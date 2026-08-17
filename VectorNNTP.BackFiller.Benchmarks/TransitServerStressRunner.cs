@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -1063,29 +1062,12 @@ internal static class TransitServerStressRunner
 
     private static void WriteStructuredResultArtifacts(BenchmarkResult result, TransitBenchmarkConfig config)
     {
-        try
-        {
-            BenchmarkResultArtifact artifact = BenchmarkResultArtifact.From(result, config, Environment.ProcessorCount);
-            string json = JsonSerializer.Serialize(artifact, new JsonSerializerOptions { WriteIndented = true });
-            string csv = artifact.ToCsv();
-
-            string stamp = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-            string baseDir = AppContext.BaseDirectory;
-            string jsonPath = Path.Combine(baseDir, $"transit-benchmark-result-{stamp}.json");
-            string csvPath = Path.Combine(baseDir, $"transit-benchmark-result-{stamp}.csv");
-
-            File.WriteAllText(jsonPath, json);
-            File.WriteAllText(csvPath, csv);
-
-            Console.WriteLine();
-            Console.WriteLine("Structured benchmark artifacts written:");
-            Console.WriteLine($"JSON: {jsonPath}");
-            Console.WriteLine($"CSV:  {csvPath}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"WARNING: Failed to write structured benchmark artifacts: {ex.GetType().Name}: {ex.Message}");
-        }
+        BenchmarkArtifactWriter.WriteStructuredResultArtifacts(
+            result,
+            config,
+            Environment.ProcessorCount,
+            static (benchmarkResult, benchmarkConfig, processorCount) => BenchmarkResultArtifact.From(benchmarkResult, benchmarkConfig, processorCount),
+            static artifact => artifact.ToCsv());
     }
 
     private static void EnsureRuntimeIdentityMatches(RuntimeIdentityExpectation expected)
