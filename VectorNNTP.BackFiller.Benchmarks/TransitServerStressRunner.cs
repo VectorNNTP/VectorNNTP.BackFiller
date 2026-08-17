@@ -526,7 +526,7 @@ internal static class TransitServerStressRunner
         Task[] dispatchers = new Task[config.DispatchWorkerCount];
         for (int i = 0; i < dispatchers.Length; i++)
         {
-            dispatchers[i] = Task.Run(() => DispatchLoopAsync(queue, publisher, metrics, workload, cancellationToken, enableForensicDiagnostics), CancellationToken.None);
+            dispatchers[i] = Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, cancellationToken, enableForensicDiagnostics), CancellationToken.None);
         }
 
         await Task.Delay(config.MeasurementDuration, cancellationToken).ConfigureAwait(false);
@@ -766,62 +766,6 @@ internal static class TransitServerStressRunner
             DispatcherTimeSeriesSummary: forensic.DispatcherTimeSeriesSummary,
             ObservabilityNotes: forensic.ObservabilityNotes,
             EffectiveQueueArticleCapacityFromBytes: effectiveQueueCapacityFromBytes);
-    }
-
-    private static async Task DispatchLoopAsync(
-        BoundedArticleQueue queue,
-        TransitPublisher publisher,
-        MeasurementMetrics metrics,
-        PreparedBenchmarkWorkload workload,
-        CancellationToken cancellationToken,
-        bool enableForensicDiagnostics)
-    {
-        while (await queue.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            while (queue.TryRead(out QueuedArticle queuedArticle))
-            {
-                long dequeuedTick = Stopwatch.GetTimestamp();
-                metrics.OnDequeued(dequeuedTick);
-                Interlocked.Increment(ref metrics.InFlightSubmissions);
-
-                try
-                {
-                    int pendingAtSubmit = 0;
-                    if (enableForensicDiagnostics)
-                    {
-                        TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
-                        pendingAtSubmit = beforeSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
-                    }
-
-                    metrics.OnAdmitted(queuedArticle.PayloadLength, dequeuedTick);
-                    long publishStartTick = Stopwatch.GetTimestamp();
-                    TransitPublishResult result = await publisher.PublishAsync(queuedArticle.MessageId, workload.ReusableArticlePayload, cancellationToken).ConfigureAwait(false);
-                    long publishEndTick = Stopwatch.GetTimestamp();
-
-                    int pendingAtComplete = 0;
-                    if (enableForensicDiagnostics)
-                    {
-                        TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
-                        pendingAtComplete = afterSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
-                    }
-
-                    metrics.OnPublishResult(result, queuedArticle.PayloadLength, dequeuedTick, publishStartTick, publishEndTick, pendingAtSubmit, pendingAtComplete);
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref metrics.InFlightSubmissions);
-                    queue.ReleaseReservation(queuedArticle.PayloadLength);
-                }
-            }
-        }
-
-        TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot dispatcherExitDiagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-        int dispatcherExitPendingMessageIds = dispatcherExitDiagnostics.Connections.Sum(static entry => entry.Snapshot.OutstandingOperations.Length);
-        long dispatcherExitQueuedWriteIntents = dispatcherExitDiagnostics.Connections.Sum(static entry => entry.Snapshot.CurrentWriteIntentQueueDepth);
-        Console.WriteLine("[SHUTDOWN-DIAG] DispatchLoop exit: queuedSubmissions={QueuedSubmissions} pendingMessageIds={PendingMessageIds} queuedWriteIntents={QueuedWriteIntents}",
-            dispatcherExitDiagnostics.QueuedSubmissionCount,
-            dispatcherExitPendingMessageIds,
-            dispatcherExitQueuedWriteIntents);
     }
 
     private static async Task TelemetryLoopAsync(
