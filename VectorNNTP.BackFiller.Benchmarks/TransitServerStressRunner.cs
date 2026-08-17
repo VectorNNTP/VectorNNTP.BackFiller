@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
@@ -241,7 +240,7 @@ internal static class TransitServerStressRunner
     {
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(ValidationSeconds), BenchmarkMode.Validation, cliOptions);
 
-        EnsureRuntimeIdentityMatches(config.ExpectedRuntimeIdentity);
+        RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, RuntimeIdentity);
 
         Console.WriteLine("=== Transit Publisher Single Transaction Trace ===");
         Console.WriteLine("Benchmark execution policy: NEVER use --no-build. ALWAYS run clean -> build -> verify output identity -> execute.");
@@ -271,7 +270,7 @@ internal static class TransitServerStressRunner
         ILogger<TransitPublisher> transitPublisherLogger = CreateTransitPublisherLogger(loggerFactory);
 
         await using TransitPublisher publisher = new(
-            BuildRuntimeOptions(config),
+            TransitBenchmarkOrchestrator.BuildRuntimeOptions(config),
             TimeProvider.System,
             transitPublisherLogger,
             connectionPoolSize: config.ConnectionPoolSize,
@@ -333,149 +332,16 @@ internal static class TransitServerStressRunner
         Console.WriteLine($"  PeakOutstandingPerConnection={peakOutstandingPerConnection}");
     }
 
-    private static async Task RunCoreAsync(TransitBenchmarkConfig config, CancellationToken cancellationToken)
+    private static Task RunCoreAsync(TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
-        EnsureRuntimeIdentityMatches(config.ExpectedRuntimeIdentity);
-
-        Console.WriteLine("=== Transit Publisher Production-Path Benchmark ===");
-        Console.WriteLine("Benchmark execution policy: NEVER use --no-build. ALWAYS run clean -> build -> verify output identity -> execute.");
-        Console.WriteLine($"Benchmark Build Version: {BenchmarkBuildVersion}");
-        Console.WriteLine($"RuntimeAssemblyPath: {RuntimeIdentity.RuntimeAssemblyPath}");
-        Console.WriteLine($"RuntimeAssemblyVersion: {RuntimeIdentity.RuntimeAssemblyVersion}");
-        Console.WriteLine($"AssemblyFileVersion: {RuntimeIdentity.AssemblyFileVersion ?? "(unknown)"}");
-        Console.WriteLine($"ProcessPath: {RuntimeIdentity.ProcessPath}");
-        Console.WriteLine($"WorkingDirectory: {RuntimeIdentity.WorkingDirectory}");
-        Console.WriteLine($"Configuration: {RuntimeIdentity.Configuration ?? "(unknown)"}");
-        Console.WriteLine($"Platform: {RuntimeIdentity.Platform ?? "(unknown)"}");
-        Console.WriteLine($"TargetFramework: {RuntimeIdentity.TargetFramework ?? "(unknown)"}");
-        Console.WriteLine($"RuntimeIdentifier: {RuntimeIdentity.RuntimeIdentifier ?? "(unknown)"}");
-        Console.WriteLine($"Architecture: {RuntimeIdentity.Architecture}");
-        Console.WriteLine($"SourceRevision: {RuntimeIdentity.SourceRevision ?? "(unknown)"}");
-        Console.WriteLine($"BuildTimestampUtc: {(RuntimeIdentity.BuildTimestampUtc.HasValue ? RuntimeIdentity.BuildTimestampUtc.Value.ToString("O", CultureInfo.InvariantCulture) : "(unknown)")}");
-        Console.WriteLine($"Mode: {config.Mode}");
-        Console.WriteLine($"Experiment profile: {(config.Mode == BenchmarkMode.Saturation ? "Saturation discovery" : "Fixed-duration")}");
-        Console.WriteLine($"Config path: {config.AppSettingsPath}");
-        Console.WriteLine($"Logical Transit endpoint host (TLS/SNI/cert): {config.EndpointHost}");
-        Console.WriteLine($"Transit port: {config.EndpointPort}");
-        Console.WriteLine($"Transit UseSsl config: {config.EndpointUseSsl}");
-        Console.WriteLine($"Connection pool size: {config.ConnectionPoolSize}");
-        Console.WriteLine($"Per-connection pipeline depth: {config.PerConnectionPipelineDepth}");
-        Console.WriteLine($"Dispatch worker count: {config.DispatchWorkerCount}");
-        Console.WriteLine($"Generator worker count: {config.GeneratorWorkerCount}");
-        Console.WriteLine($"Target article bytes: {config.ArticleTargetBytes}");
-        Console.WriteLine($"Queue max articles: {config.MaxQueuedArticles}");
-        Console.WriteLine($"Queue max resident bytes: {config.MaxResidentBytes}");
-        Console.WriteLine($"Producer queue target articles: {config.ProducerQueueTargetArticles}");
-
-        IPAddress[] resolved = await Dns.GetHostAddressesAsync(config.EndpointHost, cancellationToken).ConfigureAwait(false);
-        Console.WriteLine($"Resolved addresses for {config.EndpointHost}: {string.Join(", ", resolved.Select(static x => x.ToString()))}");
-
-        using ILoggerFactory loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder
-                .SetMinimumLevel(LogLevel.Information)
-                .AddSimpleConsole(options =>
-                {
-                    options.SingleLine = true;
-                    options.TimestampFormat = "HH:mm:ss ";
-                });
-        });
-
-        ILogger<TransitPublisher> transitPublisherLogger = CreateTransitPublisherLogger(loggerFactory);
-
-        await using TransitPublisher publisher = new(
-            BuildRuntimeOptions(config),
-            TimeProvider.System,
-            transitPublisherLogger,
-            connectionPoolSize: config.ConnectionPoolSize,
-            perConnectionPipelineDepth: config.PerConnectionPipelineDepth);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 1: Initialization ===");
-        Console.WriteLine("=== Phase 2: TLS / TransitPublisher startup ===");
-        await publisher.InitializeAsync(cancellationToken).ConfigureAwait(false);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 3: Smoke test (REAL publisher, realistic ~1MiB articles) ===");
-        await RunSmokeAsync(publisher, config, cancellationToken).ConfigureAwait(false);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 3.5: Workload preparation ===");
-        using PreparedBenchmarkWorkload workload = BenchmarkWorkloadFactory.PrepareBenchmarkWorkload(config);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 4: Warmup ===");
-        await RunWarmupAsync(publisher, config, workload, cancellationToken).ConfigureAwait(false);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 5: EXACT measurement window ===");
-        BenchmarkResult result = await RunMeasurementAsync(
-            publisher,
+        return TransitBenchmarkOrchestrator.RunCoreAsync(
             config,
-            workload,
-            cancellationToken,
-            enableForensicDiagnostics: false).ConfigureAwait(false);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 7: Connection topology diagnostics ===");
-        TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot connectionDiagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-        TopologyReporter.PrintConnectionTopologyDiagnostics(connectionDiagnostics);
-
-        Console.WriteLine();
-        Console.WriteLine("=== Phase 8: Final results ===");
-        BenchmarkConsoleReporter.PrintFinalReport(result, config);
-        WriteStructuredResultArtifacts(result, config);
-    }
-
-    private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
-    {
-        const int smokeArticles = 5;
-
-        for (int i = 0; i < smokeArticles; i++)
-        {
-            string messageId = TransitBenchmarkCore.BuildMessageId(config.BenchmarkInstanceId, workerId: 0, sequence: i + 1, phase: "smoke");
-            TransitBenchmarkCore.ArticlePayload payload = TransitBenchmarkCore.ArticlePayload.Create(messageId, config.ArticleTargetBytes);
-
-            try
-            {
-                TransitPublishResult result = await publisher.PublishAsync(messageId, payload.AsMemory(), cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"Smoke article {i + 1}/{smokeArticles}: Status={result.Status}, Code={result.ResponseCode}, Bytes={payload.Length}");
-
-                if (result.Status != TransitPublishStatus.Accepted)
-                {
-                    throw new InvalidOperationException($"Smoke test requires definitive success. Got {result.Status} ({result.ResponseCode}) for {messageId}.");
-                }
-            }
-            finally
-            {
-                payload.Dispose();
-            }
-        }
-    }
-
-    private static async Task RunWarmupAsync(TransitPublisher publisher, TransitBenchmarkConfig config, PreparedBenchmarkWorkload workload, CancellationToken cancellationToken)
-    {
-        using CancellationTokenSource warmupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        warmupCts.CancelAfter(config.WarmupDuration);
-
-        while (!warmupCts.IsCancellationRequested)
-        {
-            if (!workload.TryTakeNextMessageId(out string? messageId))
-            {
-                throw new InvalidOperationException("Pre-generated Message-ID pool exhausted during warmup.");
-            }
-
-            try
-            {
-                _ = await publisher.PublishAsync(messageId, workload.ReusableArticlePayload, warmupCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (warmupCts.IsCancellationRequested)
-            {
-                break;
-            }
-        }
-
-        Console.WriteLine($"Warmup complete ({config.WarmupDuration.TotalSeconds:F0}s).");
+            RuntimeIdentity,
+            BenchmarkBuildVersion,
+            CreateTransitPublisherLogger,
+            RunMeasurementAsync,
+            WriteStructuredResultArtifacts,
+            cancellationToken);
     }
 
     private static async Task<BenchmarkResult> RunMeasurementAsync(
@@ -700,32 +566,6 @@ internal static class TransitServerStressRunner
             Environment.ProcessorCount,
             static (benchmarkResult, benchmarkConfig, processorCount) => BenchmarkResultArtifact.From(benchmarkResult, benchmarkConfig, processorCount),
             static artifact => artifact.ToCsv());
-    }
-
-    private static void EnsureRuntimeIdentityMatches(RuntimeIdentityExpectation expected)
-    {
-        RuntimeIdentityGuard.EnsureMatches(expected, RuntimeIdentity);
-    }
-
-    private static BackFillerRuntimeOptions BuildRuntimeOptions(TransitBenchmarkConfig config)
-    {
-        return new BackFillerRuntimeOptions(
-            CanonicalBackFillerFqdn: "benchmark.backfiller.usenet.ninja",
-            BackFillerId: 1,
-            CanonicalDnsSuffix: "usenet.ninja",
-            ValidatedLogDirectory: Path.GetTempPath(),
-            ValidatedCertificateDirectory: Path.GetTempPath(),
-            RabbitMqHosts: [],
-            RabbitMqPort: 5672,
-            RabbitMqEnableSsl: false,
-            TransitServerHost: config.EndpointHost,
-            TransitServerPort: config.EndpointPort,
-            TransitServerUseSsl: config.EndpointUseSsl,
-            ShutdownGracePeriodSeconds: 120,
-            ShutdownDrainQueuedWork: true,
-            ShutdownFinishActiveArticles: true,
-            RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
-            WriteBatchCoalesceMicroseconds: config.WriteBatchCoalesceMicroseconds);
     }
 
     private sealed class TransitPublisherBenchmarkLogger : ILogger<TransitPublisher>
