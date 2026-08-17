@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 internal sealed class PreparedBenchmarkWorkload : IDisposable
@@ -18,7 +20,7 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
 
     internal WorkloadPreparationSummary PreparationSummary { get; }
 
-    internal bool TryTakeNextMessageId(out string? messageId)
+    internal bool TryTakeNextMessageId([NotNullWhen(true)] out string? messageId)
     {
         int index = Interlocked.Increment(ref _nextMessageIndex) - 1;
         if ((uint)index >= (uint)_messageIds.Length)
