@@ -323,7 +323,7 @@ internal static class TransitServerStressRunner
         }
 
         TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-        PrintConnectionTopologyDiagnostics(diagnostics);
+        TopologyReporter.PrintConnectionTopologyDiagnostics(diagnostics);
 
         long totalStarted = diagnostics.Connections.Sum(static entry => entry.Snapshot.SubmissionsStarted);
         long totalAccepted = diagnostics.Connections.Sum(static entry => entry.Snapshot.SubmissionsAccepted);
@@ -430,11 +430,11 @@ internal static class TransitServerStressRunner
         Console.WriteLine();
         Console.WriteLine("=== Phase 7: Connection topology diagnostics ===");
         TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot connectionDiagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-        PrintConnectionTopologyDiagnostics(connectionDiagnostics);
+        TopologyReporter.PrintConnectionTopologyDiagnostics(connectionDiagnostics);
 
         Console.WriteLine();
         Console.WriteLine("=== Phase 8: Final results ===");
-        PrintFinalReport(result, config);
+        BenchmarkConsoleReporter.PrintFinalReport(result, config);
         WriteStructuredResultArtifacts(result, config);
     }
 
@@ -1051,206 +1051,6 @@ internal static class TransitServerStressRunner
             previous = current;
             previousElapsed = now;
         }
-    }
-
-    private static void PrintConnectionTopologyDiagnostics(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics)
-    {
-        Console.WriteLine($"Configured pool size: {diagnostics.ConfiguredConnectionPoolSize}");
-        Console.WriteLine($"Configured per-connection pipeline depth: {diagnostics.ConfiguredPerConnectionPipelineDepth}");
-        Console.WriteLine($"Global reconnect count: {diagnostics.TotalReconnects}");
-
-        int uniqueConnectionCount = diagnostics.Connections.Select(static x => x.Snapshot.ConnectionId).Distinct(StringComparer.Ordinal).Count();
-        long totalSocketOpens = diagnostics.Connections.Sum(static x => x.Snapshot.SocketOpenCount);
-        int readyConnectionCount = diagnostics.Connections.Count(static x => x.Snapshot.ReadyTransitionCount > 0);
-        int activeConnectionCount = diagnostics.Slots.Count(static x => x.TotalSubmissionsRouted > 0);
-
-        Console.WriteLine($"Unique TransitConnection instances observed: {uniqueConnectionCount}");
-        Console.WriteLine($"Total physical socket opens observed: {totalSocketOpens}");
-        Console.WriteLine($"Connections reaching READY at least once: {readyConnectionCount}");
-        Console.WriteLine($"Pool slots that carried submissions: {activeConnectionCount}/{diagnostics.ConfiguredConnectionPoolSize}");
-
-        Console.WriteLine();
-        Console.WriteLine("Per-slot participation:");
-        foreach (TransitPublisher.ConnectionSlotSnapshot slot in diagnostics.Slots.OrderBy(static x => x.SlotIndex))
-        {
-            Console.WriteLine($"  Slot {slot.SlotIndex}: HasCurrent={slot.HasCurrentConnection}, CurrentConnectionId={slot.CurrentConnectionId ?? "(none)"}, RoutedSubmissions={slot.TotalSubmissionsRouted}, Reconnects={slot.Reconnects}, CreatedConnections={slot.CreatedConnections}, MaxObservedInFlightDepth={slot.MaxObservedInFlightDepth}, WaitedForChannelReadability={slot.WaitedForChannelReadabilityCount}, WaitedForCompletionWhileFull={slot.WaitedForCompletionWhilePipelineFullCount}, FirstReachedConfiguredDepthTick={slot.FirstReachedConfiguredDepthTick}");
-        }
-
-        Console.WriteLine();
-        Console.WriteLine("Per-connection diagnostics:");
-        foreach (TransitPublisher.ConnectionDiagnosticsEntry entry in diagnostics.Connections
-                     .OrderBy(static x => x.SlotIndex)
-                     .ThenBy(static x => x.Snapshot.ConnectionId, StringComparer.Ordinal))
-        {
-            TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = entry.Snapshot;
-            Console.WriteLine($"  Slot {entry.SlotIndex}, ConnectionId={snapshot.ConnectionId}, Host={snapshot.Host}:{snapshot.Port}, State={snapshot.CurrentState}, TLS={snapshot.IsTlsActive}, Compression={snapshot.IsCompressionActive}");
-            Console.WriteLine($"    Endpoints: Local={snapshot.LocalEndpoint ?? "(unavailable)"}, Remote={snapshot.RemoteEndpoint ?? "(unavailable)"}");
-            Console.WriteLine($"    SocketOpens={snapshot.SocketOpenCount}, ReadyTransitions={snapshot.ReadyTransitionCount}, MaxInFlight={snapshot.MaxConcurrentSubmissions}, CurrentInFlight={snapshot.CurrentConcurrentSubmissions}");
-            Console.WriteLine($"    Submissions: Started={snapshot.SubmissionsStarted}, Accepted={snapshot.SubmissionsAccepted}, Rejected={snapshot.SubmissionsRejected}, Ambiguous={snapshot.SubmissionsAmbiguous}, Unavailable={snapshot.SubmissionsUnavailable}, Failed={snapshot.SubmissionsFailed}");
-
-            TransitConnection.PipeliningDiagnosticSummary diagnosticSummary = snapshot.DiagnosticsSummary;
-            Console.WriteLine($"    Pipelining diagnostics: MaxPendingDepth={diagnosticSummary.MaxPendingDepth}, MaxWriteQueueDepth={diagnosticSummary.MaxWriteQueueDepth}, MaxWriterBatchSize={diagnosticSummary.MaxWriterBatchSize}, AvgBatchSize={diagnosticSummary.AverageWriterBatchSize:F2}, P50={diagnosticSummary.P50WriterBatchSize:F0}, P95={diagnosticSummary.P95WriterBatchSize:F0}, P99={diagnosticSummary.P99WriterBatchSize:F0}, NumberOfBatches={diagnosticSummary.NumberOfBatches}");
-            Console.WriteLine($"    Batch histogram: {diagnosticSummary.BatchSizeHistogram}");
-            Console.WriteLine($"    Coalescing wait (us): Avg={diagnosticSummary.AverageCoalescingWaitMicroseconds:F2}, P50={diagnosticSummary.P50CoalescingWaitMicroseconds:F2}, P95={diagnosticSummary.P95CoalescingWaitMicroseconds:F2}, P99={diagnosticSummary.P99CoalescingWaitMicroseconds:F2}");
-            Console.WriteLine($"    MaxLaterTakethisBeforeResponse={diagnosticSummary.MaxLogicalOutstandingAheadAtResponse}, CapturedOperationCount={diagnosticSummary.CapturedOperationCount}, SampledOperationCount={diagnosticSummary.SampledOperationCount}");
-
-            int sampleCount = Math.Min(snapshot.DiagnosticSampleRecords.Length, 1000);
-            if (sampleCount > 0)
-            {
-                Console.WriteLine($"    Diagnostic sample records shown: {sampleCount}");
-                for (int i = 0; i < sampleCount; i++)
-                {
-                    TransitConnection.DiagnosticOperationRecord sample = snapshot.DiagnosticSampleRecords[i];
-                    Console.WriteLine($"      MessageId={sample.MessageId}; T0={sample.T0SubmitEnterTick}; T0SubmitTakethis={sample.T0SubmitTakethisEnterTick}; T1={sample.T1PendingRegisteredTick}; T2EnqueueStart={sample.T2WriteIntentEnqueueStartTick}; T2={sample.T2WriteIntentEnqueuedTick}; T2BeforeAwait={sample.T2BeforeCompletionAwaitTick}; T3={sample.T3WriterDequeuedTick}; T4={sample.T4AssignedToBatchTick}; T5={sample.T5FrameStageBeginTick}; T6={sample.T6FrameStageEndTick}; T7={sample.T7BatchFlushBeginTick}; T8={sample.T8BatchFlushEndTick}; T9={sample.T9ResponseCorrelatedTick}; T10={sample.T10SubmitCompletionTick}; PendingT1={sample.PendingDepthAtT1}; PendingT2={sample.PendingDepthAtT2}; PendingT3={sample.PendingDepthAtT3}; PendingT4={sample.PendingDepthAtT4}; PendingT9={sample.PendingDepthAtT9}; QueueT2={sample.QueueDepthAtT2}; QueueT3={sample.QueueDepthAtT3}; QueueBatchStart={sample.QueueDepthAtBatchStart}; BatchDequeued={sample.BatchDequeuedCount}; QueueT9={sample.QueueDepthAtT9}; BatchId={sample.BatchId}; BatchPosition={sample.BatchPosition}; BatchSize={sample.BatchSize}; SendSequence={sample.SendSequence}; LaterTakethisBefore239={sample.LogicalOutstandingAheadAtResponse}");
-                }
-            }
-        }
-
-        int submissionTraceCount = diagnostics.SubmissionTraceRecords.Length;
-        Console.WriteLine();
-        Console.WriteLine($"Submission pump trace records: {submissionTraceCount}");
-        if (submissionTraceCount > 0)
-        {
-            int submissionTraceSampleCount = Math.Min(submissionTraceCount, 1000);
-            Console.WriteLine($"Submission pump trace sample shown: {submissionTraceSampleCount}");
-            for (int i = 0; i < submissionTraceSampleCount; i++)
-            {
-                TransitPublisher.SubmissionTraceRecord trace = diagnostics.SubmissionTraceRecords[i];
-                Console.WriteLine($"  MessageId={trace.MessageId}; PumpReadTick={trace.RemovedFromSubmissionChannelTick}; PublishInvokeTick={trace.PublishToConnectionInvokedTick}; InFlightBeforeAdd={trace.InFlightCountBeforeAdd}; InFlightAfterAdd={trace.InFlightCountAfterAdd}; WriteIntentQueueDepthAtRead={trace.WriteIntentQueueDepthAtPumpRead}");
-            }
-        }
-
-        int publishTraceCount = diagnostics.PublishToConnectionTraceRecords.Length;
-        Console.WriteLine();
-        Console.WriteLine($"PublishToConnectionWithReconnect trace records: {publishTraceCount}");
-        if (publishTraceCount > 0)
-        {
-            int publishTraceSampleCount = Math.Min(publishTraceCount, 1000);
-            Console.WriteLine($"PublishToConnectionWithReconnect trace sample shown: {publishTraceSampleCount}");
-            for (int i = 0; i < publishTraceSampleCount; i++)
-            {
-                TransitPublisher.PublishToConnectionTraceRecord trace = diagnostics.PublishToConnectionTraceRecords[i];
-                Console.WriteLine($"  MessageId={trace.MessageId}; Slot={trace.SlotIndex}; MethodEntryTick={trace.MethodEntryTick}; ConnectionId={trace.SelectedConnectionId ?? "(null)"}; BeforeSubmitTakethisTick={trace.BeforeSubmitTakethisTick}; AfterSubmitTakethisTick={trace.AfterSubmitTakethisTick}");
-            }
-        }
-    }
-
-    private static void PrintFinalReport(BenchmarkResult result, TransitBenchmarkConfig config)
-    {
-        Console.WriteLine($"Benchmark Build Version: {result.BenchmarkBuildVersion}");
-        Console.WriteLine($"Production path exercised: Benchmark -> REAL TransitPublisher -> REAL TransitConnection -> TLS -> MODE STREAM -> TransitServer");
-        Console.WriteLine("Generated throughput = bytes generated by the article generator.");
-        Console.WriteLine("Admitted throughput = bytes accepted by TransitPublisher PublishAsync contract.");
-        Console.WriteLine("Accepted throughput = bytes mapped to definitive TransitServer success responses (e.g., 239).");
-        Console.WriteLine("Generated/admitted throughput must not be interpreted as socket-wire throughput.");
-        Console.WriteLine("Exact socket-wire throughput is not directly observable from TransitPublisher API surface.");
-
-        Console.WriteLine();
-        Console.WriteLine("Preparation summary:");
-        Console.WriteLine($"Pre-generation duration ms: {result.WorkloadPreparation.PreGenerationDurationMilliseconds:F2}");
-        Console.WriteLine($"Payload preparation duration ms: {result.WorkloadPreparation.PayloadPreparationDurationMilliseconds:F2}");
-        Console.WriteLine($"Pre-generated Message-ID pool size: {result.WorkloadPreparation.MessageIdPoolSize:N0}");
-        Console.WriteLine($"Unique Message-ID count: {result.WorkloadPreparation.UniqueMessageIdCount:N0}");
-        Console.WriteLine($"Duplicate Message-ID count: {result.WorkloadPreparation.DuplicateMessageIdCount:N0}");
-        Console.WriteLine($"Reusable article payload bytes: {result.WorkloadPreparation.ReusablePayloadBytes:N0}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Warmup duration: {config.WarmupDuration.TotalSeconds:F0}s");
-        Console.WriteLine($"Measurement duration: {config.MeasurementDuration.TotalSeconds:F0}s");
-        Console.WriteLine($"Drain duration: {result.DrainDuration.TotalSeconds:F3}s");
-        Console.WriteLine($"Outstanding at measurement end: {result.OutstandingAtMeasurementEnd}");
-        Console.WriteLine($"Drained after measurement: {result.DrainedAfterMeasurement}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Measurement start UTC: {result.MeasurementStartUtc:O}");
-        Console.WriteLine($"Measurement end UTC:   {result.MeasurementEndUtc:O}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Generated articles: {result.GeneratedArticles}");
-        Console.WriteLine($"Generated bytes: {result.GeneratedBytes}");
-        Console.WriteLine($"Generated Gbps: {result.GeneratedGbps:F4}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Admitted articles: {result.AdmittedArticles}");
-        Console.WriteLine($"Admitted bytes: {result.AdmittedBytes}");
-        Console.WriteLine($"Admitted Gbps: {result.AdmittedGbps:F4}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Accepted articles: {result.AcceptedArticles}");
-        Console.WriteLine($"Accepted bytes: {result.AcceptedBytes}");
-        Console.WriteLine($"Accepted Gbps: {result.AcceptedGbps:F4}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Rejected articles: {result.RejectedArticles}");
-        Console.WriteLine($"Ambiguous articles: {result.AmbiguousArticles}");
-
-        Console.WriteLine();
-        Console.WriteLine($"Queue target depth (articles): {config.ProducerQueueTargetArticles}");
-        Console.WriteLine($"Queue minimum depth: {result.MinQueueDepth}");
-        Console.WriteLine($"Queue average depth: {result.AverageQueueDepth:F2}");
-        Console.WriteLine($"Queue peak depth: {result.PeakQueueDepth}");
-        Console.WriteLine($"Queue average bytes: {result.AverageQueuedBytes:F0}");
-        Console.WriteLine($"Queue peak bytes: {result.PeakQueuedBytes}");
-        Console.WriteLine($"Queue configured article cap: {config.MaxQueuedArticles}");
-        Console.WriteLine($"Queue configured byte cap: {config.MaxResidentBytes}");
-        Console.WriteLine($"Peak dispatcher in-flight (PublishAsync waits): {result.PeakInFlight}");
-        Console.WriteLine($"Peak actual pending submissions (sum connection CurrentInFlight): {result.PeakActualPending}");
-        Console.WriteLine($"Producer queue starvation: {(result.PeakQueueDepth <= 1 ? "Yes" : "No")}");
-        Console.WriteLine($"Producer active %: {result.ProducerActivePercent:F2}");
-        Console.WriteLine($"Producer blocked/backpressured %: {result.ProducerBlockedPercent:F2}");
-        Console.WriteLine($"Producer active ms: {result.ProducerActiveMilliseconds:F2}");
-        Console.WriteLine($"Producer blocked ms: {result.ProducerBlockedMilliseconds:F2}");
-        Console.WriteLine($"Producer queue-capacity wait ms: {result.ProducerQueueWaitMilliseconds:F2}");
-
-        Console.WriteLine();
-        Console.WriteLine($"CPU % (avg sampled): {result.AverageCpuPercent:F2}");
-        Console.WriteLine($"Host CPU % (avg/peak sampled): {result.AverageHostCpuPercent:F2}/{result.PeakHostCpuPercent:F2}");
-        Console.WriteLine($"TransitServer CPU % (avg/peak sampled): {result.AverageTransitServerCpuPercent:F2}/{result.PeakTransitServerCpuPercent:F2}");
-        Console.WriteLine($"Working Set MB: {result.WorkingSetMb:F2}");
-        Console.WriteLine($"GC Heap MB: {result.GcHeapMb:F2}");
-        Console.WriteLine($"Allocated MB: {result.AllocatedMb:F2}");
-        Console.WriteLine($"Gen0: {result.Gen0Collections}, Gen1: {result.Gen1Collections}, Gen2: {result.Gen2Collections}");
-
-        Console.WriteLine();
-        Console.WriteLine("Forensic timing and time-series:");
-        Console.WriteLine($"Forensic samples captured: {result.ForensicSampleCount}");
-        Console.WriteLine($"Dispatch wait (T0->T1) us [samples={result.DispatchQueueWaitSampleCount}]: avg={result.AverageDispatchQueueWaitUs:F3}, p50={result.P50DispatchQueueWaitUs:F3}, p95={result.P95DispatchQueueWaitUs:F3}, p99={result.P99DispatchQueueWaitUs:F3}, max={result.MaxDispatchQueueWaitUs:F3}");
-        Console.WriteLine($"Socket write (T2->T3) us [samples={result.SocketWriteSampleCount}]: avg={result.AverageSocketWriteUs:F3}, p50={result.P50SocketWriteUs:F3}, p95={result.P95SocketWriteUs:F3}, p99={result.P99SocketWriteUs:F3}, max={result.MaxSocketWriteUs:F3}");
-        Console.WriteLine($"Response wait (T3->T4) us [samples={result.ResponseWaitSampleCount}]: avg={result.AverageResponseWaitUs:F3}, p50={result.P50ResponseWaitUs:F3}, p95={result.P95ResponseWaitUs:F3}, p99={result.P99ResponseWaitUs:F3}, max={result.MaxResponseWaitUs:F3}");
-        Console.WriteLine($"Parse/correlation (T4->T6) us [samples={result.ParseCorrelationSampleCount}]: avg={result.AverageParseCorrelationUs:F3}, p50={result.P50ParseCorrelationUs:F3}, p95={result.P95ParseCorrelationUs:F3}, p99={result.P99ParseCorrelationUs:F3}, max={result.MaxParseCorrelationUs:F3}");
-        Console.WriteLine($"Total PublishAsync (T0->T7) us [samples={result.TotalPublishLatencySampleCount}]: avg={result.AverageTotalPublishLatencyUs:F3}, p50={result.P50TotalPublishLatencyUs:F3}, p95={result.P95TotalPublishLatencyUs:F3}, p99={result.P99TotalPublishLatencyUs:F3}, max={result.MaxTotalPublishLatencyUs:F3}");
-
-        if (result.AverageTotalPublishLatencyUs > 0)
-        {
-            double dispatchPct = result.AverageDispatchQueueWaitUs * 100d / result.AverageTotalPublishLatencyUs;
-            double writePct = result.AverageSocketWriteUs * 100d / result.AverageTotalPublishLatencyUs;
-            double responsePct = result.AverageResponseWaitUs * 100d / result.AverageTotalPublishLatencyUs;
-            double parseCorrelationPct = result.AverageParseCorrelationUs * 100d / result.AverageTotalPublishLatencyUs;
-            double accountedPct = dispatchPct + writePct + responsePct + parseCorrelationPct;
-            double remainderPct = Math.Max(0, 100d - accountedPct);
-            Console.WriteLine($"Average T0->T7 contribution (%): dispatch={dispatchPct:F2}, write={writePct:F2}, responseWait={responsePct:F2}, parse/correlation={parseCorrelationPct:F2}, remainder={remainderPct:F2}");
-        }
-
-        Console.WriteLine($"Legacy publish latency us: avg={result.AveragePublishLatencyUs:F3}, min={result.MinPublishLatencyUs:F3}, p50={result.P50PublishLatencyUs:F3}, p95={result.P95PublishLatencyUs:F3}, p99={result.P99PublishLatencyUs:F3}, max={result.MaxPublishLatencyUs:F3}");
-        Console.WriteLine($"Lifecycle latency avg (us): {result.AverageLifecycleLatencyUs:F3}");
-        Console.WriteLine("Latency buckets by pending depth:");
-        Console.WriteLine(result.PendingDepthLatencyBuckets);
-        Console.WriteLine($"Dispatcher series summary: {result.DispatcherTimeSeriesSummary}");
-        Console.WriteLine("Connection series summary:");
-        Console.WriteLine(result.ConnectionTimeSeriesSummary);
-        Console.WriteLine($"Observability boundaries: {result.ObservabilityNotes}");
-        Console.WriteLine($"Queue capacity estimate by byte budget (maxResidentBytes/articleBytes): {result.EffectiveQueueArticleCapacityFromBytes}");
-
-        Console.WriteLine();
-        Console.WriteLine("TransitServer reconciliation:");
-        Console.WriteLine($"Benchmark measurement start UTC: {result.MeasurementStartUtc:O}");
-        Console.WriteLine($"Benchmark measurement end UTC:   {result.MeasurementEndUtc:O}");
-        Console.WriteLine($"Benchmark accepted articles: {result.AcceptedArticles}");
-        Console.WriteLine($"Benchmark rejected articles: {result.RejectedArticles}");
-        Console.WriteLine($"Benchmark ambiguous articles: {result.AmbiguousArticles}");
-        Console.WriteLine($"Benchmark elapsed seconds: {config.MeasurementDuration.TotalSeconds:F0}");
-        Console.WriteLine($"Benchmark accepted articles/sec: {result.AcceptedArticles / config.MeasurementDuration.TotalSeconds:F4}");
-        Console.WriteLine("TransitServer spool/throughput counters may use different reporting windows and aggregation cadence (for example rolling 60-second windows). Compare by timestamps, not by assuming identical window boundaries.");
     }
 
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
