@@ -1,0 +1,64 @@
+using VectorNNTP.BackFiller.Benchmarks;
+using Xunit;
+
+namespace VectorNNTP.Backfiller.Tests;
+
+public sealed class BenchmarkConsoleReporterContractTests
+{
+    [Fact]
+    public void PrintFinalReport_ContainsExpectedSectionsInStableOrder()
+    {
+        TransitBenchmarkConfig config = BenchmarkContractTestHelper.CreateConfig(measurementSeconds: 20);
+        BenchmarkResult result = BenchmarkContractTestHelper.InvokeCreateBenchmarkResult(
+            config,
+            BenchmarkContractTestHelper.CreateMeasurementSnapshot(),
+            BenchmarkContractTestHelper.CreateMeasurementMetricsWithForensicSample(),
+            BenchmarkContractTestHelper.CreateRuntimeMetricsWithSnapshotValues(128L * 1024 * 1024, 64L * 1024 * 1024, 32L * 1024 * 1024),
+            BenchmarkContractTestHelper.CreateWorkloadPreparation(),
+            measurementStartUtc: new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
+            measurementEndUtc: new DateTimeOffset(2026, 7, 1, 0, 0, 20, TimeSpan.Zero),
+            drainDuration: TimeSpan.FromSeconds(1),
+            outstandingAtMeasurementEnd: 2,
+            drainedAfterMeasurement: 2,
+            allocatedStartBytes: 0,
+            enableForensicDiagnostics: true);
+
+        StringWriter writer = new();
+        TextWriter original = Console.Out;
+
+        try
+        {
+            Console.SetOut(writer);
+            BenchmarkConsoleReporter.PrintFinalReport(result, config);
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        string output = writer.ToString();
+
+        Assert.Contains("Benchmark Build Version:", output, StringComparison.Ordinal);
+        Assert.Contains("Preparation summary:", output, StringComparison.Ordinal);
+        Assert.Contains("Generated articles:", output, StringComparison.Ordinal);
+        Assert.Contains("Admitted articles:", output, StringComparison.Ordinal);
+        Assert.Contains("Accepted articles:", output, StringComparison.Ordinal);
+        Assert.Contains("Queue target depth (articles):", output, StringComparison.Ordinal);
+        Assert.Contains("CPU % (avg sampled):", output, StringComparison.Ordinal);
+        Assert.Contains("Forensic timing and time-series:", output, StringComparison.Ordinal);
+
+        int benchmarkIndex = output.IndexOf("Benchmark Build Version:", StringComparison.Ordinal);
+        int prepIndex = output.IndexOf("Preparation summary:", StringComparison.Ordinal);
+        int generatedIndex = output.IndexOf("Generated articles:", StringComparison.Ordinal);
+        int queueIndex = output.IndexOf("Queue target depth (articles):", StringComparison.Ordinal);
+        int cpuIndex = output.IndexOf("CPU % (avg sampled):", StringComparison.Ordinal);
+        int forensicIndex = output.IndexOf("Forensic timing and time-series:", StringComparison.Ordinal);
+
+        Assert.True(benchmarkIndex >= 0);
+        Assert.True(prepIndex > benchmarkIndex);
+        Assert.True(generatedIndex > prepIndex);
+        Assert.True(queueIndex > generatedIndex);
+        Assert.True(cpuIndex > queueIndex);
+        Assert.True(forensicIndex > cpuIndex);
+    }
+}
