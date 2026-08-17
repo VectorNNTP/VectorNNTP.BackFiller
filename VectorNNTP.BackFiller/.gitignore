@@ -57,11 +57,14 @@ dlldata.c
 
 # Benchmark Results
 BenchmarkDotNet.Artifacts/
+VectorNNTP.BackFiller.Benchmarks/**/transit-benchmark-result-*.json
+VectorNNTP.BackFiller.Benchmarks/**/transit-benchmark-result-*.csv
+VectorNNTP.BackFiller.Benchmarks/**/transit-benchmark-result-*.log
 
 # .NET Core
 project.lock.json
 project.fragment.lock.json
-artifacts/
+/artifacts/
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
