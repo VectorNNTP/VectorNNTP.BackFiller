@@ -3,7 +3,7 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
-internal static class MeasurementExecutionEngine
+internal static partial class MeasurementExecutionEngine
 {
     internal static async Task ProducerLoopAsync(
         BoundedArticleQueue queue,
