@@ -1,0 +1,27 @@
+namespace VectorNNTP.BackFiller.Benchmarks;
+
+internal readonly record struct MeasurementSnapshot(
+    long GeneratedCount,
+    long GeneratedBytes,
+    long AdmittedCount,
+    long AdmittedBytes,
+    long AcceptedCount,
+    long AcceptedBytes,
+    long RejectedCount,
+    long AmbiguousCount,
+    long CompletedCount,
+    long BlockedTicks,
+    long GenerationTicks,
+    long OtherActiveTicks,
+    long ActiveTicks,
+    long LoopTicks,
+    long PeakQueueDepth,
+    long PeakQueueBytes,
+    long PeakInFlight,
+    long PeakActualPending,
+    long MinQueueDepth,
+    long MinQueueBytes,
+    double AverageQueueDepth,
+    double AverageQueueBytes,
+    long ProducerQueueWaitTicks,
+    int ArticleBytes);

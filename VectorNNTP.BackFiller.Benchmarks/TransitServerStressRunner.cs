@@ -741,7 +741,7 @@ internal static class TransitServerStressRunner
 
         long drainedAfterMeasurement = Math.Max(0, metrics.GetCompletedCount() - completedAtMeasurementEnd);
 
-        return BenchmarkResult.Create(
+        return CreateBenchmarkResult(
             config,
             metrics.Snapshot(),
             metrics,
@@ -755,6 +755,141 @@ internal static class TransitServerStressRunner
             drainedAfterMeasurement,
             allocatedStartBytes,
             enableForensicDiagnostics);
+    }
+
+    private static BenchmarkResult CreateBenchmarkResult(
+        TransitBenchmarkConfig config,
+        MeasurementSnapshot snapshot,
+        MeasurementMetrics metrics,
+        RuntimeMetrics runtime,
+        Process process,
+        WorkloadPreparationSummary workloadPreparation,
+        DateTimeOffset measurementStartUtc,
+        DateTimeOffset measurementEndUtc,
+        TimeSpan drainDuration,
+        long outstandingAtMeasurementEnd,
+        long drainedAfterMeasurement,
+        long allocatedStartBytes,
+        bool enableForensicDiagnostics)
+    {
+        RuntimeSnapshot runtimeSnapshot = runtime.Snapshot();
+        ForensicSnapshot forensic = metrics.CaptureForensicSnapshot();
+        double measurementSeconds = config.MeasurementDuration.TotalSeconds;
+
+        long producerObservedTicks = snapshot.ActiveTicks + snapshot.BlockedTicks;
+        double blockedPercent = producerObservedTicks <= 0
+            ? 0
+            : snapshot.BlockedTicks * 100d / producerObservedTicks;
+
+        double activePercent = producerObservedTicks <= 0
+            ? 0
+            : snapshot.ActiveTicks * 100d / producerObservedTicks;
+
+        double activeMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(snapshot.ActiveTicks);
+        double blockedMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(snapshot.BlockedTicks);
+        double queueWaitMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(snapshot.ProducerQueueWaitTicks);
+
+        long fallbackAllocatedBytes = GC.GetTotalAllocatedBytes(precise: false) - allocatedStartBytes;
+        double workingSetMb = runtimeSnapshot.LastWorkingSetBytes > 0
+            ? runtimeSnapshot.LastWorkingSetBytes / 1024d / 1024d
+            : process.WorkingSet64 / 1024d / 1024d;
+
+        double heapMb = runtimeSnapshot.LastGcHeapBytes > 0
+            ? runtimeSnapshot.LastGcHeapBytes / 1024d / 1024d
+            : GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024d;
+
+        double allocatedMb = runtimeSnapshot.LastAllocatedBytes > 0
+            ? runtimeSnapshot.LastAllocatedBytes / 1024d / 1024d
+            : fallbackAllocatedBytes / 1024d / 1024d;
+
+        long effectiveQueueCapacityFromBytes = snapshot.ArticleBytes <= 0 ? 0 : config.MaxResidentBytes / snapshot.ArticleBytes;
+
+        return new BenchmarkResult(
+            BenchmarkBuildVersion: TransitServerStressRunner.BenchmarkBuildVersion,
+            RuntimeIdentity: TransitServerStressRunner.RuntimeIdentity,
+            WorkloadPreparation: workloadPreparation,
+            MeasurementStartUtc: measurementStartUtc,
+            MeasurementEndUtc: measurementEndUtc,
+            DrainDuration: drainDuration,
+            OutstandingAtMeasurementEnd: outstandingAtMeasurementEnd,
+            DrainedAfterMeasurement: drainedAfterMeasurement,
+            GeneratedArticles: snapshot.GeneratedCount,
+            GeneratedBytes: snapshot.GeneratedBytes,
+            GeneratedGbps: snapshot.GeneratedBytes * 8d / 1_000_000_000d / measurementSeconds,
+            AdmittedArticles: snapshot.AdmittedCount,
+            AdmittedBytes: snapshot.AdmittedBytes,
+            AdmittedGbps: snapshot.AdmittedBytes * 8d / 1_000_000_000d / measurementSeconds,
+            AcceptedArticles: snapshot.AcceptedCount,
+            AcceptedBytes: snapshot.AcceptedBytes,
+            AcceptedGbps: snapshot.AcceptedBytes * 8d / 1_000_000_000d / measurementSeconds,
+            RejectedArticles: snapshot.RejectedCount,
+            AmbiguousArticles: snapshot.AmbiguousCount,
+            MinQueueDepth: snapshot.MinQueueDepth,
+            AverageQueueDepth: snapshot.AverageQueueDepth,
+            AverageQueuedBytes: snapshot.AverageQueueBytes,
+            PeakQueueDepth: snapshot.PeakQueueDepth,
+            PeakQueuedBytes: snapshot.PeakQueueBytes,
+            PeakInFlight: snapshot.PeakInFlight,
+            PeakActualPending: snapshot.PeakActualPending,
+            ProducerActivePercent: activePercent,
+            ProducerBlockedPercent: blockedPercent,
+            ProducerActiveMilliseconds: activeMilliseconds,
+            ProducerBlockedMilliseconds: blockedMilliseconds,
+            ProducerQueueWaitMilliseconds: queueWaitMilliseconds,
+            AverageCpuPercent: runtimeSnapshot.AverageCpuPercent,
+            AverageHostCpuPercent: runtimeSnapshot.AverageHostCpuPercent,
+            AverageTransitServerCpuPercent: runtimeSnapshot.AverageTransitServerCpuPercent,
+            PeakHostCpuPercent: runtimeSnapshot.PeakHostCpuPercent,
+            PeakTransitServerCpuPercent: runtimeSnapshot.PeakTransitServerCpuPercent,
+            WorkingSetMb: workingSetMb,
+            GcHeapMb: heapMb,
+            AllocatedMb: allocatedMb,
+            Gen0Collections: GC.CollectionCount(0),
+            Gen1Collections: GC.CollectionCount(1),
+            Gen2Collections: GC.CollectionCount(2),
+            AverageDispatchQueueWaitUs: forensic.AverageDispatchQueueWaitUs,
+            P50DispatchQueueWaitUs: forensic.P50DispatchQueueWaitUs,
+            P95DispatchQueueWaitUs: forensic.P95DispatchQueueWaitUs,
+            P99DispatchQueueWaitUs: forensic.P99DispatchQueueWaitUs,
+            MaxDispatchQueueWaitUs: forensic.MaxDispatchQueueWaitUs,
+            DispatchQueueWaitSampleCount: forensic.DispatchQueueWaitSampleCount,
+            AverageSocketWriteUs: forensic.AverageSocketWriteUs,
+            P50SocketWriteUs: forensic.P50SocketWriteUs,
+            P95SocketWriteUs: forensic.P95SocketWriteUs,
+            P99SocketWriteUs: forensic.P99SocketWriteUs,
+            MaxSocketWriteUs: forensic.MaxSocketWriteUs,
+            SocketWriteSampleCount: forensic.SocketWriteSampleCount,
+            AverageResponseWaitUs: forensic.AverageResponseWaitUs,
+            P50ResponseWaitUs: forensic.P50ResponseWaitUs,
+            P95ResponseWaitUs: forensic.P95ResponseWaitUs,
+            P99ResponseWaitUs: forensic.P99ResponseWaitUs,
+            MaxResponseWaitUs: forensic.MaxResponseWaitUs,
+            ResponseWaitSampleCount: forensic.ResponseWaitSampleCount,
+            AverageParseCorrelationUs: forensic.AverageParseCorrelationUs,
+            P50ParseCorrelationUs: forensic.P50ParseCorrelationUs,
+            P95ParseCorrelationUs: forensic.P95ParseCorrelationUs,
+            P99ParseCorrelationUs: forensic.P99ParseCorrelationUs,
+            MaxParseCorrelationUs: forensic.MaxParseCorrelationUs,
+            ParseCorrelationSampleCount: forensic.ParseCorrelationSampleCount,
+            AverageTotalPublishLatencyUs: forensic.AverageTotalPublishLatencyUs,
+            P50TotalPublishLatencyUs: forensic.P50TotalPublishLatencyUs,
+            P95TotalPublishLatencyUs: forensic.P95TotalPublishLatencyUs,
+            P99TotalPublishLatencyUs: forensic.P99TotalPublishLatencyUs,
+            MaxTotalPublishLatencyUs: forensic.MaxTotalPublishLatencyUs,
+            TotalPublishLatencySampleCount: forensic.TotalPublishLatencySampleCount,
+            AveragePublishLatencyUs: forensic.AveragePublishLatencyUs,
+            MinPublishLatencyUs: forensic.MinPublishLatencyUs,
+            P50PublishLatencyUs: forensic.P50PublishLatencyUs,
+            P95PublishLatencyUs: forensic.P95PublishLatencyUs,
+            P99PublishLatencyUs: forensic.P99PublishLatencyUs,
+            MaxPublishLatencyUs: forensic.MaxPublishLatencyUs,
+            AverageLifecycleLatencyUs: forensic.AverageLifecycleLatencyUs,
+            PendingDepthLatencyBuckets: forensic.PendingDepthLatencyBuckets,
+            ForensicSampleCount: forensic.ForensicSampleCount,
+            ConnectionTimeSeriesSummary: forensic.ConnectionTimeSeriesSummary,
+            DispatcherTimeSeriesSummary: forensic.DispatcherTimeSeriesSummary,
+            ObservabilityNotes: forensic.ObservabilityNotes,
+            EffectiveQueueArticleCapacityFromBytes: effectiveQueueCapacityFromBytes);
     }
 
     private static async Task ProducerLoopAsync(
@@ -1574,14 +1709,6 @@ internal static class TransitServerStressRunner
 
     private readonly record struct QueuedArticle(string MessageId, int PayloadLength);
 
-    private readonly record struct WorkloadPreparationSummary(
-        double PreGenerationDurationMilliseconds,
-        double PayloadPreparationDurationMilliseconds,
-        int MessageIdPoolSize,
-        int UniqueMessageIdCount,
-        int DuplicateMessageIdCount,
-        int ReusablePayloadBytes);
-
     private sealed class PreparedBenchmarkWorkload : IDisposable
     {
         private readonly string[] _messageIds;
@@ -2219,354 +2346,6 @@ internal static class TransitServerStressRunner
                 return new RuntimeSnapshot(avgCpu, avgHostCpu, avgTransitCpu, _peakHostCpuPercent, _peakTransitServerCpuPercent, _lastWorkingSet, _lastGcHeap, _lastAllocated);
             }
         }
-    }
-
-    private readonly record struct MeasurementSnapshot(
-        long GeneratedCount,
-        long GeneratedBytes,
-        long AdmittedCount,
-        long AdmittedBytes,
-        long AcceptedCount,
-        long AcceptedBytes,
-        long RejectedCount,
-        long AmbiguousCount,
-        long CompletedCount,
-        long BlockedTicks,
-        long GenerationTicks,
-        long OtherActiveTicks,
-        long ActiveTicks,
-        long LoopTicks,
-        long PeakQueueDepth,
-        long PeakQueueBytes,
-        long PeakInFlight,
-        long PeakActualPending,
-        long MinQueueDepth,
-        long MinQueueBytes,
-        double AverageQueueDepth,
-        double AverageQueueBytes,
-        long ProducerQueueWaitTicks,
-        int ArticleBytes);
-
-    private readonly record struct RuntimeSnapshot(
-        double AverageCpuPercent,
-        double AverageHostCpuPercent,
-        double AverageTransitServerCpuPercent,
-        double PeakHostCpuPercent,
-        double PeakTransitServerCpuPercent,
-        long LastWorkingSetBytes,
-        long LastGcHeapBytes,
-        long LastAllocatedBytes);
-
-    private readonly record struct BenchmarkResult(
-        string BenchmarkBuildVersion,
-        RuntimeExecutionIdentity RuntimeIdentity,
-        WorkloadPreparationSummary WorkloadPreparation,
-        DateTimeOffset MeasurementStartUtc,
-        DateTimeOffset MeasurementEndUtc,
-        TimeSpan DrainDuration,
-        long OutstandingAtMeasurementEnd,
-        long DrainedAfterMeasurement,
-        long GeneratedArticles,
-        long GeneratedBytes,
-        double GeneratedGbps,
-        long AdmittedArticles,
-        long AdmittedBytes,
-        double AdmittedGbps,
-        long AcceptedArticles,
-        long AcceptedBytes,
-        double AcceptedGbps,
-        long RejectedArticles,
-        long AmbiguousArticles,
-        long MinQueueDepth,
-        double AverageQueueDepth,
-        double AverageQueuedBytes,
-        long PeakQueueDepth,
-        long PeakQueuedBytes,
-        long PeakInFlight,
-        long PeakActualPending,
-        double ProducerActivePercent,
-        double ProducerBlockedPercent,
-        double ProducerActiveMilliseconds,
-        double ProducerBlockedMilliseconds,
-        double ProducerQueueWaitMilliseconds,
-        double AverageCpuPercent,
-        double AverageHostCpuPercent,
-        double AverageTransitServerCpuPercent,
-        double PeakHostCpuPercent,
-        double PeakTransitServerCpuPercent,
-        double WorkingSetMb,
-        double GcHeapMb,
-        double AllocatedMb,
-        int Gen0Collections,
-        int Gen1Collections,
-        int Gen2Collections,
-        double AverageDispatchQueueWaitUs,
-        double P50DispatchQueueWaitUs,
-        double P95DispatchQueueWaitUs,
-        double P99DispatchQueueWaitUs,
-        double MaxDispatchQueueWaitUs,
-        long DispatchQueueWaitSampleCount,
-        double AverageSocketWriteUs,
-        double P50SocketWriteUs,
-        double P95SocketWriteUs,
-        double P99SocketWriteUs,
-        double MaxSocketWriteUs,
-        long SocketWriteSampleCount,
-        double AverageResponseWaitUs,
-        double P50ResponseWaitUs,
-        double P95ResponseWaitUs,
-        double P99ResponseWaitUs,
-        double MaxResponseWaitUs,
-        long ResponseWaitSampleCount,
-        double AverageParseCorrelationUs,
-        double P50ParseCorrelationUs,
-        double P95ParseCorrelationUs,
-        double P99ParseCorrelationUs,
-        double MaxParseCorrelationUs,
-        long ParseCorrelationSampleCount,
-        double AverageTotalPublishLatencyUs,
-        double P50TotalPublishLatencyUs,
-        double P95TotalPublishLatencyUs,
-        double P99TotalPublishLatencyUs,
-        double MaxTotalPublishLatencyUs,
-        long TotalPublishLatencySampleCount,
-        double AveragePublishLatencyUs,
-        double MinPublishLatencyUs,
-        double P50PublishLatencyUs,
-        double P95PublishLatencyUs,
-        double P99PublishLatencyUs,
-        double MaxPublishLatencyUs,
-        double AverageLifecycleLatencyUs,
-        string PendingDepthLatencyBuckets,
-        int ForensicSampleCount,
-        string ConnectionTimeSeriesSummary,
-        string DispatcherTimeSeriesSummary,
-        string ObservabilityNotes,
-        long EffectiveQueueArticleCapacityFromBytes)
-    {
-        internal static BenchmarkResult Create(
-            TransitBenchmarkConfig config,
-            MeasurementSnapshot snapshot,
-            MeasurementMetrics metrics,
-            RuntimeMetrics runtime,
-            Process process,
-            WorkloadPreparationSummary workloadPreparation,
-            DateTimeOffset measurementStartUtc,
-            DateTimeOffset measurementEndUtc,
-            TimeSpan drainDuration,
-            long outstandingAtMeasurementEnd,
-            long drainedAfterMeasurement,
-            long allocatedStartBytes,
-            bool enableForensicDiagnostics)
-        {
-            RuntimeSnapshot runtimeSnapshot = runtime.Snapshot();
-            ForensicSnapshot forensic = metrics.CaptureForensicSnapshot();
-            double measurementSeconds = config.MeasurementDuration.TotalSeconds;
-
-            long producerObservedTicks = snapshot.ActiveTicks + snapshot.BlockedTicks;
-            double blockedPercent = producerObservedTicks <= 0
-                ? 0
-                : snapshot.BlockedTicks * 100d / producerObservedTicks;
-
-            double activePercent = producerObservedTicks <= 0
-                ? 0
-                : snapshot.ActiveTicks * 100d / producerObservedTicks;
-
-            double activeMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(snapshot.ActiveTicks);
-            double blockedMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(snapshot.BlockedTicks);
-            double queueWaitMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(snapshot.ProducerQueueWaitTicks);
-
-            long fallbackAllocatedBytes = GC.GetTotalAllocatedBytes(precise: false) - allocatedStartBytes;
-            double workingSetMb = runtimeSnapshot.LastWorkingSetBytes > 0
-                ? runtimeSnapshot.LastWorkingSetBytes / 1024d / 1024d
-                : process.WorkingSet64 / 1024d / 1024d;
-
-            double heapMb = runtimeSnapshot.LastGcHeapBytes > 0
-                ? runtimeSnapshot.LastGcHeapBytes / 1024d / 1024d
-                : GC.GetTotalMemory(forceFullCollection: false) / 1024d / 1024d;
-
-            double allocatedMb = runtimeSnapshot.LastAllocatedBytes > 0
-                ? runtimeSnapshot.LastAllocatedBytes / 1024d / 1024d
-                : fallbackAllocatedBytes / 1024d / 1024d;
-
-            long effectiveQueueCapacityFromBytes = snapshot.ArticleBytes <= 0 ? 0 : config.MaxResidentBytes / snapshot.ArticleBytes;
-
-            return new BenchmarkResult(
-                BenchmarkBuildVersion: TransitServerStressRunner.BenchmarkBuildVersion,
-                RuntimeIdentity: TransitServerStressRunner.RuntimeIdentity,
-                WorkloadPreparation: workloadPreparation,
-                MeasurementStartUtc: measurementStartUtc,
-                MeasurementEndUtc: measurementEndUtc,
-                DrainDuration: drainDuration,
-                OutstandingAtMeasurementEnd: outstandingAtMeasurementEnd,
-                DrainedAfterMeasurement: drainedAfterMeasurement,
-                GeneratedArticles: snapshot.GeneratedCount,
-                GeneratedBytes: snapshot.GeneratedBytes,
-                GeneratedGbps: snapshot.GeneratedBytes * 8d / 1_000_000_000d / measurementSeconds,
-                AdmittedArticles: snapshot.AdmittedCount,
-                AdmittedBytes: snapshot.AdmittedBytes,
-                AdmittedGbps: snapshot.AdmittedBytes * 8d / 1_000_000_000d / measurementSeconds,
-                AcceptedArticles: snapshot.AcceptedCount,
-                AcceptedBytes: snapshot.AcceptedBytes,
-                AcceptedGbps: snapshot.AcceptedBytes * 8d / 1_000_000_000d / measurementSeconds,
-                RejectedArticles: snapshot.RejectedCount,
-                AmbiguousArticles: snapshot.AmbiguousCount,
-                MinQueueDepth: snapshot.MinQueueDepth,
-                AverageQueueDepth: snapshot.AverageQueueDepth,
-                AverageQueuedBytes: snapshot.AverageQueueBytes,
-                PeakQueueDepth: snapshot.PeakQueueDepth,
-                PeakQueuedBytes: snapshot.PeakQueueBytes,
-                PeakInFlight: snapshot.PeakInFlight,
-                PeakActualPending: snapshot.PeakActualPending,
-                ProducerActivePercent: activePercent,
-                ProducerBlockedPercent: blockedPercent,
-                ProducerActiveMilliseconds: activeMilliseconds,
-                ProducerBlockedMilliseconds: blockedMilliseconds,
-                ProducerQueueWaitMilliseconds: queueWaitMilliseconds,
-                AverageCpuPercent: runtimeSnapshot.AverageCpuPercent,
-                AverageHostCpuPercent: runtimeSnapshot.AverageHostCpuPercent,
-                AverageTransitServerCpuPercent: runtimeSnapshot.AverageTransitServerCpuPercent,
-                PeakHostCpuPercent: runtimeSnapshot.PeakHostCpuPercent,
-                PeakTransitServerCpuPercent: runtimeSnapshot.PeakTransitServerCpuPercent,
-                WorkingSetMb: workingSetMb,
-                GcHeapMb: heapMb,
-                AllocatedMb: allocatedMb,
-                Gen0Collections: GC.CollectionCount(0),
-                Gen1Collections: GC.CollectionCount(1),
-                Gen2Collections: GC.CollectionCount(2),
-                AverageDispatchQueueWaitUs: forensic.AverageDispatchQueueWaitUs,
-                P50DispatchQueueWaitUs: forensic.P50DispatchQueueWaitUs,
-                P95DispatchQueueWaitUs: forensic.P95DispatchQueueWaitUs,
-                P99DispatchQueueWaitUs: forensic.P99DispatchQueueWaitUs,
-                MaxDispatchQueueWaitUs: forensic.MaxDispatchQueueWaitUs,
-                DispatchQueueWaitSampleCount: forensic.DispatchQueueWaitSampleCount,
-                AverageSocketWriteUs: forensic.AverageSocketWriteUs,
-                P50SocketWriteUs: forensic.P50SocketWriteUs,
-                P95SocketWriteUs: forensic.P95SocketWriteUs,
-                P99SocketWriteUs: forensic.P99SocketWriteUs,
-                MaxSocketWriteUs: forensic.MaxSocketWriteUs,
-                SocketWriteSampleCount: forensic.SocketWriteSampleCount,
-                AverageResponseWaitUs: forensic.AverageResponseWaitUs,
-                P50ResponseWaitUs: forensic.P50ResponseWaitUs,
-                P95ResponseWaitUs: forensic.P95ResponseWaitUs,
-                P99ResponseWaitUs: forensic.P99ResponseWaitUs,
-                MaxResponseWaitUs: forensic.MaxResponseWaitUs,
-                ResponseWaitSampleCount: forensic.ResponseWaitSampleCount,
-                AverageParseCorrelationUs: forensic.AverageParseCorrelationUs,
-                P50ParseCorrelationUs: forensic.P50ParseCorrelationUs,
-                P95ParseCorrelationUs: forensic.P95ParseCorrelationUs,
-                P99ParseCorrelationUs: forensic.P99ParseCorrelationUs,
-                MaxParseCorrelationUs: forensic.MaxParseCorrelationUs,
-                ParseCorrelationSampleCount: forensic.ParseCorrelationSampleCount,
-                AverageTotalPublishLatencyUs: forensic.AverageTotalPublishLatencyUs,
-                P50TotalPublishLatencyUs: forensic.P50TotalPublishLatencyUs,
-                P95TotalPublishLatencyUs: forensic.P95TotalPublishLatencyUs,
-                P99TotalPublishLatencyUs: forensic.P99TotalPublishLatencyUs,
-                MaxTotalPublishLatencyUs: forensic.MaxTotalPublishLatencyUs,
-                TotalPublishLatencySampleCount: forensic.TotalPublishLatencySampleCount,
-                AveragePublishLatencyUs: forensic.AveragePublishLatencyUs,
-                MinPublishLatencyUs: forensic.MinPublishLatencyUs,
-                P50PublishLatencyUs: forensic.P50PublishLatencyUs,
-                P95PublishLatencyUs: forensic.P95PublishLatencyUs,
-                P99PublishLatencyUs: forensic.P99PublishLatencyUs,
-                MaxPublishLatencyUs: forensic.MaxPublishLatencyUs,
-                AverageLifecycleLatencyUs: forensic.AverageLifecycleLatencyUs,
-                PendingDepthLatencyBuckets: forensic.PendingDepthLatencyBuckets,
-                ForensicSampleCount: forensic.ForensicSampleCount,
-                ConnectionTimeSeriesSummary: forensic.ConnectionTimeSeriesSummary,
-                DispatcherTimeSeriesSummary: forensic.DispatcherTimeSeriesSummary,
-                ObservabilityNotes: forensic.ObservabilityNotes,
-                EffectiveQueueArticleCapacityFromBytes: effectiveQueueCapacityFromBytes);
-        }
-    }
-
-    private readonly record struct ForensicSnapshot(
-        double AverageDispatchQueueWaitUs,
-        double P50DispatchQueueWaitUs,
-        double P95DispatchQueueWaitUs,
-        double P99DispatchQueueWaitUs,
-        double MaxDispatchQueueWaitUs,
-        long DispatchQueueWaitSampleCount,
-        double AverageSocketWriteUs,
-        double P50SocketWriteUs,
-        double P95SocketWriteUs,
-        double P99SocketWriteUs,
-        double MaxSocketWriteUs,
-        long SocketWriteSampleCount,
-        double AverageResponseWaitUs,
-        double P50ResponseWaitUs,
-        double P95ResponseWaitUs,
-        double P99ResponseWaitUs,
-        double MaxResponseWaitUs,
-        long ResponseWaitSampleCount,
-        double AverageParseCorrelationUs,
-        double P50ParseCorrelationUs,
-        double P95ParseCorrelationUs,
-        double P99ParseCorrelationUs,
-        double MaxParseCorrelationUs,
-        long ParseCorrelationSampleCount,
-        double AverageTotalPublishLatencyUs,
-        double P50TotalPublishLatencyUs,
-        double P95TotalPublishLatencyUs,
-        double P99TotalPublishLatencyUs,
-        double MaxTotalPublishLatencyUs,
-        long TotalPublishLatencySampleCount,
-        double AveragePublishLatencyUs,
-        double MinPublishLatencyUs,
-        double P50PublishLatencyUs,
-        double P95PublishLatencyUs,
-        double P99PublishLatencyUs,
-        double MaxPublishLatencyUs,
-        double AverageLifecycleLatencyUs,
-        string PendingDepthLatencyBuckets,
-        int ForensicSampleCount,
-        string ConnectionTimeSeriesSummary,
-        string DispatcherTimeSeriesSummary,
-        string ObservabilityNotes)
-    {
-        internal static ForensicSnapshot Empty => new(
-            AverageDispatchQueueWaitUs: 0,
-            P50DispatchQueueWaitUs: 0,
-            P95DispatchQueueWaitUs: 0,
-            P99DispatchQueueWaitUs: 0,
-            MaxDispatchQueueWaitUs: 0,
-            DispatchQueueWaitSampleCount: 0,
-            AverageSocketWriteUs: 0,
-            P50SocketWriteUs: 0,
-            P95SocketWriteUs: 0,
-            P99SocketWriteUs: 0,
-            MaxSocketWriteUs: 0,
-            SocketWriteSampleCount: 0,
-            AverageResponseWaitUs: 0,
-            P50ResponseWaitUs: 0,
-            P95ResponseWaitUs: 0,
-            P99ResponseWaitUs: 0,
-            MaxResponseWaitUs: 0,
-            ResponseWaitSampleCount: 0,
-            AverageParseCorrelationUs: 0,
-            P50ParseCorrelationUs: 0,
-            P95ParseCorrelationUs: 0,
-            P99ParseCorrelationUs: 0,
-            MaxParseCorrelationUs: 0,
-            ParseCorrelationSampleCount: 0,
-            AverageTotalPublishLatencyUs: 0,
-            P50TotalPublishLatencyUs: 0,
-            P95TotalPublishLatencyUs: 0,
-            P99TotalPublishLatencyUs: 0,
-            MaxTotalPublishLatencyUs: 0,
-            TotalPublishLatencySampleCount: 0,
-            AveragePublishLatencyUs: 0,
-            MinPublishLatencyUs: 0,
-            P50PublishLatencyUs: 0,
-            P95PublishLatencyUs: 0,
-            P99PublishLatencyUs: 0,
-            MaxPublishLatencyUs: 0,
-            AverageLifecycleLatencyUs: 0,
-            PendingDepthLatencyBuckets: "(forensic diagnostics disabled)",
-            ForensicSampleCount: 0,
-            ConnectionTimeSeriesSummary: "(forensic diagnostics disabled)",
-            DispatcherTimeSeriesSummary: "(forensic diagnostics disabled)",
-            ObservabilityNotes: "Forensic diagnostics disabled for this run.");
     }
 
     private sealed class TransitPublisherBenchmarkLogger : ILogger<TransitPublisher>
