@@ -2,12 +2,9 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-using System.Runtime.InteropServices;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
@@ -17,7 +14,6 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 
 internal static class TransitServerStressRunner
 {
-    private const string RequiredTransitHostname = "incoming.usenet.ninja";
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
     private const int DefaultWarmupSeconds = 10;
     private const int ValidationSeconds = 10;
@@ -31,7 +27,7 @@ internal static class TransitServerStressRunner
     private static readonly object TransitServerCpuGate = new();
     private static DateTime _transitServerCpuLastSampleUtc;
     private static long _transitServerCpuLastTotalTicks;
-    private static readonly RuntimeExecutionIdentity RuntimeIdentity = CaptureRuntimeExecutionIdentity();
+    private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
     private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
 
     internal static async Task RunAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
@@ -1198,210 +1194,9 @@ internal static class TransitServerStressRunner
         }
     }
 
-    private static RuntimeExecutionIdentity CaptureRuntimeExecutionIdentity()
-    {
-        Assembly assembly = Assembly.GetEntryAssembly() ?? typeof(TransitServerStressRunner).Assembly;
-        string runtimeAssemblyPath = Path.GetFullPath(assembly.Location);
-        string runtimeAssemblyVersion = assembly.GetName().Version?.ToString() ?? "(unknown)";
-        string? assemblyFileVersion = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
-
-        string processPath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? "(unknown)";
-        string workingDirectory = Environment.CurrentDirectory;
-
-        string? sourceRevision = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        DateTimeOffset? buildTimestampUtc = null;
-        if (File.Exists(runtimeAssemblyPath))
-        {
-            DateTime lastWriteUtc = File.GetLastWriteTimeUtc(runtimeAssemblyPath);
-            if (lastWriteUtc != DateTime.MinValue)
-            {
-                buildTimestampUtc = new DateTimeOffset(lastWriteUtc, TimeSpan.Zero);
-            }
-        }
-
-        return new RuntimeExecutionIdentity(
-            RuntimeAssemblyPath: runtimeAssemblyPath,
-            RuntimeAssemblyVersion: runtimeAssemblyVersion,
-            AssemblyFileVersion: assemblyFileVersion,
-            ProcessPath: processPath,
-            WorkingDirectory: workingDirectory,
-            Configuration: AppBuildConfiguration.Value,
-            Platform: AppBuildPlatform.Value,
-            TargetFramework: AppTargetFramework.Value,
-            RuntimeIdentifier: AppRuntimeIdentifier.Value,
-            Architecture: RuntimeInformation.ProcessArchitecture.ToString(),
-            SourceRevision: sourceRevision,
-            BuildTimestampUtc: buildTimestampUtc);
-    }
-
     private static void EnsureRuntimeIdentityMatches(RuntimeIdentityExpectation expected)
     {
-        if (string.IsNullOrWhiteSpace(expected.ExpectedAssemblyPath) ||
-            string.IsNullOrWhiteSpace(expected.ExpectedAssemblyVersion) ||
-            string.IsNullOrWhiteSpace(expected.ExpectedFileVersion) ||
-            string.IsNullOrWhiteSpace(expected.ExpectedTargetFramework) ||
-            string.IsNullOrWhiteSpace(expected.ExpectedArchitecture))
-        {
-            throw new InvalidOperationException(
-                "Runtime identity guard requires expected hard-identity options: --expected-assembly-path, --expected-assembly-version, --expected-file-version, --expected-target-framework, and --expected-architecture.");
-        }
-
-        List<string> mismatches = [];
-        List<string> provenanceNotes = [];
-
-        string expectedPath = Path.GetFullPath(expected.ExpectedAssemblyPath);
-        string actualPath = Path.GetFullPath(RuntimeIdentity.RuntimeAssemblyPath);
-        if (!string.Equals(expectedPath, actualPath, StringComparison.OrdinalIgnoreCase))
-        {
-            mismatches.Add($"AssemblyPath expected='{expectedPath}' actual='{actualPath}'");
-        }
-
-        if (!string.Equals(expected.ExpectedAssemblyVersion, RuntimeIdentity.RuntimeAssemblyVersion, StringComparison.Ordinal))
-        {
-            mismatches.Add($"AssemblyVersion expected='{expected.ExpectedAssemblyVersion}' actual='{RuntimeIdentity.RuntimeAssemblyVersion}'");
-        }
-
-        string actualFileVersion = RuntimeIdentity.AssemblyFileVersion ?? "(unknown)";
-        if (!string.Equals(expected.ExpectedFileVersion, actualFileVersion, StringComparison.Ordinal))
-        {
-            mismatches.Add($"FileVersion expected='{expected.ExpectedFileVersion}' actual='{actualFileVersion}'");
-        }
-
-        string actualConfiguration = RuntimeIdentity.Configuration ?? "(unknown)";
-        if (!string.IsNullOrWhiteSpace(expected.ExpectedConfiguration))
-        {
-            if (IsUnknownIdentityValue(actualConfiguration))
-            {
-                provenanceNotes.Add($"Configuration expected='{expected.ExpectedConfiguration}' actual='(unknown)' (treated as build provenance)");
-            }
-            else if (!string.Equals(expected.ExpectedConfiguration, actualConfiguration, StringComparison.OrdinalIgnoreCase))
-            {
-                provenanceNotes.Add($"Configuration expected='{expected.ExpectedConfiguration}' actual='{actualConfiguration}' (treated as build provenance)");
-            }
-        }
-
-        string actualPlatform = RuntimeIdentity.Platform ?? "(unknown)";
-        if (!string.IsNullOrWhiteSpace(expected.ExpectedPlatform))
-        {
-            if (IsUnknownIdentityValue(actualPlatform))
-            {
-                provenanceNotes.Add($"Platform expected='{expected.ExpectedPlatform}' actual='(unknown)' (treated as build provenance)");
-            }
-            else if (!string.Equals(expected.ExpectedPlatform, actualPlatform, StringComparison.OrdinalIgnoreCase))
-            {
-                provenanceNotes.Add($"Platform expected='{expected.ExpectedPlatform}' actual='{actualPlatform}' (treated as build provenance)");
-            }
-        }
-
-        string actualTargetFramework = RuntimeIdentity.TargetFramework ?? "(unknown)";
-        string normalizedExpectedTargetFramework = NormalizeTargetFramework(expected.ExpectedTargetFramework);
-        string normalizedActualTargetFramework = NormalizeTargetFramework(actualTargetFramework);
-        if (!string.Equals(normalizedExpectedTargetFramework, normalizedActualTargetFramework, StringComparison.OrdinalIgnoreCase))
-        {
-            mismatches.Add($"TargetFramework expected='{expected.ExpectedTargetFramework}' (normalized='{normalizedExpectedTargetFramework}') actual='{actualTargetFramework}' (normalized='{normalizedActualTargetFramework}')");
-        }
-
-        string actualRuntimeIdentifier = RuntimeIdentity.RuntimeIdentifier ?? "(unknown)";
-        if (!string.IsNullOrWhiteSpace(expected.ExpectedRuntimeIdentifier))
-        {
-            if (IsUnknownIdentityValue(actualRuntimeIdentifier))
-            {
-                provenanceNotes.Add($"RuntimeIdentifier expected='{expected.ExpectedRuntimeIdentifier}' actual='(unknown)' (treated as build provenance)");
-            }
-            else if (!string.Equals(expected.ExpectedRuntimeIdentifier, actualRuntimeIdentifier, StringComparison.OrdinalIgnoreCase))
-            {
-                provenanceNotes.Add($"RuntimeIdentifier expected='{expected.ExpectedRuntimeIdentifier}' actual='{actualRuntimeIdentifier}' (treated as build provenance)");
-            }
-        }
-
-        if (!string.Equals(expected.ExpectedArchitecture, RuntimeIdentity.Architecture, StringComparison.OrdinalIgnoreCase))
-        {
-            mismatches.Add($"Architecture expected='{expected.ExpectedArchitecture}' actual='{RuntimeIdentity.Architecture}'");
-        }
-
-        if (mismatches.Count == 0)
-        {
-            if (provenanceNotes.Count > 0)
-            {
-                Console.WriteLine("Runtime identity provenance notes:");
-                foreach (string note in provenanceNotes)
-                {
-                    Console.WriteLine($"  {note}");
-                }
-            }
-
-            return;
-        }
-
-        StringBuilder message = new();
-        message.AppendLine("Runtime identity mismatch detected. ABORTING before warmup/measurement.");
-        message.AppendLine("EXPECTED:");
-        message.AppendLine($"  path={expected.ExpectedAssemblyPath}");
-        message.AppendLine($"  assemblyVersion={expected.ExpectedAssemblyVersion}");
-        message.AppendLine($"  fileVersion={expected.ExpectedFileVersion}");
-        message.AppendLine($"  configuration={expected.ExpectedConfiguration ?? "(unspecified)"}");
-        message.AppendLine($"  platform={expected.ExpectedPlatform ?? "(unspecified)"}");
-        message.AppendLine($"  targetFramework={expected.ExpectedTargetFramework}");
-        message.AppendLine($"  runtimeIdentifier={expected.ExpectedRuntimeIdentifier ?? "(unspecified)"}");
-        message.AppendLine($"  architecture={expected.ExpectedArchitecture}");
-        message.AppendLine("ACTUAL:");
-        message.AppendLine($"  path={RuntimeIdentity.RuntimeAssemblyPath}");
-        message.AppendLine($"  assemblyVersion={RuntimeIdentity.RuntimeAssemblyVersion}");
-        message.AppendLine($"  fileVersion={actualFileVersion}");
-        message.AppendLine($"  configuration={actualConfiguration}");
-        message.AppendLine($"  platform={actualPlatform}");
-        message.AppendLine($"  targetFramework={actualTargetFramework} (normalized={normalizedActualTargetFramework})");
-        message.AppendLine($"  runtimeIdentifier={actualRuntimeIdentifier}");
-        message.AppendLine($"  architecture={RuntimeIdentity.Architecture}");
-        message.AppendLine($"  processPath={RuntimeIdentity.ProcessPath}");
-        message.AppendLine($"  workingDirectory={RuntimeIdentity.WorkingDirectory}");
-        message.AppendLine("MISMATCH DETAILS:");
-        foreach (string mismatch in mismatches)
-        {
-            message.AppendLine($"  - {mismatch}");
-        }
-
-        if (provenanceNotes.Count > 0)
-        {
-            message.AppendLine("PROVENANCE NOTES:");
-            foreach (string note in provenanceNotes)
-            {
-                message.AppendLine($"  - {note}");
-            }
-        }
-
-        throw new InvalidOperationException(message.ToString());
-    }
-
-    private static bool IsUnknownIdentityValue(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) || string.Equals(value, "(unknown)", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string NormalizeTargetFramework(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "(unknown)";
-        }
-
-        string candidate = value.Trim();
-        if (candidate.StartsWith("net", StringComparison.OrdinalIgnoreCase))
-        {
-            return candidate.ToLowerInvariant();
-        }
-
-        const string prefix = ".NETCoreApp,Version=v";
-        if (candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            string version = candidate[prefix.Length..];
-            if (version.Length > 0)
-            {
-                return "net" + version;
-            }
-        }
-
-        return candidate.ToLowerInvariant();
+        RuntimeIdentityGuard.EnsureMatches(expected, RuntimeIdentity);
     }
 
     private static double ReadHostCpuPercent()
@@ -1504,156 +1299,6 @@ internal static class TransitServerStressRunner
             ShutdownFinishActiveArticles: true,
             RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
             WriteBatchCoalesceMicroseconds: config.WriteBatchCoalesceMicroseconds);
-    }
-
-    private static string FindBackFillerAppSettingsPath()
-    {
-        DirectoryInfo? current = new(AppContext.BaseDirectory);
-
-        while (current is not null)
-        {
-            string candidate = Path.Combine(current.FullName, "VectorNNTP.BackFiller", "appsettings.json");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            current = current.Parent;
-        }
-
-        throw new FileNotFoundException("Unable to locate existing BackFiller appsettings.json from benchmark runner base directory.");
-    }
-
-    private readonly record struct TransitBenchmarkConfig(
-        BenchmarkMode Mode,
-        long BenchmarkInstanceId,
-        string EndpointHost,
-        int EndpointPort,
-        bool EndpointUseSsl,
-        string AppSettingsPath,
-        TimeSpan WarmupDuration,
-        TimeSpan MeasurementDuration,
-        int ConnectionPoolSize,
-        int PerConnectionPipelineDepth,
-        int DispatchWorkerCount,
-        int GeneratorWorkerCount,
-        int WriteBatchCoalesceMicroseconds,
-        int MaxQueuedArticles,
-        long MaxResidentBytes,
-        int ArticleTargetBytes,
-        int ProducerQueueTargetArticles,
-        RuntimeIdentityExpectation ExpectedRuntimeIdentity)
-    {
-        internal static TransitBenchmarkConfig Load(TimeSpan measurementDuration, BenchmarkMode mode, TransitBenchmarkCliOptions cliOptions)
-        {
-            string appSettingsPath = FindBackFillerAppSettingsPath();
-
-            IConfigurationRoot configuration = new ConfigurationBuilder()
-                .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
-                .Build();
-
-            string host = configuration["BackFiller:TransitServer:Host"]
-                ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is missing in existing application configuration.");
-
-            string normalizedHost = host.Trim();
-            if (!normalizedHost.Equals(RequiredTransitHostname, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"Configured TransitServer host must be '{RequiredTransitHostname}', but was '{normalizedHost}'.");
-            }
-
-            string? portRaw = configuration["BackFiller:TransitServer:Port"];
-            if (!int.TryParse(portRaw, out int port) || port is <= 0 or > 65535)
-            {
-                throw new InvalidOperationException("BackFiller:TransitServer:Port is missing or invalid in existing application configuration.");
-            }
-
-            bool useSsl = bool.TryParse(configuration["BackFiller:TransitServer:UseSsl"], out bool parsedUseSsl) && parsedUseSsl;
-
-            int connectionPoolSize = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(cliOptions.ConnectionPoolSize ?? 4, min: 1, max: 64, "connections");
-            int perConnectionPipelineDepth = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(cliOptions.PipelineDepth ?? 8, min: 1, max: 64, "pipeline-depth");
-
-            int defaultDispatchWorkers = checked(connectionPoolSize * perConnectionPipelineDepth);
-            int dispatchWorkerCount = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
-                cliOptions.DispatchWorkers ?? defaultDispatchWorkers,
-                min: 1,
-                max: 512,
-                optionName: "dispatch-workers");
-
-            int articleTargetBytes = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
-                cliOptions.ArticleKilobytes is null ? DefaultArticleTargetBytes : checked(cliOptions.ArticleKilobytes.Value * 1024),
-                min: 128 * 1024,
-                max: 4 * 1024 * 1024,
-                optionName: "article-kib");
-
-            int generatorWorkerCount = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
-                cliOptions.GeneratorWorkers ?? 1,
-                min: 1,
-                max: 512,
-                optionName: "generator-workers");
-
-            int writeBatchCoalesceMicroseconds = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
-                cliOptions.WriteBatchCoalesceMicroseconds ?? 250,
-                min: 1,
-                max: 50_000,
-                optionName: "write-batch-coalesce-us");
-
-            long maxResidentBytes = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateLongRange(
-                cliOptions.QueueMegabytes is null ? 256L * 1024L * 1024L : checked((long)cliOptions.QueueMegabytes.Value * 1024L * 1024L),
-                min: 64L * 1024L * 1024L,
-                max: 2L * 1024L * 1024L * 1024L,
-                optionName: "queue-mib");
-
-            int computedArticlesFromBytes = (int)Math.Max(1, maxResidentBytes / articleTargetBytes);
-            int maxQueuedArticles = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
-                cliOptions.QueueArticles ?? Math.Max(64, computedArticlesFromBytes),
-                min: 1,
-                max: 200_000,
-                optionName: "queue-articles");
-
-            if (maxResidentBytes < articleTargetBytes)
-            {
-                throw new InvalidOperationException("Queue byte budget must be at least one article target size.");
-            }
-
-            int warmupSeconds = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(cliOptions.WarmupSeconds ?? DefaultWarmupSeconds, min: 1, max: 600, optionName: "warmup-seconds");
-
-            int producerQueueTargetArticles = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
-                Math.Min(maxQueuedArticles, 2048),
-                min: 1,
-                max: maxQueuedArticles,
-                optionName: "producer-queue-target-articles");
-
-            RuntimeIdentityExpectation expectedRuntimeIdentity = new(
-                ExpectedAssemblyPath: cliOptions.ExpectedAssemblyPath,
-                ExpectedAssemblyVersion: cliOptions.ExpectedAssemblyVersion,
-                ExpectedFileVersion: cliOptions.ExpectedFileVersion,
-                ExpectedConfiguration: cliOptions.ExpectedConfiguration,
-                ExpectedPlatform: cliOptions.ExpectedPlatform,
-                ExpectedTargetFramework: cliOptions.ExpectedTargetFramework,
-                ExpectedRuntimeIdentifier: cliOptions.ExpectedRuntimeIdentifier,
-                ExpectedArchitecture: cliOptions.ExpectedArchitecture);
-
-            return new TransitBenchmarkConfig(
-                Mode: mode,
-                BenchmarkInstanceId: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                EndpointHost: normalizedHost,
-                EndpointPort: port,
-                EndpointUseSsl: useSsl,
-                AppSettingsPath: appSettingsPath,
-                WarmupDuration: TimeSpan.FromSeconds(warmupSeconds),
-                MeasurementDuration: measurementDuration,
-                ConnectionPoolSize: connectionPoolSize,
-                PerConnectionPipelineDepth: perConnectionPipelineDepth,
-                DispatchWorkerCount: dispatchWorkerCount,
-                GeneratorWorkerCount: generatorWorkerCount,
-                WriteBatchCoalesceMicroseconds: writeBatchCoalesceMicroseconds,
-                MaxQueuedArticles: maxQueuedArticles,
-                MaxResidentBytes: maxResidentBytes,
-                ArticleTargetBytes: articleTargetBytes,
-                ProducerQueueTargetArticles: producerQueueTargetArticles,
-                ExpectedRuntimeIdentity: expectedRuntimeIdentity);
-        }
-
     }
 
     private sealed class BoundedArticleQueue : IDisposable
@@ -3316,68 +2961,4 @@ internal static class TransitServerStressRunner
         }
     }
 
-    private readonly record struct RuntimeIdentityExpectation(
-        string? ExpectedAssemblyPath,
-        string? ExpectedAssemblyVersion,
-        string? ExpectedFileVersion,
-        string? ExpectedConfiguration,
-        string? ExpectedPlatform,
-        string? ExpectedTargetFramework,
-        string? ExpectedRuntimeIdentifier,
-        string? ExpectedArchitecture);
-
-    private readonly record struct RuntimeExecutionIdentity(
-        string RuntimeAssemblyPath,
-        string RuntimeAssemblyVersion,
-        string? AssemblyFileVersion,
-        string ProcessPath,
-        string WorkingDirectory,
-        string? Configuration,
-        string? Platform,
-        string? TargetFramework,
-        string? RuntimeIdentifier,
-        string Architecture,
-        string? SourceRevision,
-        DateTimeOffset? BuildTimestampUtc);
-
-    private static class AppBuildConfiguration
-    {
-        public static readonly string? Value = AppAssemblyMetadata.GetValue("Configuration")
-            ?? typeof(AppBuildConfiguration).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
     }
-
-    private static class AppBuildPlatform
-    {
-        public static readonly string? Value = AppAssemblyMetadata.GetValue("Platform");
-    }
-
-    private static class AppTargetFramework
-    {
-        public static readonly string? Value = AppAssemblyMetadata.GetValue("TargetFramework")
-            ?? typeof(AppTargetFramework).Assembly.GetCustomAttribute<System.Runtime.Versioning.TargetFrameworkAttribute>()?.FrameworkName;
-    }
-
-    private static class AppRuntimeIdentifier
-    {
-        public static readonly string? Value = AppAssemblyMetadata.GetValue("RuntimeIdentifier");
-    }
-
-    private static class AppAssemblyMetadata
-    {
-        public static string? GetValue(string key)
-        {
-            return typeof(AppAssemblyMetadata).Assembly
-                .GetCustomAttributes<AssemblyMetadataAttribute>()
-                .FirstOrDefault(metadata => string.Equals(metadata.Key, key, StringComparison.OrdinalIgnoreCase))
-                ?.Value;
-        }
-    }
-
-    private enum BenchmarkMode
-    {
-        Validation,
-        Full,
-        Saturation,
-        Forensic,
-    }
-}
