@@ -209,9 +209,9 @@ internal static class TransitServerStressRunner
 
         latencySamples.Sort();
 
-        double p50LatencyUs = ComputePercentileMicroseconds(latencySamples, 0.50);
-        double p95LatencyUs = ComputePercentileMicroseconds(latencySamples, 0.95);
-        double p99LatencyUs = ComputePercentileMicroseconds(latencySamples, 0.99);
+        double p50LatencyUs = MetricMathHelpers.ComputePercentileMicroseconds(latencySamples, 0.50);
+        double p95LatencyUs = MetricMathHelpers.ComputePercentileMicroseconds(latencySamples, 0.95);
+        double p99LatencyUs = MetricMathHelpers.ComputePercentileMicroseconds(latencySamples, 0.99);
 
         Console.WriteLine();
         Console.WriteLine($"Total articles generated: {generatedArticles}");
@@ -245,48 +245,7 @@ internal static class TransitServerStressRunner
         Console.WriteLine($"P99 generation time/article (us): {p99LatencyUs:F3}");
 
         Console.WriteLine();
-        PrintRequiredRateComparison(articlesPerSecond, articleTargetBytes);
-    }
-
-    private static double ComputePercentileMicroseconds(List<long> sortedLatencyTicks, double percentile)
-    {
-        ArgumentNullException.ThrowIfNull(sortedLatencyTicks);
-
-        if (sortedLatencyTicks.Count == 0)
-        {
-            return 0;
-        }
-
-        percentile = Math.Clamp(percentile, 0d, 1d);
-        int index = (int)Math.Clamp(Math.Ceiling(percentile * sortedLatencyTicks.Count) - 1, 0, sortedLatencyTicks.Count - 1);
-        long ticks = sortedLatencyTicks[index];
-        return TransitBenchmarkCore.StopwatchTicksToMilliseconds(ticks) * 1000d;
-    }
-
-    private static void PrintRequiredRateComparison(double currentArticlesPerSecond, int articleBytes)
-    {
-        double bitsPerArticle = articleBytes * 8d;
-
-        double articlesPerSecond10Gbps = 10_000_000_000d / bitsPerArticle;
-        double articlesPerSecond20Gbps = 20_000_000_000d / bitsPerArticle;
-        double articlesPerSecond30Gbps = 30_000_000_000d / bitsPerArticle;
-        double articlesPerSecond40Gbps = 40_000_000_000d / bitsPerArticle;
-
-        double requiredImprovementFor10Gbps = currentArticlesPerSecond <= 0
-            ? double.PositiveInfinity
-            : articlesPerSecond10Gbps / currentArticlesPerSecond;
-
-        double currentTo10GbpsRatio = articlesPerSecond10Gbps <= 0
-            ? 0
-            : currentArticlesPerSecond / articlesPerSecond10Gbps;
-
-        Console.WriteLine($"Required rate for 10 Gbps: {articlesPerSecond10Gbps:F4} articles/sec");
-        Console.WriteLine($"Required rate for 20 Gbps: {articlesPerSecond20Gbps:F4} articles/sec");
-        Console.WriteLine($"Required rate for 30 Gbps: {articlesPerSecond30Gbps:F4} articles/sec");
-        Console.WriteLine($"Required rate for 40 Gbps: {articlesPerSecond40Gbps:F4} articles/sec");
-        Console.WriteLine($"Current rate: {currentArticlesPerSecond:F4} articles/sec");
-        Console.WriteLine($"Required improvement for 10 Gbps: {requiredImprovementFor10Gbps:F4}x");
-        Console.WriteLine($"Current rate / 10 Gbps target ratio: {currentTo10GbpsRatio:F4}");
+        FormatHelpers.PrintRequiredRateComparison(articlesPerSecond, articleTargetBytes);
     }
 
     internal static async Task RunSingleTraceAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
@@ -1810,6 +1769,64 @@ internal static class TransitServerStressRunner
         private readonly List<DispatcherSeriesPoint> _dispatcherSeries = [];
         private int _forensicSampleCount;
 
+        private readonly record struct ConnectionCounterState(
+            string ConnectionId,
+            TimeSpan Elapsed,
+            long SubmissionsStarted,
+            long Completed);
+
+        private readonly record struct DispatcherSeriesPoint(
+            TimeSpan Elapsed,
+            int InFlight,
+            long DispatchPending,
+            int ActualPending,
+            int QueueDepth,
+            long QueueBytes);
+
+        private sealed class ConnectionSeriesAggregate
+        {
+            private readonly int _slot;
+            private double _pendingSum;
+            private int _samples;
+            private int _pendingMin = int.MaxValue;
+            private int _pendingMax;
+            private int _maxInFlight;
+            private long _failures;
+            private long _reconnects;
+            private double _submitRateSum;
+            private double _completeRateSum;
+            private double _responseRateSum;
+
+            internal ConnectionSeriesAggregate(int slot)
+            {
+                _slot = slot;
+            }
+
+            internal void Observe(TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot, double submitRate, double completeRate, double responseRate, long reconnects)
+            {
+                _samples++;
+                _pendingSum += snapshot.CurrentConcurrentSubmissions;
+                _pendingMin = Math.Min(_pendingMin, snapshot.CurrentConcurrentSubmissions);
+                _pendingMax = Math.Max(_pendingMax, snapshot.CurrentConcurrentSubmissions);
+                _maxInFlight = Math.Max(_maxInFlight, snapshot.MaxConcurrentSubmissions);
+                _submitRateSum += submitRate;
+                _completeRateSum += completeRate;
+                _responseRateSum += responseRate;
+                _failures = snapshot.SubmissionsFailed + snapshot.SubmissionsUnavailable;
+                _reconnects = reconnects;
+            }
+
+            internal string FormatLine()
+            {
+                double avgPending = _samples == 0 ? 0 : _pendingSum / _samples;
+                double avgSubmitRate = _samples == 0 ? 0 : _submitRateSum / _samples;
+                double avgCompleteRate = _samples == 0 ? 0 : _completeRateSum / _samples;
+                double avgResponseRate = _samples == 0 ? 0 : _responseRateSum / _samples;
+                int pendingMin = _pendingMin == int.MaxValue ? 0 : _pendingMin;
+                return $"slot={_slot}, pending min/avg/max={pendingMin}/{avgPending:F2}/{_pendingMax}, maxInFlight={_maxInFlight}, submitRate={avgSubmitRate:F2}/s, completionRate={avgCompleteRate:F2}/s, responseRate={avgResponseRate:F2}/s, failures={_failures}, reconnects={_reconnects}";
+            }
+        }
+
         private readonly int _articleBytes;
 
         internal MeasurementMetrics(int articleBytes)
@@ -1931,8 +1948,8 @@ internal static class TransitServerStressRunner
                 UpdatePeak(ref _totalPublishTicksMax, totalPublishTicks);
             }
 
-            int submitBucket = ClassifyDepthBucket(pendingAtSubmit);
-            int completeBucket = ClassifyDepthBucket(pendingAtComplete);
+            int submitBucket = MetricMathHelpers.ClassifyDepthBucket(pendingAtSubmit);
+            int completeBucket = MetricMathHelpers.ClassifyDepthBucket(pendingAtComplete);
 
             lock (_forensicGate)
             {
@@ -2051,44 +2068,44 @@ internal static class TransitServerStressRunner
                 long totalPublishSampleCount = Math.Max(1, Interlocked.Read(ref _totalPublishSampleCount));
 
                 return new ForensicSnapshot(
-                    AverageDispatchQueueWaitUs: TicksToUs(Interlocked.Read(ref _dispatchQueueWaitTicksTotal) / (double)dispatchWaitSampleCount),
-                    P50DispatchQueueWaitUs: PercentileUs(_dispatchWaitTicksSamples, 0.50),
-                    P95DispatchQueueWaitUs: PercentileUs(_dispatchWaitTicksSamples, 0.95),
-                    P99DispatchQueueWaitUs: PercentileUs(_dispatchWaitTicksSamples, 0.99),
-                    MaxDispatchQueueWaitUs: TicksToUs(Interlocked.Read(ref _dispatchQueueWaitTicksMax)),
+                    AverageDispatchQueueWaitUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _dispatchQueueWaitTicksTotal) / (double)dispatchWaitSampleCount),
+                    P50DispatchQueueWaitUs: MetricMathHelpers.PercentileUs(_dispatchWaitTicksSamples, 0.50),
+                    P95DispatchQueueWaitUs: MetricMathHelpers.PercentileUs(_dispatchWaitTicksSamples, 0.95),
+                    P99DispatchQueueWaitUs: MetricMathHelpers.PercentileUs(_dispatchWaitTicksSamples, 0.99),
+                    MaxDispatchQueueWaitUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _dispatchQueueWaitTicksMax)),
                     DispatchQueueWaitSampleCount: Interlocked.Read(ref _dispatchQueueWaitSampleCount),
-                    AverageSocketWriteUs: TicksToUs(Interlocked.Read(ref _socketWriteTicksTotal) / (double)socketWriteSampleCount),
-                    P50SocketWriteUs: PercentileUs(_socketWriteTicksSamples, 0.50),
-                    P95SocketWriteUs: PercentileUs(_socketWriteTicksSamples, 0.95),
-                    P99SocketWriteUs: PercentileUs(_socketWriteTicksSamples, 0.99),
-                    MaxSocketWriteUs: TicksToUs(Interlocked.Read(ref _socketWriteTicksMax)),
+                    AverageSocketWriteUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _socketWriteTicksTotal) / (double)socketWriteSampleCount),
+                    P50SocketWriteUs: MetricMathHelpers.PercentileUs(_socketWriteTicksSamples, 0.50),
+                    P95SocketWriteUs: MetricMathHelpers.PercentileUs(_socketWriteTicksSamples, 0.95),
+                    P99SocketWriteUs: MetricMathHelpers.PercentileUs(_socketWriteTicksSamples, 0.99),
+                    MaxSocketWriteUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _socketWriteTicksMax)),
                     SocketWriteSampleCount: Interlocked.Read(ref _socketWriteSampleCount),
-                    AverageResponseWaitUs: TicksToUs(Interlocked.Read(ref _responseWaitTicksTotal) / (double)responseWaitSampleCount),
-                    P50ResponseWaitUs: PercentileUs(_responseWaitTicksSamples, 0.50),
-                    P95ResponseWaitUs: PercentileUs(_responseWaitTicksSamples, 0.95),
-                    P99ResponseWaitUs: PercentileUs(_responseWaitTicksSamples, 0.99),
-                    MaxResponseWaitUs: TicksToUs(Interlocked.Read(ref _responseWaitTicksMax)),
+                    AverageResponseWaitUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _responseWaitTicksTotal) / (double)responseWaitSampleCount),
+                    P50ResponseWaitUs: MetricMathHelpers.PercentileUs(_responseWaitTicksSamples, 0.50),
+                    P95ResponseWaitUs: MetricMathHelpers.PercentileUs(_responseWaitTicksSamples, 0.95),
+                    P99ResponseWaitUs: MetricMathHelpers.PercentileUs(_responseWaitTicksSamples, 0.99),
+                    MaxResponseWaitUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _responseWaitTicksMax)),
                     ResponseWaitSampleCount: Interlocked.Read(ref _responseWaitSampleCount),
-                    AverageParseCorrelationUs: TicksToUs(Interlocked.Read(ref _parseCorrelationTicksTotal) / (double)parseCorrelationSampleCount),
-                    P50ParseCorrelationUs: PercentileUs(_parseCorrelationTicksSamples, 0.50),
-                    P95ParseCorrelationUs: PercentileUs(_parseCorrelationTicksSamples, 0.95),
-                    P99ParseCorrelationUs: PercentileUs(_parseCorrelationTicksSamples, 0.99),
-                    MaxParseCorrelationUs: TicksToUs(Interlocked.Read(ref _parseCorrelationTicksMax)),
+                    AverageParseCorrelationUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _parseCorrelationTicksTotal) / (double)parseCorrelationSampleCount),
+                    P50ParseCorrelationUs: MetricMathHelpers.PercentileUs(_parseCorrelationTicksSamples, 0.50),
+                    P95ParseCorrelationUs: MetricMathHelpers.PercentileUs(_parseCorrelationTicksSamples, 0.95),
+                    P99ParseCorrelationUs: MetricMathHelpers.PercentileUs(_parseCorrelationTicksSamples, 0.99),
+                    MaxParseCorrelationUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _parseCorrelationTicksMax)),
                     ParseCorrelationSampleCount: Interlocked.Read(ref _parseCorrelationSampleCount),
-                    AverageTotalPublishLatencyUs: TicksToUs(Interlocked.Read(ref _totalPublishTicksTotal) / (double)totalPublishSampleCount),
-                    P50TotalPublishLatencyUs: PercentileUs(_totalPublishTicksSamples, 0.50),
-                    P95TotalPublishLatencyUs: PercentileUs(_totalPublishTicksSamples, 0.95),
-                    P99TotalPublishLatencyUs: PercentileUs(_totalPublishTicksSamples, 0.99),
-                    MaxTotalPublishLatencyUs: TicksToUs(Interlocked.Read(ref _totalPublishTicksMax)),
+                    AverageTotalPublishLatencyUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _totalPublishTicksTotal) / (double)totalPublishSampleCount),
+                    P50TotalPublishLatencyUs: MetricMathHelpers.PercentileUs(_totalPublishTicksSamples, 0.50),
+                    P95TotalPublishLatencyUs: MetricMathHelpers.PercentileUs(_totalPublishTicksSamples, 0.95),
+                    P99TotalPublishLatencyUs: MetricMathHelpers.PercentileUs(_totalPublishTicksSamples, 0.99),
+                    MaxTotalPublishLatencyUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _totalPublishTicksMax)),
                     TotalPublishLatencySampleCount: Interlocked.Read(ref _totalPublishSampleCount),
-                    AveragePublishLatencyUs: TicksToUs(Interlocked.Read(ref _publishTicksTotal) / (double)publishCount),
-                    MinPublishLatencyUs: TicksToUs(publishMinTicks),
-                    P50PublishLatencyUs: PercentileUs(_publishTicksSamples, 0.50),
-                    P95PublishLatencyUs: PercentileUs(_publishTicksSamples, 0.95),
-                    P99PublishLatencyUs: PercentileUs(_publishTicksSamples, 0.99),
-                    MaxPublishLatencyUs: TicksToUs(Interlocked.Read(ref _publishTicksMax)),
-                    AverageLifecycleLatencyUs: TicksToUs(Interlocked.Read(ref _lifecycleTicksTotal) / (double)publishCount),
-                    PendingDepthLatencyBuckets: BuildDepthBucketSummary(_publishBySubmitDepthBucket, _publishByCompleteDepthBucket),
+                    AveragePublishLatencyUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _publishTicksTotal) / (double)publishCount),
+                    MinPublishLatencyUs: MetricMathHelpers.TicksToUs(publishMinTicks),
+                    P50PublishLatencyUs: MetricMathHelpers.PercentileUs(_publishTicksSamples, 0.50),
+                    P95PublishLatencyUs: MetricMathHelpers.PercentileUs(_publishTicksSamples, 0.95),
+                    P99PublishLatencyUs: MetricMathHelpers.PercentileUs(_publishTicksSamples, 0.99),
+                    MaxPublishLatencyUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _publishTicksMax)),
+                    AverageLifecycleLatencyUs: MetricMathHelpers.TicksToUs(Interlocked.Read(ref _lifecycleTicksTotal) / (double)publishCount),
+                    PendingDepthLatencyBuckets: FormatHelpers.BuildDepthBucketSummary(_publishBySubmitDepthBucket, _publishByCompleteDepthBucket),
                     ForensicSampleCount: _forensicSampleCount,
                     ConnectionTimeSeriesSummary: BuildConnectionSeriesSummary(_connectionSeries),
                     DispatcherTimeSeriesSummary: BuildDispatcherSeriesSummary(_dispatcherSeries),
@@ -2117,37 +2134,12 @@ internal static class TransitServerStressRunner
                 PeakQueueBytes: Interlocked.Read(ref _peakQueueBytes),
                 PeakInFlight: Interlocked.Read(ref _peakInFlight),
                 PeakActualPending: Interlocked.Read(ref _peakActualPending),
-                MinQueueDepth: NormalizeMin(_minQueueDepth),
-                MinQueueBytes: NormalizeMin(_minQueueBytes),
-                AverageQueueDepth: ComputeAverage(_queueDepthSampleSum, _queueDepthSampleCount),
-                AverageQueueBytes: ComputeAverage(_queueBytesSampleSum, _queueDepthSampleCount),
+                MinQueueDepth: MetricMathHelpers.NormalizeMin(_minQueueDepth),
+                MinQueueBytes: MetricMathHelpers.NormalizeMin(_minQueueBytes),
+                AverageQueueDepth: MetricMathHelpers.ComputeAverage(_queueDepthSampleSum, _queueDepthSampleCount),
+                AverageQueueBytes: MetricMathHelpers.ComputeAverage(_queueBytesSampleSum, _queueDepthSampleCount),
                 ProducerQueueWaitTicks: Interlocked.Read(ref _producerQueueWaitTicks),
                 ArticleBytes: _articleBytes);
-        }
-
-        private static int ClassifyDepthBucket(int pending)
-        {
-            if (pending <= 4) return 0;
-            if (pending <= 8) return 1;
-            if (pending <= 12) return 2;
-            if (pending <= 16) return 3;
-            return 4;
-        }
-
-        private static string BuildDepthBucketSummary(List<long>[] submitBuckets, List<long>[] completeBuckets)
-        {
-            string[] labels = ["1-4", "5-8", "9-12", "13-16", ">16"];
-            List<string> parts = new(capacity: labels.Length);
-            for (int i = 0; i < labels.Length; i++)
-            {
-                double submitAvg = submitBuckets[i].Count == 0 ? 0 : TicksToUs(submitBuckets[i].Average());
-                double submitP95 = PercentileUs(submitBuckets[i], 0.95);
-                double completeAvg = completeBuckets[i].Count == 0 ? 0 : TicksToUs(completeBuckets[i].Average());
-                double completeP95 = PercentileUs(completeBuckets[i], 0.95);
-                parts.Add($"Depth {labels[i]}: submit avg={submitAvg:F2}us p95={submitP95:F2}us | complete avg={completeAvg:F2}us p95={completeP95:F2}us");
-            }
-
-            return string.Join("; ", parts);
         }
 
         private static string BuildConnectionSeriesSummary(Dictionary<int, ConnectionSeriesAggregate> series)
@@ -2179,39 +2171,6 @@ internal static class TransitServerStressRunner
             int maxActualPending = series.Max(static x => x.ActualPending);
 
             return $"samples={series.Count}, inFlight avg/max={avgInFlight:F2}/{maxInFlight}, dispatchPending avg/max={avgDispatchPending:F2}/{maxDispatchPending}, actualPending avg/max={avgActualPending:F2}/{maxActualPending}";
-        }
-
-        private static double PercentileUs(List<long> samples, double percentile)
-        {
-            if (samples.Count == 0)
-            {
-                return 0;
-            }
-
-            List<long> sorted = [.. samples];
-            sorted.Sort();
-            int index = (int)Math.Clamp(Math.Ceiling(percentile * sorted.Count) - 1, 0, sorted.Count - 1);
-            return TicksToUs(sorted[index]);
-        }
-
-        private static double TicksToUs(double ticks)
-        {
-            if (ticks <= 0)
-            {
-                return 0;
-            }
-
-            return ticks * 1_000_000d / Stopwatch.Frequency;
-        }
-
-        private static long NormalizeMin(long value)
-        {
-            return value == long.MaxValue ? 0 : value;
-        }
-
-        private static double ComputeAverage(long sum, long count)
-        {
-            return count <= 0 ? 0 : (double)sum / count;
         }
 
         private static void UpdatePeak(ref long location, long candidate)
@@ -2247,64 +2206,6 @@ internal static class TransitServerStressRunner
                 }
             }
         }
-
-        private sealed class ConnectionSeriesAggregate
-        {
-            private readonly int _slot;
-            private double _pendingSum;
-            private int _samples;
-            private int _pendingMin = int.MaxValue;
-            private int _pendingMax;
-            private int _maxInFlight;
-            private long _failures;
-            private long _reconnects;
-            private double _submitRateSum;
-            private double _completeRateSum;
-            private double _responseRateSum;
-
-            internal ConnectionSeriesAggregate(int slot)
-            {
-                _slot = slot;
-            }
-
-            internal void Observe(TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot, double submitRate, double completeRate, double responseRate, long reconnects)
-            {
-                _samples++;
-                _pendingSum += snapshot.CurrentConcurrentSubmissions;
-                _pendingMin = Math.Min(_pendingMin, snapshot.CurrentConcurrentSubmissions);
-                _pendingMax = Math.Max(_pendingMax, snapshot.CurrentConcurrentSubmissions);
-                _maxInFlight = Math.Max(_maxInFlight, snapshot.MaxConcurrentSubmissions);
-                _submitRateSum += submitRate;
-                _completeRateSum += completeRate;
-                _responseRateSum += responseRate;
-                _failures = snapshot.SubmissionsFailed + snapshot.SubmissionsUnavailable;
-                _reconnects = reconnects;
-            }
-
-            internal string FormatLine()
-            {
-                double avgPending = _samples == 0 ? 0 : _pendingSum / _samples;
-                double avgSubmitRate = _samples == 0 ? 0 : _submitRateSum / _samples;
-                double avgCompleteRate = _samples == 0 ? 0 : _completeRateSum / _samples;
-                double avgResponseRate = _samples == 0 ? 0 : _responseRateSum / _samples;
-                int pendingMin = _pendingMin == int.MaxValue ? 0 : _pendingMin;
-                return $"slot={_slot}, pending min/avg/max={pendingMin}/{avgPending:F2}/{_pendingMax}, maxInFlight={_maxInFlight}, submitRate={avgSubmitRate:F2}/s, completionRate={avgCompleteRate:F2}/s, responseRate={avgResponseRate:F2}/s, failures={_failures}, reconnects={_reconnects}";
-            }
-        }
-
-        private readonly record struct ConnectionCounterState(
-            string ConnectionId,
-            TimeSpan Elapsed,
-            long SubmissionsStarted,
-            long Completed);
-
-        private readonly record struct DispatcherSeriesPoint(
-            TimeSpan Elapsed,
-            int InFlight,
-            long DispatchPending,
-            int ActualPending,
-            int QueueDepth,
-            long QueueBytes);
     }
 
     private sealed class RuntimeMetrics
