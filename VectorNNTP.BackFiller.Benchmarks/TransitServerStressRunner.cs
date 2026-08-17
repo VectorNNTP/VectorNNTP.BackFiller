@@ -1,10 +1,10 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Transit;
+using VectorNNTP.BackFiller.Benchmarks.Execution;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
@@ -114,84 +114,14 @@ internal static class TransitServerStressRunner
         CancellationToken cancellationToken,
         bool enableForensicDiagnostics)
     {
-        using BoundedArticleQueue queue = new(config.MaxQueuedArticles, config.MaxResidentBytes);
-        MeasurementMetrics metrics = new(config.ArticleTargetBytes);
-        RuntimeMetrics runtime = new();
-
-        using CancellationTokenSource producerStopCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        DateTimeOffset measurementStartUtc = DateTimeOffset.UtcNow;
-        Console.WriteLine($"Measurement start UTC: {measurementStartUtc:O}");
-
-        Process process = Process.GetCurrentProcess();
-        long allocatedStartBytes = GC.GetTotalAllocatedBytes(precise: false);
-
-        int producerQueueTargetArticles = Math.Clamp(config.ProducerQueueTargetArticles, 1, config.MaxQueuedArticles);
-
-        Task[] producerTasks = new Task[config.GeneratorWorkerCount];
-        for (int producerWorkerId = 0; producerWorkerId < producerTasks.Length; producerWorkerId++)
-        {
-            int capturedWorkerId = producerWorkerId;
-            producerTasks[producerWorkerId] = Task.Run(() => MeasurementExecutionEngine.ProducerLoopAsync(
-                queue,
-                metrics,
-                workload,
-                producerQueueTargetArticles,
-                capturedWorkerId,
-                producerStopCts.Token), CancellationToken.None);
-        }
-
-        Task telemetryTask = Task.Run(() => MeasurementExecutionEngine.TelemetryLoopAsync(
-            queue,
-            metrics,
-            runtime,
-            process,
-            allocatedStartBytes,
-            publisher,
-            producerQueueTargetArticles,
-            enableForensicDiagnostics,
-            producerStopCts.Token), CancellationToken.None);
-
-        Task[] dispatchers = new Task[config.DispatchWorkerCount];
-        for (int i = 0; i < dispatchers.Length; i++)
-        {
-            dispatchers[i] = Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, cancellationToken, enableForensicDiagnostics), CancellationToken.None);
-        }
-
-        await Task.Delay(config.MeasurementDuration, cancellationToken).ConfigureAwait(false);
-
-        return await MeasurementExecutionEngine.DrainAndShutdownAsync(
-            queue,
-            metrics,
-            runtime,
-            process,
-            workload,
+        return await MeasurementRunCoordinator.RunAsync(
             publisher,
             config,
-            producerTasks,
-            telemetryTask,
-            dispatchers,
-            producerStopCts,
-            measurementStartUtc,
-            allocatedStartBytes,
-            enableForensicDiagnostics,
-            (drainConfig, snapshot, drainMetrics, drainRuntime, drainProcess, workloadPreparation, startUtc, endUtc, drainTime, outstandingAtEnd, drainedAfterEnd, allocatedAtStart, forensicEnabled) =>
-                BenchmarkResultFactory.Create(
-                    drainConfig,
-                    RuntimeIdentity,
-                    BenchmarkBuildVersion,
-                    snapshot,
-                    drainMetrics,
-                    drainRuntime,
-                    drainProcess,
-                    workloadPreparation,
-                    startUtc,
-                    endUtc,
-                    drainTime,
-                    outstandingAtEnd,
-                    drainedAfterEnd,
-                    allocatedAtStart,
-                    forensicEnabled)).ConfigureAwait(false);
+            workload,
+            RuntimeIdentity,
+            BenchmarkBuildVersion,
+            cancellationToken,
+            enableForensicDiagnostics).ConfigureAwait(false);
     }
 
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
