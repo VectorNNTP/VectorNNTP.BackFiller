@@ -1,0 +1,240 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+	<!-- ════════════════════════════════════════════════════════════════════
+	     Project Configuration
+         ════════════════════════════════════════════════════════════════════
+		 Core target framework, platform, and language settings. -->
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Platforms>x64</Platforms>
+		<RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="VectorNNTP.BackFiller.Tests" />
+	</ItemGroup>
+
+	<!-- ── Language Version ─────────────────────────────────────────────
+         C# 13 on .NET 8: the compiler ships with the SDK (not the runtime),
+         so language features that do NOT require new BCL types work on any
+         target framework.
+
+         Features used on net8.0:
+           • Span<T> / ReadOnlySpan<T> locals in async methods (before the
+             first await) — eliminates helper-method splits in NntpSession
+             and NntpParser.
+
+         Features NOT available on net8.0 (require .NET 9+ BCL types):
+           • params ReadOnlySpan<T> overloads
+           • System.Threading.Lock (the new Lock type)
+
+         Requires .NET 9+ SDK to compile (VS 2022 17.12+). -->
+	<PropertyGroup Label="Language">
+		<LangVersion>13</LangVersion>
+	</PropertyGroup>
+
+	<!-- ── Compilation & Startup Performance ──────────────────────────────
+         ReadyToRun (R2R) pre-compiles IL to native code at publish time,
+         eliminating JIT overhead on first invocation and improving cold-
+         start latency.  This is NOT NativeAOT; JIT still runs for methods
+         the R2R image doesn't cover.
+
+         TieredCompilation + TieredPGO let the JIT re-compile hot methods
+         with profile-guided optimizations at runtime, recovering any
+         steady-state throughput that R2R's ahead-of-time layout misses. -->
+	<PropertyGroup Label="Performance">
+		<PublishReadyToRun>true</PublishReadyToRun>
+		<TieredCompilation>true</TieredCompilation>
+		<TieredPGO>true</TieredPGO>
+	</PropertyGroup>
+
+	<!-- ── Garbage Collection ────────────────────────────────────────────
+         ServerGarbageCollection    — one managed heap per logical processor,
+                                      collected in parallel on dedicated GC
+                                      threads; essential for high-throughput,
+                                      multi-threaded services.
+
+         ConcurrentGarbageCollection — Gen2/LOH collections run concurrently
+                                       with application threads, minimising
+                                       pause times.
+
+         RetainVMGarbageCollection  — keeps de-committed virtual-memory
+                                      segments reserved so the GC can reuse
+                                      them without re-acquiring VA space from
+                                      the OS; reduces allocation stalls under
+                                      bursty load.
+
+         GarbageCollectionAdaptationMode (DATAS, mode 1) — a .NET 8 feature
+                                      that dynamically adjusts heap count and
+                                      commit size based on actual throughput,
+                                      reducing memory footprint during idle
+                                      periods while scaling up under load.
+                                      Ideal for long-running daemons with
+                                      variable connection counts. -->
+	<PropertyGroup Label="GarbageCollection">
+		<ServerGarbageCollection>true</ServerGarbageCollection>
+		<ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+		<RetainVMGarbageCollection>true</RetainVMGarbageCollection>
+		<GarbageCollectionAdaptationMode>1</GarbageCollectionAdaptationMode>
+	</PropertyGroup>
+
+	<!-- ── Globalization ─────────────────────────────────────────────────
+         InvariantGlobalization removes ICU / NLS culture data from the
+         deployment.  Safe here because NNTP is an ASCII-oriented protocol
+         and the service does not perform locale-sensitive formatting or
+         collation.  Saves ~28 MB in a single-file publish. -->
+	<PropertyGroup Label="Globalization">
+		<InvariantGlobalization>true</InvariantGlobalization>
+	</PropertyGroup>
+
+	<!-- ── Feature Switches (Dead-Code Stripping) ────────────────────────
+	     These MSBuild properties map to ILLink substitution files in the
+	     BCL.  Even without PublishTrimmed, the runtime respects the flags
+	     at JIT time — disabled code paths are never compiled, reducing
+	     working set and eliminating overhead from unused infrastructure.
+
+	     JsonSerializerIsReflectionEnabledByDefault — the project uses
+	       source-generated JsonSerializerContext (CacheBroadcastPayload,
+	       CertificateDefaults) exclusively.  Disabling reflection fallback
+	       catches accidental non-source-gen serialization at startup
+	       (throws InvalidOperationException) instead of silently degrading
+	       to reflection-based serialization.
+
+	     EventSourceSupport — enabled to support OpenTelemetry runtime
+	       instrumentation which relies on EventSource-based counters for
+	       GC, ThreadPool, and JIT metrics.
+
+	     HttpActivityPropagationSupport — the project does not use
+	       OpenTelemetry or System.Diagnostics.Activity-based distributed
+	       tracing.  Disabling prevents Activity object allocation on every
+	       HttpClient request (ACME, Cloudflare DNS API calls).
+
+	     MetricsSupport — enabled to support System.Diagnostics.Metrics
+	       instruments used by OpenTelemetry for application-level and
+	       runtime metrics collection. -->
+	<PropertyGroup Label="FeatureSwitches">
+		<JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+		<EventSourceSupport>true</EventSourceSupport>
+		<HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+		<MetricsSupport>true</MetricsSupport>
+	</PropertyGroup>
+
+	<!-- ── Publish & Packaging ───────────────────────────────────────────
+         PublishSingleFile  — bundles host, runtime, and all assemblies into
+                              one executable for simpler deployment.
+         SelfContained      — includes the .NET runtime so the target host
+                              does not require a framework-dependent install.
+         PublishTrimmed     — DISABLED; trimming can remove reflection-
+                              dependent code used by the hosting / DI
+                              infrastructure and Serilog sink resolution.
+         DebugType=embedded — keeps PDB symbols inside the binary for
+                              production diagnostics without shipping
+                              separate .pdb files.
+         Optimize=true      — enables compiler optimizations for Release
+                              (overridden to false in the Debug section
+                              below for breakpoint fidelity). -->
+	<PropertyGroup Label="Publish">
+		<PublishSingleFile>true</PublishSingleFile>
+		<SelfContained>true</SelfContained>
+		<PublishTrimmed>false</PublishTrimmed>
+		<DebugType>embedded</DebugType>
+		<Optimize>true</Optimize>
+	</PropertyGroup>
+
+	<!-- ── Analysis & Quality ────────────────────────────────────────────
+         EnableNETAnalyzers ensures the built-in .NET code-quality and
+         code-style analysers run during build in all configurations.
+
+         AnalysisLevel=latest-recommended enables the latest recommended
+         rule set for the target framework, catching common pitfalls such
+         as CA1849 (prefer async method variants) and CA2007 (configure
+         await) without manual .editorconfig rule-by-rule opt-in.
+
+         EnforceCodeStyleInBuild ensures IDE-only analysers (e.g.,
+         IDE0005 remove-unnecessary-using) and source generators (e.g.,
+         GeneratedRegex, LoggerMessage) run on every incremental build,
+         preventing CS8795 errors for partial method stubs that the IDE
+         might otherwise skip. -->
+	<PropertyGroup Label="Analysis">
+		<EnableNETAnalyzers>true</EnableNETAnalyzers>
+		<AnalysisLevel>latest-recommended</AnalysisLevel>
+		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+	</PropertyGroup>
+
+	<!-- ── Debug Configuration Overrides ──────────────────────────────────
+         Applied ONLY in Debug builds.  Overrides Optimize and DebugType
+         from the Publish group above to ensure accurate breakpoints,
+         locals inspection, and full PDB fidelity during development.
+
+         Release builds retain Optimize=true and DebugType=embedded from
+         the Publish group. -->
+	<PropertyGroup Label="Debug" Condition="'$(Configuration)' == 'Debug'">
+		<Optimize>false</Optimize>
+		<DebugType>full</DebugType>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Certes" Version="3.0.4" />
+		<PackageReference Include="CloudFlare.Client" Version="8.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+		<PackageReference Include="MySqlConnector" Version="2.6.2" />
+		<PackageReference Include="RabbitMQ.Client" Version="7.2.2" />
+		<PackageReference Include="Serilog" Version="4.4.0" />
+		<PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+		<PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+		<PackageReference Include="Serilog.Exceptions" Version="8.4.0" />
+		<PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+		<PackageReference Include="Serilog.Sinks.File.Archive" Version="1.0.8" />
+		<PackageReference Include="System.IO.Hashing" Version="10.0.11" />
+	</ItemGroup>
+	
+	<!-- ════════════════════════════════════════════════════════════════════
+         Runtime Host Configuration
+         ════════════════════════════════════════════════════════════════════
+         These values are written into <app>.runtimeconfig.json and apply to
+         both `dotnet run` and the published executable.
+
+         NOTE: ThreadPool min/max threads are NOT fixed here.  They are
+         configured dynamically in Program.cs using CPU-proportional scaling
+         via ThreadPool.SetMinThreads / SetMaxThreads so the service adapts
+         to the deployment host's core count at startup.
+         ════════════════════════════════════════════════════════════════════ -->
+	<ItemGroup Label="RuntimeConfig">
+
+		<!-- Portable (managed) thread-pool with hill-climbing heuristics.
+             Required for the runtime to dynamically scale worker threads. -->
+		<RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.UsePortableThreadPool" Value="true" />
+
+		<!-- ── GC Tuning ──────────────────────────────────────────────────
+             NoAffinitize = true: don't pin GC threads to specific processors.
+             Lets the OS scheduler balance GC work across NUMA nodes, which is
+             important in containerised environments where CPU affinity masks
+             change at runtime.  HeapCount is intentionally omitted (default:
+             auto-detect) so the runtime matches heap count to available cores
+             and DATAS can scale it dynamically. -->
+		<RuntimeHostConfigurationOption Include="System.GC.NoAffinitize" Value="true" />
+
+		<!-- ── Socket / Networking ────────────────────────────────────────
+             Bandwidth-Delay Product at 1 Gbps / 30 ms RTT ≈ 3.75 MB.
+             4 MB (4,194,304 byte) per-socket buffers ensure the kernel TCP
+             window can scale to fill the pipe without becoming the bottleneck.
+
+             ⚠ Memory note: each connected socket reserves up to 4 MB send +
+             4 MB receive in kernel space.  At 100 concurrent connections this
+             is ~800 MB of kernel buffer.  Size appropriately for the host. -->
+		<RuntimeHostConfigurationOption Include="System.Net.Sockets.DefaultSendBufferSize" Value="4194304" />
+		<RuntimeHostConfigurationOption Include="System.Net.Sockets.DefaultReceiveBufferSize" Value="4194304" />
+
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Docs\" />
+	  <Folder Include="Startup\Shutdown\" />
+	</ItemGroup>
+</Project>

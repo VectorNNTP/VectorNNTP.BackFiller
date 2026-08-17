@@ -1,0 +1,32 @@
+# Copilot Instructions
+
+## Project Guidelines
+- User/project coding standard: every method must have XML documentation comments; enforce this especially in Program.Validation.cs.
+- Preferred startup architecture: no expensive, irreversible, or externally visible operations before configuration and startup validation pass; flow should be bind -> validate -> canonicalize runtime snapshot -> directory validation -> dependency validation -> DI/service startup.
+- Runtime listener creation must explicitly map null/empty BackFiller:BindAddress to independent wildcard endpoints (0.0.0.0 and ::) rather than relying on implicit framework behavior or dual-stack defaults.
+- For dual-stack wildcard binds, runtime listener implementation should explicitly configure IPv6-only behavior (IPV6_V6ONLY) to enforce the intended independent IPv4 and IPv6 endpoint model, rather than relying on OS defaults.
+- Networking runtime should explicitly configure IPv6 dual-stack behavior (IPv6Only/DualMode) so IPv4 and IPv6 listener semantics are deterministic and match documented independent endpoints.
+- Cloudflare validation is mandatory even when BackFiller:LetsEncrypt:Enabled is false, because DNS/FQDN registration/testing depends on Cloudflare independently of ACME issuance. Keep explicit regression coverage for LetsEncrypt Enabled=false conditional behavior: ACME-specific settings are ignored while Cloudflare settings remain required.
+- Prefer a single immutable startup configuration object produced by bind->validate->normalize/derive, containing validated options plus canonical derived values (e.g., FQDN and directories), to prevent divergence between validator and runtime calculations.
+- Avoid new DI abstractions solely to make startup-validation tests mockable when the implementation is still simple; treat that as potential over-engineering.
+- When DomainNames is not authoritative for certificate identity, tests must clearly reflect that they cover syntax/validation contract only, not identity selection behavior.
+- When adding validator tests, only add cross-setting/coherence tests for constraints explicitly defined by production contracts; do not invent new relationships in tests.
+- For validator tests, prefer asserting absence of error-severity diagnostics (Assert.DoesNotContain with Severity==Error) over Assert.Empty when warnings may be legitimate and should remain distinguishable from invalid states.
+- Be cautious with shared global state in tests; avoid per-test mutation of static Program state where possible and prefer a dedicated test setup/reset mechanism when initialization mutates global state.
+- Expect immediate implementation execution with concrete code changes, not planning-only responses.
+- Validate configuration once, canonicalize once, and use the validated runtime snapshot instead of rebinding/revalidating raw IConfiguration later.
+- When a user reports a validation false negative, improve diagnostics and probe logic instead of assuming environment mismatch.
+- For shutdown documentation, describe layered deadlines as application drain deadline, Generic Host cancellation deadline, and systemd handles process termination deadline. Document that cancellation is signaled, services should stop promptly, non-cooperative work may continue, and external supervisor is final hard boundary. Additionally, document shutdown architecture as layered and non-overlapping: ShutdownCoordinator is domain-specific graceful/forced worker escalation inside Generic Host lifecycle, with HostOptions.ShutdownTimeout as a slightly larger framework-level safety boundary rather than an equal shared budget. Prefer keeping GracePeriodSeconds as a single shared shutdown budget (coordinator and HostOptions.ShutdownTimeout aligned) rather than adding a hidden offset, accepting concurrent deadline signals for a clean configuration model. Keep Dispose non-throwing but log a warning if called before shutdown is signaled to surface contract misuse. 
+- For internal configuration application methods, keep invariants explicit: options should be pre-validated by startup validation, but still add defensive argument-range guards when callable independently.
+- Do not claim runtime initialization ordering from IServiceCollection registration order; document that readiness dependencies must be enforced via explicit service dependencies/orchestration.
+- Prefer simpler DI/configuration when settings are immutable at runtime: favor plain singleton snapshot objects like ShutdownOptions over custom IOptionsSnapshot/IOptionsMonitor wrappers unless the options abstractions are truly needed.
+- Distinguish primary/global validation from local defensive re-validation; avoid comments that imply a helper method is the main validation phase when it is actually rebinding and defensively validating a local snapshot.
+- Prefer ServiceLifecycle.Ready and systemd READY=1 to represent the same operational milestone unless there is a strong reason to delay external readiness beyond actual work acceptance.
+- Prefer cleaner shutdown APIs that pass the validated runtime policy (or a dedicated immutable shutdown policy object) directly, instead of threading a separately derived gracefulShutdownTimeout TimeSpan through lifecycle/shutdown callbacks.
+- Prefer immutable process identity/runtime snapshot types like BuildInfo to be registered and injected directly rather than also being exposed through IOptions<T>, unless there is a concrete consumer that requires the options abstraction.
+- Use TimeProvider instead of DateTimeOffset.UtcNow in ControlPlaneService to keep Program as the single authority for Initializing -> Ready, and to avoid 1-second Information-level heartbeat logs in production because high-frequency telemetry should be metrics or lower log levels.
+- When executing an approved plan, continue executing it fully instead of stopping after step announcements; repeated reminders indicate this is a required workflow preference.
+- Benchmark execution policy: never use --no-build; always clean, build, verify output identity, then run with matching Debug/x64/net8.0/win-x64 settings and enforce runtime identity guard before warmup.
+
+## Diagnostics Guidelines
+- Keep --diagnostics lightweight and non-invasive: it should only emit runtime/build information and must not initialize DI, hosted services, external dependencies, listeners, or certificate flows.

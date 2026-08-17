@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <!-- x64-only build surface: see .cursor/rules/x64-platform-only.mdc -->
+    <Platform>x64</Platform>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <MajorVersion>1</MajorVersion>
+    <MinorVersion>1</MinorVersion>
+    <BuildNumber>$([System.DateTime]::UtcNow.DayOfYear)</BuildNumber>
+    <RevisionNumber>$([System.Math]::Floor($([MSBuild]::Divide($([System.DateTime]::UtcNow.TimeOfDay.TotalSeconds), 2))))</RevisionNumber>
+
+    <!-- Generates versions like 1.1.86.32411 -->
+    <AssemblyVersion>$(MajorVersion).$(MinorVersion).$(BuildNumber).$(RevisionNumber)</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
+    <Version>$(AssemblyVersion)</Version>
+
+    <!-- Prevent Git commit hash from being appended to Product version -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

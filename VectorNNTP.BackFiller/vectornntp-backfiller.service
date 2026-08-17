@@ -1,0 +1,109 @@
+# VectorNNTP.Backfiller.service -- Systemd service unit file template
+#
+# Location: /etc/systemd/system/vectornntp-backfiller.service
+#
+# Enable and start:
+#   sudo systemctl enable vectornntp-backfiller.service
+#   sudo systemctl start vectornntp-backfiller.service
+#
+# Monitor:
+#   systemctl status vectornntp-backfiller.service
+#   journalctl -u vectornntp-backfiller.service -f
+#
+# Stop gracefully:
+#   systemctl stop vectornntp-backfiller.service
+#   systemctl restart vectornntp-backfiller.service
+
+[Unit]
+Description=VectorNNTP Backfiller Service
+Documentation=https://github.com/example/vectornntp-backfiller
+After=network-online.target
+Wants=network-online.target
+
+# Wait for these services to start first (adjust as needed for your environment):
+# After=postgresql.service mysql.service  (if you have database dependencies)
+# After=rabbitmq-server.service           (if you have message queue dependencies)
+
+[Service]
+# User context and security
+Type=notify
+NotifyAccess=main
+User=vectornntp
+Group=vectornntp
+WorkingDirectory=/opt/vectornntp-backfiller
+
+# Process and environment
+ExecStart=/usr/bin/dotnet /opt/vectornntp-backfiller/VectorNNTP.Backfiller.dll
+Restart=on-failure
+
+# Restart strategy: Respond to exit codes
+# 0 = Normal shutdown (no restart)
+# 1 = Unexpected failure (retry with backoff)
+# 2 = Configuration error (do not restart)
+# 3 = Dependency unavailable (retry with backoff)
+# 4 = Storage failure (do not restart)
+# 5 = Startup failure (do not restart)
+RestartForceExitStatus=1 3
+RestartPreventExitStatus=2 4 5
+
+# Restart timing
+# RestartSec starts at 100ms and doubles on each restart, up to MaxRestart seconds
+RestartSec=100ms
+StartLimitBurst=5
+StartLimitIntervalSec=300s
+
+# Timeouts
+TimeoutStartSec=30s      # Service must signal READY=1 within 30 seconds
+TimeoutStopSec=90s       # Invariant: TimeoutStopSec > HostOptions.ShutdownTimeout; example assumes BackFiller:Shutdown:GracePeriodSeconds=60 (host timeout=60s) + 30s external safety margin
+
+# Environment variables (customize as needed)
+Environment="ASPNETCORE_ENVIRONMENT=Production"
+Environment="DOTNET_ENVIRONMENT=Production"
+EnvironmentFile=-%h/.config/vectornntp-backfiller/env  # Optional per-user config
+
+# Resource limits (adjust based on your workload)
+LimitNOFILE=65536        # Max open files
+LimitNPROC=4096          # Max processes
+MemoryMax=4G             # Memory hard limit
+MemoryHigh=3G            # Memory soft limit (triggers reclaim)
+CPUQuota=400%            # 4 CPU cores (adjust as needed)
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vectornntp-backfiller
+
+# Security and sandboxing (adjust to your requirements)
+PrivateTmp=true          # Private /tmp directory
+NoNewPrivileges=true     # Process cannot gain new privileges
+ProtectSystem=strict     # Read-only root filesystem
+ProtectHome=true         # Hide home directories
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+SystemCallFilter=~@clock @debug @module @obsolete @privileged @raw-io @swap
+
+# Allow necessary system calls for .NET runtime
+SystemCallFilter=write read open getpid stat openat close rt_sigaction gettimeofday mmap brk munmap mprotect
+SystemCallErrorNumber=EPERM
+
+# Restart after crash
+AutomaticRestart=yes
+AutomaticRestartMaxSec=3600
+
+[Install]
+WantedBy=multi-user.target
+
+# Optional: Dependency ordering examples
+# To ensure this service starts only after postgres:
+#   Wants=postgresql.service
+#   After=postgresql.service
+
+# To ensure dependent services wait for this service:
+# (other service files add: Wants=vectornntp-backfiller.service After=vectornntp-backfiller.service)

@@ -1,0 +1,39 @@
+namespace VectorNNTP.Backfiller.Configuration
+{
+    /// <summary>
+    /// Immutable runtime configuration snapshot produced after successful startup validation.
+    /// </summary>
+    /// <param name="CanonicalBackFillerFqdn">Canonical BackFiller FQDN derived from validated identity inputs.</param>
+    /// <param name="BackFillerId">Authoritative BackFiller server identifier derived from validated configuration.</param>
+    /// <param name="CanonicalDnsSuffix">Canonical DNS suffix derived from validated configuration.</param>
+    /// <param name="ValidatedLogDirectory">Validated absolute log directory path.</param>
+    /// <param name="ValidatedCertificateDirectory">Validated absolute certificate directory path.</param>
+    /// <param name="RabbitMqHosts">Canonical RabbitMQ host list used by runtime services.</param>
+    /// <param name="RabbitMqPort">Validated RabbitMQ port used by runtime services.</param>
+    /// <param name="RabbitMqEnableSsl">Validated RabbitMQ TLS mode used by runtime services.</param>
+    /// <param name="TransitServerHost">Canonical TransitServer host used by runtime services.</param>
+    /// <param name="TransitServerPort">Validated TransitServer port used by runtime services.</param>
+    /// <param name="TransitServerUseSsl">Validated TransitServer TLS mode used by runtime services.</param>
+    /// <param name="ShutdownGracePeriodSeconds">Validated graceful-shutdown grace period in seconds used by runtime services.</param>
+    /// <param name="ShutdownDrainQueuedWork">Validated graceful-shutdown queued-work drain flag used by runtime services.</param>
+    /// <param name="ShutdownFinishActiveArticles">Validated graceful-shutdown active-work completion flag used by runtime services.</param>
+    /// <param name="RabbitMqMaximumShutdownDrainTimeoutSeconds">Validated RabbitMQ shutdown-drain timeout in seconds used by runtime services.</param>
+    /// <param name="WriteBatchCoalesceMicroseconds">Configured writer coalescing window in microseconds for transit write batching experiments.</param>
+    internal sealed record BackFillerRuntimeOptions(
+        string CanonicalBackFillerFqdn,
+        int BackFillerId,
+        string CanonicalDnsSuffix,
+        string ValidatedLogDirectory,
+        string ValidatedCertificateDirectory,
+        IReadOnlyList<string> RabbitMqHosts,
+        int RabbitMqPort,
+        bool RabbitMqEnableSsl,
+        string TransitServerHost,
+        int TransitServerPort,
+        bool TransitServerUseSsl,
+        int ShutdownGracePeriodSeconds,
+        bool ShutdownDrainQueuedWork,
+        bool ShutdownFinishActiveArticles,
+        int RabbitMqMaximumShutdownDrainTimeoutSeconds,
+        int WriteBatchCoalesceMicroseconds);
+}

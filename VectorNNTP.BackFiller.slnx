@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Project Path="VectorNNTP.BackFiller.Benchmarks/VectorNNTP.BackFiller.Benchmarks.csproj">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj" />
+  <Project Path="VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj">
+    <Platform Project="x64" />
+  </Project>
+</Solution>

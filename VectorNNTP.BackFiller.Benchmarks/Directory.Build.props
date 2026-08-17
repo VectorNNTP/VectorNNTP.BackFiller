@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+	<MajorVersion>1</MajorVersion>
+	<MinorVersion>1</MinorVersion>
+	<BuildNumber>$([System.DateTime]::UtcNow.DayOfYear)</BuildNumber>
+	<RevisionNumber>$([System.Math]::Floor($([MSBuild]::Divide($([System.DateTime]::UtcNow.TimeOfDay.TotalSeconds), 2))))</RevisionNumber>
+
+	<AssemblyVersion>$(MajorVersion).$(MinorVersion).$(BuildNumber).$(RevisionNumber)</AssemblyVersion>
+	<FileVersion>$(AssemblyVersion)</FileVersion>
+	<Version>$(AssemblyVersion)</Version>
+
+	<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>
