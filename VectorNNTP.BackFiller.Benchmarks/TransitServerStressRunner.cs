@@ -512,7 +512,7 @@ internal static class TransitServerStressRunner
                 producerStopCts.Token), CancellationToken.None);
         }
 
-        Task telemetryTask = Task.Run(() => TelemetryLoopAsync(
+        Task telemetryTask = Task.Run(() => MeasurementExecutionEngine.TelemetryLoopAsync(
             queue,
             metrics,
             runtime,
@@ -766,104 +766,6 @@ internal static class TransitServerStressRunner
             DispatcherTimeSeriesSummary: forensic.DispatcherTimeSeriesSummary,
             ObservabilityNotes: forensic.ObservabilityNotes,
             EffectiveQueueArticleCapacityFromBytes: effectiveQueueCapacityFromBytes);
-    }
-
-    private static async Task TelemetryLoopAsync(
-        BoundedArticleQueue queue,
-        MeasurementMetrics metrics,
-        RuntimeMetrics runtime,
-        Process process,
-        long allocatedStartBytes,
-        TransitPublisher publisher,
-        int queueTargetArticles,
-        bool enableForensicDiagnostics,
-        CancellationToken cancellationToken)
-    {
-        Console.WriteLine("elapsed_s gen_art_s gen_MB_s gen_Gbps adm_art_s adm_MB_s acc_art_s acc_MB_s acc_Gbps rej_art_s amb_art_s q_depth q_bytes inflight dispatch_pending actual_pending peak_conn_inflight conn_ready active_slots host_cpu_pct transit_cpu_pct cpu_pct ws_mb heap_mb alloc_mb gen0 gen1 gen2 prod_active_pct prod_blocked_pct prod_active_ms prod_blocked_ms queue_wait_ms");
-        Console.WriteLine("NOTE: generated/admitted/accepted are distinct throughput classes; accepted is based on definitive TransitServer success responses.");
-        Console.WriteLine($"Queue target depth (articles): {queueTargetArticles}");
-
-        Stopwatch elapsed = Stopwatch.StartNew();
-        MeasurementSnapshot previous = metrics.Snapshot();
-        TimeSpan previousElapsed = TimeSpan.Zero;
-        TimeSpan previousCpu = process.TotalProcessorTime;
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
-
-            TimeSpan now = elapsed.Elapsed;
-            double seconds = (now - previousElapsed).TotalSeconds;
-            if (seconds <= 0)
-            {
-                continue;
-            }
-
-            MeasurementSnapshot current = metrics.Snapshot();
-
-            long generatedCountDelta = current.GeneratedCount - previous.GeneratedCount;
-            long generatedBytesDelta = current.GeneratedBytes - previous.GeneratedBytes;
-            long admittedCountDelta = current.AdmittedCount - previous.AdmittedCount;
-            long admittedBytesDelta = current.AdmittedBytes - previous.AdmittedBytes;
-            long acceptedCountDelta = current.AcceptedCount - previous.AcceptedCount;
-            long acceptedBytesDelta = current.AcceptedBytes - previous.AcceptedBytes;
-            long rejectedCountDelta = current.RejectedCount - previous.RejectedCount;
-            long ambiguousCountDelta = current.AmbiguousCount - previous.AmbiguousCount;
-
-            int queueDepth = queue.CurrentQueuedCount;
-            long queueBytes = queue.CurrentQueuedBytes;
-            int inFlight = Volatile.Read(ref metrics.InFlightSubmissions);
-
-            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-            int actualPending = diagnostics.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
-            int peakConnectionInFlight = diagnostics.Connections.Length == 0 ? 0 : diagnostics.Connections.Max(static x => x.Snapshot.MaxConcurrentSubmissions);
-            int readyConnections = diagnostics.Connections.Count(static x => x.Snapshot.ReadyTransitionCount > 0);
-            int activeSlots = diagnostics.Slots.Count(static x => x.TotalSubmissionsRouted > 0);
-
-            metrics.ObservePeaks(queueDepth, queueBytes, inFlight);
-            metrics.ObserveActualPending(actualPending);
-
-            TimeSpan cpuNow = process.TotalProcessorTime;
-            double cpuPercent = (cpuNow - previousCpu).TotalSeconds / (Environment.ProcessorCount * seconds) * 100d;
-            previousCpu = cpuNow;
-
-            double hostCpuPercent = RuntimeMetricSamplingHelpers.ReadHostCpuPercent();
-            double transitServerCpuPercent = RuntimeMetricSamplingHelpers.ReadTransitServerCpuPercent();
-
-            long workingSet = process.WorkingSet64;
-            long gcHeapBytes = GC.GetTotalMemory(forceFullCollection: false);
-            long allocatedBytes = GC.GetTotalAllocatedBytes(precise: false) - allocatedStartBytes;
-
-            runtime.Sample(cpuPercent, hostCpuPercent, transitServerCpuPercent, workingSet, gcHeapBytes, allocatedBytes);
-
-            if (enableForensicDiagnostics)
-            {
-                metrics.RecordConnectionSample(diagnostics, now);
-                metrics.RecordDispatcherSample(now, inFlight, current.AdmittedCount - current.CompletedCount, actualPending, queueDepth, queueBytes);
-            }
-
-            long activeTicksDelta = current.ActiveTicks - previous.ActiveTicks;
-            long blockedTicksDelta = current.BlockedTicks - previous.BlockedTicks;
-            long producerObservedTicksDelta = activeTicksDelta + blockedTicksDelta;
-
-            double blockedPercent = producerObservedTicksDelta <= 0
-                ? 0
-                : blockedTicksDelta * 100d / producerObservedTicksDelta;
-
-            double activePercent = producerObservedTicksDelta <= 0
-                ? 0
-                : activeTicksDelta * 100d / producerObservedTicksDelta;
-
-            double activeMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(activeTicksDelta);
-            double blockedMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(blockedTicksDelta);
-            long queueWaitTicksDelta = current.ProducerQueueWaitTicks - previous.ProducerQueueWaitTicks;
-            double queueWaitMilliseconds = TransitBenchmarkCore.StopwatchTicksToMilliseconds(queueWaitTicksDelta);
-
-            Console.WriteLine($"{now.TotalSeconds:F1} {generatedCountDelta / seconds:F2} {generatedBytesDelta / 1024d / 1024d / seconds:F2} {generatedBytesDelta * 8d / 1_000_000_000d / seconds:F4} {admittedCountDelta / seconds:F2} {admittedBytesDelta / 1024d / 1024d / seconds:F2} {acceptedCountDelta / seconds:F2} {acceptedBytesDelta / 1024d / 1024d / seconds:F2} {acceptedBytesDelta * 8d / 1_000_000_000d / seconds:F4} {rejectedCountDelta / seconds:F2} {ambiguousCountDelta / seconds:F2} {queueDepth} {queueBytes} {inFlight} {current.AdmittedCount - current.CompletedCount} {actualPending} {peakConnectionInFlight} {readyConnections} {activeSlots} {hostCpuPercent:F2} {transitServerCpuPercent:F2} {cpuPercent:F2} {workingSet / 1024d / 1024d:F2} {gcHeapBytes / 1024d / 1024d:F2} {allocatedBytes / 1024d / 1024d:F2} {GC.CollectionCount(0)} {GC.CollectionCount(1)} {GC.CollectionCount(2)} {activePercent:F2} {blockedPercent:F2} {activeMilliseconds:F2} {blockedMilliseconds:F2} {queueWaitMilliseconds:F2}");
-
-            previous = current;
-            previousElapsed = now;
-        }
     }
 
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
