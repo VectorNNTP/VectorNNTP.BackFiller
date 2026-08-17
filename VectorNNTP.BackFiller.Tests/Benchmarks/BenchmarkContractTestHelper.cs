@@ -7,9 +7,12 @@ namespace VectorNNTP.Backfiller.Tests;
 
 internal static class BenchmarkContractTestHelper
 {
-    private static readonly MethodInfo CreateBenchmarkResultMethod = typeof(TransitServerStressRunner)
-        .GetMethod("CreateBenchmarkResult", BindingFlags.NonPublic | BindingFlags.Static)
-        ?? throw new InvalidOperationException("TransitServerStressRunner.CreateBenchmarkResult was not found.");
+    private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
+    private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
+
+    private static readonly MethodInfo CreateBenchmarkResultMethod = typeof(BenchmarkResultFactory)
+        .GetMethod("Create", BindingFlags.NonPublic | BindingFlags.Static)
+        ?? throw new InvalidOperationException("BenchmarkResultFactory.Create was not found.");
 
     internal static TransitBenchmarkConfig CreateConfig(
         double measurementSeconds = 10,
@@ -153,6 +156,8 @@ internal static class BenchmarkContractTestHelper
             parameters:
             [
                 config,
+                RuntimeIdentity,
+                BenchmarkBuildVersion,
                 snapshot,
                 metrics,
                 runtime,
