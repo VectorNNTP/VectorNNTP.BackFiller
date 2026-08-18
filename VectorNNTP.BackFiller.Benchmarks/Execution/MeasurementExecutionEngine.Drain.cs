@@ -52,7 +52,7 @@ internal static partial class MeasurementExecutionEngine
         int pendingMessageIdsAtMeasurementEnd = diagnosticsAtMeasurementEnd.Connections.Sum(static entry => entry.Snapshot.OutstandingOperations.Length);
         long queuedWriteIntentsAtMeasurementEnd = diagnosticsAtMeasurementEnd.Connections.Sum(static entry => entry.Snapshot.CurrentWriteIntentQueueDepth);
 
-        Console.WriteLine("[SHUTDOWN-DIAG] Measurement window expired: outstandingSubmissions={OutstandingSubmissions} queuedSubmissions={QueuedSubmissions} pendingMessageIds={PendingMessageIds} queuedWriteIntents={QueuedWriteIntents}",
+        Console.WriteLine("[SHUTDOWN-DIAG] Measurement window expired: outstandingSubmissions={0} queuedSubmissions={1} pendingMessageIds={2} queuedWriteIntents={3}",
             outstandingAtMeasurementEnd,
             diagnosticsAtMeasurementEnd.QueuedSubmissionCount,
             pendingMessageIdsAtMeasurementEnd,
@@ -63,7 +63,7 @@ internal static partial class MeasurementExecutionEngine
                      .ThenBy(static x => x.Snapshot.ConnectionId, StringComparer.Ordinal))
         {
             TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = entry.Snapshot;
-            Console.WriteLine("[SHUTDOWN-DIAG] Measurement-end connection snapshot: slot={SlotIndex} connectionId={ConnectionId} state={State} inFlight={InFlight} writeQueueDepth={WriteQueueDepth} pendingMessageIds={PendingMessageIds}",
+            Console.WriteLine("[SHUTDOWN-DIAG] Measurement-end connection snapshot: slot={0} connectionId={1} state={2} inFlight={3} writeQueueDepth={4} pendingMessageIds={5}",
                 entry.SlotIndex,
                 snapshot.ConnectionId,
                 snapshot.CurrentState,
@@ -73,7 +73,7 @@ internal static partial class MeasurementExecutionEngine
 
             foreach (TransitConnection.OutstandingPublishOperationSnapshot operation in snapshot.OutstandingOperations)
             {
-                Console.WriteLine("[SHUTDOWN-DIAG] Outstanding operation: connectionId={ConnectionId} messageId={MessageId} writeIntentEnqueued={WriteIntentEnqueued} takethisStagedForWrite={TakethisStagedForWrite} flushCompleted={FlushCompleted} waitingFor239Response={WaitingFor239Response} completionTaskStatus={CompletionTaskStatus} completionStatus={CompletionStatus} likelyAwaitingPath={LikelyAwaitingPath} t2Enqueued={T2WriteIntentEnqueuedTick} t6Staged={T6FrameStageEndTick} t8Flush={T8BatchFlushEndTick} t9Correlated={T9ResponseCorrelatedTick}",
+                Console.WriteLine("[SHUTDOWN-DIAG] Outstanding operation: connectionId={0} messageId={1} writeIntentEnqueued={2} takethisStagedForWrite={3} flushCompleted={4} waitingFor239Response={5} completionTaskStatus={6} completionStatus={7} likelyAwaitingPath={8} t2Enqueued={9} t6Staged={10} t8Flush={11} t9Correlated={12}",
                     snapshot.ConnectionId,
                     operation.MessageId,
                     operation.WriteIntentEnqueued,
@@ -100,7 +100,7 @@ internal static partial class MeasurementExecutionEngine
         int pendingMessageIdsAfterDrain = diagnosticsAfterDrain.Connections.Sum(static entry => entry.Snapshot.OutstandingOperations.Length);
         long queuedWriteIntentsAfterDrain = diagnosticsAfterDrain.Connections.Sum(static entry => entry.Snapshot.CurrentWriteIntentQueueDepth);
 
-        Console.WriteLine("[SHUTDOWN-DIAG] Drain completed: outstandingSubmissions={OutstandingSubmissions} queuedSubmissions={QueuedSubmissions} pendingMessageIds={PendingMessageIds} queuedWriteIntents={QueuedWriteIntents}",
+        Console.WriteLine("[SHUTDOWN-DIAG] Drain completed: outstandingSubmissions={0} queuedSubmissions={1} pendingMessageIds={2} queuedWriteIntents={3}",
             metrics.GetAdmittedCount() - metrics.GetCompletedCount(),
             diagnosticsAfterDrain.QueuedSubmissionCount,
             pendingMessageIdsAfterDrain,

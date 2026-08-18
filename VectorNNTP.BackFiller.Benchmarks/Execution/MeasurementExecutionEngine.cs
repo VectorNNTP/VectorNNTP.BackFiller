@@ -103,7 +103,7 @@ internal static partial class MeasurementExecutionEngine
         TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot dispatcherExitDiagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
         int dispatcherExitPendingMessageIds = dispatcherExitDiagnostics.Connections.Sum(static entry => entry.Snapshot.OutstandingOperations.Length);
         long dispatcherExitQueuedWriteIntents = dispatcherExitDiagnostics.Connections.Sum(static entry => entry.Snapshot.CurrentWriteIntentQueueDepth);
-        Console.WriteLine("[SHUTDOWN-DIAG] DispatchLoop exit: queuedSubmissions={QueuedSubmissions} pendingMessageIds={PendingMessageIds} queuedWriteIntents={QueuedWriteIntents}",
+        Console.WriteLine("[SHUTDOWN-DIAG] DispatchLoop exit: queuedSubmissions={0} pendingMessageIds={1} queuedWriteIntents={2}",
             dispatcherExitDiagnostics.QueuedSubmissionCount,
             dispatcherExitPendingMessageIds,
             dispatcherExitQueuedWriteIntents);

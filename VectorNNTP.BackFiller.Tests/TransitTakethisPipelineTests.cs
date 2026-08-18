@@ -663,11 +663,17 @@ public sealed class TransitTakethisPipelineTests
     }
 
     [Fact]
-    public async Task DisposeAsync_WhenSubmissionAwaitsTakethisResponse_CompletesSubmissionAsAmbiguous()
+    public async Task DisposeAsync_WhenMultipleOutstandingTakethis_WaitsForDefinitiveResponsesBeforeTransportClose()
     {
-        string messageId = "<msg-dispose-ambiguous@example.com>";
-        byte[] payload = [(byte)'D', (byte)'\n'];
-        TaskCompletionSource responseBlocked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        string[] messageIds =
+        [
+            "<msg-dispose-drain-0@example.com>",
+            "<msg-dispose-drain-1@example.com>",
+            "<msg-dispose-drain-2@example.com>",
+        ];
+
+        TaskCompletionSource allTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource disposeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
         {
@@ -679,12 +685,28 @@ public sealed class TransitTakethisPipelineTests
             await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
             await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
 
-            string takethisLine = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
-            Assert.Equal($"TAKETHIS {messageId}", takethisLine);
-            _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            for (int i = 0; i < messageIds.Length; i++)
+            {
+                string takethisLine = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageIds[i]}", takethisLine);
+                _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            }
 
-            responseBlocked.TrySetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            allTakethisObserved.TrySetResult();
+            await disposeStarted.Task.WaitAsync(cancellationToken);
+
+            byte[] single = new byte[1];
+            using (CancellationTokenSource noEarlyCloseTimeout = new(TimeSpan.FromMilliseconds(250)))
+            {
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stream.ReadAsync(single, noEarlyCloseTimeout.Token).AsTask());
+            }
+
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[2]} transferred");
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[0]} transferred");
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[1]} transferred");
+
+            string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("QUIT", quit);
         });
 
         await using TransitConnection connection = new(
@@ -695,19 +717,265 @@ public sealed class TransitTakethisPipelineTests
 
         await connection.InitializeAsync(CancellationToken.None);
 
-        Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+        Task<TransitPublishResult>[] publishTasks =
+        [
+            connection.SubmitTakethisAsync(messageIds[0], new byte[] { (byte)'A', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+            connection.SubmitTakethisAsync(messageIds[1], new byte[] { (byte)'B', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+            connection.SubmitTakethisAsync(messageIds[2], new byte[] { (byte)'C', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+        ];
 
-        using CancellationTokenSource startedTimeout = new(TimeSpan.FromSeconds(10));
-        await responseBlocked.Task.WaitAsync(startedTimeout.Token);
+        using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
+        await allTakethisObserved.Task.WaitAsync(observedTimeout.Token);
+
+        Task disposeTask = connection.DisposeAsync().AsTask();
+        disposeStarted.TrySetResult();
+
+        TransitPublishResult[] results = await Task.WhenAll(publishTasks);
+        Assert.Equal(3, results.Length);
+        Assert.All(results, static result =>
+        {
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+        });
+
+        using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
+        await disposeTask.WaitAsync(disposeTimeout.Token);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenNoOutstandingTakethis_SendsQuitBeforeTransportClose()
+    {
+        TaskCompletionSource quitObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("QUIT", quit);
+            quitObserved.TrySetResult();
+        });
+
+        await using TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+        await connection.DisposeAsync();
+
+        using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
+        await quitObserved.Task.WaitAsync(observedTimeout.Token);
+        Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenOutstandingTakethis_Drains239BeforeSendingQuit()
+    {
+        string[] messageIds =
+        [
+            "<msg-quit-order-0@example.com>",
+            "<msg-quit-order-1@example.com>",
+            "<msg-quit-order-2@example.com>",
+        ];
+
+        TaskCompletionSource allTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource disposeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            for (int i = 0; i < messageIds.Length; i++)
+            {
+                string takethis = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageIds[i]}", takethis);
+                _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            }
+
+            allTakethisObserved.TrySetResult();
+            await disposeStarted.Task.WaitAsync(cancellationToken);
+
+            byte[] single = new byte[1];
+            using (CancellationTokenSource noEarlyQuitTimeout = new(TimeSpan.FromMilliseconds(250)))
+            {
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stream.ReadAsync(single, noEarlyQuitTimeout.Token).AsTask());
+            }
+
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[0]} transferred");
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[1]} transferred");
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[2]} transferred");
+
+            string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("QUIT", quit);
+        });
+
+        await using TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult>[] submissions =
+        [
+            connection.SubmitTakethisAsync(messageIds[0], new byte[] { (byte)'A', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+            connection.SubmitTakethisAsync(messageIds[1], new byte[] { (byte)'B', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+            connection.SubmitTakethisAsync(messageIds[2], new byte[] { (byte)'C', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+        ];
+
+        using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
+        await allTakethisObserved.Task.WaitAsync(observedTimeout.Token);
+
+        Task disposeTask = connection.DisposeAsync().AsTask();
+        disposeStarted.TrySetResult();
+
+        TransitPublishResult[] results = await Task.WhenAll(submissions);
+        Assert.All(results, static result =>
+        {
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+        });
+
+        using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
+        await disposeTask.WaitAsync(disposeTimeout.Token);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenTransportAlreadyFaulted_DoesNotAttemptQuit()
+    {
+        TaskCompletionSource disconnectObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            await FakeTakethisServer.WriteLineAsync(stream, "malformed-status-line");
+
+            byte[] single = new byte[1];
+            using CancellationTokenSource readTimeout = new(TimeSpan.FromSeconds(5));
+            int read = await stream.ReadAsync(single, readTimeout.Token);
+            Assert.Equal(0, read);
+            disconnectObserved.TrySetResult();
+        });
+
+        await using TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+
+        using CancellationTokenSource faultTimeout = new(TimeSpan.FromSeconds(5));
+        while (connection.CurrentState != TransitConnectionState.Faulted)
+        {
+            await Task.Delay(10, faultTimeout.Token);
+        }
 
         await connection.DisposeAsync();
 
-        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
-        TransitPublishResult result = await publishTask.WaitAsync(completionTimeout.Token);
+        using CancellationTokenSource disconnectTimeout = new(TimeSpan.FromSeconds(5));
+        await disconnectObserved.Task.WaitAsync(disconnectTimeout.Token);
+    }
 
-        Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
-        Assert.Equal(messageId, result.MessageId);
-        Assert.Null(result.ResponseCode);
+    [Fact]
+    public async Task DisposeAsync_WhenQuitServerClosesImmediatelyAfterQuit_DoesNotFault()
+    {
+        string messageId = "<quit-immediate-close@example.com>";
+        byte[] payload = [(byte)'Q', (byte)'\n'];
+
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethis = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal($"TAKETHIS {messageId}", takethis);
+            _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+
+            string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("QUIT", quit);
+            await FakeTakethisServer.WriteLineAsync(stream, "205 Connection closing");
+            stream.Dispose();
+        });
+
+        TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+        TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+        Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+        Assert.Equal(239, result.ResponseCode);
+
+        Exception? disposeException = await Record.ExceptionAsync(async () => await connection.DisposeAsync());
+        Assert.Null(disposeException);
+
+        TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = connection.CaptureDiagnosticsSnapshot();
+        Assert.Equal(0, snapshot.CurrentConcurrentSubmissions);
+        Assert.Equal(0, snapshot.SubmissionsAmbiguous);
+        Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenQuitServerReturnsUnexpectedCode_StillDisposesSafely()
+    {
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("QUIT", quit);
+            await FakeTakethisServer.WriteLineAsync(stream, "500 Command not recognized");
+            stream.Dispose();
+        });
+
+        TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+
+        Exception? disposeException = await Record.ExceptionAsync(async () => await connection.DisposeAsync());
+        Assert.Null(disposeException);
+        Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
     }
 
     [Fact]

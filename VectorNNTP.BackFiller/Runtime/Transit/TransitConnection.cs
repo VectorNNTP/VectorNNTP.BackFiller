@@ -32,6 +32,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private readonly SemaphoreSlim _tokenlessCorrelationGate = new(1, 1);
         private readonly ConcurrentDictionary<string, PendingPublishOperation> _pendingByMessageId = new(StringComparer.Ordinal);
         private readonly ConcurrentQueue<string> _pendingBySendOrder = new();
+        private TaskCompletionSource? _shutdownDrainCompletion;
+        private int _shutdownRequested;
         private readonly int _maxWriteBatchSize;
         private readonly int _writeIntentQueueCapacity;
         private readonly int _writeBatchCoalesceMicroseconds;
@@ -522,6 +524,40 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             operation.T10SubmitCompletionTick = Stopwatch.GetTimestamp();
             UpdateDiagnosticOperation(operation);
+            SignalDrainIfCompleted();
+        }
+
+        /// <summary>
+        /// Waits for all outstanding TAKETHIS operations to correlate and complete.
+        /// </summary>
+        private async Task DrainPendingTakethisAsync()
+        {
+            if (_pendingByMessageId.IsEmpty)
+            {
+                return;
+            }
+
+            TaskCompletionSource drainCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _shutdownDrainCompletion = drainCompletion;
+            SignalDrainIfCompleted();
+            await drainCompletion.Task.ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Signals graceful-shutdown drain completion when no pending TAKETHIS operations remain.
+        /// </summary>
+        private void SignalDrainIfCompleted()
+        {
+            TaskCompletionSource? drainCompletion = _shutdownDrainCompletion;
+            if (drainCompletion is null)
+            {
+                return;
+            }
+
+            if (_pendingByMessageId.IsEmpty)
+            {
+                drainCompletion.TrySetResult();
+            }
         }
 
         private void LogSkippedWriteIntent(WriteIntent intent, long batchId, int batchPosition, bool pendingContains, string skipReason)
@@ -698,8 +734,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 FullMode = BoundedChannelFullMode.Wait,
             });
 
-            _writeLoopCancellation = new CancellationTokenSource();
-            _writeLoopTask = Task.Run(() => WriteLoopAsync(_writeLoopCancellation.Token), CancellationToken.None);
+            CancellationTokenSource writeLoopCancellation = new();
+            _writeLoopCancellation = writeLoopCancellation;
+            _writeLoopTask = Task.Run(() => WriteLoopAsync(writeLoopCancellation.Token), CancellationToken.None);
             _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeCoreAsync COMPLETE connectionId={ConnectionId}", ConnectionId);
         }
 
@@ -735,7 +772,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private async Task ResetTransportStateAsync()
         {
-            await StopWriteLoopAsync().ConfigureAwait(false);
+            await StopWriteLoopAsync(requestCancellation: true, drainQueuedWriteIntentsAsAmbiguous: true).ConfigureAwait(false);
 
             PipeWriter? writer = _writer;
             _writer = null;
@@ -1278,7 +1315,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
-        private async Task StopWriteLoopAsync()
+        private async Task StopWriteLoopAsync(bool requestCancellation, bool drainQueuedWriteIntentsAsAmbiguous)
         {
             Channel<WriteIntent>? writeIntentChannel = _writeIntentChannel;
             long pendingBeforeStop = _pendingByMessageId.Count;
@@ -1295,7 +1332,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             CancellationTokenSource? writeLoopCancellation = _writeLoopCancellation;
             _writeLoopCancellation = null;
 
-            if (writeLoopCancellation is not null)
+            if (requestCancellation && writeLoopCancellation is not null)
             {
                 try
                 {
@@ -1323,7 +1360,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection write loop terminated connectionId={ConnectionId}", ConnectionId);
             }
 
-            if (writeIntentChannel is not null)
+            if (drainQueuedWriteIntentsAsAmbiguous && writeIntentChannel is not null)
             {
                 DrainQueuedWriteIntentsAsAmbiguous(writeIntentChannel.Reader, "Connection closed before definitive TAKETHIS responses were received.");
                 _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection drained queued write intents as ambiguous connectionId={ConnectionId}", ConnectionId);
@@ -1359,6 +1396,42 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             if (drainedCount > 0)
             {
                 _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection drained queued write intents count={DrainedCount} connectionId={ConnectionId}", drainedCount, ConnectionId);
+            }
+        }
+
+        /// <summary>
+        /// Sends QUIT over a healthy connection and ensures command bytes are flushed to transport.
+        /// </summary>
+        private async Task SendQuitAsync()
+        {
+            if (_state == TransitConnectionState.Faulted)
+            {
+                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection skipping QUIT because connection is faulted connectionId={ConnectionId}", ConnectionId);
+                return;
+            }
+
+            if (_writer is null)
+            {
+                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection skipping QUIT because protocol writer is not initialized connectionId={ConnectionId}", ConnectionId);
+                return;
+            }
+
+            try
+            {
+                await _writeGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection sending QUIT connectionId={ConnectionId}", ConnectionId);
+                    await WriteCommandAsync("QUIT", CancellationToken.None).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _writeGate.Release();
+                }
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or InvalidOperationException)
+            {
+                _logger.LogWarning(ex, "Transit connection {ConnectionId} failed while sending QUIT.", ConnectionId);
             }
         }
 
@@ -1527,6 +1600,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection completed outstanding operations as ambiguous count={OutstandingCount} connectionId={ConnectionId}", completedAsAmbiguous, ConnectionId);
             }
+
+            SignalDrainIfCompleted();
         }
 
         private void ObserveMaxConcurrentSubmissions(int currentConcurrent)
@@ -1598,7 +1673,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new ArgumentException("Article payload must end with LF to preserve byte integrity during TAKETHIS framing.", nameof(articlePayload));
             }
 
-            if ((_state != TransitConnectionState.Ready && _state != TransitConnectionState.Publishing) || !_streamingModeNegotiated)
+            if (Volatile.Read(ref _shutdownRequested) == 1
+                || (_state != TransitConnectionState.Ready && _state != TransitConnectionState.Publishing)
+                || !_streamingModeNegotiated)
             {
                 Interlocked.Increment(ref _submissionsUnavailable);
                 return new TransitPublishResult(
@@ -1744,37 +1821,60 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         public async ValueTask DisposeAsync()
         {
+            if (Interlocked.Exchange(ref _shutdownRequested, 1) == 1)
+            {
+                return;
+            }
+
+            TransitConnectionState stateBeforeShutdown = _state;
             TransitionState(TransitConnectionState.Disconnecting);
 
             TransitConnectionDiagnosticsSnapshot preDisposeSnapshot = CaptureDiagnosticsSnapshot();
             _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection.DisposeAsync start connectionId={ConnectionId} pendingMessageIds={PendingMessageIds} writeQueueDepth={WriteQueueDepth} outstandingOps={OutstandingOps}", ConnectionId, preDisposeSnapshot.CurrentConcurrentSubmissions, preDisposeSnapshot.CurrentWriteIntentQueueDepth, preDisposeSnapshot.OutstandingOperations.Length);
 
-            await StopWriteLoopAsync().ConfigureAwait(false);
-
-            if (_responseLoopCancellation is not null)
+            try
             {
-                try
+                await StopWriteLoopAsync(requestCancellation: false, drainQueuedWriteIntentsAsAmbiguous: false).ConfigureAwait(false);
+                await DrainPendingTakethisAsync().ConfigureAwait(false);
+
+                if (stateBeforeShutdown is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
                 {
-                    _responseLoopCancellation.Cancel();
-                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection response loop cancellation requested connectionId={ConnectionId}", ConnectionId);
+                    await SendQuitAsync().ConfigureAwait(false);
                 }
-                catch (ObjectDisposedException)
+                else
                 {
+                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection skipping QUIT because pre-shutdown state was {State} connectionId={ConnectionId}", stateBeforeShutdown, ConnectionId);
+                }
+
+                if (_responseLoopCancellation is not null)
+                {
+                    try
+                    {
+                        _responseLoopCancellation.Cancel();
+                        _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection response loop cancellation requested connectionId={ConnectionId}", ConnectionId);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                    }
+                }
+
+                if (_responseLoopTask is not null)
+                {
+                    try
+                    {
+                        await _responseLoopTask.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+
+                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection response loop terminated connectionId={ConnectionId}", ConnectionId);
+                    _responseLoopTask = null;
                 }
             }
-
-            if (_responseLoopTask is not null)
+            finally
             {
-                try
-                {
-                    await _responseLoopTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection response loop terminated connectionId={ConnectionId}", ConnectionId);
-                _responseLoopTask = null;
+                _shutdownDrainCompletion = null;
             }
 
             if (_writer is not null)

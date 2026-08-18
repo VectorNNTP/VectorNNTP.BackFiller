@@ -38,7 +38,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             await FakeNntpServer.WriteLineAsync(stream, ".");
             await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
             await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-            await WaitUntilCanceledAsync(cancellationToken: _);
+            await ServeGracefulShutdownAsync(stream, _);
         });
 
         await using TransitConnection connection = new(
@@ -68,7 +68,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             await FakeNntpServer.WriteLineAsync(stream, ".");
             await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
             await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-            await WaitUntilCanceledAsync(cancellationToken: _);
+            await ServeGracefulShutdownAsync(stream, _);
         });
 
         await using TransitConnection connection = new(
@@ -81,6 +81,41 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
         Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         Assert.True(connection.Capabilities.SupportsStreaming);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenDisposedImmediatelyAfterReady_DoesNotThrowFromWriteLoopStartupRace()
+    {
+        const int iterations = 100;
+
+        for (int iteration = 0; iteration < iterations; iteration++)
+        {
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
+                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
+                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakeNntpServer.WriteLineAsync(stream, "VERSION 2");
+                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
+                await FakeNntpServer.WriteLineAsync(stream, ".");
+                await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
+                await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
+            });
+
+            await using TransitConnection connection = new(
+                host: IPAddress.Loopback.ToString(),
+                port: server.Port,
+                useSsl: false,
+                NullLogger<TransitPublisher>.Instance);
+
+            await connection.InitializeAsync(CancellationToken.None);
+            Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
+
+            Exception? disposeException = await Record.ExceptionAsync(async () => await connection.DisposeAsync());
+            Assert.Null(disposeException);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+        }
     }
 
     [Fact]
@@ -113,7 +148,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             await allowResponse.Task.WaitAsync(linked.Token);
 
             await FakeNntpServer.WriteLineAsync(stream, $"239 {messageId} transferred");
-            await WaitUntilCanceledAsync(cancellationToken);
+            await ServeGracefulShutdownAsync(stream, cancellationToken);
         });
 
         await using TransitConnection connection = new(
@@ -175,7 +210,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
             await FakeNntpServer.ExpectCommandAsync(sslStream, "MODE STREAM");
             await FakeNntpServer.WriteLineAsync(sslStream, "203 Streaming permitted");
-            await WaitUntilCanceledAsync(cancellationToken);
+            await ServeGracefulShutdownAsync(sslStream, cancellationToken);
         });
 
         await using TransitConnection connection = new(
@@ -366,7 +401,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             await FakeNntpServer.WriteLineAsync(sslStream, ".");
             await FakeNntpServer.ExpectCommandAsync(sslStream, "MODE STREAM");
             await FakeNntpServer.WriteLineAsync(sslStream, "203 Streaming permitted");
-            await WaitUntilCanceledAsync(cancellationToken);
+            await ServeGracefulShutdownAsync(sslStream, cancellationToken);
         });
 
         await using TransitConnection connection = new(
@@ -717,7 +752,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await WaitUntilCanceledAsync(cancellationToken);
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             },
         ]);
 
@@ -938,7 +973,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
                 await FakeNntpServer.WriteLineAsync(stream, ".");
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await WaitUntilCanceledAsync(cancellationToken);
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             },
         ]);
 
@@ -986,7 +1021,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
                 await FakeNntpServer.WriteLineAsync(stream, ".");
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await WaitUntilCanceledAsync(cancellationToken);
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             },
         ]);
 
@@ -1035,7 +1070,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
                 await FakeNntpServer.WriteLineAsync(stream, ".");
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await WaitUntilCanceledAsync(cancellationToken);
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             },
         ]);
 
@@ -1085,7 +1120,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
                 await FakeNntpServer.WriteLineAsync(stream, ".");
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await WaitUntilCanceledAsync(cancellationToken);
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             },
         ]);
 
@@ -1130,7 +1165,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
                 await FakeNntpServer.WriteLineAsync(stream, ".");
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await WaitUntilCanceledAsync(cancellationToken);
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             },
         ]);
 
@@ -1154,15 +1189,16 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
         Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
     }
 
-    private static async Task WaitUntilCanceledAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Continues servicing a ready fake NNTP session until the client performs graceful QUIT shutdown.
+    /// </summary>
+    private static async Task ServeGracefulShutdownAsync(Stream stream, CancellationToken cancellationToken)
     {
-        try
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
+        ArgumentNullException.ThrowIfNull(stream);
+
+        string command = await FakeNntpServer.ReadLineAsync(stream, cancellationToken);
+        Assert.Equal("QUIT", command);
+        await FakeNntpServer.WriteLineAsync(stream, "205 connection closing");
     }
 
     public sealed class TlsCertificateFixture : IDisposable
