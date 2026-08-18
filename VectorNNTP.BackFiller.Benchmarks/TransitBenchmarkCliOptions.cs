@@ -11,6 +11,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
     int? ArticleKilobytes,
     int? GeneratorWorkers,
     int? WriteBatchCoalesceMicroseconds,
+    int? ArticleCount = null,
     string? ExpectedAssemblyPath = null,
     string? ExpectedAssemblyVersion = null,
     string? ExpectedFileVersion = null,
@@ -18,7 +19,10 @@ internal readonly record struct TransitBenchmarkCliOptions(
     string? ExpectedPlatform = null,
     string? ExpectedTargetFramework = null,
     string? ExpectedRuntimeIdentifier = null,
-    string? ExpectedArchitecture = null)
+    string? ExpectedArchitecture = null,
+    string? ExpectedProductionAssemblyPath = null,
+    string? ExpectedProductionAssemblyVersion = null,
+    string? ExpectedProductionFileVersion = null)
 {
     internal static TransitBenchmarkCliOptions Parse(string[] args)
     {
@@ -37,6 +41,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
         int? articleKilobytes = null;
         int? generatorWorkers = null;
         int? writeBatchCoalesceMicroseconds = null;
+        int? articleCount = null;
         string? expectedAssemblyPath = null;
         string? expectedAssemblyVersion = null;
         string? expectedFileVersion = null;
@@ -45,6 +50,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
         string? expectedTargetFramework = null;
         string? expectedRuntimeIdentifier = null;
         string? expectedArchitecture = null;
+        string? expectedProductionAssemblyPath = null;
+        string? expectedProductionAssemblyVersion = null;
+        string? expectedProductionFileVersion = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -106,6 +114,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
                 case "write-batch-coalesce-us":
                     writeBatchCoalesceMicroseconds = ParsePositiveInt(key, value);
                     break;
+                case "article-count":
+                    articleCount = ParsePositiveInt(key, value);
+                    break;
                 case "expected-assembly-path":
                     expectedAssemblyPath = ParseRequiredString(key, value);
                     break;
@@ -130,6 +141,15 @@ internal readonly record struct TransitBenchmarkCliOptions(
                 case "expected-architecture":
                     expectedArchitecture = ParseRequiredString(key, value);
                     break;
+                case "expected-production-assembly-path":
+                    expectedProductionAssemblyPath = ParseRequiredString(key, value);
+                    break;
+                case "expected-production-assembly-version":
+                    expectedProductionAssemblyVersion = ParseRequiredString(key, value);
+                    break;
+                case "expected-production-file-version":
+                    expectedProductionFileVersion = ParseRequiredString(key, value);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown option '--{key}'.");
             }
@@ -146,6 +166,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
             ArticleKilobytes: articleKilobytes,
             GeneratorWorkers: generatorWorkers,
             WriteBatchCoalesceMicroseconds: writeBatchCoalesceMicroseconds,
+            ArticleCount: articleCount,
             ExpectedAssemblyPath: expectedAssemblyPath,
             ExpectedAssemblyVersion: expectedAssemblyVersion,
             ExpectedFileVersion: expectedFileVersion,
@@ -153,7 +174,10 @@ internal readonly record struct TransitBenchmarkCliOptions(
             ExpectedPlatform: expectedPlatform,
             ExpectedTargetFramework: expectedTargetFramework,
             ExpectedRuntimeIdentifier: expectedRuntimeIdentifier,
-            ExpectedArchitecture: expectedArchitecture);
+            ExpectedArchitecture: expectedArchitecture,
+            ExpectedProductionAssemblyPath: expectedProductionAssemblyPath,
+            ExpectedProductionAssemblyVersion: expectedProductionAssemblyVersion,
+            ExpectedProductionFileVersion: expectedProductionFileVersion);
     }
 
     private static int ParsePositiveInt(string key, string raw)

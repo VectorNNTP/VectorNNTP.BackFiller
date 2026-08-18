@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Runtime.Loader;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
@@ -10,10 +13,13 @@ internal static class RuntimeIdentityGuard
             string.IsNullOrWhiteSpace(expected.ExpectedAssemblyVersion) ||
             string.IsNullOrWhiteSpace(expected.ExpectedFileVersion) ||
             string.IsNullOrWhiteSpace(expected.ExpectedTargetFramework) ||
-            string.IsNullOrWhiteSpace(expected.ExpectedArchitecture))
+            string.IsNullOrWhiteSpace(expected.ExpectedArchitecture) ||
+            string.IsNullOrWhiteSpace(expected.ExpectedProductionAssemblyPath) ||
+            string.IsNullOrWhiteSpace(expected.ExpectedProductionAssemblyVersion) ||
+            string.IsNullOrWhiteSpace(expected.ExpectedProductionFileVersion))
         {
             throw new InvalidOperationException(
-                "Runtime identity guard requires expected hard-identity options: --expected-assembly-path, --expected-assembly-version, --expected-file-version, --expected-target-framework, and --expected-architecture.");
+                "Runtime identity guard requires expected hard-identity options for executing benchmark assembly and production dependency: --expected-assembly-path, --expected-assembly-version, --expected-file-version, --expected-target-framework, --expected-architecture, --expected-production-assembly-path, --expected-production-assembly-version, and --expected-production-file-version.");
         }
 
         List<string> mismatches = [];
@@ -89,6 +95,70 @@ internal static class RuntimeIdentityGuard
             mismatches.Add($"Architecture expected='{expected.ExpectedArchitecture}' actual='{runtimeIdentity.Architecture}'");
         }
 
+        string expectedProductionPath = Path.GetFullPath(expected.ExpectedProductionAssemblyPath);
+        Assembly? loadedProductionAssembly = ResolveLoadedProductionAssembly();
+        string? loadedProductionAssemblyName = loadedProductionAssembly?.GetName().Name;
+
+        string actualProductionPath = ResolveActualProductionAssemblyPath(runtimeIdentity, loadedProductionAssembly);
+        string actualProductionAssemblyVersion = runtimeIdentity.ProductionDependencyAssemblyVersion ?? "(unknown)";
+        string actualProductionFileVersion = runtimeIdentity.ProductionDependencyFileVersion ?? "(unknown)";
+
+        if (loadedProductionAssembly is null)
+        {
+            mismatches.Add("ProductionAssemblyName expected='VectorNNTP.BackFiller' actual='(not loaded)'");
+        }
+        else if (!string.Equals(loadedProductionAssemblyName, "VectorNNTP.BackFiller", StringComparison.Ordinal))
+        {
+            mismatches.Add($"ProductionAssemblyName expected='VectorNNTP.BackFiller' actual='{loadedProductionAssemblyName}'");
+        }
+
+        string expectedProductionSha256 = "(unavailable)";
+        string actualProductionSha256 = "(unavailable)";
+        string binaryIdentity = "UNAVAILABLE";
+
+        if (!File.Exists(expectedProductionPath))
+        {
+            mismatches.Add($"Expected production artifact file not found at path '{expectedProductionPath}'.");
+        }
+        else
+        {
+            expectedProductionSha256 = ComputeSha256(expectedProductionPath);
+        }
+
+        if (IsUnknownIdentityValue(actualProductionPath))
+        {
+            mismatches.Add("ProductionAssemblyPath actual='(unknown)' (VectorNNTP.BackFiller dependency not loaded)");
+        }
+        else if (!File.Exists(actualProductionPath))
+        {
+            mismatches.Add($"Loaded production assembly file not found at path '{actualProductionPath}'.");
+        }
+        else
+        {
+            actualProductionSha256 = ComputeSha256(actualProductionPath);
+        }
+
+        if (!string.Equals(expectedProductionSha256, "(unavailable)", StringComparison.Ordinal)
+            && !string.Equals(actualProductionSha256, "(unavailable)", StringComparison.Ordinal))
+        {
+            bool hashesMatch = string.Equals(expectedProductionSha256, actualProductionSha256, StringComparison.OrdinalIgnoreCase);
+            binaryIdentity = hashesMatch ? "IDENTICAL" : "DIFFERENT";
+            if (!hashesMatch)
+            {
+                mismatches.Add($"ProductionBinarySha256 expected='{expectedProductionSha256}' actual='{actualProductionSha256}'");
+            }
+        }
+
+        if (!string.Equals(expected.ExpectedProductionAssemblyVersion, actualProductionAssemblyVersion, StringComparison.Ordinal))
+        {
+            mismatches.Add($"ProductionAssemblyVersion expected='{expected.ExpectedProductionAssemblyVersion}' actual='{actualProductionAssemblyVersion}'");
+        }
+
+        if (!string.Equals(expected.ExpectedProductionFileVersion, actualProductionFileVersion, StringComparison.Ordinal))
+        {
+            mismatches.Add($"ProductionFileVersion expected='{expected.ExpectedProductionFileVersion}' actual='{actualProductionFileVersion}'");
+        }
+
         if (mismatches.Count == 0)
         {
             if (provenanceNotes.Count > 0)
@@ -105,26 +175,38 @@ internal static class RuntimeIdentityGuard
 
         StringBuilder message = new();
         message.AppendLine("Runtime identity mismatch detected. ABORTING before warmup/measurement.");
-        message.AppendLine("EXPECTED:");
+        message.AppendLine("EXECUTING BENCHMARK ASSEMBLY (EXPECTED):");
         message.AppendLine($"  path={expected.ExpectedAssemblyPath}");
         message.AppendLine($"  assemblyVersion={expected.ExpectedAssemblyVersion}");
         message.AppendLine($"  fileVersion={expected.ExpectedFileVersion}");
+        message.AppendLine($"  targetFramework={expected.ExpectedTargetFramework}");
+        message.AppendLine($"  architecture={expected.ExpectedArchitecture}");
         message.AppendLine($"  configuration={expected.ExpectedConfiguration ?? "(unspecified)"}");
         message.AppendLine($"  platform={expected.ExpectedPlatform ?? "(unspecified)"}");
-        message.AppendLine($"  targetFramework={expected.ExpectedTargetFramework}");
         message.AppendLine($"  runtimeIdentifier={expected.ExpectedRuntimeIdentifier ?? "(unspecified)"}");
-        message.AppendLine($"  architecture={expected.ExpectedArchitecture}");
-        message.AppendLine("ACTUAL:");
+        message.AppendLine("EXECUTING BENCHMARK ASSEMBLY (ACTUAL):");
         message.AppendLine($"  path={runtimeIdentity.RuntimeAssemblyPath}");
         message.AppendLine($"  assemblyVersion={runtimeIdentity.RuntimeAssemblyVersion}");
         message.AppendLine($"  fileVersion={actualFileVersion}");
+        message.AppendLine($"  targetFramework={actualTargetFramework} (normalized={normalizedActualTargetFramework})");
+        message.AppendLine($"  architecture={runtimeIdentity.Architecture}");
         message.AppendLine($"  configuration={actualConfiguration}");
         message.AppendLine($"  platform={actualPlatform}");
-        message.AppendLine($"  targetFramework={actualTargetFramework} (normalized={normalizedActualTargetFramework})");
         message.AppendLine($"  runtimeIdentifier={actualRuntimeIdentifier}");
-        message.AppendLine($"  architecture={runtimeIdentity.Architecture}");
         message.AppendLine($"  processPath={runtimeIdentity.ProcessPath}");
         message.AppendLine($"  workingDirectory={runtimeIdentity.WorkingDirectory}");
+        message.AppendLine("EXPECTED PRODUCTION ARTIFACT:");
+        message.AppendLine($"  path={expectedProductionPath}");
+        message.AppendLine($"  assemblyVersion={expected.ExpectedProductionAssemblyVersion}");
+        message.AppendLine($"  fileVersion={expected.ExpectedProductionFileVersion}");
+        message.AppendLine($"  SHA256={expectedProductionSha256}");
+        message.AppendLine("ACTUAL LOADED PRODUCTION ASSEMBLY:");
+        message.AppendLine($"  name={loadedProductionAssemblyName ?? "(not loaded)"}");
+        message.AppendLine($"  path={actualProductionPath}");
+        message.AppendLine($"  assemblyVersion={actualProductionAssemblyVersion}");
+        message.AppendLine($"  fileVersion={actualProductionFileVersion}");
+        message.AppendLine($"  SHA256={actualProductionSha256}");
+        message.AppendLine($"BINARY_IDENTITY: {binaryIdentity}");
         message.AppendLine("MISMATCH DETAILS:");
         foreach (string mismatch in mismatches)
         {
@@ -141,6 +223,31 @@ internal static class RuntimeIdentityGuard
         }
 
         throw new InvalidOperationException(message.ToString());
+    }
+
+    private static Assembly? ResolveLoadedProductionAssembly()
+    {
+        return AssemblyLoadContext.Default.Assemblies
+            .FirstOrDefault(static assembly => string.Equals(assembly.GetName().Name, "VectorNNTP.BackFiller", StringComparison.Ordinal));
+    }
+
+    private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
+    {
+        if (loadedProductionAssembly is not null && !string.IsNullOrWhiteSpace(loadedProductionAssembly.Location))
+        {
+            return Path.GetFullPath(loadedProductionAssembly.Location);
+        }
+
+        return IsUnknownIdentityValue(runtimeIdentity.ProductionDependencyPath)
+            ? "(unknown)"
+            : Path.GetFullPath(runtimeIdentity.ProductionDependencyPath!);
+    }
+
+    private static string ComputeSha256(string filePath)
+    {
+        using FileStream stream = File.OpenRead(filePath);
+        byte[] hash = SHA256.HashData(stream);
+        return Convert.ToHexString(hash);
     }
 
     private static bool IsUnknownIdentityValue(string? value)

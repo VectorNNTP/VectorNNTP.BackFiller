@@ -1,4 +1,161 @@
+using VectorNNTP.Backfiller.Runtime.Transit;
+
 namespace VectorNNTP.BackFiller.Benchmarks;
+
+internal readonly record struct BoundaryConnectionSnapshot(
+    int SlotIndex,
+    string ConnectionId,
+    string State,
+    int CurrentConcurrentSubmissions,
+    int OutstandingOperations,
+    long CurrentWriteIntentQueueDepth,
+    long SubmissionsStarted,
+    long SubmissionsAccepted,
+    long SubmissionsRejected,
+    long SubmissionsAmbiguous,
+    long SubmissionsUnavailable,
+    long SubmissionsFailed);
+
+internal readonly record struct FixedCountBoundarySnapshot(
+    string Phase,
+    DateTimeOffset TimestampUtc,
+    long StopwatchTick,
+    long TotalSubmissionsStarted,
+    long TotalSubmissionsAccepted,
+    long TotalSubmissionsRejected,
+    long TotalSubmissionsAmbiguous,
+    long TotalSubmissionsFailed,
+    long TotalSubmissionsUnavailable,
+    long TotalSubmissionsCanceled,
+    long CurrentOutstandingSubmissions,
+    long QueuedSubmissionCount,
+    long PendingOperationsCount,
+    long QueuedWriteIntentsCount,
+    int CurrentConnectionCount,
+    int ActiveConnectionCount,
+    int ReadyConnectionCount,
+    BoundaryConnectionSnapshot[] Connections);
+
+internal readonly record struct PostMeasurementTerminalizationReasons(
+    long Response400,
+    long ResponseLoopFailure,
+    long ConnectionClose,
+    long QueuedWriteDrain,
+    long Shutdown,
+    long Preemption,
+    long Cancellation,
+    long Timeout,
+    long Unavailable,
+    long Failed,
+    long OtherOrUnknown);
+
+internal readonly record struct PostMeasurementTerminalizationSummary(
+    long TerminalizedBeforeMeasurementEnd,
+    long TerminalizedAfterMeasurementEnd,
+    long PostMeasurementAccepted,
+    long PostMeasurementRejected,
+    long PostMeasurementAmbiguous,
+    long PostMeasurementFailed,
+    long PostMeasurementUnavailable,
+    long PostMeasurementCanceled,
+    DateTimeOffset? FirstPostMeasurementTerminalizationUtc,
+    DateTimeOffset? LastPostMeasurementTerminalizationUtc,
+    PostMeasurementTerminalizationReasons Reasons);
+
+internal readonly record struct FixedCountBoundaryTelemetry(
+    FixedCountBoundarySnapshot AtMeasurementEnd,
+    FixedCountBoundarySnapshot PostMeasurementPreDrain,
+    FixedCountBoundarySnapshot PostDrainFinal,
+    PostMeasurementTerminalizationSummary PostMeasurementTerminalization);
+
+internal readonly record struct AmbiguityProvenanceCategorySummary(
+    TransitPublishProvenance Category,
+    long Count,
+    long BeforeMeasurementEndCount,
+    long AfterMeasurementEndCount,
+    double? FirstOccurrenceMsFromMeasurementStart,
+    double? LastOccurrenceMsFromMeasurementStart);
+
+internal readonly record struct ProvenanceConnectionCategorySummary(
+    TransitPublishProvenance Category,
+    long Count,
+    long BeforeMeasurementEndCount,
+    long AfterMeasurementEndCount);
+
+internal readonly record struct ProvenanceConnectionSummary(
+    string ConnectionId,
+    int? SlotIndex,
+    long AmbiguousCount,
+    string[] StatesObserved,
+    ProvenanceConnectionCategorySummary[] Categories);
+
+internal readonly record struct AmbiguityProvenanceSummary(
+    AmbiguityProvenanceCategorySummary[] Categories,
+    ProvenanceConnectionSummary[] Connections);
+
+internal readonly record struct SubmissionPumpInitiatingFaultSummary(
+    long FaultSequence,
+    int SlotIndex,
+    long CapturedAtTick,
+    string ExceptionType,
+    string BaseExceptionType,
+    int HResult,
+    string InvalidOperationMessageClass,
+    string SanitizedFirstFaultMessageClass,
+    string SanitizedFirstFaultMessage,
+    string? FullFirstFaultStackTrace,
+    string? TopStackFrameDeclaringType,
+    string? TopStackFrameMethodName,
+    string Origin,
+    double? MillisecondsFromMeasurementStart,
+    bool MeasurementBoundaryObserved,
+    double? MillisecondsFromMeasurementEnd,
+    string MeasurementStateAtFault,
+    long QueuedSubmissionCount,
+    int InFlightCount,
+    long ActiveSubmissionCount,
+    int? ChannelImmediateAvailableCount,
+    int ActiveConnectionCount,
+    int ReadyConnectionCount,
+    int FaultedConnectionCount,
+    int ReconnectingConnectionCount,
+    long OutstandingConnectionOperations,
+    string ProducerCompletionState,
+    string DispatchersCompletedState);
+
+internal readonly record struct SubmissionPumpFaultSummary(
+    long TotalFaultCount,
+    long InitiatingFaultCount,
+    long CascadeFaultCount,
+    SubmissionPumpInitiatingFaultSummary? InitiatingFault);
+
+internal readonly record struct P1GreetingLifecycleEventSummary(
+    string Event,
+    long Tick,
+    int InitializationAttemptId);
+
+internal readonly record struct P1GreetingProvenanceSummary(
+    string ConnectionId,
+    string Host,
+    int Port,
+    int InitializationAttemptId,
+    string? LocalIp,
+    int LocalPort,
+    string? RemoteIp,
+    int RemotePort,
+    long CapturedAtTick,
+    long? ConnectedAtTick,
+    long? PipesCreatedAtTick,
+    long? AwaitingGreetingAtTick,
+    DateTimeOffset? ConnectedAtUtc,
+    DateTimeOffset? P1AtUtc,
+    bool LocalDisposeAsyncBeforeP1,
+    bool LocalResetTransportStateBeforeP1,
+    bool LocalDisposeTransportArtifactsBeforeP1,
+    bool LocalRebuildPipesBeforeP1,
+    bool LocalCleanupFailedInitializationBeforeP1,
+    bool InitializationCancellationBeforeP1,
+    P1GreetingLifecycleEventSummary[] LifecycleEvents);
 
 internal readonly record struct BenchmarkResult(
     string BenchmarkBuildVersion,
@@ -9,6 +166,10 @@ internal readonly record struct BenchmarkResult(
     TimeSpan DrainDuration,
     long OutstandingAtMeasurementEnd,
     long DrainedAfterMeasurement,
+    FixedCountBoundaryTelemetry? FixedCountBoundaryTelemetry,
+    AmbiguityProvenanceSummary AmbiguityProvenance,
+    SubmissionPumpFaultSummary SubmissionPumpFault,
+    P1GreetingProvenanceSummary? P1GreetingProvenance,
     long GeneratedArticles,
     long GeneratedBytes,
     double GeneratedGbps,
@@ -21,6 +182,7 @@ internal readonly record struct BenchmarkResult(
     long RejectedArticles,
     long AmbiguousArticles,
     long MinQueueDepth,
+    long QueueDepthSampleCount,
     double AverageQueueDepth,
     double AverageQueuedBytes,
     long PeakQueueDepth,

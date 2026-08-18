@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
 
@@ -61,6 +62,21 @@ public sealed class CreateBenchmarkResultContractTests
         Assert.Equal(drainDuration, result.DrainDuration);
         Assert.Equal(17, result.OutstandingAtMeasurementEnd);
         Assert.Equal(13, result.DrainedAfterMeasurement);
+        Assert.Null(result.FixedCountBoundaryTelemetry);
+
+        Assert.All(result.AmbiguityProvenance.Categories, static category =>
+        {
+            Assert.Equal(0, category.Count);
+            Assert.Equal(0, category.BeforeMeasurementEndCount);
+            Assert.Equal(0, category.AfterMeasurementEndCount);
+        });
+        Assert.Empty(result.AmbiguityProvenance.Connections);
+
+        Assert.Equal(0, result.SubmissionPumpFault.TotalFaultCount);
+        Assert.Equal(0, result.SubmissionPumpFault.InitiatingFaultCount);
+        Assert.Equal(0, result.SubmissionPumpFault.CascadeFaultCount);
+        Assert.Null(result.SubmissionPumpFault.InitiatingFault);
+        Assert.Null(result.P1GreetingProvenance);
 
         Assert.Equal(snapshot.GeneratedCount, result.GeneratedArticles);
         Assert.Equal(snapshot.GeneratedBytes, result.GeneratedBytes);
@@ -72,6 +88,7 @@ public sealed class CreateBenchmarkResultContractTests
         Assert.Equal(snapshot.AmbiguousCount, result.AmbiguousArticles);
 
         Assert.Equal(snapshot.MinQueueDepth, result.MinQueueDepth);
+        Assert.Equal(snapshot.QueueDepthSampleCount, result.QueueDepthSampleCount);
         Assert.Equal(snapshot.AverageQueueDepth, result.AverageQueueDepth);
         Assert.Equal(snapshot.AverageQueueBytes, result.AverageQueuedBytes);
         Assert.Equal(snapshot.PeakQueueDepth, result.PeakQueueDepth);

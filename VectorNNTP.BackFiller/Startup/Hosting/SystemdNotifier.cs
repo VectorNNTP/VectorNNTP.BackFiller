@@ -95,6 +95,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// Sends a custom status message to systemd (Type=notify services only).
         /// </summary>
         /// <param name="statusMessage">Status message (e.g., "Running: 38.7 Gbps, 128k articles/s").</param>
+        /// <param name="logger">Logger used for operational diagnostics.</param>
         /// <remarks>
         /// <para>Sends <c>STATUS=&lt;message&gt;</c> to systemd. This appears in <c>systemctl status</c>
         /// output and systemd logs, providing service status visibility.</para>
@@ -200,6 +201,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// </summary>
         /// <param name="state">Notification state string (e.g., "READY=1", "STOPPING=1", "STATUS=...").</param>
         /// <param name="notificationType">Diagnostic label for the notification type (e.g., "readiness", "status").</param>
+        /// <param name="logger">Logger used for diagnostics related to notify delivery.</param>
         /// <returns><see langword="true"/> if the notification was sent successfully; otherwise <see langword="false"/>.</returns>
         private static bool NotifySystemd(string state, string notificationType, ILogger logger)
         {

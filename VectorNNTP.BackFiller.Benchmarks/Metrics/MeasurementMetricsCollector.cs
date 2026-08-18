@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
+
+internal readonly record struct ProvenanceOccurrenceBounds(long FirstTick, long LastTick);
 
 internal sealed class MeasurementMetrics
 {
@@ -12,7 +15,20 @@ internal sealed class MeasurementMetrics
     private long _acceptedBytes;
     private long _rejectedCount;
     private long _ambiguousCount;
+    private long _ambiguousOnlyCount;
+    private long _failedCount;
+    private long _unavailableCount;
+    private long _canceledCount;
     private long _completedCount;
+
+    private long _measurementStartStopwatchTick;
+    private long _measurementEndStopwatchTick;
+    private long _measurementEndUtcTicks;
+    private long _measurementBoundarySet;
+
+    private readonly ProvenanceAggregate[] _provenanceAggregates = new ProvenanceAggregate[Enum.GetValues<TransitPublishProvenance>().Length];
+    private readonly object _provenanceConnectionGate = new();
+    private readonly Dictionary<string, ProvenanceConnectionAggregate> _provenanceByConnection = [];
 
     private long _blockedTicks;
     private long _generationTicks;
@@ -72,6 +88,11 @@ internal sealed class MeasurementMetrics
     internal MeasurementMetrics(int articleBytes)
     {
         _articleBytes = articleBytes;
+
+        for (int i = 0; i < _provenanceAggregates.Length; i++)
+        {
+            _provenanceAggregates[i] = new ProvenanceAggregate();
+        }
     }
 
     internal int InFlightSubmissions;
@@ -121,7 +142,25 @@ internal sealed class MeasurementMetrics
             Interlocked.Increment(ref _ambiguousCount);
         }
 
+        switch (publishResult.Status)
+        {
+            case TransitPublishStatus.Ambiguous:
+                Interlocked.Increment(ref _ambiguousOnlyCount);
+                break;
+            case TransitPublishStatus.Failed:
+                Interlocked.Increment(ref _failedCount);
+                break;
+            case TransitPublishStatus.Unavailable:
+                Interlocked.Increment(ref _unavailableCount);
+                break;
+            case TransitPublishStatus.Canceled:
+                Interlocked.Increment(ref _canceledCount);
+                break;
+        }
+
+        long completionTick = Stopwatch.GetTimestamp();
         Interlocked.Increment(ref _completedCount);
+        RecordProvenanceClassification(publishResult, completionTick);
 
         long dispatchQueueWaitTicks = Math.Max(0, publishStartTick - dequeuedTick);
         long publishTicks = Math.Max(0, publishEndTick - publishStartTick);
@@ -272,6 +311,100 @@ internal sealed class MeasurementMetrics
 
     internal long GetAdmittedCount() => Interlocked.Read(ref _admittedCount);
     internal long GetCompletedCount() => Interlocked.Read(ref _completedCount);
+    internal long GetAcceptedCount() => Interlocked.Read(ref _acceptedCount);
+    internal long GetRejectedCount() => Interlocked.Read(ref _rejectedCount);
+    internal long GetAmbiguousOnlyCount() => Interlocked.Read(ref _ambiguousOnlyCount);
+    internal long GetFailedCount() => Interlocked.Read(ref _failedCount);
+    internal long GetUnavailableCount() => Interlocked.Read(ref _unavailableCount);
+    internal long GetCanceledCount() => Interlocked.Read(ref _canceledCount);
+
+    internal void MarkMeasurementBoundary(DateTimeOffset measurementEndUtc, long measurementEndStopwatchTick)
+    {
+        Interlocked.Exchange(ref _measurementEndUtcTicks, measurementEndUtc.UtcTicks);
+        Interlocked.Exchange(ref _measurementEndStopwatchTick, measurementEndStopwatchTick);
+        Interlocked.Exchange(ref _measurementBoundarySet, 1);
+    }
+
+    internal void MarkMeasurementStart(long measurementStartStopwatchTick)
+    {
+        Interlocked.Exchange(ref _measurementStartStopwatchTick, measurementStartStopwatchTick);
+    }
+
+    internal PostMeasurementTerminalizationReasons CapturePostMeasurementReasons()
+    {
+        return new PostMeasurementTerminalizationReasons(
+            Response400: _provenanceAggregates[(int)TransitPublishProvenance.Response400].PostMeasurementCount,
+            ResponseLoopFailure: _provenanceAggregates[(int)TransitPublishProvenance.ResponseLoopFailure].PostMeasurementCount,
+            ConnectionClose: _provenanceAggregates[(int)TransitPublishProvenance.ConnectionClose].PostMeasurementCount,
+            QueuedWriteDrain: _provenanceAggregates[(int)TransitPublishProvenance.QueuedWriteDrain].PostMeasurementCount,
+            Shutdown: _provenanceAggregates[(int)TransitPublishProvenance.Shutdown].PostMeasurementCount,
+            Preemption: _provenanceAggregates[(int)TransitPublishProvenance.Preemption].PostMeasurementCount,
+            Cancellation: _provenanceAggregates[(int)TransitPublishProvenance.Cancellation].PostMeasurementCount,
+            Timeout: _provenanceAggregates[(int)TransitPublishProvenance.Timeout].PostMeasurementCount,
+            Unavailable: _provenanceAggregates[(int)TransitPublishProvenance.Unavailable].PostMeasurementCount,
+            Failed: _provenanceAggregates[(int)TransitPublishProvenance.Failed].PostMeasurementCount,
+            OtherOrUnknown: _provenanceAggregates[(int)TransitPublishProvenance.OtherOrUnknown].PostMeasurementCount);
+    }
+
+    internal ProvenanceOccurrenceBounds CapturePostMeasurementOccurrenceBounds()
+    {
+        long first = 0;
+        long last = 0;
+
+        foreach (ProvenanceAggregate aggregate in _provenanceAggregates)
+        {
+            if (aggregate.PostMeasurementCount <= 0)
+            {
+                continue;
+            }
+
+            long candidateFirst = aggregate.FirstOccurrenceTick;
+            long candidateLast = aggregate.LastOccurrenceTick;
+
+            if (candidateFirst > 0 && (first == 0 || candidateFirst < first))
+            {
+                first = candidateFirst;
+            }
+
+            if (candidateLast > last)
+            {
+                last = candidateLast;
+            }
+        }
+
+        return new ProvenanceOccurrenceBounds(first, last);
+    }
+
+    internal AmbiguityProvenanceSummary CaptureAmbiguityProvenanceSummary(DateTimeOffset measurementStartUtc)
+    {
+        long measurementStartStopwatchTick = Interlocked.Read(ref _measurementStartStopwatchTick);
+        AmbiguityProvenanceCategorySummary[] categories = new AmbiguityProvenanceCategorySummary[_provenanceAggregates.Length];
+        for (int i = 0; i < _provenanceAggregates.Length; i++)
+        {
+            TransitPublishProvenance provenance = (TransitPublishProvenance)i;
+            ProvenanceAggregate aggregate = _provenanceAggregates[i];
+            categories[i] = new AmbiguityProvenanceCategorySummary(
+                Category: provenance,
+                Count: aggregate.Count,
+                BeforeMeasurementEndCount: aggregate.BeforeMeasurementEndCount,
+                AfterMeasurementEndCount: aggregate.PostMeasurementCount,
+                FirstOccurrenceMsFromMeasurementStart: ToMeasurementOffsetMilliseconds(measurementStartUtc, measurementStartStopwatchTick, aggregate.FirstOccurrenceTick),
+                LastOccurrenceMsFromMeasurementStart: ToMeasurementOffsetMilliseconds(measurementStartUtc, measurementStartStopwatchTick, aggregate.LastOccurrenceTick));
+        }
+
+        ProvenanceConnectionSummary[] connectionSummaries;
+        lock (_provenanceConnectionGate)
+        {
+            connectionSummaries = _provenanceByConnection.Values
+                .Select(static aggregate => aggregate.ToSummary())
+                .OrderBy(static x => x.ConnectionId, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        return new AmbiguityProvenanceSummary(
+            Categories: categories,
+            Connections: connectionSummaries);
+    }
 
     internal void ObservePeaks(int queueDepth, long queueBytes, int inFlight)
     {
@@ -355,6 +488,8 @@ internal sealed class MeasurementMetrics
 
     internal MeasurementSnapshot Snapshot()
     {
+        long queueDepthSampleCount = Interlocked.Read(ref _queueDepthSampleCount);
+
         return new MeasurementSnapshot(
             GeneratedCount: Interlocked.Read(ref _generatedCount),
             GeneratedBytes: Interlocked.Read(ref _generatedBytes),
@@ -376,9 +511,199 @@ internal sealed class MeasurementMetrics
             PeakActualPending: Interlocked.Read(ref _peakActualPending),
             MinQueueDepth: MetricMathHelpers.NormalizeMin(_minQueueDepth),
             MinQueueBytes: MetricMathHelpers.NormalizeMin(_minQueueBytes),
-            AverageQueueDepth: MetricMathHelpers.ComputeAverage(_queueDepthSampleSum, _queueDepthSampleCount),
-            AverageQueueBytes: MetricMathHelpers.ComputeAverage(_queueBytesSampleSum, _queueDepthSampleCount),
+            QueueDepthSampleCount: queueDepthSampleCount,
+            AverageQueueDepth: MetricMathHelpers.ComputeAverage(_queueDepthSampleSum, queueDepthSampleCount),
+            AverageQueueBytes: MetricMathHelpers.ComputeAverage(_queueBytesSampleSum, queueDepthSampleCount),
             ProducerQueueWaitTicks: Interlocked.Read(ref _producerQueueWaitTicks),
             ArticleBytes: _articleBytes);
+    }
+
+    private void RecordProvenanceClassification(TransitPublishResult publishResult, long completionTick)
+    {
+        if (publishResult.Status != TransitPublishStatus.Ambiguous)
+        {
+            return;
+        }
+
+        TransitPublishProvenance provenance = NormalizeProvenance(publishResult);
+        bool boundaryDefined = Interlocked.Read(ref _measurementBoundarySet) == 1;
+        long measurementEndTick = boundaryDefined ? Interlocked.Read(ref _measurementEndStopwatchTick) : 0;
+        bool isPostMeasurement = boundaryDefined && completionTick > measurementEndTick;
+
+        _provenanceAggregates[(int)provenance].Record(completionTick, isPostMeasurement);
+
+        if (!string.IsNullOrWhiteSpace(publishResult.ProvenanceConnectionId))
+        {
+            lock (_provenanceConnectionGate)
+            {
+                string connectionId = publishResult.ProvenanceConnectionId;
+                if (!_provenanceByConnection.TryGetValue(connectionId, out ProvenanceConnectionAggregate? aggregate))
+                {
+                    aggregate = new ProvenanceConnectionAggregate(connectionId, publishResult.ProvenanceSlotIndex);
+                    _provenanceByConnection[connectionId] = aggregate;
+                }
+
+                aggregate.Record(
+                    provenance,
+                    completionTick,
+                    isPostMeasurement,
+                    publishResult.ProvenanceConnectionState,
+                    publishResult.Status == TransitPublishStatus.Ambiguous);
+            }
+        }
+    }
+
+    private static TransitPublishProvenance NormalizeProvenance(TransitPublishResult publishResult)
+    {
+        if (publishResult.Status == TransitPublishStatus.Canceled && publishResult.Provenance == TransitPublishProvenance.Cancellation)
+        {
+            string reason = publishResult.ResponseText ?? string.Empty;
+            if (reason.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                return TransitPublishProvenance.Timeout;
+            }
+        }
+
+        return publishResult.Provenance;
+    }
+
+    private static double? ToMeasurementOffsetMilliseconds(DateTimeOffset measurementStartUtc, long measurementStartStopwatchTick, long tick)
+    {
+        if (tick <= 0)
+        {
+            return null;
+        }
+
+        if (measurementStartStopwatchTick > 0)
+        {
+            return (tick - measurementStartStopwatchTick) * 1000d / Stopwatch.Frequency;
+        }
+
+        long baselineTick = measurementStartUtc.UtcTicks * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
+        return (tick - baselineTick) * 1000d / Stopwatch.Frequency;
+    }
+
+    private sealed class ProvenanceAggregate
+    {
+        private long _count;
+        private long _beforeMeasurementEndCount;
+        private long _postMeasurementCount;
+        private long _firstOccurrenceTick;
+        private long _lastOccurrenceTick;
+
+        internal long Count => Interlocked.Read(ref _count);
+        internal long BeforeMeasurementEndCount => Interlocked.Read(ref _beforeMeasurementEndCount);
+        internal long PostMeasurementCount => Interlocked.Read(ref _postMeasurementCount);
+        internal long FirstOccurrenceTick => Interlocked.Read(ref _firstOccurrenceTick);
+        internal long LastOccurrenceTick => Interlocked.Read(ref _lastOccurrenceTick);
+
+        internal void Record(long completionTick, bool isPostMeasurement)
+        {
+            Interlocked.Increment(ref _count);
+            if (isPostMeasurement)
+            {
+                Interlocked.Increment(ref _postMeasurementCount);
+            }
+            else
+            {
+                Interlocked.Increment(ref _beforeMeasurementEndCount);
+            }
+
+            while (true)
+            {
+                long existingFirst = Interlocked.Read(ref _firstOccurrenceTick);
+                if (existingFirst != 0 && existingFirst <= completionTick)
+                {
+                    break;
+                }
+
+                if (Interlocked.CompareExchange(ref _firstOccurrenceTick, completionTick, existingFirst) == existingFirst)
+                {
+                    break;
+                }
+            }
+
+            while (true)
+            {
+                long existingLast = Interlocked.Read(ref _lastOccurrenceTick);
+                if (completionTick <= existingLast)
+                {
+                    break;
+                }
+
+                if (Interlocked.CompareExchange(ref _lastOccurrenceTick, completionTick, existingLast) == existingLast)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private sealed class ProvenanceConnectionAggregate
+    {
+        private readonly Dictionary<TransitPublishProvenance, ProvenanceAggregate> _byProvenance = [];
+        private readonly HashSet<TransitConnectionState> _states = [];
+        private readonly object _gate = new();
+        private long _ambiguousCount;
+
+        internal ProvenanceConnectionAggregate(string connectionId, int? slotIndex)
+        {
+            ConnectionId = connectionId;
+            SlotIndex = slotIndex;
+        }
+
+        internal string ConnectionId { get; }
+
+        internal int? SlotIndex { get; }
+
+        internal void Record(TransitPublishProvenance provenance, long completionTick, bool isPostMeasurement, TransitConnectionState? connectionState, bool isAmbiguous)
+        {
+            lock (_gate)
+            {
+                if (!_byProvenance.TryGetValue(provenance, out ProvenanceAggregate? aggregate))
+                {
+                    aggregate = new ProvenanceAggregate();
+                    _byProvenance[provenance] = aggregate;
+                }
+
+                aggregate.Record(completionTick, isPostMeasurement);
+                if (connectionState is TransitConnectionState state)
+                {
+                    _states.Add(state);
+                }
+
+                if (isAmbiguous)
+                {
+                    _ambiguousCount++;
+                }
+            }
+        }
+
+        internal ProvenanceConnectionSummary ToSummary()
+        {
+            lock (_gate)
+            {
+                ProvenanceConnectionCategorySummary[] categories = _byProvenance
+                    .OrderBy(static x => x.Key)
+                    .Select(static pair => new ProvenanceConnectionCategorySummary(
+                        Category: pair.Key,
+                        Count: pair.Value.Count,
+                        BeforeMeasurementEndCount: pair.Value.BeforeMeasurementEndCount,
+                        AfterMeasurementEndCount: pair.Value.PostMeasurementCount))
+                    .ToArray();
+
+                string[] states = _states
+                    .Select(static x => x.ToString())
+                    .OrderBy(static x => x, StringComparer.Ordinal)
+                    .ToArray();
+
+                return new ProvenanceConnectionSummary(
+                    ConnectionId: ConnectionId,
+                    SlotIndex: SlotIndex,
+                    AmbiguousCount: _ambiguousCount,
+                    StatesObserved: states,
+                    Categories: categories);
+            }
+        }
     }
 }

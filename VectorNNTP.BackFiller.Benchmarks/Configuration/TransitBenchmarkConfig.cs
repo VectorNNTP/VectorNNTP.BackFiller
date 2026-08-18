@@ -19,6 +19,7 @@ internal readonly record struct TransitBenchmarkConfig(
     string AppSettingsPath,
     TimeSpan WarmupDuration,
     TimeSpan MeasurementDuration,
+    int? MeasurementArticleCount,
     int ConnectionPoolSize,
     int PerConnectionPipelineDepth,
     int DispatchWorkerCount,
@@ -36,6 +37,11 @@ internal readonly record struct TransitBenchmarkConfig(
 
     internal static TransitBenchmarkConfig Load(TimeSpan measurementDuration, BenchmarkMode mode, TransitBenchmarkCliOptions cliOptions)
     {
+        if (cliOptions.ArticleCount is not null && cliOptions.DurationSeconds is not null)
+        {
+            throw new InvalidOperationException("Options '--article-count' and '--duration-seconds' are mutually exclusive for measurement execution.");
+        }
+
         string appSettingsPath = FindBackFillerAppSettingsPath();
 
         IConfigurationRoot configuration = new ConfigurationBuilder()
@@ -107,6 +113,16 @@ internal readonly record struct TransitBenchmarkConfig(
 
         int warmupSeconds = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(cliOptions.WarmupSeconds ?? DefaultWarmupSeconds, min: 1, max: 600, optionName: "warmup-seconds");
 
+        int? measurementArticleCount = null;
+        if (cliOptions.ArticleCount is int articleCount)
+        {
+            measurementArticleCount = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
+                articleCount,
+                min: 1,
+                max: 2_000_000,
+                optionName: "article-count");
+        }
+
         int producerQueueTargetArticles = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(
             Math.Min(maxQueuedArticles, 2048),
             min: 1,
@@ -121,7 +137,10 @@ internal readonly record struct TransitBenchmarkConfig(
             ExpectedPlatform: cliOptions.ExpectedPlatform,
             ExpectedTargetFramework: cliOptions.ExpectedTargetFramework,
             ExpectedRuntimeIdentifier: cliOptions.ExpectedRuntimeIdentifier,
-            ExpectedArchitecture: cliOptions.ExpectedArchitecture);
+            ExpectedArchitecture: cliOptions.ExpectedArchitecture,
+            ExpectedProductionAssemblyPath: cliOptions.ExpectedProductionAssemblyPath,
+            ExpectedProductionAssemblyVersion: cliOptions.ExpectedProductionAssemblyVersion,
+            ExpectedProductionFileVersion: cliOptions.ExpectedProductionFileVersion);
 
         return new TransitBenchmarkConfig(
             Mode: mode,
@@ -132,6 +151,7 @@ internal readonly record struct TransitBenchmarkConfig(
             AppSettingsPath: appSettingsPath,
             WarmupDuration: TimeSpan.FromSeconds(warmupSeconds),
             MeasurementDuration: measurementDuration,
+            MeasurementArticleCount: measurementArticleCount,
             ConnectionPoolSize: connectionPoolSize,
             PerConnectionPipelineDepth: perConnectionPipelineDepth,
             DispatchWorkerCount: dispatchWorkerCount,

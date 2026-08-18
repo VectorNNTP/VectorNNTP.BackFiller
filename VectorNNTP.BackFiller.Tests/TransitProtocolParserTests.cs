@@ -38,7 +38,7 @@ public sealed class TransitProtocolParserTests
     }
 
     [Fact]
-    public void ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_DetectsAll()
+    public void ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_IgnoresCompressionAndDetectsSupportedFeatures()
     {
         string[] lines =
         [
@@ -53,7 +53,6 @@ public sealed class TransitProtocolParserTests
         TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
 
         Assert.True(snapshot.SupportsStartTls);
-        Assert.True(snapshot.SupportsCompressDeflate);
         Assert.True(snapshot.SupportsStreaming);
     }
 
@@ -100,7 +99,6 @@ public sealed class TransitProtocolParserTests
             "101 Capability list:",
             "version 2",
             "starttls",
-            "compress deflate level=6",
             "streaming posting",
             "x-feature custom",
             ".",
@@ -109,7 +107,6 @@ public sealed class TransitProtocolParserTests
         TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
 
         Assert.True(snapshot.SupportsStartTls);
-        Assert.True(snapshot.SupportsCompressDeflate);
         Assert.True(snapshot.SupportsStreaming);
     }
 

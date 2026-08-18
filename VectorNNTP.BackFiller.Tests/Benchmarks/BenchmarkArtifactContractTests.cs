@@ -54,6 +54,9 @@ public sealed class BenchmarkArtifactContractTests
         Assert.Equal(result.Gen2Collections, artifact.Gen2);
         Assert.Equal(result.PendingDepthLatencyBuckets, artifact.PendingDepthLatencyBuckets);
         Assert.Equal(result.ObservabilityNotes, artifact.ObservabilityNotes);
+        Assert.Equal(result.FixedCountBoundaryTelemetry, artifact.FixedCountBoundaryTelemetry);
+        Assert.Equal(result.SubmissionPumpFault, artifact.SubmissionPumpFault);
+        Assert.Equal(result.P1GreetingProvenance, artifact.P1GreetingProvenance);
 
         Assert.Equal(config.Mode.ToString(), artifact.Mode);
         Assert.Equal(config.WarmupDuration.TotalSeconds, artifact.WarmupSeconds);
@@ -121,6 +124,7 @@ public sealed class BenchmarkArtifactContractTests
         Assert.True(root.TryGetProperty("PendingDepthLatencyBuckets", out _));
         Assert.True(root.TryGetProperty("EffectiveQueueArticleCapacityFromBytes", out _));
         Assert.True(root.TryGetProperty("ObservabilityNotes", out _));
+        Assert.True(root.TryGetProperty("FixedCountBoundaryTelemetry", out _));
     }
 
     [Fact]

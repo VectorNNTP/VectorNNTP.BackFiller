@@ -6,6 +6,89 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 
 internal static class TransitSingleTraceRunner
 {
+    internal interface ITransitSingleTracePublishExecutor
+    {
+        ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken);
+    }
+
+    internal sealed record SingleTracePublishBatchResult(
+        IReadOnlyList<string> MessageIds,
+        IReadOnlyList<TransitPublishResult> PublishResults,
+        int TimeoutCount);
+
+    private sealed class TransitPublisherSingleTracePublishExecutor : ITransitSingleTracePublishExecutor
+    {
+        private readonly TransitPublisher _publisher;
+
+        internal TransitPublisherSingleTracePublishExecutor(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+            _publisher = publisher;
+        }
+
+        public ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
+        {
+            return _publisher.PublishAsync(messageId, articlePayload, cancellationToken);
+        }
+    }
+
+    internal static int ResolveRequestedArticleCount(int? measurementArticleCount)
+    {
+        return measurementArticleCount ?? 1;
+    }
+
+    internal static async Task<SingleTracePublishBatchResult> PublishSequentiallyAsync(
+        ITransitSingleTracePublishExecutor publishExecutor,
+        int requestedArticleCount,
+        int articleTargetBytes,
+        Action<string> writeLine,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(publishExecutor);
+        ArgumentNullException.ThrowIfNull(writeLine);
+
+        List<string> publishedMessageIds = new(requestedArticleCount);
+        List<TransitPublishResult> publishResults = new(requestedArticleCount);
+        int timeoutCount = 0;
+
+        for (int articleIndex = 1; articleIndex <= requestedArticleCount; articleIndex++)
+        {
+            string messageId = $"<single-trace-{articleIndex:D4}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}@benchmark.usenet.ninja>";
+            publishedMessageIds.Add(messageId);
+            writeLine($"TRACE_MESSAGE_ID[{articleIndex}/{requestedArticleCount}]: {messageId}");
+
+            TransitBenchmarkCore.ArticlePayload payload = TransitBenchmarkCore.ArticlePayload.Create(messageId, articleTargetBytes);
+            DateTimeOffset submitStartUtc = DateTimeOffset.UtcNow;
+            writeLine($"TRACE_SUBMIT_START_UTC[{articleIndex}/{requestedArticleCount}]: {submitStartUtc:O}");
+
+            try
+            {
+                using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(90));
+
+                TransitPublishResult publishResult = await publishExecutor.PublishAsync(messageId, payload.AsMemory(), timeoutCts.Token).ConfigureAwait(false);
+                publishResults.Add(publishResult);
+
+                DateTimeOffset submitEndUtc = DateTimeOffset.UtcNow;
+                writeLine($"TRACE_SUBMIT_END_UTC[{articleIndex}/{requestedArticleCount}]: {submitEndUtc:O}");
+                writeLine($"TRACE_PUBLISH_RESULT[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, Status={publishResult.Status}, Code={publishResult.ResponseCode}, Text={publishResult.ResponseText}");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                timeoutCount++;
+                DateTimeOffset timeoutUtc = DateTimeOffset.UtcNow;
+                writeLine($"TRACE_TIMEOUT_UTC[{articleIndex}/{requestedArticleCount}]: {timeoutUtc:O}");
+                writeLine($"TRACE_PUBLISH_RESULT[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, TIMED_OUT");
+            }
+            finally
+            {
+                payload.Dispose();
+            }
+        }
+
+        return new SingleTracePublishBatchResult(publishedMessageIds, publishResults, timeoutCount);
+    }
+
     internal static async Task RunAsync(
         TransitBenchmarkCliOptions cliOptions,
         int validationSeconds,
@@ -27,6 +110,18 @@ internal static class TransitSingleTraceRunner
         Console.WriteLine($"Per-connection pipeline depth: {config.PerConnectionPipelineDepth}");
         Console.WriteLine($"Dispatch worker count: {config.DispatchWorkerCount}");
         Console.WriteLine($"Target article bytes: {config.ArticleTargetBytes}");
+        int requestedArticleCount = ResolveRequestedArticleCount(config.MeasurementArticleCount);
+        Console.WriteLine($"Requested article count: {requestedArticleCount}");
+        Console.WriteLine($"RuntimeAssemblyPath: {runtimeIdentity.RuntimeAssemblyPath}");
+        Console.WriteLine($"RuntimeAssemblyVersion: {runtimeIdentity.RuntimeAssemblyVersion}");
+        Console.WriteLine($"AssemblyFileVersion: {runtimeIdentity.AssemblyFileVersion ?? "(unknown)"}");
+        Console.WriteLine($"ProcessPath: {runtimeIdentity.ProcessPath}");
+        Console.WriteLine($"TargetFramework: {runtimeIdentity.TargetFramework ?? "(unknown)"}");
+        Console.WriteLine($"RuntimeIdentifier: {runtimeIdentity.RuntimeIdentifier ?? "(unknown)"}");
+        Console.WriteLine($"Architecture: {runtimeIdentity.Architecture}");
+        Console.WriteLine($"ProductionDependencyPath: {runtimeIdentity.ProductionDependencyPath ?? "(unknown)"}");
+        Console.WriteLine($"ProductionDependencyAssemblyVersion: {runtimeIdentity.ProductionDependencyAssemblyVersion ?? "(unknown)"}");
+        Console.WriteLine($"ProductionDependencyFileVersion: {runtimeIdentity.ProductionDependencyFileVersion ?? "(unknown)"}");
 
         IPAddress[] resolved = await Dns.GetHostAddressesAsync(config.EndpointHost, cancellationToken).ConfigureAwait(false);
         Console.WriteLine($"Resolved addresses for {config.EndpointHost}: {string.Join(", ", resolved.Select(static x => x.ToString()))}");
@@ -54,36 +149,12 @@ internal static class TransitSingleTraceRunner
         Console.WriteLine("Phase 1: Initialize publisher/connection stack");
         await publisher.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
-        string messageId = $"<single-trace-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}@benchmark.usenet.ninja>";
-        Console.WriteLine($"TRACE_MESSAGE_ID: {messageId}");
-
-        TransitBenchmarkCore.ArticlePayload payload = TransitBenchmarkCore.ArticlePayload.Create(messageId, config.ArticleTargetBytes);
-
-        TransitPublishResult? publishResult = null;
-        DateTimeOffset submitStartUtc = DateTimeOffset.UtcNow;
-        Console.WriteLine($"TRACE_SUBMIT_START_UTC: {submitStartUtc:O}");
-
-        try
-        {
-            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(90));
-
-            publishResult = await publisher.PublishAsync(messageId, payload.AsMemory(), timeoutCts.Token).ConfigureAwait(false);
-
-            DateTimeOffset submitEndUtc = DateTimeOffset.UtcNow;
-            Console.WriteLine($"TRACE_SUBMIT_END_UTC: {submitEndUtc:O}");
-            Console.WriteLine($"TRACE_PUBLISH_RESULT: Status={publishResult.Status}, Code={publishResult.ResponseCode}, Text={publishResult.ResponseText}");
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            DateTimeOffset timeoutUtc = DateTimeOffset.UtcNow;
-            Console.WriteLine($"TRACE_TIMEOUT_UTC: {timeoutUtc:O}");
-            Console.WriteLine("TRACE_PUBLISH_RESULT: TIMED_OUT");
-        }
-        finally
-        {
-            payload.Dispose();
-        }
+        SingleTracePublishBatchResult publishBatch = await PublishSequentiallyAsync(
+            new TransitPublisherSingleTracePublishExecutor(publisher),
+            requestedArticleCount,
+            config.ArticleTargetBytes,
+            Console.WriteLine,
+            cancellationToken).ConfigureAwait(false);
 
         TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
         TopologyReporter.PrintConnectionTopologyDiagnostics(diagnostics);
@@ -97,11 +168,28 @@ internal static class TransitSingleTraceRunner
         long totalCurrentOutstanding = diagnostics.Connections.Sum(static entry => entry.Snapshot.CurrentConcurrentSubmissions);
         int peakOutstandingPerConnection = diagnostics.Connections.Length == 0 ? 0 : diagnostics.Connections.Max(static entry => entry.Snapshot.MaxConcurrentSubmissions);
 
+        long publishCompletedCount = publishBatch.PublishResults.Count;
+        long publishAcceptedCount = publishBatch.PublishResults.LongCount(static result => result.Status == TransitPublishStatus.Accepted);
+        long publishRejectedCount = publishBatch.PublishResults.LongCount(static result => result.Status == TransitPublishStatus.Rejected);
+        long publishFailedCount = publishBatch.PublishResults.LongCount(static result => result.Status == TransitPublishStatus.Failed);
+        long publishAmbiguousCount = publishBatch.PublishResults.LongCount(static result => result.Status == TransitPublishStatus.Ambiguous);
+        long publishUnavailableCount = publishBatch.PublishResults.LongCount(static result => result.Status == TransitPublishStatus.Unavailable);
+        string publishResponseCodes = publishBatch.PublishResults.Count == 0
+            ? "(none)"
+            : string.Join(",", publishBatch.PublishResults.Select(static result => result.ResponseCode?.ToString() ?? "(none)"));
+
         Console.WriteLine("TRACE_BACKFILLER_SUMMARY:");
-        Console.WriteLine($"  MessageId={messageId}");
-        Console.WriteLine($"  PublishCompleted={(publishResult is not null)}");
-        Console.WriteLine($"  PublishStatus={(publishResult?.Status.ToString() ?? "(none)")}");
-        Console.WriteLine($"  PublishCode={(publishResult?.ResponseCode?.ToString() ?? "(none)")}");
+        Console.WriteLine($"  RequestedArticleCount={requestedArticleCount}");
+        Console.WriteLine($"  SubmittedArticleCount={publishBatch.MessageIds.Count}");
+        Console.WriteLine($"  PublishCompletedCount={publishCompletedCount}");
+        Console.WriteLine($"  PublishAcceptedCount={publishAcceptedCount}");
+        Console.WriteLine($"  PublishRejectedCount={publishRejectedCount}");
+        Console.WriteLine($"  PublishFailedCount={publishFailedCount}");
+        Console.WriteLine($"  PublishAmbiguousCount={publishAmbiguousCount}");
+        Console.WriteLine($"  PublishUnavailableCount={publishUnavailableCount}");
+        Console.WriteLine($"  PublishTimeoutCount={publishBatch.TimeoutCount}");
+        Console.WriteLine($"  PublishResponseCodes={publishResponseCodes}");
+        Console.WriteLine($"  LastMessageId={(publishBatch.MessageIds.Count == 0 ? "(none)" : publishBatch.MessageIds[^1])}");
         Console.WriteLine($"  Totals: Started={totalStarted}, Accepted={totalAccepted}, Rejected={totalRejected}, Ambiguous={totalAmbiguous}, Failed={totalFailed}, Unavailable={totalUnavailable}");
         Console.WriteLine($"  CurrentOutstanding={totalCurrentOutstanding}");
         Console.WriteLine($"  PeakOutstandingPerConnection={peakOutstandingPerConnection}");

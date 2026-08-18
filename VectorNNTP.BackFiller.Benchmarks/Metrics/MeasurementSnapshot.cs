@@ -21,6 +21,7 @@ internal readonly record struct MeasurementSnapshot(
     long PeakActualPending,
     long MinQueueDepth,
     long MinQueueBytes,
+    long QueueDepthSampleCount,
     double AverageQueueDepth,
     double AverageQueueBytes,
     long ProducerQueueWaitTicks,

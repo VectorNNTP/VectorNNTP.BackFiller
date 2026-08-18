@@ -97,7 +97,11 @@ internal readonly record struct BenchmarkResultArtifact(
     double AverageLifecycleLatencyUs,
     string PendingDepthLatencyBuckets,
     long EffectiveQueueArticleCapacityFromBytes,
-    string ObservabilityNotes)
+    string ObservabilityNotes,
+    FixedCountBoundaryTelemetry? FixedCountBoundaryTelemetry,
+    AmbiguityProvenanceSummary AmbiguityProvenance,
+    SubmissionPumpFaultSummary SubmissionPumpFault,
+    P1GreetingProvenanceSummary? P1GreetingProvenance)
 {
     internal static BenchmarkResultArtifact From(BenchmarkResult result, TransitBenchmarkConfig config, int processorCount)
     {
@@ -196,7 +200,11 @@ internal readonly record struct BenchmarkResultArtifact(
             AverageLifecycleLatencyUs: result.AverageLifecycleLatencyUs,
             PendingDepthLatencyBuckets: result.PendingDepthLatencyBuckets,
             EffectiveQueueArticleCapacityFromBytes: result.EffectiveQueueArticleCapacityFromBytes,
-            ObservabilityNotes: result.ObservabilityNotes);
+            ObservabilityNotes: result.ObservabilityNotes,
+            FixedCountBoundaryTelemetry: result.FixedCountBoundaryTelemetry,
+            AmbiguityProvenance: result.AmbiguityProvenance,
+            SubmissionPumpFault: result.SubmissionPumpFault,
+            P1GreetingProvenance: result.P1GreetingProvenance);
     }
 
     internal string ToCsv()

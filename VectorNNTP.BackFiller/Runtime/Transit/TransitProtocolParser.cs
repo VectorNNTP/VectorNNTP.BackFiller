@@ -114,7 +114,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             bool supportsStartTls = false;
-            bool supportsCompressDeflate = false;
             bool supportsStreaming = false;
 
             for (int i = 1; i < responseLines.Count - 1; i++)
@@ -137,14 +136,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                if (tokens.Length >= 2
-                    && string.Equals(tokens[0], "COMPRESS", StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(tokens[1], "DEFLATE", StringComparison.OrdinalIgnoreCase))
-                {
-                    supportsCompressDeflate = true;
-                    continue;
-                }
-
                 if (string.Equals(tokens[0], "STREAMING", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(tokens[0], "STREAM", StringComparison.OrdinalIgnoreCase))
                 {
@@ -154,7 +145,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             return new TransitCapabilitySnapshot(
                 SupportsStartTls: supportsStartTls,
-                SupportsCompressDeflate: supportsCompressDeflate,
                 SupportsStreaming: supportsStreaming);
         }
 

@@ -34,8 +34,14 @@ internal static class TransitBenchmarkOrchestrator
         Console.WriteLine($"Architecture: {runtimeIdentity.Architecture}");
         Console.WriteLine($"SourceRevision: {runtimeIdentity.SourceRevision ?? "(unknown)"}");
         Console.WriteLine($"BuildTimestampUtc: {(runtimeIdentity.BuildTimestampUtc.HasValue ? runtimeIdentity.BuildTimestampUtc.Value.ToString("O", CultureInfo.InvariantCulture) : "(unknown)")}");
+        Console.WriteLine($"ProductionDependencyPath: {runtimeIdentity.ProductionDependencyPath ?? "(unknown)"}");
+        Console.WriteLine($"ProductionDependencyAssemblyVersion: {runtimeIdentity.ProductionDependencyAssemblyVersion ?? "(unknown)"}");
+        Console.WriteLine($"ProductionDependencyFileVersion: {runtimeIdentity.ProductionDependencyFileVersion ?? "(unknown)"}");
         Console.WriteLine($"Mode: {config.Mode}");
-        Console.WriteLine($"Experiment profile: {(config.Mode == BenchmarkMode.Saturation ? "Saturation discovery" : "Fixed-duration")}");
+        string executionProfile = config.MeasurementArticleCount is int articleCount
+            ? $"Fixed-article-count ({articleCount})"
+            : (config.Mode == BenchmarkMode.Saturation ? "Saturation discovery" : "Fixed-duration");
+        Console.WriteLine($"Experiment profile: {executionProfile}");
         Console.WriteLine($"Config path: {config.AppSettingsPath}");
         Console.WriteLine($"Logical Transit endpoint host (TLS/SNI/cert): {config.EndpointHost}");
         Console.WriteLine($"Transit port: {config.EndpointPort}");
@@ -48,6 +54,7 @@ internal static class TransitBenchmarkOrchestrator
         Console.WriteLine($"Queue max articles: {config.MaxQueuedArticles}");
         Console.WriteLine($"Queue max resident bytes: {config.MaxResidentBytes}");
         Console.WriteLine($"Producer queue target articles: {config.ProducerQueueTargetArticles}");
+        Console.WriteLine($"Measurement article count: {(config.MeasurementArticleCount?.ToString() ?? "(duration-driven)")}");
 
         IPAddress[] resolved = await Dns.GetHostAddressesAsync(config.EndpointHost, cancellationToken).ConfigureAwait(false);
         Console.WriteLine($"Resolved addresses for {config.EndpointHost}: {string.Join(", ", resolved.Select(static x => x.ToString()))}");
@@ -87,7 +94,14 @@ internal static class TransitBenchmarkOrchestrator
 
         Console.WriteLine();
         Console.WriteLine("=== Phase 4: Warmup ===");
-        await RunWarmupAsync(publisher, config, workload, cancellationToken).ConfigureAwait(false);
+        if (config.MeasurementArticleCount is null)
+        {
+            await RunWarmupAsync(publisher, config, workload, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            Console.WriteLine("Warmup skipped for fixed article-count mode to preserve exact measurement article accounting.");
+        }
 
         Console.WriteLine();
         Console.WriteLine("=== Phase 5: EXACT measurement window ===");

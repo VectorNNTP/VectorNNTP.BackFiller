@@ -10,7 +10,10 @@ internal readonly record struct RuntimeIdentityExpectation(
     string? ExpectedPlatform,
     string? ExpectedTargetFramework,
     string? ExpectedRuntimeIdentifier,
-    string? ExpectedArchitecture);
+    string? ExpectedArchitecture,
+    string? ExpectedProductionAssemblyPath,
+    string? ExpectedProductionAssemblyVersion,
+    string? ExpectedProductionFileVersion);
 
 internal readonly record struct RuntimeExecutionIdentity(
     string RuntimeAssemblyPath,
@@ -24,7 +27,10 @@ internal readonly record struct RuntimeExecutionIdentity(
     string? RuntimeIdentifier,
     string Architecture,
     string? SourceRevision,
-    DateTimeOffset? BuildTimestampUtc);
+    DateTimeOffset? BuildTimestampUtc,
+    string? ProductionDependencyPath,
+    string? ProductionDependencyAssemblyVersion,
+    string? ProductionDependencyFileVersion);
 
 internal static class AppBuildConfiguration
 {

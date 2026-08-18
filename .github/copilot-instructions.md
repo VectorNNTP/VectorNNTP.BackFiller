@@ -27,6 +27,8 @@
 - Use TimeProvider instead of DateTimeOffset.UtcNow in ControlPlaneService to keep Program as the single authority for Initializing -> Ready, and to avoid 1-second Information-level heartbeat logs in production because high-frequency telemetry should be metrics or lower log levels.
 - When executing an approved plan, continue executing it fully instead of stopping after step announcements; repeated reminders indicate this is a required workflow preference.
 - Benchmark execution policy: never use --no-build; always clean, build, verify output identity, then run with matching Debug/x64/net8.0/win-x64 settings and enforce runtime identity guard before warmup.
+- For regression-validation phases, require fully autonomous execution with one isolated test/method per process, stale test process cleanup, 45-second no-progress watchdog monitoring of testhost, automatic forensic capture/analysis on hangs, no manual user intervention, and no speculative code changes. Do not rely on Visual Studio/DevHub test runner; use watchdog + CLI infrastructure for potentially blocking/concurrency/lifecycle tests and capture forensics before termination.
+- Phase 2 workflow for this repo is benchmark-first: no production code changes before readiness assessment approval, use CLI + watchdog (not Visual Studio runner), and evaluate one optimization at a time with before/after evidence artifacts.
 
 ## Diagnostics Guidelines
 - Keep --diagnostics lightweight and non-invasive: it should only emit runtime/build information and must not initialize DI, hosted services, external dependencies, listeners, or certificate flows.

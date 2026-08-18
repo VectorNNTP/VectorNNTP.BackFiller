@@ -24,6 +24,7 @@ internal static class BenchmarkConsoleReporter
         Console.WriteLine();
         Console.WriteLine($"Warmup duration: {config.WarmupDuration.TotalSeconds:F0}s");
         Console.WriteLine($"Measurement duration: {config.MeasurementDuration.TotalSeconds:F0}s");
+        Console.WriteLine($"Measurement article count: {(config.MeasurementArticleCount?.ToString() ?? "(duration-driven)")}");
         Console.WriteLine($"Drain duration: {result.DrainDuration.TotalSeconds:F3}s");
         Console.WriteLine($"Outstanding at measurement end: {result.OutstandingAtMeasurementEnd}");
         Console.WriteLine($"Drained after measurement: {result.DrainedAfterMeasurement}");
@@ -53,10 +54,21 @@ internal static class BenchmarkConsoleReporter
 
         Console.WriteLine();
         Console.WriteLine($"Queue target depth (articles): {config.ProducerQueueTargetArticles}");
-        Console.WriteLine($"Queue minimum depth: {result.MinQueueDepth}");
-        Console.WriteLine($"Queue average depth: {result.AverageQueueDepth:F2}");
+        Console.WriteLine($"Queue depth samples: {result.QueueDepthSampleCount}");
+        if (result.QueueDepthSampleCount == 0)
+        {
+            Console.WriteLine("Queue minimum depth: (no samples)");
+            Console.WriteLine("Queue average depth: (no samples)");
+            Console.WriteLine("Queue average bytes: (no samples)");
+        }
+        else
+        {
+            Console.WriteLine($"Queue minimum depth: {result.MinQueueDepth}");
+            Console.WriteLine($"Queue average depth: {result.AverageQueueDepth:F2}");
+            Console.WriteLine($"Queue average bytes: {result.AverageQueuedBytes:F0}");
+        }
+
         Console.WriteLine($"Queue peak depth: {result.PeakQueueDepth}");
-        Console.WriteLine($"Queue average bytes: {result.AverageQueuedBytes:F0}");
         Console.WriteLine($"Queue peak bytes: {result.PeakQueuedBytes}");
         Console.WriteLine($"Queue configured article cap: {config.MaxQueuedArticles}");
         Console.WriteLine($"Queue configured byte cap: {config.MaxResidentBytes}");

@@ -663,13 +663,13 @@ public sealed class TransitTakethisPipelineTests
     }
 
     [Fact]
-    public async Task DisposeAsync_WhenMultipleOutstandingTakethis_WaitsForDefinitiveResponsesBeforeTransportClose()
+    public async Task DisposeAsync_WhenMultipleOutstandingTakethisResponsesAreWithheld_TerminalizesAsAmbiguousAndCompletes()
     {
         string[] messageIds =
         [
-            "<msg-dispose-drain-0@example.com>",
-            "<msg-dispose-drain-1@example.com>",
-            "<msg-dispose-drain-2@example.com>",
+            "<msg-dispose-withheld-0@example.com>",
+            "<msg-dispose-withheld-1@example.com>",
+            "<msg-dispose-withheld-2@example.com>",
         ];
 
         TaskCompletionSource allTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -694,16 +694,6 @@ public sealed class TransitTakethisPipelineTests
 
             allTakethisObserved.TrySetResult();
             await disposeStarted.Task.WaitAsync(cancellationToken);
-
-            byte[] single = new byte[1];
-            using (CancellationTokenSource noEarlyCloseTimeout = new(TimeSpan.FromMilliseconds(250)))
-            {
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stream.ReadAsync(single, noEarlyCloseTimeout.Token).AsTask());
-            }
-
-            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[2]} transferred");
-            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[0]} transferred");
-            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[1]} transferred");
 
             string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
             Assert.Equal("QUIT", quit);
@@ -730,16 +720,156 @@ public sealed class TransitTakethisPipelineTests
         Task disposeTask = connection.DisposeAsync().AsTask();
         disposeStarted.TrySetResult();
 
-        TransitPublishResult[] results = await Task.WhenAll(publishTasks);
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(5));
+        TransitPublishResult[] results = await Task.WhenAll(publishTasks).WaitAsync(completionTimeout.Token);
+
         Assert.Equal(3, results.Length);
         Assert.All(results, static result =>
         {
-            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
-            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
+            Assert.Null(result.ResponseCode);
         });
 
         using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
         await disposeTask.WaitAsync(disposeTimeout.Token);
+
+        TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = connection.CaptureDiagnosticsSnapshot();
+        Assert.Equal(0, snapshot.CurrentConcurrentSubmissions);
+        Assert.Empty(snapshot.OutstandingOperations);
+        Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenTakethisResponseIsCorrelatedBeforeShutdown_LeavesDefinitiveResult()
+    {
+        string messageId = "<msg-response-wins@example.com>";
+        byte[] payload = [(byte)'R', (byte)'\n'];
+
+        TaskCompletionSource responseCorrelated = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource disposeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethis = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal($"TAKETHIS {messageId}", takethis);
+            _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+
+            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+            responseCorrelated.TrySetResult();
+            await disposeStarted.Task.WaitAsync(cancellationToken);
+
+            string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("QUIT", quit);
+        });
+
+        await using TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+
+        using CancellationTokenSource responseTimeout = new(TimeSpan.FromSeconds(5));
+        await responseCorrelated.Task.WaitAsync(responseTimeout.Token);
+
+        Task disposeTask = connection.DisposeAsync().AsTask();
+        disposeStarted.TrySetResult();
+
+        TransitPublishResult result = await publishTask;
+        Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+        Assert.Equal(239, result.ResponseCode);
+
+        using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
+        await disposeTask.WaitAsync(disposeTimeout.Token);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenShutdownWinsPendingTakethisAndLateResponseArrives_TerminalizesOnceAsAmbiguous()
+    {
+        string messageId = "<msg-shutdown-wins@example.com>";
+        byte[] payload = [(byte)'S', (byte)'\n'];
+
+        TaskCompletionSource takethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource disposeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource publishCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+            await FakeTakethisServer.WriteLineAsync(stream, ".");
+            await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethis = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal($"TAKETHIS {messageId}", takethis);
+            _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            takethisObserved.TrySetResult();
+
+            await disposeStarted.Task.WaitAsync(cancellationToken);
+            await publishCompleted.Task.WaitAsync(cancellationToken);
+
+            try
+            {
+                await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+            {
+            }
+
+            try
+            {
+                string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal("QUIT", quit);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or IOException or SocketException or ObjectDisposedException)
+            {
+            }
+        });
+
+        await using TransitConnection connection = new(
+            host: IPAddress.Loopback.ToString(),
+            port: server.Port,
+            useSsl: false,
+            NullLogger<TransitConnection>.Instance);
+
+        await connection.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+
+        using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
+        await takethisObserved.Task.WaitAsync(observedTimeout.Token);
+
+        Task disposeTask = connection.DisposeAsync().AsTask();
+        disposeStarted.TrySetResult();
+
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(5));
+        TransitPublishResult result = await publishTask.WaitAsync(completionTimeout.Token);
+        publishCompleted.TrySetResult();
+
+        Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
+        Assert.Null(result.ResponseCode);
+
+        using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
+        await disposeTask.WaitAsync(disposeTimeout.Token);
+
+        TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = connection.CaptureDiagnosticsSnapshot();
+        Assert.Equal(0, snapshot.CurrentConcurrentSubmissions);
+        Assert.Empty(snapshot.OutstandingOperations);
+        Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
     }
 
     [Fact]
@@ -777,7 +907,7 @@ public sealed class TransitTakethisPipelineTests
     }
 
     [Fact]
-    public async Task DisposeAsync_WhenOutstandingTakethis_Drains239BeforeSendingQuit()
+    public async Task DisposeAsync_WhenOutstandingTakethisAndShutdownBegins_TerminalizesAndThenSendsQuit()
     {
         string[] messageIds =
         [
@@ -809,18 +939,18 @@ public sealed class TransitTakethisPipelineTests
             allTakethisObserved.TrySetResult();
             await disposeStarted.Task.WaitAsync(cancellationToken);
 
-            byte[] single = new byte[1];
-            using (CancellationTokenSource noEarlyQuitTimeout = new(TimeSpan.FromMilliseconds(250)))
-            {
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stream.ReadAsync(single, noEarlyQuitTimeout.Token).AsTask());
-            }
-
-            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[0]} transferred");
-            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[1]} transferred");
-            await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[2]} transferred");
-
             string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
             Assert.Equal("QUIT", quit);
+
+            try
+            {
+                await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[0]} transferred");
+                await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[1]} transferred");
+                await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageIds[2]} transferred");
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+            {
+            }
         });
 
         await using TransitConnection connection = new(
@@ -844,12 +974,9 @@ public sealed class TransitTakethisPipelineTests
         Task disposeTask = connection.DisposeAsync().AsTask();
         disposeStarted.TrySetResult();
 
-        TransitPublishResult[] results = await Task.WhenAll(submissions);
-        Assert.All(results, static result =>
-        {
-            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
-            Assert.Equal(239, result.ResponseCode);
-        });
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(5));
+        TransitPublishResult[] results = await Task.WhenAll(submissions).WaitAsync(completionTimeout.Token);
+        Assert.All(results, static result => Assert.Equal(TransitPublishStatus.Ambiguous, result.Status));
 
         using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
         await disposeTask.WaitAsync(disposeTimeout.Token);

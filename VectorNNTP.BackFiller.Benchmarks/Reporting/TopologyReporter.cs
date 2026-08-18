@@ -34,7 +34,7 @@ internal static class TopologyReporter
                      .ThenBy(static x => x.Snapshot.ConnectionId, StringComparer.Ordinal))
         {
             TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = entry.Snapshot;
-            Console.WriteLine($"  Slot {entry.SlotIndex}, ConnectionId={snapshot.ConnectionId}, Host={snapshot.Host}:{snapshot.Port}, State={snapshot.CurrentState}, TLS={snapshot.IsTlsActive}, Compression={snapshot.IsCompressionActive}");
+            Console.WriteLine($"  Slot {entry.SlotIndex}, ConnectionId={snapshot.ConnectionId}, Host={snapshot.Host}:{snapshot.Port}, State={snapshot.CurrentState}, TLS={snapshot.IsTlsActive}");
             Console.WriteLine($"    Endpoints: Local={snapshot.LocalEndpoint ?? "(unavailable)"}, Remote={snapshot.RemoteEndpoint ?? "(unavailable)"}");
             Console.WriteLine($"    SocketOpens={snapshot.SocketOpenCount}, ReadyTransitions={snapshot.ReadyTransitionCount}, MaxInFlight={snapshot.MaxConcurrentSubmissions}, CurrentInFlight={snapshot.CurrentConcurrentSubmissions}");
             Console.WriteLine($"    Submissions: Started={snapshot.SubmissionsStarted}, Accepted={snapshot.SubmissionsAccepted}, Rejected={snapshot.SubmissionsRejected}, Ambiguous={snapshot.SubmissionsAmbiguous}, Unavailable={snapshot.SubmissionsUnavailable}, Failed={snapshot.SubmissionsFailed}");

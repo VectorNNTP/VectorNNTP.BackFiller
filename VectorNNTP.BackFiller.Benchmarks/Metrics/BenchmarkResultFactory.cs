@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
@@ -19,11 +20,85 @@ internal static class BenchmarkResultFactory
         long outstandingAtMeasurementEnd,
         long drainedAfterMeasurement,
         long allocatedStartBytes,
-        bool enableForensicDiagnostics)
+        bool enableForensicDiagnostics,
+        FixedCountBoundaryTelemetry? fixedCountBoundaryTelemetry,
+        TransitPublisher publisher)
     {
         RuntimeSnapshot runtimeSnapshot = runtime.Snapshot();
         ForensicSnapshot forensic = metrics.CaptureForensicSnapshot();
-        double measurementSeconds = config.MeasurementDuration.TotalSeconds;
+        AmbiguityProvenanceSummary ambiguityProvenance = metrics.CaptureAmbiguityProvenanceSummary(measurementStartUtc);
+        TransitPublisher.PumpFaultTelemetrySnapshot? initiatingFaultSnapshot = publisher.CaptureSubmissionPumpFaultTelemetrySnapshot();
+        TransitPublisher.SubmissionPumpFaultCounts faultCounts = publisher.CaptureSubmissionPumpFaultCounts();
+        TransitConnection.P1GreetingProvenanceSnapshot? p1GreetingProvenanceSnapshot = publisher.CaptureFirstP1GreetingProvenanceSnapshot();
+        SubmissionPumpInitiatingFaultSummary? initiatingFaultSummary = initiatingFaultSnapshot is null
+            ? null
+            : new SubmissionPumpInitiatingFaultSummary(
+                FaultSequence: initiatingFaultSnapshot.FaultSequence,
+                SlotIndex: initiatingFaultSnapshot.SlotIndex,
+                CapturedAtTick: initiatingFaultSnapshot.CapturedAtTick,
+                ExceptionType: initiatingFaultSnapshot.ExceptionType,
+                BaseExceptionType: initiatingFaultSnapshot.BaseExceptionType,
+                HResult: initiatingFaultSnapshot.HResult,
+                InvalidOperationMessageClass: initiatingFaultSnapshot.InvalidOperationMessageClass.ToString(),
+                SanitizedFirstFaultMessageClass: initiatingFaultSnapshot.SanitizedFirstFaultMessageClass.ToString(),
+                SanitizedFirstFaultMessage: initiatingFaultSnapshot.SanitizedFirstFaultMessage,
+                FullFirstFaultStackTrace: initiatingFaultSnapshot.FullFirstFaultStackTrace,
+                TopStackFrameDeclaringType: initiatingFaultSnapshot.TopStackFrameDeclaringType,
+                TopStackFrameMethodName: initiatingFaultSnapshot.TopStackFrameMethodName,
+                Origin: initiatingFaultSnapshot.Origin.ToString(),
+                MillisecondsFromMeasurementStart: initiatingFaultSnapshot.MillisecondsFromMeasurementStart,
+                MeasurementBoundaryObserved: initiatingFaultSnapshot.MeasurementBoundaryObserved,
+                MillisecondsFromMeasurementEnd: initiatingFaultSnapshot.MillisecondsFromMeasurementEnd,
+                MeasurementStateAtFault: initiatingFaultSnapshot.MeasurementStateAtFault.ToString(),
+                QueuedSubmissionCount: initiatingFaultSnapshot.QueuedSubmissionCount,
+                InFlightCount: initiatingFaultSnapshot.InFlightCount,
+                ActiveSubmissionCount: initiatingFaultSnapshot.ActiveSubmissionCount,
+                ChannelImmediateAvailableCount: initiatingFaultSnapshot.ChannelImmediateAvailableCount,
+                ActiveConnectionCount: initiatingFaultSnapshot.ActiveConnectionCount,
+                ReadyConnectionCount: initiatingFaultSnapshot.ReadyConnectionCount,
+                FaultedConnectionCount: initiatingFaultSnapshot.FaultedConnectionCount,
+                ReconnectingConnectionCount: initiatingFaultSnapshot.ReconnectingConnectionCount,
+                OutstandingConnectionOperations: initiatingFaultSnapshot.OutstandingConnectionOperations,
+                ProducerCompletionState: initiatingFaultSnapshot.ProducerCompletionState.ToString(),
+                DispatchersCompletedState: initiatingFaultSnapshot.DispatchersCompletedState.ToString());
+
+        SubmissionPumpFaultSummary submissionPumpFaultSummary = new(
+            TotalFaultCount: faultCounts.TotalFaultCount,
+            InitiatingFaultCount: faultCounts.InitiatingFaultCount,
+            CascadeFaultCount: faultCounts.CascadeFaultCount,
+            InitiatingFault: initiatingFaultSummary);
+
+        P1GreetingProvenanceSummary? p1GreetingProvenanceSummary = p1GreetingProvenanceSnapshot is null
+            ? null
+            : new P1GreetingProvenanceSummary(
+                ConnectionId: p1GreetingProvenanceSnapshot.ConnectionId,
+                Host: p1GreetingProvenanceSnapshot.Host,
+                Port: p1GreetingProvenanceSnapshot.Port,
+                InitializationAttemptId: p1GreetingProvenanceSnapshot.InitializationAttemptId,
+                LocalIp: p1GreetingProvenanceSnapshot.LocalIp,
+                LocalPort: p1GreetingProvenanceSnapshot.LocalPort,
+                RemoteIp: p1GreetingProvenanceSnapshot.RemoteIp,
+                RemotePort: p1GreetingProvenanceSnapshot.RemotePort,
+                CapturedAtTick: p1GreetingProvenanceSnapshot.CapturedAtTick,
+                ConnectedAtTick: p1GreetingProvenanceSnapshot.ConnectedAtTick,
+                PipesCreatedAtTick: p1GreetingProvenanceSnapshot.PipesCreatedAtTick,
+                AwaitingGreetingAtTick: p1GreetingProvenanceSnapshot.AwaitingGreetingAtTick,
+                ConnectedAtUtc: p1GreetingProvenanceSnapshot.ConnectedAtUtc,
+                P1AtUtc: p1GreetingProvenanceSnapshot.P1AtUtc,
+                LocalDisposeAsyncBeforeP1: p1GreetingProvenanceSnapshot.LocalDisposeAsyncBeforeP1,
+                LocalResetTransportStateBeforeP1: p1GreetingProvenanceSnapshot.LocalResetTransportStateBeforeP1,
+                LocalDisposeTransportArtifactsBeforeP1: p1GreetingProvenanceSnapshot.LocalDisposeTransportArtifactsBeforeP1,
+                LocalRebuildPipesBeforeP1: p1GreetingProvenanceSnapshot.LocalRebuildPipesBeforeP1,
+                LocalCleanupFailedInitializationBeforeP1: p1GreetingProvenanceSnapshot.LocalCleanupFailedInitializationBeforeP1,
+                InitializationCancellationBeforeP1: p1GreetingProvenanceSnapshot.InitializationCancellationBeforeP1,
+                LifecycleEvents: p1GreetingProvenanceSnapshot.LifecycleEvents
+                    .Select(static lifecycleEvent => new P1GreetingLifecycleEventSummary(
+                        Event: lifecycleEvent.Event.ToString(),
+                        Tick: lifecycleEvent.Tick,
+                        InitializationAttemptId: lifecycleEvent.AttemptId))
+                    .ToArray());
+
+        double measurementSeconds = Math.Max(0.000001d, (measurementEndUtc - measurementStartUtc).TotalSeconds);
 
         long producerObservedTicks = snapshot.ActiveTicks + snapshot.BlockedTicks;
         double blockedPercent = producerObservedTicks <= 0
@@ -62,6 +137,10 @@ internal static class BenchmarkResultFactory
             DrainDuration: drainDuration,
             OutstandingAtMeasurementEnd: outstandingAtMeasurementEnd,
             DrainedAfterMeasurement: drainedAfterMeasurement,
+            FixedCountBoundaryTelemetry: fixedCountBoundaryTelemetry,
+            AmbiguityProvenance: ambiguityProvenance,
+            SubmissionPumpFault: submissionPumpFaultSummary,
+            P1GreetingProvenance: p1GreetingProvenanceSummary,
             GeneratedArticles: snapshot.GeneratedCount,
             GeneratedBytes: snapshot.GeneratedBytes,
             GeneratedGbps: snapshot.GeneratedBytes * 8d / 1_000_000_000d / measurementSeconds,
@@ -74,6 +153,7 @@ internal static class BenchmarkResultFactory
             RejectedArticles: snapshot.RejectedCount,
             AmbiguousArticles: snapshot.AmbiguousCount,
             MinQueueDepth: snapshot.MinQueueDepth,
+            QueueDepthSampleCount: snapshot.QueueDepthSampleCount,
             AverageQueueDepth: snapshot.AverageQueueDepth,
             AverageQueuedBytes: snapshot.AverageQueueBytes,
             PeakQueueDepth: snapshot.PeakQueueDepth,

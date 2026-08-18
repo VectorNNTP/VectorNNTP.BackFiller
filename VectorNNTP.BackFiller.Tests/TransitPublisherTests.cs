@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -175,7 +176,7 @@ public sealed class TransitPublisherTests
         using CancellationTokenSource publishTimeout = new(TimeSpan.FromSeconds(10));
         TransitPublishResult result = await publishTask.WaitAsync(publishTimeout.Token);
 
-        Assert.Equal(TransitPublishStatus.Canceled, result.Status);
+        Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
         Assert.Equal(messageId, result.MessageId);
         Assert.Null(result.ResponseCode);
         Assert.Equal(0, GetQueuedSubmissionCount(publisher));
@@ -474,6 +475,7 @@ public sealed class TransitPublisherTests
             Assert.Equal(expectedPayload3, payload3);
 
             await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId2} transferred");
+            await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId3} transferred");
 
             string takethis4 = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
             string messageId4 = takethis4.Split(' ', 2, StringSplitOptions.TrimEntries)[1];
@@ -484,7 +486,6 @@ public sealed class TransitPublisherTests
             byte[] payload4 = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
             Assert.Equal(expectedPayload4, payload4);
 
-            await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId3} transferred");
             await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId4} transferred");
         });
 
@@ -875,9 +876,17 @@ public sealed class TransitPublisherTests
 
                 using CancellationTokenSource noRetryCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 noRetryCts.CancelAfter(TimeSpan.FromMilliseconds(100));
-                Exception ex = await Record.ExceptionAsync(() => FakePublisherServer.ReadLineAsync(stream, noRetryCts.Token));
-                Assert.NotNull(ex);
-                Assert.True(ex is OperationCanceledException or InvalidOperationException);
+
+                string? nextLine = null;
+                Exception? ex = await Record.ExceptionAsync(async () => nextLine = await FakePublisherServer.ReadLineAsync(stream, noRetryCts.Token));
+                if (ex is null)
+                {
+                    Assert.Equal("QUIT", nextLine);
+                }
+                else
+                {
+                    Assert.True(ex is OperationCanceledException or InvalidOperationException);
+                }
             },
         ]);
 
@@ -1259,33 +1268,50 @@ public sealed class TransitPublisherTests
 
         TransitConnection oldConnection = GetPrimaryConnection(publisher);
         SemaphoreSlim writeGate = GetConnectionWriteGate(oldConnection);
-        await writeGate.WaitAsync(timeout.Token);
+        bool writeGateHeld = false;
+        TransitPublishResult firstResult;
 
-        Task<TransitPublishResult> firstPublish = publisher.PublishAsync(firstMessageId, new byte[] { (byte)'1', (byte)'\n' }, CancellationToken.None).AsTask();
-
-        while (oldConnection.OutstandingSubmissionCount < 1)
+        try
         {
-            await Task.Delay(10, timeout.Token);
-        }
+            await writeGate.WaitAsync(timeout.Token);
+            writeGateHeld = true;
 
-        SetConnectionState(oldConnection, TransitConnectionState.Faulted);
-        Task reconnectTask = InvokeReconnectAsync(publisher, slotIndex: 0, CancellationToken.None);
+            Task<TransitPublishResult> firstPublish = publisher.PublishAsync(firstMessageId, new byte[] { (byte)'1', (byte)'\n' }, CancellationToken.None).AsTask();
 
-        while (true)
-        {
-            TransitConnection? current = TryGetPrimaryConnection(publisher);
-            if (current is not null && !ReferenceEquals(current, oldConnection))
+            while (oldConnection.OutstandingSubmissionCount < 1)
             {
-                break;
+                await Task.Delay(10, timeout.Token);
             }
 
-            await Task.Delay(10, timeout.Token);
+            SetConnectionState(oldConnection, TransitConnectionState.Faulted);
+            Task reconnectTask = InvokeReconnectAsync(publisher, slotIndex: 0, CancellationToken.None);
+
+            // The test must not hold the production connection write gate across reconnect/disposal
+            // because shutdown waits for the write loop, which itself requires that gate.
+            writeGate.Release();
+            writeGateHeld = false;
+
+            while (true)
+            {
+                TransitConnection? current = TryGetPrimaryConnection(publisher);
+                if (current is not null && !ReferenceEquals(current, oldConnection))
+                {
+                    break;
+                }
+
+                await Task.Delay(10, timeout.Token);
+            }
+
+            firstResult = await firstPublish.WaitAsync(timeout.Token);
+            await reconnectTask.WaitAsync(timeout.Token);
         }
-
-        writeGate.Release();
-
-        TransitPublishResult firstResult = await firstPublish.WaitAsync(timeout.Token);
-        await reconnectTask.WaitAsync(timeout.Token);
+        finally
+        {
+            if (writeGateHeld)
+            {
+                writeGate.Release();
+            }
+        }
 
         Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
 
@@ -1475,6 +1501,446 @@ public sealed class TransitPublisherTests
         Assert.Equal(0, GetQueuedSubmissionCount(publisher));
     }
 
+    [Fact]
+    public async Task PreemptSubmissionProcessingAsync_WhenFirstPipelineLaneStalls_CompletesAllAdmittedPublishTasksAndClearsQueuedCount()
+    {
+        byte[] payload = [(byte)'S', (byte)'\n'];
+        TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+            await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+            await FakePublisherServer.WriteLineAsync(stream, ".");
+            await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+            Assert.StartsWith("TAKETHIS ", takethisLine, StringComparison.Ordinal);
+            _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            firstTakethisObserved.TrySetResult();
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        });
+
+        await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+        await publisher.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult>[] submissions =
+        [
+            publisher.PublishAsync("<stall-1@example.com>", payload, CancellationToken.None).AsTask(),
+            publisher.PublishAsync("<stall-2@example.com>", payload, CancellationToken.None).AsTask(),
+            publisher.PublishAsync("<stall-3@example.com>", payload, CancellationToken.None).AsTask(),
+        ];
+
+        using CancellationTokenSource firstObserveTimeout = new(TimeSpan.FromSeconds(10));
+        await firstTakethisObserved.Task.WaitAsync(firstObserveTimeout.Token);
+
+        using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(10));
+        await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
+        TransitPublishResult[] results = await Task.WhenAll(submissions).WaitAsync(completionTimeout.Token);
+
+        Assert.All(results, result => Assert.True(result.Status is TransitPublishStatus.Canceled or TransitPublishStatus.Ambiguous));
+        Assert.Equal(0, GetQueuedSubmissionCount(publisher));
+    }
+
+    [Fact]
+    public async Task PreemptSubmissionProcessingAsync_WhenConnectionPendingIsZeroAndPublisherOutstandingIsPositive_TerminalizesPublisherBacklog()
+    {
+        byte[] payload = [(byte)'Z', (byte)'\n'];
+        TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource reconnectCapabilitiesObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseReconnectSession = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+        [
+            async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                Assert.Equal("CAPABILITIES", await FakePublisherServer.ReadLineAsync(stream, cancellationToken));
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                Assert.Equal("MODE STREAM", await FakePublisherServer.ReadLineAsync(stream, cancellationToken));
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.StartsWith("TAKETHIS ", takethisLine, StringComparison.Ordinal);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                firstTakethisObserved.TrySetResult();
+            },
+            async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                string capabilitiesCommand = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal("CAPABILITIES", capabilitiesCommand);
+                reconnectCapabilitiesObserved.TrySetResult();
+                await releaseReconnectSession.Task.WaitAsync(cancellationToken);
+            },
+        ]);
+
+        await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+        await publisher.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult>[] admittedSubmissions =
+        [
+            publisher.PublishAsync("<post-init-1@example.com>", payload, CancellationToken.None).AsTask(),
+            publisher.PublishAsync("<post-init-2@example.com>", payload, CancellationToken.None).AsTask(),
+            publisher.PublishAsync("<post-init-3@example.com>", payload, CancellationToken.None).AsTask(),
+        ];
+
+        using CancellationTokenSource firstObserveTimeout = new(TimeSpan.FromSeconds(10));
+        await firstTakethisObserved.Task.WaitAsync(firstObserveTimeout.Token);
+
+        using CancellationTokenSource reconnectObserveTimeout = new(TimeSpan.FromSeconds(10));
+        await reconnectCapabilitiesObserved.Task.WaitAsync(reconnectObserveTimeout.Token);
+
+        using CancellationTokenSource stateTimeout = new(TimeSpan.FromSeconds(10));
+        while (true)
+        {
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+            int pendingMessageIds = snapshot.Connections.Sum(static entry => entry.Snapshot.OutstandingOperations.Length);
+            long queuedSubmissions = snapshot.QueuedSubmissionCount;
+
+            if (pendingMessageIds == 0 && queuedSubmissions > 0)
+            {
+                break;
+            }
+
+            await Task.Delay(10, stateTimeout.Token);
+        }
+
+        using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(10));
+        await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+        releaseReconnectSession.TrySetResult();
+
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
+        TransitPublishResult[] results = await Task.WhenAll(admittedSubmissions).WaitAsync(completionTimeout.Token);
+
+        Assert.All(results, result => Assert.True(result.Status is TransitPublishStatus.Canceled or TransitPublishStatus.Ambiguous));
+        Assert.Equal(0, GetQueuedSubmissionCount(publisher));
+    }
+
+    [Fact]
+    public async Task PreemptSubmissionProcessingAsync_WhenQueuedBacklogExceedsPipelineDepth_TerminalizesAllAdmittedSubmissionsAndClearsTracking()
+    {
+        const int submissionCount = 12;
+        byte[] payload = [(byte)'Q', (byte)'\n'];
+        TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+            await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+            await FakePublisherServer.WriteLineAsync(stream, ".");
+            await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+            Assert.StartsWith("TAKETHIS ", takethisLine, StringComparison.Ordinal);
+            _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            firstTakethisObserved.TrySetResult();
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        });
+
+        await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 2);
+        await publisher.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult>[] submissions = Enumerable.Range(0, submissionCount)
+            .Select(index => publisher.PublishAsync($"<queued-preempt-{index}@example.com>", payload, CancellationToken.None).AsTask())
+            .ToArray();
+
+        using CancellationTokenSource firstObserveTimeout = new(TimeSpan.FromSeconds(10));
+        await firstTakethisObserved.Task.WaitAsync(firstObserveTimeout.Token);
+
+        using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(10));
+        await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
+        TransitPublishResult[] results = await Task.WhenAll(submissions).WaitAsync(completionTimeout.Token);
+
+        Assert.Equal(submissionCount, results.Length);
+        Assert.All(results, result => Assert.True(result.Status is TransitPublishStatus.Canceled or TransitPublishStatus.Ambiguous));
+        Assert.Equal(0, GetQueuedSubmissionCount(publisher));
+        Assert.Equal(0, GetActiveSubmissionCount(publisher));
+    }
+
+    [Fact]
+    public async Task PreemptSubmissionProcessingAsync_WhenSubmissionIsInFlight_TerminalizesExactlyOnceAndClearsTracking()
+    {
+        byte[] payload = [(byte)'I', (byte)'\n'];
+        TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+            await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+            await FakePublisherServer.WriteLineAsync(stream, ".");
+            await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+            Assert.StartsWith("TAKETHIS ", takethisLine, StringComparison.Ordinal);
+            _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            firstTakethisObserved.TrySetResult();
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        });
+
+        await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+        await publisher.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult> submission = publisher.PublishAsync("<inflight-preempt@example.com>", payload, CancellationToken.None).AsTask();
+
+        using CancellationTokenSource firstObserveTimeout = new(TimeSpan.FromSeconds(10));
+        await firstTakethisObserved.Task.WaitAsync(firstObserveTimeout.Token);
+
+        using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(10));
+        await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
+        TransitPublishResult result = await submission.WaitAsync(completionTimeout.Token);
+
+        Assert.True(result.Status is TransitPublishStatus.Canceled or TransitPublishStatus.Ambiguous);
+        Assert.Equal(0, GetQueuedSubmissionCount(publisher));
+        Assert.Equal(0, GetActiveSubmissionCount(publisher));
+    }
+
+    [Fact]
+    public async Task PreemptSubmissionProcessingAsync_WhenRacedWithOwnershipTransitionAcrossRepeatedRuns_DoesNotStrandSubmission()
+    {
+        const int iterations = 20;
+
+        for (int iteration = 0; iteration < iterations; iteration++)
+        {
+            byte[] payload = [(byte)'R', (byte)'\n'];
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES");
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM");
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            Task<TransitPublishResult>[] submissions =
+            [
+                publisher.PublishAsync($"<transition-{iteration}-1@example.com>", payload, CancellationToken.None).AsTask(),
+                publisher.PublishAsync($"<transition-{iteration}-2@example.com>", payload, CancellationToken.None).AsTask(),
+                publisher.PublishAsync($"<transition-{iteration}-3@example.com>", payload, CancellationToken.None).AsTask(),
+            ];
+
+            using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(10));
+            await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+            using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
+            TransitPublishResult[] results = await Task.WhenAll(submissions).WaitAsync(completionTimeout.Token);
+
+            Assert.Equal(3, results.Length);
+            Assert.All(results, result => Assert.True(result.Status is TransitPublishStatus.Canceled or TransitPublishStatus.Ambiguous));
+            Assert.Equal(0, GetQueuedSubmissionCount(publisher));
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+    }
+
+    [Fact]
+    public async Task PreemptSubmissionProcessingAsync_WhenCompletionRacesWithPreemption_CompletesAllAdmittedSubmissionsWithSingleTerminalOutcomePerSubmission()
+    {
+        byte[] payload = [(byte)'N', (byte)'\n'];
+        TaskCompletionSource firstAcceptedObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+            await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+            await FakePublisherServer.WriteLineAsync(stream, ".");
+            await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("TAKETHIS <race-preempt-1@example.com>", firstTakethis);
+            _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            await FakePublisherServer.WriteLineAsync(stream, "239 <race-preempt-1@example.com> transferred");
+            firstAcceptedObserved.TrySetResult();
+
+            string nextCommand = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+            if (nextCommand.StartsWith("TAKETHIS ", StringComparison.Ordinal))
+            {
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            }
+            else
+            {
+                Assert.Equal("QUIT", nextCommand);
+            }
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        });
+
+        await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+        await publisher.InitializeAsync(CancellationToken.None);
+
+        Task<TransitPublishResult>[] submissions =
+        [
+            publisher.PublishAsync("<race-preempt-1@example.com>", payload, CancellationToken.None).AsTask(),
+            publisher.PublishAsync("<race-preempt-2@example.com>", payload, CancellationToken.None).AsTask(),
+            publisher.PublishAsync("<race-preempt-3@example.com>", payload, CancellationToken.None).AsTask(),
+        ];
+
+        using CancellationTokenSource acceptedTimeout = new(TimeSpan.FromSeconds(10));
+        await firstAcceptedObserved.Task.WaitAsync(acceptedTimeout.Token);
+
+        using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(10));
+        await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+        using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
+        TransitPublishResult[] results = await Task.WhenAll(submissions).WaitAsync(completionTimeout.Token);
+
+        Assert.Equal(3, results.Length);
+        Assert.Equal(3, results.Select(result => result.MessageId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(results, result => result.MessageId == "<race-preempt-1@example.com>" && result.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Ambiguous);
+        Assert.All(results, result => Assert.True(result.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Canceled or TransitPublishStatus.Ambiguous));
+        Assert.Equal(0, GetQueuedSubmissionCount(publisher));
+        Assert.Equal(0, GetActiveSubmissionCount(publisher));
+    }
+
+    [Fact]
+    public async Task PublishAsync_WhenCancellationOutcomeLoggingThrows_LogsContinuationFailureWithoutFaultingCaller()
+    {
+        string messageId = "<publisher-cancel-logger-failure@example.com>";
+        byte[] payload = [(byte)'C', (byte)'\n'];
+        ThrowOnOutcomeCapturingLoggerProvider provider = new();
+
+        await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+        {
+            await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+            await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+            await FakePublisherServer.WriteLineAsync(stream, ".");
+            await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+            _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+
+            await Task.Delay(80, cancellationToken);
+            await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+        });
+
+        await using TransitPublisher publisher = CreatePublisherWithLogger(server.Port, connectionPoolSize: 1, provider.CreateLogger<TransitPublisher>());
+        await publisher.InitializeAsync(CancellationToken.None);
+
+        using CancellationTokenSource cts = new();
+        ValueTask<TransitPublishResult> pending = publisher.PublishAsync(messageId, payload, cts.Token);
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.AsTask());
+
+        using CancellationTokenSource eventualLogTimeout = new(TimeSpan.FromSeconds(5));
+        while (!provider.Entries.Any(entry => entry.EventId.Id == 2209))
+        {
+            await Task.Delay(20, eventualLogTimeout.Token);
+        }
+
+        Assert.Contains(provider.Entries, entry =>
+            entry.EventId.Id == 2209
+            && entry.Exception is InvalidOperationException
+            && entry.Message.Contains("cancellation continuation failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void IsConnectionLifecycleSubmitFailure_WhenLifecycleExceptionWriterNotInitialized_ReturnsTrue()
+    {
+        TransitConnection connection = new("localhost", 119, useSsl: false, NullLogger<TransitPublisher>.Instance);
+
+        bool classified = InvokeIsConnectionLifecycleSubmitFailure(
+            connection,
+            new TransitConnection.TransitConnectionLifecycleException(TransitConnection.TransitConnectionLifecycleFailure.WriterNotInitialized));
+
+        Assert.True(classified);
+    }
+
+    [Fact]
+    public void IsConnectionLifecycleSubmitFailure_WhenLifecycleExceptionWriterCompleted_ReturnsTrue()
+    {
+        TransitConnection connection = new("localhost", 119, useSsl: false, NullLogger<TransitPublisher>.Instance);
+
+        bool classified = InvokeIsConnectionLifecycleSubmitFailure(
+            connection,
+            new TransitConnection.TransitConnectionLifecycleException(TransitConnection.TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission));
+
+        Assert.True(classified);
+    }
+
+    [Fact]
+    public void IsConnectionLifecycleSubmitFailure_WhenInvalidOperationAndConnectionFaulted_ReturnsTrue()
+    {
+        TransitConnection connection = new("localhost", 119, useSsl: false, NullLogger<TransitPublisher>.Instance);
+        SetConnectionState(connection, TransitConnectionState.Faulted);
+
+        bool classified = InvokeIsConnectionLifecycleSubmitFailure(connection, new InvalidOperationException("arbitrary"));
+
+        Assert.True(classified);
+    }
+
+    [Fact]
+    public void IsConnectionLifecycleSubmitFailure_WhenInvalidOperationAndConnectionReady_ReturnsFalse()
+    {
+        TransitConnection connection = new("localhost", 119, useSsl: false, NullLogger<TransitPublisher>.Instance);
+        SetConnectionState(connection, TransitConnectionState.Ready);
+
+        bool classified = InvokeIsConnectionLifecycleSubmitFailure(connection, new InvalidOperationException("arbitrary"));
+
+        Assert.False(classified);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetAlwaysClassifiedLifecycleExceptions))]
+    public void IsConnectionLifecycleSubmitFailure_WhenKnownLifecycleExceptionType_ReturnsTrue(Exception exception)
+    {
+        TransitConnection connection = new("localhost", 119, useSsl: false, NullLogger<TransitPublisher>.Instance);
+
+        bool classified = InvokeIsConnectionLifecycleSubmitFailure(connection, exception);
+
+        Assert.True(classified);
+    }
+
+    public static IEnumerable<object[]> GetAlwaysClassifiedLifecycleExceptions()
+    {
+        yield return [new ObjectDisposedException("transport")];
+        yield return [new IOException("io")];
+        yield return [new SocketException((int)SocketError.ConnectionReset)];
+    }
+
+    private static bool InvokeIsConnectionLifecycleSubmitFailure(TransitConnection connection, Exception exception)
+    {
+        MethodInfo? method = typeof(TransitPublisher).GetMethod("IsConnectionLifecycleSubmitFailure", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        object? raw = method.Invoke(null, [connection, exception]);
+        return Assert.IsType<bool>(raw);
+    }
+
     private static TransitPublisher CreatePublisher(int port, int connectionPoolSize, int perConnectionPipelineDepth = 8)
     {
         BackFillerRuntimeOptions options = new(
@@ -1508,6 +1974,20 @@ public sealed class TransitPublisherTests
         object? raw = field.GetValue(publisher);
         Assert.IsType<long>(raw);
         return (long)raw;
+    }
+
+    private static int GetActiveSubmissionCount(TransitPublisher publisher)
+    {
+        ArgumentNullException.ThrowIfNull(publisher);
+
+        FieldInfo? field = typeof(TransitPublisher).GetField("_activeSubmissions", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(field);
+
+        object? raw = field.GetValue(publisher);
+        Assert.NotNull(raw);
+
+        IDictionary activeSubmissions = Assert.IsAssignableFrom<IDictionary>(raw);
+        return activeSubmissions.Count;
     }
 
     private static int GetPrimaryConnectionCount(TransitPublisher publisher)
@@ -1688,7 +2168,7 @@ public sealed class TransitPublisherTests
             return new CapturingLogger<T>(Entries, _gate);
         }
 
-        internal sealed record LogEntry(EventId EventId, string Message);
+        internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
 
         private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
         {
@@ -1708,9 +2188,78 @@ public sealed class TransitPublisherTests
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
                 string message = formatter(state, exception);
+                Dictionary<string, object?> stateValues = [];
+                if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+                {
+                    foreach (KeyValuePair<string, object?> item in structuredState)
+                    {
+                        stateValues[item.Key] = item.Value;
+                    }
+                }
+
                 lock (_gate)
                 {
-                    _entries.Add(new LogEntry(eventId, message));
+                    _entries.Add(new LogEntry(eventId, logLevel, message, exception, stateValues));
+                }
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                internal static readonly NullScope Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
+        }
+    }
+
+    private sealed class ThrowOnOutcomeCapturingLoggerProvider
+    {
+        private readonly object _gate = new();
+
+        internal List<CapturingLoggerProvider.LogEntry> Entries { get; } = [];
+
+        internal ILogger<T> CreateLogger<T>()
+        {
+            return new ThrowOnOutcomeCapturingLogger<T>(Entries, _gate);
+        }
+
+        private sealed class ThrowOnOutcomeCapturingLogger<T>(List<CapturingLoggerProvider.LogEntry> entries, object gate) : ILogger<T>
+        {
+            private readonly List<CapturingLoggerProvider.LogEntry> _entries = entries;
+            private readonly object _gate = gate;
+
+            public IDisposable BeginScope<TState>(TState state) where TState : notnull
+            {
+                return NullScope.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                string message = formatter(state, exception);
+                Dictionary<string, object?> stateValues = [];
+                if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+                {
+                    foreach (KeyValuePair<string, object?> item in structuredState)
+                    {
+                        stateValues[item.Key] = item.Value;
+                    }
+                }
+
+                lock (_gate)
+                {
+                    _entries.Add(new CapturingLoggerProvider.LogEntry(eventId, logLevel, message, exception, stateValues));
+                }
+
+                if (eventId.Id == 2204)
+                {
+                    throw new InvalidOperationException("Simulated logging failure for delayed outcome continuation.");
                 }
             }
 

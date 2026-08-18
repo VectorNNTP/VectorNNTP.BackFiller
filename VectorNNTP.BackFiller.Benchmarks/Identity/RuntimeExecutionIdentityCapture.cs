@@ -1,16 +1,28 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 internal static class RuntimeExecutionIdentityCapture
 {
+    /// <summary>
+    /// Captures runtime identity using the process entry assembly when available.
+    /// </summary>
     internal static RuntimeExecutionIdentity Capture(Assembly fallbackAssembly)
+    {
+        return Capture(fallbackAssembly, Assembly.GetEntryAssembly());
+    }
+
+    /// <summary>
+    /// Captures runtime identity using an explicit entry assembly override when provided.
+    /// </summary>
+    internal static RuntimeExecutionIdentity Capture(Assembly fallbackAssembly, Assembly? entryAssembly)
     {
         ArgumentNullException.ThrowIfNull(fallbackAssembly);
 
-        Assembly assembly = Assembly.GetEntryAssembly() ?? fallbackAssembly;
+        Assembly assembly = entryAssembly ?? fallbackAssembly;
         string runtimeAssemblyPath = Path.GetFullPath(assembly.Location);
         string runtimeAssemblyVersion = assembly.GetName().Version?.ToString() ?? "(unknown)";
         string? assemblyFileVersion = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
@@ -29,6 +41,22 @@ internal static class RuntimeExecutionIdentityCapture
             }
         }
 
+        Assembly? productionAssembly = AppDomain.CurrentDomain
+            .GetAssemblies()
+            .FirstOrDefault(static x => string.Equals(x.GetName().Name, "VectorNNTP.BackFiller", StringComparison.Ordinal))
+            ?? typeof(TransitPublisher).Assembly;
+
+        string? productionDependencyPath = null;
+        string? productionDependencyAssemblyVersion = null;
+        string? productionDependencyFileVersion = null;
+
+        if (productionAssembly is not null)
+        {
+            productionDependencyPath = Path.GetFullPath(productionAssembly.Location);
+            productionDependencyAssemblyVersion = productionAssembly.GetName().Version?.ToString();
+            productionDependencyFileVersion = productionAssembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version;
+        }
+
         return new RuntimeExecutionIdentity(
             RuntimeAssemblyPath: runtimeAssemblyPath,
             RuntimeAssemblyVersion: runtimeAssemblyVersion,
@@ -41,6 +69,9 @@ internal static class RuntimeExecutionIdentityCapture
             RuntimeIdentifier: AppRuntimeIdentifier.Value,
             Architecture: RuntimeInformation.ProcessArchitecture.ToString(),
             SourceRevision: sourceRevision,
-            BuildTimestampUtc: buildTimestampUtc);
+            BuildTimestampUtc: buildTimestampUtc,
+            ProductionDependencyPath: productionDependencyPath,
+            ProductionDependencyAssemblyVersion: productionDependencyAssemblyVersion,
+            ProductionDependencyFileVersion: productionDependencyFileVersion);
     }
 }

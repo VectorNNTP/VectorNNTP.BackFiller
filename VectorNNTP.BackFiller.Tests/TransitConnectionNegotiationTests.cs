@@ -1,6 +1,6 @@
-using System.IO.Compression;
 using System.Net;
 using System.Net.Security;
+using System.Reflection;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
@@ -51,7 +51,6 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
         Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         Assert.False(connection.IsTlsActive);
-        Assert.False(connection.IsCompressionActive);
         Assert.True(connection.Capabilities.SupportsStreaming);
     }
 
@@ -224,7 +223,6 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
         Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         Assert.True(connection.IsTlsActive);
-        Assert.False(connection.IsCompressionActive);
         Assert.True(connection.Capabilities.SupportsStreaming);
     }
 
@@ -297,9 +295,9 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
     }
 
     [Fact]
-    public async Task InitializeAsync_WhenCompressNegotiationRejected_Throws()
+    public async Task InitializeAsync_WhenCompressDeflateAdvertised_DoesNotNegotiateCompression()
     {
-        await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
+        await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, cancellationToken) =>
         {
             await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
             await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
@@ -307,8 +305,15 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
             await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
             await FakeNntpServer.WriteLineAsync(stream, ".");
-            await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-            await FakeNntpServer.WriteLineAsync(stream, "503 compression unavailable");
+            await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+            string takethis = await FakeNntpServer.ReadLineAsync(stream, cancellationToken);
+            Assert.Equal("TAKETHIS <compress-ignored@example.com>", takethis);
+            byte[] payload = await FakeNntpServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+            Assert.Equal(new byte[] { (byte)'N', (byte)'\n' }, payload);
+            await FakeNntpServer.WriteLineAsync(stream, "239 <compress-ignored@example.com> transferred");
+            await ServeGracefulShutdownAsync(stream, cancellationToken);
         });
 
         await using TransitConnection connection = new(
@@ -317,8 +322,12 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             useSsl: false,
             NullLogger<TransitPublisher>.Instance);
 
-        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
-        Assert.Contains("COMPRESS DEFLATE negotiation failed", ex.Message, StringComparison.Ordinal);
+        await connection.InitializeAsync(CancellationToken.None);
+        TransitPublishResult result = await connection.SubmitTakethisAsync("<compress-ignored@example.com>", new byte[] { (byte)'N', (byte)'\n' }, CancellationToken.None, 0L, 0L);
+
+        Assert.Equal(TransitConnectionState.Publishing, connection.CurrentState);
+        Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+        Assert.True(connection.Capabilities.SupportsStreaming);
     }
 
     [Fact]
@@ -342,8 +351,12 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
     [Fact]
     public async Task InitializeAsync_WhenServerClosesDuringGreeting_Throws()
     {
-        await using FakeNntpServer server = await FakeNntpServer.StartAsync(static (stream, cancellationToken) =>
+        TaskCompletionSource<(string? ServerLocalEndpoint, string? ClientLocalEndpoint)> endpointCapture = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeNntpServer server = await FakeNntpServer.StartAsync((stream, cancellationToken) =>
         {
+            endpointCapture.TrySetResult(
+                (stream.Socket.LocalEndPoint?.ToString(), stream.Socket.RemoteEndPoint?.ToString()));
             stream.Dispose();
             return Task.CompletedTask;
         });
@@ -356,6 +369,43 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
         Assert.Contains("closed while awaiting line response", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        (string? serverLocalEndpoint, string? clientLocalEndpoint) = await endpointCapture.Task;
+        string listenerLocalEndpoint = GetListenerLocalEndpoint(server) ?? string.Empty;
+        string clientRemoteEndpoint = serverLocalEndpoint ?? listenerLocalEndpoint;
+        string clientEndpoint = clientLocalEndpoint ?? string.Empty;
+
+        string diagnosticLine = $"P1-TCP-ENDPOINT: listener={listenerLocalEndpoint} clientLocal={clientEndpoint} clientRemote={clientRemoteEndpoint} tuple={clientEndpoint}->{clientRemoteEndpoint}";
+        Console.WriteLine(diagnosticLine);
+
+        string artifactsDirectory = ResolveArtifactsDirectory();
+        Directory.CreateDirectory(artifactsDirectory);
+        string diagnosticPath = Path.Combine(artifactsDirectory, "phase2-p1-greeting-test-endpoint-diag.txt");
+        File.WriteAllText(diagnosticPath, diagnosticLine + Environment.NewLine);
+
+        static string? GetListenerLocalEndpoint(FakeNntpServer serverInstance)
+        {
+            FieldInfo? listenerField = typeof(FakeNntpServer).GetField("_listener", BindingFlags.Instance | BindingFlags.NonPublic);
+            TcpListener? listener = listenerField?.GetValue(serverInstance) as TcpListener;
+            return listener?.LocalEndpoint?.ToString();
+        }
+
+        static string ResolveArtifactsDirectory()
+        {
+            DirectoryInfo? current = new(AppContext.BaseDirectory);
+            while (current is not null)
+            {
+                string candidate = Path.Combine(current.FullName, "artifacts");
+                if (Directory.Exists(candidate))
+                {
+                    return candidate;
+                }
+
+                current = current.Parent;
+            }
+
+            return Path.Combine(AppContext.BaseDirectory, "artifacts");
+        }
     }
 
     [Fact]
@@ -415,12 +465,11 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
         Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         Assert.True(connection.IsTlsActive);
-        Assert.False(connection.IsCompressionActive);
         Assert.True(connection.Capabilities.SupportsStreaming);
     }
 
     [Fact]
-    public async Task InitializeAsync_WhenUseSslTrueAndCompressionAdvertised_UsesTlsThenCompression()
+    public async Task InitializeAsync_WhenUseSslTrueAndCompressionAdvertised_UsesTlsWithoutCompression()
     {
         byte[] payload =
         [
@@ -445,24 +494,17 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             await FakeNntpServer.WriteLineAsync(sslStream, "200 transit ready");
             await FakeNntpServer.ExpectCommandAsync(sslStream, "CAPABILITIES");
             await FakeNntpServer.WriteLineAsync(sslStream, "101 Capability list:");
-            await FakeNntpServer.WriteLineAsync(sslStream, "COMPRESS DEFLATE");
             await FakeNntpServer.WriteLineAsync(sslStream, "STREAMING");
             await FakeNntpServer.WriteLineAsync(sslStream, ".");
 
-            await FakeNntpServer.ExpectCommandAsync(sslStream, "COMPRESS DEFLATE");
-            await FakeNntpServer.WriteLineAsync(sslStream, "206 Compression enabled");
+            await FakeNntpServer.ExpectCommandAsync(sslStream, "MODE STREAM");
+            await FakeNntpServer.WriteLineAsync(sslStream, "203 Streaming permitted");
 
-            using DeflateStream compressedRead = new(sslStream, CompressionMode.Decompress, leaveOpen: true);
-            using DeflateStream compressedWrite = new(sslStream, CompressionMode.Compress, leaveOpen: true);
-
-            await FakeNntpServer.ExpectCommandAsync(compressedRead, "MODE STREAM");
-            await FakeNntpServer.WriteLineAsync(compressedWrite, "203 Streaming permitted");
-
-            string takethis = await FakeNntpServer.ReadLineAsync(compressedRead, cancellationToken);
-            Assert.Equal("TAKETHIS <ssl-compressed@example.com>", takethis);
-            byte[] receivedPayload = await FakeNntpServer.ReadTakethisPayloadAsync(compressedRead, cancellationToken);
+            string takethis = await FakeNntpServer.ReadLineAsync(sslStream, cancellationToken);
+            Assert.Equal("TAKETHIS <ssl-uncompressed@example.com>", takethis);
+            byte[] receivedPayload = await FakeNntpServer.ReadTakethisPayloadAsync(sslStream, cancellationToken);
             Assert.Equal(payload, receivedPayload);
-            await FakeNntpServer.WriteLineAsync(compressedWrite, "239 <ssl-compressed@example.com> transferred");
+            await FakeNntpServer.WriteLineAsync(sslStream, "239 <ssl-uncompressed@example.com> transferred");
         });
 
         await using TransitConnection connection = new(
@@ -473,10 +515,9 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             _tlsFixture.ServerCertificateValidationCallback);
 
         await connection.InitializeAsync(CancellationToken.None);
-        TransitPublishResult result = await connection.SubmitTakethisAsync("<ssl-compressed@example.com>", payload, CancellationToken.None, 0L, 0L);
+        TransitPublishResult result = await connection.SubmitTakethisAsync("<ssl-uncompressed@example.com>", payload, CancellationToken.None, 0L, 0L);
 
         Assert.True(connection.IsTlsActive);
-        Assert.True(connection.IsCompressionActive);
         Assert.Equal(TransitPublishStatus.Accepted, result.Status);
     }
 
@@ -515,7 +556,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
     }
 
     [Fact]
-    public async Task InitializeAsync_WhenStartTlsAdvertisedWithCompression_UpgradesToTlsThenEnablesCompression()
+    public async Task InitializeAsync_WhenStartTlsAdvertisedWithCompression_UpgradesToTlsWithoutCompression()
     {
         byte[] payload =
         [
@@ -549,25 +590,17 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
             await FakeNntpServer.ExpectCommandAsync(sslStream, "CAPABILITIES");
             await FakeNntpServer.WriteLineAsync(sslStream, "101 Capability list:");
-            await FakeNntpServer.WriteLineAsync(sslStream, "COMPRESS DEFLATE");
             await FakeNntpServer.WriteLineAsync(sslStream, "STREAMING");
             await FakeNntpServer.WriteLineAsync(sslStream, ".");
 
-            await FakeNntpServer.ExpectCommandAsync(sslStream, "COMPRESS DEFLATE");
-            await FakeNntpServer.WriteLineAsync(sslStream, "206 Compression enabled");
+            await FakeNntpServer.ExpectCommandAsync(sslStream, "MODE STREAM");
+            await FakeNntpServer.WriteLineAsync(sslStream, "203 Streaming permitted");
 
-            using DeflateStream compressedRead = new(sslStream, CompressionMode.Decompress, leaveOpen: true);
-            using DeflateStream compressedWrite = new(sslStream, CompressionMode.Compress, leaveOpen: true);
-
-            await FakeNntpServer.ExpectCommandAsync(compressedRead, "MODE STREAM");
-            await FakeNntpServer.WriteLineAsync(compressedWrite, "203 Streaming permitted");
-
-            string takethis = await FakeNntpServer.ReadLineAsync(compressedRead, cancellationToken);
-            Assert.Equal("TAKETHIS <starttls-compressed@example.com>", takethis);
-            byte[] receivedPayload = await FakeNntpServer.ReadTakethisPayloadAsync(compressedRead, cancellationToken);
+            string takethis = await FakeNntpServer.ReadLineAsync(sslStream, cancellationToken);
+            Assert.Equal("TAKETHIS <starttls-uncompressed@example.com>", takethis);
+            byte[] receivedPayload = await FakeNntpServer.ReadTakethisPayloadAsync(sslStream, cancellationToken);
             Assert.Equal(payload, receivedPayload);
-
-            await FakeNntpServer.WriteLineAsync(compressedWrite, "239 <starttls-compressed@example.com> transferred");
+            await FakeNntpServer.WriteLineAsync(sslStream, "239 <starttls-uncompressed@example.com> transferred");
         });
 
         await using TransitConnection connection = new(
@@ -578,10 +611,9 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             _tlsFixture.ServerCertificateValidationCallback);
 
         await connection.InitializeAsync(CancellationToken.None);
-        TransitPublishResult result = await connection.SubmitTakethisAsync("<starttls-compressed@example.com>", payload, CancellationToken.None, 0L, 0L);
+        TransitPublishResult result = await connection.SubmitTakethisAsync("<starttls-uncompressed@example.com>", payload, CancellationToken.None, 0L, 0L);
 
         Assert.True(connection.IsTlsActive);
-        Assert.True(connection.IsCompressionActive);
         Assert.Equal(TransitPublishStatus.Accepted, result.Status);
     }
 
@@ -637,33 +669,26 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
     }
 
     [Fact]
-    public async Task InitializeAsync_WhenCompressionAdvertised_EnablesCompressionAndPublishes()
+    public async Task InitializeAsync_WhenCompressionAdvertised_PublishesOverUncompressedTransport()
     {
         await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
         {
             await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
             await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
             await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-            await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
             await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
             await FakeNntpServer.WriteLineAsync(stream, ".");
 
-            await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-            await FakeNntpServer.WriteLineAsync(stream, "206 Compression enabled");
+            await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
+            await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
 
-            using DeflateStream compressedRead = new(stream, CompressionMode.Decompress, leaveOpen: true);
-            using DeflateStream compressedWrite = new(stream, CompressionMode.Compress, leaveOpen: true);
+            string takethis = await FakeNntpServer.ReadLineAsync(stream, CancellationToken.None);
+            Assert.Equal("TAKETHIS <uncompressed@example.com>", takethis);
 
-            await FakeNntpServer.ExpectCommandAsync(compressedRead, "MODE STREAM");
-            await FakeNntpServer.WriteLineAsync(compressedWrite, "203 Streaming permitted");
-
-            string takethis = await FakeNntpServer.ReadLineAsync(compressedRead, CancellationToken.None);
-            Assert.Equal("TAKETHIS <compressed@example.com>", takethis);
-
-            byte[] payload = await FakeNntpServer.ReadTakethisPayloadAsync(compressedRead, CancellationToken.None);
+            byte[] payload = await FakeNntpServer.ReadTakethisPayloadAsync(stream, CancellationToken.None);
             Assert.Equal(new byte[] { (byte)'Z', (byte)'\n' }, payload);
 
-            await FakeNntpServer.WriteLineAsync(compressedWrite, "239 <compressed@example.com> transferred");
+            await FakeNntpServer.WriteLineAsync(stream, "239 <uncompressed@example.com> transferred");
         });
 
         await using TransitConnection connection = new(
@@ -673,279 +698,10 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             NullLogger<TransitPublisher>.Instance);
 
         await connection.InitializeAsync(CancellationToken.None);
-        TransitPublishResult result = await connection.SubmitTakethisAsync("<compressed@example.com>", new byte[] { (byte)'Z', (byte)'\n' }, CancellationToken.None, 0L, 0L);
+        TransitPublishResult result = await connection.SubmitTakethisAsync("<uncompressed@example.com>", new byte[] { (byte)'Z', (byte)'\n' }, CancellationToken.None, 0L, 0L);
 
         Assert.Equal(TransitConnectionState.Publishing, connection.CurrentState);
-        Assert.True(connection.IsCompressionActive);
         Assert.Equal(TransitPublishStatus.Accepted, result.Status);
-    }
-
-    [Fact]
-    public async Task InitializeAsync_WhenCompressionResponseAndExtraPlaintextBuffered_ThrowsTransitionSafetyError()
-    {
-        await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
-        {
-            await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-            await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-            await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-            await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-            await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-            await FakeNntpServer.WriteLineAsync(stream, ".");
-
-            await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-            await FakeNntpServer.WriteLinesAsync(stream,
-            [
-                "206 Compression enabled",
-                "203 Unexpected plaintext line",
-            ]);
-        });
-
-        await using TransitConnection connection = new(
-            host: IPAddress.Loopback.ToString(),
-            port: server.Port,
-            useSsl: false,
-            NullLogger<TransitPublisher>.Instance);
-
-        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
-        Assert.Contains("Buffered NNTP data remained in PipeReader", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task InitializeAsync_WhenCompressInteroperabilityFails_FallsBackToUncompressedReconnect()
-    {
-        FakeNntpServer.CapturingLoggerProvider loggerProvider = new();
-        int sessionCount = 0;
-
-        await using FakeNntpServer server = await FakeNntpServer.StartSessionsAsync(
-        [
-            async (stream, cancellationToken) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-
-                await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "206 Compression enabled");
-
-                using DeflateStream compressedRead = new(stream, CompressionMode.Decompress, leaveOpen: true);
-                await FakeNntpServer.ExpectCommandAsync(compressedRead, "MODE STREAM");
-
-                using ZLibStream zlibWrite = new(stream, CompressionMode.Compress, leaveOpen: true);
-                await FakeNntpServer.WriteLineAsync(zlibWrite, "203 Streaming is OK");
-                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
-            },
-            async (stream, cancellationToken) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-
-                await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
-                await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await ServeGracefulShutdownAsync(stream, cancellationToken);
-            },
-        ]);
-
-        await using TransitConnection connection = new(
-            host: IPAddress.Loopback.ToString(),
-            port: server.Port,
-            useSsl: false,
-            loggerProvider.CreateLogger<TransitPublisher>());
-
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        await connection.InitializeAsync(timeout.Token);
-
-        Assert.Equal(2, sessionCount);
-        Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
-        Assert.False(connection.IsCompressionActive);
-        Assert.Contains(loggerProvider.Entries, entry => entry.EventId.Id == 2214);
-        Assert.Single(loggerProvider.Entries.Where(entry => entry.EventId.Id == 2214));
-    }
-
-    [Fact]
-    public async Task InitializeAsync_WhenCancellationDuringCompressionNegotiation_ThrowsOperationCanceledWithoutFallback()
-    {
-        FakeNntpServer.CapturingLoggerProvider loggerProvider = new();
-        int sessionCount = 0;
-
-        await using FakeNntpServer server = await FakeNntpServer.StartSessionsAsync(
-        [
-            async (stream, cancellationToken) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-
-                await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "206 Compression enabled");
-
-                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-            },
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-            },
-        ]);
-
-        await using TransitConnection connection = new(
-            host: IPAddress.Loopback.ToString(),
-            port: server.Port,
-            useSsl: false,
-            loggerProvider.CreateLogger<TransitPublisher>());
-
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(1));
-        await Assert.ThrowsAsync<OperationCanceledException>(() => connection.InitializeAsync(timeout.Token));
-        Assert.Equal(1, sessionCount);
-        Assert.DoesNotContain(loggerProvider.Entries, entry => entry.EventId.Id == 2214);
-    }
-
-    [Fact]
-    public async Task InitializeAsync_WhenCompressedModeStreamReadGetsConnectionReset_DoesNotFallback()
-    {
-        FakeNntpServer.CapturingLoggerProvider loggerProvider = new();
-        int sessionCount = 0;
-
-        await using FakeNntpServer server = await FakeNntpServer.StartSessionsAsync(
-        [
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-
-                await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "206 Compression enabled");
-                stream.Socket.Shutdown(SocketShutdown.Both);
-                stream.Socket.Close();
-            },
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-            },
-        ]);
-
-        await using TransitConnection connection = new(
-            host: IPAddress.Loopback.ToString(),
-            port: server.Port,
-            useSsl: false,
-            loggerProvider.CreateLogger<TransitPublisher>());
-
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        await Assert.ThrowsAnyAsync<IOException>(() => connection.InitializeAsync(timeout.Token));
-
-        Assert.Equal(1, sessionCount);
-        Assert.DoesNotContain(loggerProvider.Entries, entry => entry.EventId.Id == 2214);
-    }
-
-    [Fact]
-    public async Task InitializeAsync_WhenCompressedModeStreamReadGetsConnectionAborted_DoesNotFallback()
-    {
-        FakeNntpServer.CapturingLoggerProvider loggerProvider = new();
-        int sessionCount = 0;
-
-        await using FakeNntpServer server = await FakeNntpServer.StartSessionsAsync(
-        [
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-
-                await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "206 Compression enabled");
-                stream.Socket.LingerState = new LingerOption(true, 0);
-                stream.Socket.Close();
-            },
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-            },
-        ]);
-
-        await using TransitConnection connection = new(
-            host: IPAddress.Loopback.ToString(),
-            port: server.Port,
-            useSsl: false,
-            loggerProvider.CreateLogger<TransitPublisher>());
-
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        await Assert.ThrowsAnyAsync<IOException>(() => connection.InitializeAsync(timeout.Token));
-
-        Assert.Equal(1, sessionCount);
-        Assert.DoesNotContain(loggerProvider.Entries, entry => entry.EventId.Id == 2214);
-    }
-
-    [Fact]
-    public async Task InitializeAsync_WhenCompressedModeStreamReadGetsEof_DoesNotFallback()
-    {
-        FakeNntpServer.CapturingLoggerProvider loggerProvider = new();
-        int sessionCount = 0;
-
-        await using FakeNntpServer server = await FakeNntpServer.StartSessionsAsync(
-        [
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-
-                await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "206 Compression enabled");
-                stream.Close();
-            },
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-            },
-        ]);
-
-        await using TransitConnection connection = new(
-            host: IPAddress.Loopback.ToString(),
-            port: server.Port,
-            useSsl: false,
-            loggerProvider.CreateLogger<TransitPublisher>());
-
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        Exception ex = await Record.ExceptionAsync(() => connection.InitializeAsync(timeout.Token));
-
-        Assert.NotNull(ex);
-        Assert.True(ex is InvalidOperationException or IOException);
-        Assert.Equal(1, sessionCount);
-        Assert.DoesNotContain(loggerProvider.Entries, entry => entry.EventId.Id == 2214);
     }
 
     [Fact]
@@ -1042,37 +798,15 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
     }
 
     [Fact]
-    public async Task InitializeAsync_WhenCompressRejectedThenRetryOnSameInstance_SucceedsWithFreshTransport()
+    public async Task InitializeAsync_WhenOnlyCompressAdvertisedWithNoStreaming_ThrowsStreamingRequired()
     {
-        int sessionCount = 0;
-
-        await using FakeNntpServer server = await FakeNntpServer.StartSessionsAsync(
-        [
-            async (stream, _) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-                await FakeNntpServer.ExpectCommandAsync(stream, "COMPRESS DEFLATE");
-                await FakeNntpServer.WriteLineAsync(stream, "503 compression unavailable");
-            },
-            async (stream, cancellationToken) =>
-            {
-                Interlocked.Increment(ref sessionCount);
-                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
-                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
-                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
-                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
-                await FakeNntpServer.WriteLineAsync(stream, ".");
-                await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
-                await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
-                await ServeGracefulShutdownAsync(stream, cancellationToken);
-            },
-        ]);
+        await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
+        {
+            await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
+            await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
+            await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
+            await FakeNntpServer.WriteLineAsync(stream, ".");
+        });
 
         await using TransitConnection connection = new(
             host: IPAddress.Loopback.ToString(),
@@ -1080,14 +814,8 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             useSsl: false,
             NullLogger<TransitPublisher>.Instance);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
-        Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
-
-        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
-        await connection.InitializeAsync(timeout.Token);
-
-        Assert.Equal(2, sessionCount);
-        Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+        Assert.Contains("does not advertise STREAMING capability", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

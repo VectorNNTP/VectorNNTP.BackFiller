@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO.Compression;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Security;
@@ -66,14 +65,45 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private TransitCapabilitySnapshot _capabilities = new(
             SupportsStartTls: false,
-            SupportsCompressDeflate: false,
             SupportsStreaming: false);
 
         private bool _tlsActive;
-        private bool _compressionActive;
-        private bool _skipCompressionForCurrentInitialization;
         private bool _streamingModeNegotiated;
         private TransitConnectionState _state = TransitConnectionState.Disconnected;
+        private const int P1GreetingLifecycleEventHistoryCapacity = 128;
+
+        private int _firstP1GreetingProvenanceCaptured;
+        private int _localDisposeAsyncObserved;
+        private int _localResetTransportStateObserved;
+        private int _localDisposeTransportArtifactsObserved;
+        private int _localRebuildPipesObserved;
+        private int _initializationCancellationPathObserved;
+        private int _initializationAttemptSequence;
+        private int _currentInitializationAttemptId;
+        private int _p1InitializationAttemptId;
+        private string? _currentAttemptLocalIp;
+        private int _currentAttemptLocalPort;
+        private string? _currentAttemptRemoteIp;
+        private int _currentAttemptRemotePort;
+        private long _currentAttemptConnectedUtcTicks;
+        private string? _p1LocalIp;
+        private int _p1LocalPort;
+        private string? _p1RemoteIp;
+        private int _p1RemotePort;
+        private long _p1ConnectedUtcTicks;
+        private long _p1UtcTicks;
+        private long _connectedTick;
+        private long _pipesCreatedTick;
+        private long _awaitingGreetingTick;
+        private long _rebuildPipesTick;
+        private long _resetTransportTick;
+        private long _cleanupFailedInitializationTick;
+        private long _disposeAsyncTick;
+        private long _disposeTransportArtifactsTick;
+        private long _initializationCancellationTick;
+        private long _p1GreetingEofTick;
+        private readonly P1GreetingLifecycleEventRecord[] _p1LifecycleEventHistory = new P1GreetingLifecycleEventRecord[P1GreetingLifecycleEventHistoryCapacity];
+        private int _p1LifecycleEventHistoryCount;
         private long _bytesTransmitted;
         private long _bytesReceived;
         private long _socketOpenCount;
@@ -137,11 +167,236 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         internal TransitConnectionState CurrentState => _state;
 
+        internal P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
+        {
+            if (Volatile.Read(ref _firstP1GreetingProvenanceCaptured) == 0)
+            {
+                return null;
+            }
+
+            int attemptId = Volatile.Read(ref _p1InitializationAttemptId);
+            P1GreetingLifecycleEventRecord[] events = BuildP1GreetingLifecycleEventsForAttempt(attemptId);
+            bool disposeAsyncBeforeP1 = IsEventObservedBeforeP1OnAttempt(
+                attemptId,
+                P1GreetingProvenanceLifecycleEvent.DisposeAsync,
+                events);
+            bool resetTransportBeforeP1 = IsEventObservedBeforeP1OnAttempt(
+                attemptId,
+                P1GreetingProvenanceLifecycleEvent.ResetTransport,
+                events);
+            bool disposeTransportBeforeP1 = IsEventObservedBeforeP1OnAttempt(
+                attemptId,
+                P1GreetingProvenanceLifecycleEvent.DisposeTransportArtifacts,
+                events);
+            bool rebuildPipesBeforeP1 = IsEventObservedBeforeP1OnAttempt(
+                attemptId,
+                P1GreetingProvenanceLifecycleEvent.RebuildPipes,
+                events);
+            bool cleanupFailedInitializationBeforeP1 = IsEventObservedBeforeP1OnAttempt(
+                attemptId,
+                P1GreetingProvenanceLifecycleEvent.CleanupFailedInitialization,
+                events);
+            bool initializationCancellationBeforeP1 = IsEventObservedBeforeP1OnAttempt(
+                attemptId,
+                P1GreetingProvenanceLifecycleEvent.Cancellation,
+                events);
+
+            return new P1GreetingProvenanceSnapshot(
+                ConnectionId: ConnectionId,
+                Host: _host,
+                Port: _port,
+                InitializationAttemptId: attemptId,
+                LocalIp: Volatile.Read(ref _p1LocalIp),
+                LocalPort: Volatile.Read(ref _p1LocalPort),
+                RemoteIp: Volatile.Read(ref _p1RemoteIp),
+                RemotePort: Volatile.Read(ref _p1RemotePort),
+                CapturedAtTick: Volatile.Read(ref _p1GreetingEofTick),
+                ConnectedAtTick: ReadOptionalTick(FindEventTick(events, P1GreetingProvenanceLifecycleEvent.Connected)),
+                PipesCreatedAtTick: ReadOptionalTick(FindEventTick(events, P1GreetingProvenanceLifecycleEvent.PipesCreated)),
+                AwaitingGreetingAtTick: ReadOptionalTick(FindEventTick(events, P1GreetingProvenanceLifecycleEvent.AwaitingGreeting)),
+                ConnectedAtUtc: ReadOptionalUtc(Volatile.Read(ref _p1ConnectedUtcTicks)),
+                P1AtUtc: ReadOptionalUtc(Volatile.Read(ref _p1UtcTicks)),
+                LocalDisposeAsyncBeforeP1: disposeAsyncBeforeP1,
+                LocalResetTransportStateBeforeP1: resetTransportBeforeP1,
+                LocalDisposeTransportArtifactsBeforeP1: disposeTransportBeforeP1,
+                LocalRebuildPipesBeforeP1: rebuildPipesBeforeP1,
+                LocalCleanupFailedInitializationBeforeP1: cleanupFailedInitializationBeforeP1,
+                InitializationCancellationBeforeP1: initializationCancellationBeforeP1,
+                LifecycleEvents: events);
+        }
+
+        private void CaptureP1GreetingEofProvenance()
+        {
+            if (Interlocked.CompareExchange(ref _firstP1GreetingProvenanceCaptured, 1, 0) != 0)
+            {
+                return;
+            }
+
+            int attemptId = Volatile.Read(ref _currentInitializationAttemptId);
+            Interlocked.Exchange(ref _p1InitializationAttemptId, attemptId);
+            Volatile.Write(ref _p1LocalIp, Volatile.Read(ref _currentAttemptLocalIp));
+            Interlocked.Exchange(ref _p1LocalPort, Volatile.Read(ref _currentAttemptLocalPort));
+            Volatile.Write(ref _p1RemoteIp, Volatile.Read(ref _currentAttemptRemoteIp));
+            Interlocked.Exchange(ref _p1RemotePort, Volatile.Read(ref _currentAttemptRemotePort));
+            Interlocked.Exchange(ref _p1ConnectedUtcTicks, Volatile.Read(ref _currentAttemptConnectedUtcTicks));
+            Interlocked.Exchange(ref _p1UtcTicks, DateTimeOffset.UtcNow.UtcTicks);
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.P1GreetingEof, ref _p1GreetingEofTick);
+        }
+
+        private static bool IsP1GreetingEofException(Exception exception)
+        {
+            return exception is InvalidOperationException invalidOperationException
+                && string.Equals(invalidOperationException.Message, "NNTP connection closed while awaiting line response.", StringComparison.Ordinal);
+        }
+
+        private static long? ReadOptionalTick(long tick)
+        {
+            return tick > 0 ? tick : null;
+        }
+
+        private static DateTimeOffset? ReadOptionalUtc(long utcTicks)
+        {
+            return utcTicks > 0
+                ? new DateTimeOffset(utcTicks, TimeSpan.Zero)
+                : null;
+        }
+
+        private bool IsEventObservedBeforeP1OnAttempt(
+            int attemptId,
+            P1GreetingProvenanceLifecycleEvent lifecycleEvent,
+            P1GreetingLifecycleEventRecord[] lifecycleEvents)
+        {
+            if (attemptId <= 0)
+            {
+                return false;
+            }
+
+            long p1Tick = Volatile.Read(ref _p1GreetingEofTick);
+            if (p1Tick <= 0)
+            {
+                return false;
+            }
+
+            foreach (P1GreetingLifecycleEventRecord @event in lifecycleEvents)
+            {
+                if (@event.AttemptId == attemptId
+                    && @event.Event == lifecycleEvent
+                    && @event.Tick <= p1Tick)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent lifecycleEvent, ref long tickField)
+        {
+            long tick = Stopwatch.GetTimestamp();
+            int attemptId = Volatile.Read(ref _currentInitializationAttemptId);
+            Interlocked.CompareExchange(ref tickField, tick, 0);
+            AppendP1LifecycleEvent(lifecycleEvent, tick, attemptId);
+        }
+
+        private P1GreetingLifecycleEventRecord[] BuildP1GreetingLifecycleEventsForAttempt(int attemptId)
+        {
+            if (attemptId <= 0)
+            {
+                return [];
+            }
+
+            int count = Volatile.Read(ref _p1LifecycleEventHistoryCount);
+            if (count <= 0)
+            {
+                return [];
+            }
+
+            int boundedCount = Math.Min(count, _p1LifecycleEventHistory.Length);
+            List<P1GreetingLifecycleEventRecord> events = [];
+
+            for (int i = 0; i < boundedCount; i++)
+            {
+                P1GreetingLifecycleEventRecord record = _p1LifecycleEventHistory[i];
+                if (record.Tick <= 0 || record.AttemptId != attemptId)
+                {
+                    continue;
+                }
+
+                events.Add(record);
+            }
+
+            events.Sort(static (left, right) => left.Tick.CompareTo(right.Tick));
+            return events.ToArray();
+        }
+
+        private void AppendP1LifecycleEvent(P1GreetingProvenanceLifecycleEvent lifecycleEvent, long tick, int attemptId)
+        {
+            if (attemptId <= 0 || tick <= 0)
+            {
+                return;
+            }
+
+            int index = Interlocked.Increment(ref _p1LifecycleEventHistoryCount) - 1;
+            if ((uint)index >= (uint)_p1LifecycleEventHistory.Length)
+            {
+                return;
+            }
+
+            _p1LifecycleEventHistory[index] = new P1GreetingLifecycleEventRecord(lifecycleEvent, tick, attemptId);
+        }
+
+        private static long FindEventTick(P1GreetingLifecycleEventRecord[] events, P1GreetingProvenanceLifecycleEvent lifecycleEvent)
+        {
+            foreach (P1GreetingLifecycleEventRecord @event in events)
+            {
+                if (@event.Event == lifecycleEvent)
+                {
+                    return @event.Tick;
+                }
+            }
+
+            return 0;
+        }
+
+        private int BeginInitializationAttempt()
+        {
+            int attemptId = Interlocked.Increment(ref _initializationAttemptSequence);
+            Interlocked.Exchange(ref _currentInitializationAttemptId, attemptId);
+            Volatile.Write(ref _currentAttemptLocalIp, null);
+            Interlocked.Exchange(ref _currentAttemptLocalPort, 0);
+            Volatile.Write(ref _currentAttemptRemoteIp, null);
+            Interlocked.Exchange(ref _currentAttemptRemotePort, 0);
+            Interlocked.Exchange(ref _currentAttemptConnectedUtcTicks, 0);
+            return attemptId;
+        }
+
+        private void CaptureAttemptEndpointsAndConnectedUtc(TcpClient tcpClient)
+        {
+            ArgumentNullException.ThrowIfNull(tcpClient);
+
+            (string? localIp, int localPort) = TryGetEndpointParts(tcpClient.Client.LocalEndPoint);
+            (string? remoteIp, int remotePort) = TryGetEndpointParts(tcpClient.Client.RemoteEndPoint);
+
+            Volatile.Write(ref _currentAttemptLocalIp, localIp);
+            Interlocked.Exchange(ref _currentAttemptLocalPort, localPort);
+            Volatile.Write(ref _currentAttemptRemoteIp, remoteIp);
+            Interlocked.Exchange(ref _currentAttemptRemotePort, remotePort);
+            Interlocked.Exchange(ref _currentAttemptConnectedUtcTicks, DateTimeOffset.UtcNow.UtcTicks);
+        }
+
+        private static (string? Ip, int Port) TryGetEndpointParts(EndPoint? endpoint)
+        {
+            if (endpoint is IPEndPoint ipEndPoint)
+            {
+                return (ipEndPoint.Address.ToString(), ipEndPoint.Port);
+            }
+
+            return (null, 0);
+        }
+
         internal TransitCapabilitySnapshot Capabilities => _capabilities;
 
         internal bool IsTlsActive => _tlsActive;
-
-        internal bool IsCompressionActive => _compressionActive;
 
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
 
@@ -224,7 +479,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 Port: _port,
                 CurrentState: _state,
                 IsTlsActive: _tlsActive,
-                IsCompressionActive: _compressionActive,
                 SocketOpenCount: Interlocked.Read(ref _socketOpenCount),
                 ReadyTransitionCount: Interlocked.Read(ref _readyTransitionCount),
                 SubmissionsStarted: Interlocked.Read(ref _submissionsStarted),
@@ -598,62 +852,45 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync START connectionId={ConnectionId}", ConnectionId);
             cancellationToken.ThrowIfCancellationRequested();
 
-            bool fallbackAttempted = false;
-
-            while (true)
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync BEFORE InitializeCoreAsync connectionId={ConnectionId}", ConnectionId);
-                    await InitializeCoreAsync(cancellationToken).ConfigureAwait(false);
-                    _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync COMPLETE connectionId={ConnectionId}", ConnectionId);
-                    return;
-                }
-                catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogError(ex, "[INIT-TRACE] TransitConnection.InitializeAsync CANCELED connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
-                    await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
-                    throw;
-                }
-                catch (Exception ex) when (!fallbackAttempted && IsCompressionInteroperabilityFailure(ex))
-                {
-                    _logger.LogWarning(ex, "[INIT-TRACE] TransitConnection.InitializeAsync COMPRESS fallback triggered connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
-                    fallbackAttempted = true;
-                    _skipCompressionForCurrentInitialization = true;
-                    LogTransitCompressionInteroperabilityFallback(
-                        _logger,
-                        ConnectionId,
-                        _host,
-                        _port);
-
-                    await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[INIT-TRACE] TransitConnection.InitializeAsync FAILED connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
-                    await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
-                    throw;
-                }
+                _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync BEFORE InitializeCoreAsync connectionId={ConnectionId}", ConnectionId);
+                await InitializeCoreAsync(cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync COMPLETE connectionId={ConnectionId}", ConnectionId);
+            }
+            catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+            {
+                MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.Cancellation, ref _initializationCancellationTick);
+                Interlocked.Exchange(ref _initializationCancellationPathObserved, 1);
+                _logger.LogError(ex, "[INIT-TRACE] TransitConnection.InitializeAsync CANCELED connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
+                await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[INIT-TRACE] TransitConnection.InitializeAsync FAILED connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
+                await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
+                throw;
             }
         }
 
         private async Task InitializeCoreAsync(CancellationToken cancellationToken)
         {
+            BeginInitializationAttempt();
             _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeCoreAsync START connectionId={ConnectionId}", ConnectionId);
             TransitionState(TransitConnectionState.Connecting);
             _tcpClient = new TcpClient();
             _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE ConnectAsync connectionId={ConnectionId}, host={Host}, port={Port}", ConnectionId, _host, _port);
             await _tcpClient.ConnectAsync(_host, _port, cancellationToken).ConfigureAwait(false);
+            CaptureAttemptEndpointsAndConnectedUtc(_tcpClient);
             _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER ConnectAsync connectionId={ConnectionId}", ConnectionId);
             Interlocked.Increment(ref _socketOpenCount);
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.Connected, ref _connectedTick);
 
             _transportStream = _tcpClient.GetStream();
             _readStream = _transportStream;
             _writeStream = _transportStream;
             _tlsActive = false;
-            _compressionActive = false;
             _streamingModeNegotiated = false;
 
             if (_useSsl)
@@ -666,17 +903,29 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             await RebuildPipesAsync(cancellationToken).ConfigureAwait(false);
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.PipesCreated, ref _pipesCreatedTick);
 
             TransitionState(TransitConnectionState.AwaitingGreeting);
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.AwaitingGreeting, ref _awaitingGreetingTick);
             _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE greeting read connectionId={ConnectionId}", ConnectionId);
-            string greetingLine = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            string greetingLine;
+            try
+            {
+                greetingLine = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsP1GreetingEofException(ex))
+            {
+                CaptureP1GreetingEofProvenance();
+                throw;
+            }
+
             _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER greeting read connectionId={ConnectionId}, greeting={Greeting}", ConnectionId, greetingLine);
             TransitProtocolParser.ValidateGreeting(greetingLine);
 
             TransitionState(TransitConnectionState.CapabilitiesNegotiation);
             _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE capabilities connectionId={ConnectionId}", ConnectionId);
             _capabilities = await ReadCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER capabilities connectionId={ConnectionId}, startTls={SupportsStartTls}, compress={SupportsCompressDeflate}, streaming={SupportsStreaming}", ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsCompressDeflate, _capabilities.SupportsStreaming);
+            _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER capabilities connectionId={ConnectionId}, startTls={SupportsStartTls}, streaming={SupportsStreaming}", ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
 
             if (!_useSsl && _capabilities.SupportsStartTls)
             {
@@ -689,20 +938,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitionState(TransitConnectionState.CapabilitiesNegotiation);
                 _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE capabilities (post-STARTTLS) connectionId={ConnectionId}", ConnectionId);
                 _capabilities = await ReadCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER capabilities (post-STARTTLS) connectionId={ConnectionId}, startTls={SupportsStartTls}, compress={SupportsCompressDeflate}, streaming={SupportsStreaming}", ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsCompressDeflate, _capabilities.SupportsStreaming);
-            }
-
-            if (!_skipCompressionForCurrentInitialization && _capabilities.SupportsCompressDeflate)
-            {
-                TransitionState(TransitConnectionState.StartingCompression);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE COMPRESS DEFLATE connectionId={ConnectionId}", ConnectionId);
-                await StartCompressionAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER COMPRESS DEFLATE connectionId={ConnectionId}", ConnectionId);
-                TransitionState(TransitConnectionState.CompressionEstablished);
-            }
-            else
-            {
-                _logger.LogInformation("[INIT-TRACE] TransitConnection COMPRESS skipped connectionId={ConnectionId}, skipFlag={SkipFlag}, supportsCompress={SupportsCompress}", ConnectionId, _skipCompressionForCurrentInitialization, _capabilities.SupportsCompressDeflate);
+                _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER capabilities (post-STARTTLS) connectionId={ConnectionId}, startTls={SupportsStartTls}, streaming={SupportsStreaming}", ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
             }
 
             if (!_capabilities.SupportsStreaming)
@@ -722,7 +958,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             TransitionState(TransitConnectionState.Ready);
             Interlocked.Increment(ref _readyTransitionCount);
-            LogTransitConnectionReady(_logger, ConnectionId, _tlsActive, _compressionActive);
+            LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
 
             _responseLoopCancellation = new CancellationTokenSource();
             _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
@@ -740,38 +976,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeCoreAsync COMPLETE connectionId={ConnectionId}", ConnectionId);
         }
 
-        private bool IsCompressionInteroperabilityFailure(Exception exception)
-        {
-            if (!_compressionActive || _state != TransitConnectionState.StartingStreaming)
-            {
-                return false;
-            }
-
-            Exception candidate = exception;
-            if (candidate is IOException ioException && ioException.InnerException is not null)
-            {
-                candidate = ioException.InnerException;
-            }
-
-            if (candidate is InvalidDataException invalidDataException)
-            {
-                return invalidDataException.Message.Contains(
-                    "unsupported compression method",
-                    StringComparison.OrdinalIgnoreCase);
-            }
-
-            if (candidate is InvalidOperationException invalidOperationException)
-            {
-                return invalidOperationException.Message.Contains(
-                    "unsupported compression method",
-                    StringComparison.OrdinalIgnoreCase);
-            }
-
-            return false;
-        }
-
         private async Task ResetTransportStateAsync()
         {
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.ResetTransport, ref _resetTransportTick);
+            Interlocked.Exchange(ref _localResetTransportStateObserved, 1);
             await StopWriteLoopAsync(requestCancellation: true, drainQueuedWriteIntentsAsAmbiguous: true).ConfigureAwait(false);
 
             PipeWriter? writer = _writer;
@@ -805,16 +1013,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             DisposeTransportArtifacts();
 
             _tlsActive = false;
-            _compressionActive = false;
             _streamingModeNegotiated = false;
             _capabilities = new TransitCapabilitySnapshot(
                 SupportsStartTls: false,
-                SupportsCompressDeflate: false,
                 SupportsStreaming: false);
         }
 
         private async Task CleanupFailedInitializationAttemptAsync()
         {
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.CleanupFailedInitialization, ref _cleanupFailedInitializationTick);
             try
             {
                 await ResetTransportStateAsync().ConfigureAwait(false);
@@ -853,29 +1060,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             _streamingModeNegotiated = true;
-        }
-
-        private async Task StartCompressionAsync(CancellationToken cancellationToken)
-        {
-            await WriteCommandAsync("COMPRESS DEFLATE", cancellationToken).ConfigureAwait(false);
-            string compressionResponse = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            (int code, string text, _) = TransitProtocolParser.ParseStatusLine(compressionResponse);
-
-            if (code != 206)
-            {
-                throw new InvalidOperationException($"COMPRESS DEFLATE negotiation failed ({code}): {text}");
-            }
-
-            if (_transportStream is null)
-            {
-                throw new InvalidOperationException("Transit connection transport stream is not initialized for compression.");
-            }
-
-            _readStream = new DeflateStream(_transportStream, CompressionMode.Decompress, leaveOpen: true);
-            _writeStream = new DeflateStream(_transportStream, CompressionMode.Compress, leaveOpen: true);
-            _compressionActive = true;
-
-            await RebuildPipesAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private async Task StartTlsAsync(CancellationToken cancellationToken)
@@ -934,7 +1118,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
-            LogTransitCapabilities(_logger, ConnectionId, snapshot.SupportsStartTls, snapshot.SupportsCompressDeflate, snapshot.SupportsStreaming);
+            LogTransitCapabilities(_logger, ConnectionId, snapshot.SupportsStartTls, snapshot.SupportsStreaming);
             return snapshot;
         }
 
@@ -954,12 +1138,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             if (_writer is null)
             {
-                throw new InvalidOperationException("Transit protocol writer is not initialized.");
+                throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterNotInitialized);
             }
 
             ArgumentException.ThrowIfNullOrWhiteSpace(command);
 
-            byte[] bytes = System.Text.Encoding.ASCII.GetBytes(command + "\r\n");
+            byte[] commandBytes = Encoding.ASCII.GetBytes(command);
+            byte[] bytes = new byte[commandBytes.Length + CrLfBytes.Length];
+            commandBytes.CopyTo(bytes, 0);
+            CrLfBytes.CopyTo(bytes, commandBytes.Length);
+
             await _writer.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
             Interlocked.Add(ref _bytesTransmitted, bytes.Length);
             FlushResult flush = await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
@@ -972,6 +1160,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private async Task RebuildPipesAsync(CancellationToken cancellationToken)
         {
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.RebuildPipes, ref _rebuildPipesTick);
+            Interlocked.Exchange(ref _localRebuildPipesObserved, 1);
             cancellationToken.ThrowIfCancellationRequested();
 
             if (_readStream is null || _writeStream is null)
@@ -1029,8 +1219,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    if (_pendingByMessageId.TryRemove(mapped.MessageId, out PendingPublishOperation pending))
+                    if (_pendingByMessageId.TryRemove(mapped.MessageId, out PendingPublishOperation? pendingCandidate))
                     {
+                        if (pendingCandidate is null)
+                        {
+                            continue;
+                        }
+
+                        PendingPublishOperation pending = pendingCandidate;
                         pending.T9ResponseCorrelatedTick = Stopwatch.GetTimestamp();
                         pending.PendingDepthAtT9 = CapturePendingDepthAndTrackMax();
                         pending.QueueDepthAtT9 = Volatile.Read(ref _diagnosticWriteQueueDepth);
@@ -1068,7 +1264,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 TransitionState(TransitConnectionState.Faulted);
                 LogTransitResponseLoopFaulted(_logger, ex, ConnectionId);
-                FailOutstandingAsAmbiguous("Connection failed before definitive TAKETHIS responses were received.");
+                FailOutstandingAsAmbiguous("Connection failed before definitive TAKETHIS responses were received.", TransitPublishProvenance.ResponseLoopFailure);
             }
         }
 
@@ -1193,7 +1389,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         PipeWriter? writer = _writer;
                         if (writer is null)
                         {
-                            throw new InvalidOperationException("Transit protocol writer is not initialized.");
+                            throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterNotInitialized);
                         }
 
                         TransitionState(TransitConnectionState.Publishing);
@@ -1287,7 +1483,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                         if (flush.IsCompleted)
                         {
-                            throw new InvalidOperationException("Transit protocol writer completed during TAKETHIS submission.");
+                            throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission);
                         }
                     }
                     finally
@@ -1307,7 +1503,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitionState(TransitConnectionState.Faulted);
                 _logger.LogWarning(ex, "Transit connection {ConnectionId} write loop faulted", ConnectionId);
                 writeIntentChannel.Writer.TryComplete(ex);
-                FailOutstandingAsAmbiguous("Connection failed before definitive TAKETHIS responses were received.");
+                FailOutstandingAsAmbiguous("Connection failed before definitive TAKETHIS responses were received.", TransitPublishProvenance.ConnectionClose);
             }
             finally
             {
@@ -1387,7 +1583,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         MessageId: intent.MessageId,
                         Status: TransitPublishStatus.Ambiguous,
                         ResponseCode: null,
-                        ResponseText: reason));
+                        ResponseText: reason,
+                        Provenance: TransitPublishProvenance.QueuedWriteDrain,
+                        ProvenanceConnectionId: ConnectionId,
+                        ProvenanceConnectionState: _state,
+                        ProvenanceTick: Stopwatch.GetTimestamp()));
                     Interlocked.Increment(ref _submissionsAmbiguous);
                     drainedCount++;
                 }
@@ -1446,10 +1646,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 return code switch
                 {
-                    239 => new TransitPublishResult(messageId, TransitPublishStatus.Accepted, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick),
-                    439 => new TransitPublishResult(messageId, TransitPublishStatus.Rejected, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick),
-                    431 => new TransitPublishResult(messageId, TransitPublishStatus.Rejected, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick),
-                    400 => new TransitPublishResult(messageId, TransitPublishStatus.Ambiguous, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick),
+                    239 => new TransitPublishResult(messageId, TransitPublishStatus.Accepted, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.OtherOrUnknown, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
+                    439 => new TransitPublishResult(messageId, TransitPublishStatus.Rejected, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.OtherOrUnknown, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
+                    431 => new TransitPublishResult(messageId, TransitPublishStatus.Rejected, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.OtherOrUnknown, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
+                    400 => new TransitPublishResult(messageId, TransitPublishStatus.Ambiguous, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.Response400, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
                     _ => null,
                 };
             }
@@ -1483,8 +1683,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token while {_pendingByMessageId.Count} submissions were outstanding; cannot safely correlate without Message-ID.");
             }
 
-            while (_pendingBySendOrder.TryDequeue(out string nextMessageId))
+            while (_pendingBySendOrder.TryDequeue(out string? nextMessageId))
             {
+                if (nextMessageId is null)
+                {
+                    continue;
+                }
+
                 if (_pendingByMessageId.ContainsKey(nextMessageId))
                 {
                     Interlocked.Exchange(ref _tokenlessSuccessModeEnabled, 1);
@@ -1508,8 +1713,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private void AcknowledgeSendOrder(string messageId)
         {
-            while (_pendingBySendOrder.TryPeek(out string queuedMessageId))
+            while (_pendingBySendOrder.TryPeek(out string? queuedMessageId))
             {
+                if (queuedMessageId is null)
+                {
+                    _pendingBySendOrder.TryDequeue(out _);
+                    continue;
+                }
+
                 if (string.Equals(queuedMessageId, messageId, StringComparison.Ordinal))
                 {
                     _pendingBySendOrder.TryDequeue(out _);
@@ -1581,19 +1792,30 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             writer.Advance(bytes.Length);
         }
 
-        private void FailOutstandingAsAmbiguous(string reason)
+        private void FailOutstandingAsAmbiguous(string reason, TransitPublishProvenance provenance)
         {
             int completedAsAmbiguous = 0;
             foreach ((string messageId, PendingPublishOperation pending) in _pendingByMessageId)
             {
-                _ = _pendingByMessageId.TryRemove(messageId, out _);
-                pending.Completion.TrySetResult(new TransitPublishResult(
+                if (!_pendingByMessageId.TryRemove(messageId, out PendingPublishOperation? removedPending))
+                {
+                    continue;
+                }
+
+                PendingPublishOperation completionOwner = removedPending ?? pending;
+                if (completionOwner.Completion.TrySetResult(new TransitPublishResult(
                     MessageId: messageId,
                     Status: TransitPublishStatus.Ambiguous,
                     ResponseCode: null,
-                    ResponseText: reason));
-                Interlocked.Increment(ref _submissionsAmbiguous);
-                completedAsAmbiguous++;
+                    ResponseText: reason,
+                    Provenance: provenance,
+                    ProvenanceConnectionId: ConnectionId,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: Stopwatch.GetTimestamp())))
+                {
+                    Interlocked.Increment(ref _submissionsAmbiguous);
+                    completedAsAmbiguous++;
+                }
             }
 
             if (completedAsAmbiguous > 0)
@@ -1684,7 +1906,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     ResponseCode: null,
                     ResponseText: "Transit connection is not ready for publishing.",
                     T0PublishAsyncEnterTick: publishAsyncEnterTick,
-                    T1DispatcherAssignedTick: dispatcherAssignedTick);
+                    T1DispatcherAssignedTick: dispatcherAssignedTick,
+                    Provenance: TransitPublishProvenance.Unavailable,
+                    ProvenanceConnectionId: ConnectionId,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: Stopwatch.GetTimestamp());
             }
 
             bool tokenlessModeEnabled = Volatile.Read(ref _tokenlessSuccessModeEnabled) == 1;
@@ -1708,7 +1934,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         ResponseCode: null,
                         ResponseText: "Duplicate in-flight Message-ID on same connection.",
                         T0PublishAsyncEnterTick: publishAsyncEnterTick,
-                        T1DispatcherAssignedTick: dispatcherAssignedTick);
+                        T1DispatcherAssignedTick: dispatcherAssignedTick,
+                        Provenance: TransitPublishProvenance.Failed,
+                        ProvenanceConnectionId: ConnectionId,
+                        ProvenanceConnectionState: _state,
+                        ProvenanceTick: Stopwatch.GetTimestamp());
                 }
 
                 operation.T1PendingRegisteredTick = Stopwatch.GetTimestamp();
@@ -1733,7 +1963,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             ResponseCode: null,
                             ResponseText: "Transit write channel is not available.",
                             T0PublishAsyncEnterTick: publishAsyncEnterTick,
-                            T1DispatcherAssignedTick: dispatcherAssignedTick);
+                            T1DispatcherAssignedTick: dispatcherAssignedTick,
+                            Provenance: TransitPublishProvenance.Unavailable,
+                            ProvenanceConnectionId: ConnectionId,
+                            ProvenanceConnectionState: _state,
+                            ProvenanceTick: Stopwatch.GetTimestamp());
                     }
 
                     byte[] retainedPayload = articlePayload.ToArray();
@@ -1778,7 +2012,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             MessageId: messageId,
                             Status: TransitPublishStatus.Canceled,
                             ResponseCode: null,
-                            ResponseText: "Transit publisher canceled."));
+                            ResponseText: "Transit publisher canceled.",
+                            Provenance: TransitPublishProvenance.Preemption,
+                            ProvenanceConnectionId: ConnectionId,
+                            ProvenanceConnectionState: _state,
+                            ProvenanceTick: Stopwatch.GetTimestamp()));
                         _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection canceled pending operation before write begin connectionId={ConnectionId} messageId={MessageId}", ConnectionId, messageId);
                     }
 
@@ -1788,7 +2026,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         MessageId: messageId,
                         Status: TransitPublishStatus.Canceled,
                         ResponseCode: null,
-                        ResponseText: "Transit publisher canceled.");
+                        ResponseText: "Transit publisher canceled.",
+                        Provenance: TransitPublishProvenance.Preemption,
+                        ProvenanceConnectionId: ConnectionId,
+                        ProvenanceConnectionState: _state,
+                        ProvenanceTick: Stopwatch.GetTimestamp());
                 }
                 catch
                 {
@@ -1802,7 +2044,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             T0PublishAsyncEnterTick: pending.T0PublishAsyncEnterTick,
                             T1DispatcherAssignedTick: pending.T1DispatcherAssignedTick,
                             T2SocketWriteBeginTick: pending.T2SocketWriteBeginTick,
-                            T3SocketWriteEndTick: pending.T3SocketWriteEndTick));
+                            T3SocketWriteEndTick: pending.T3SocketWriteEndTick,
+                            Provenance: TransitPublishProvenance.ConnectionClose,
+                            ProvenanceConnectionId: ConnectionId,
+                            ProvenanceConnectionState: _state,
+                            ProvenanceTick: Stopwatch.GetTimestamp()));
                         Interlocked.Increment(ref _submissionsAmbiguous);
                     }
 
@@ -1826,6 +2072,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return;
             }
 
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.DisposeAsync, ref _disposeAsyncTick);
+            Interlocked.Exchange(ref _localDisposeAsyncObserved, 1);
             TransitConnectionState stateBeforeShutdown = _state;
             TransitionState(TransitConnectionState.Disconnecting);
 
@@ -1835,6 +2083,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             try
             {
                 await StopWriteLoopAsync(requestCancellation: false, drainQueuedWriteIntentsAsAmbiguous: false).ConfigureAwait(false);
+                FailOutstandingAsAmbiguous("Connection closed before definitive TAKETHIS responses were received.", TransitPublishProvenance.ConnectionClose);
+                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection outstanding operations completed as ambiguous before drain connectionId={ConnectionId}", ConnectionId);
                 await DrainPendingTakethisAsync().ConfigureAwait(false);
 
                 if (stateBeforeShutdown is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
@@ -1891,8 +2141,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             DisposeTransportArtifacts();
             _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection transport disposed connectionId={ConnectionId}", ConnectionId);
-            FailOutstandingAsAmbiguous("Connection closed before definitive TAKETHIS responses were received.");
-            _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection outstanding operations completed as ambiguous connectionId={ConnectionId}", ConnectionId);
 
             if (_responseLoopCancellation is not null)
             {
@@ -1907,29 +2155,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private void DisposeTransportArtifacts()
         {
-            try
-            {
-                _readStream?.Dispose();
-            }
-            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
-            {
-            }
-
-            try
-            {
-                _writeStream?.Dispose();
-            }
-            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
-            {
-            }
-
-            try
-            {
-                _transportStream?.Dispose();
-            }
-            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
-            {
-            }
+            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.DisposeTransportArtifacts, ref _disposeTransportArtifactsTick);
+            Interlocked.Exchange(ref _localDisposeTransportArtifactsObserved, 1);
+            DisposeStreamArtifactSafely(_readStream, "read-stream");
+            DisposeStreamArtifactSafely(_writeStream, "write-stream");
+            DisposeStreamArtifactSafely(_transportStream, "transport-stream");
 
             _tcpClient?.Dispose();
 
@@ -1939,13 +2169,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _tcpClient = null;
         }
 
+        private void DisposeStreamArtifactSafely(Stream? artifact, string artifactName)
+        {
+            if (artifact is null)
+            {
+                return;
+            }
+
+            try
+            {
+                artifact.Dispose();
+            }
+            catch (ObjectDisposedException ex)
+            {
+                LogTransportArtifactAlreadyDisposed(_logger, ConnectionId, artifactName, ex.GetType().FullName ?? ex.GetType().Name, ex);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException)
+            {
+                LogTransportArtifactDisposeFailed(_logger, ConnectionId, artifactName, ex.GetType().FullName ?? ex.GetType().Name, ex);
+            }
+        }
+
         internal sealed record TransitConnectionDiagnosticsSnapshot(
             string ConnectionId,
             string Host,
             int Port,
             TransitConnectionState CurrentState,
             bool IsTlsActive,
-            bool IsCompressionActive,
             long SocketOpenCount,
             long ReadyTransitionCount,
             long SubmissionsStarted,
@@ -1963,20 +2213,87 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             DiagnosticOperationRecord[] DiagnosticSampleRecords,
             OutstandingPublishOperationSnapshot[] OutstandingOperations);
 
+        internal enum P1GreetingProvenanceLifecycleEvent
+        {
+            Connected = 1,
+            RebuildPipes = 2,
+            PipesCreated = 3,
+            AwaitingGreeting = 4,
+            ResetTransport = 5,
+            CleanupFailedInitialization = 6,
+            DisposeAsync = 7,
+            DisposeTransportArtifacts = 8,
+            Cancellation = 9,
+            P1GreetingEof = 10,
+        }
+
+        internal readonly record struct P1GreetingLifecycleEventRecord(
+            P1GreetingProvenanceLifecycleEvent Event,
+            long Tick,
+            int AttemptId);
+
+        internal sealed record P1GreetingProvenanceSnapshot(
+            string ConnectionId,
+            string Host,
+            int Port,
+            int InitializationAttemptId,
+            string? LocalIp,
+            int LocalPort,
+            string? RemoteIp,
+            int RemotePort,
+            long CapturedAtTick,
+            long? ConnectedAtTick,
+            long? PipesCreatedAtTick,
+            long? AwaitingGreetingAtTick,
+            DateTimeOffset? ConnectedAtUtc,
+            DateTimeOffset? P1AtUtc,
+            bool LocalDisposeAsyncBeforeP1,
+            bool LocalResetTransportStateBeforeP1,
+            bool LocalDisposeTransportArtifactsBeforeP1,
+            bool LocalRebuildPipesBeforeP1,
+            bool LocalCleanupFailedInitializationBeforeP1,
+            bool InitializationCancellationBeforeP1,
+            P1GreetingLifecycleEventRecord[] LifecycleEvents);
+
         [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
         private static partial void LogTransitStateTransition(ILogger logger, string connectionId, TransitConnectionState state);
 
-        [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, COMPRESS DEFLATE={SupportsCompressDeflate}, STREAMING={SupportsStreaming}")]
-        private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsCompressDeflate, bool supportsStreaming);
+        [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
+        private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsStreaming);
 
-        [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive}, Compression={CompressionActive})")]
-        private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive, bool compressionActive);
+        [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
+        private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive);
 
         [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
         private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
 
-        [LoggerMessage(EventId = 2214, Level = LogLevel.Warning, Message = "Transit server COMPRESS DEFLATE interoperability failure detected for {Host}:{Port} on connection {ConnectionId}; RFC-compliant compression will be disabled for this connection and the client will reconnect without compression.")]
-        private static partial void LogTransitCompressionInteroperabilityFallback(ILogger logger, string connectionId, string host, int port);
+        [LoggerMessage(EventId = 2215, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} disposal artifact {ArtifactName} was already disposed ({ExceptionType}).")]
+        private static partial void LogTransportArtifactAlreadyDisposed(ILogger logger, string connectionId, string artifactName, string exceptionType, Exception exception);
+
+        [LoggerMessage(EventId = 2216, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} disposal artifact {ArtifactName} failed with {ExceptionType}; continuing non-throwing teardown.")]
+        private static partial void LogTransportArtifactDisposeFailed(ILogger logger, string connectionId, string artifactName, string exceptionType, Exception exception);
+
+        internal enum TransitConnectionLifecycleFailure
+        {
+            WriterNotInitialized,
+            WriterCompletedDuringTakethisSubmission,
+        }
+
+        internal sealed class TransitConnectionLifecycleException : InvalidOperationException
+        {
+            internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure)
+                : base(failure switch
+                {
+                    TransitConnectionLifecycleFailure.WriterNotInitialized => "Transit protocol writer is not initialized.",
+                    TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission => "Transit protocol writer completed during TAKETHIS submission.",
+                    _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown transit lifecycle failure."),
+                })
+            {
+                Failure = failure;
+            }
+
+            internal TransitConnectionLifecycleFailure Failure { get; }
+        }
 
         private readonly record struct WriteIntent(
             string MessageId,

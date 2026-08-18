@@ -44,6 +44,7 @@ public sealed class BenchmarkConsoleReporterContractTests
         Assert.Contains("Admitted articles:", output, StringComparison.Ordinal);
         Assert.Contains("Accepted articles:", output, StringComparison.Ordinal);
         Assert.Contains("Queue target depth (articles):", output, StringComparison.Ordinal);
+        Assert.Contains("Queue depth samples:", output, StringComparison.Ordinal);
         Assert.Contains("CPU % (avg sampled):", output, StringComparison.Ordinal);
         Assert.Contains("Forensic timing and time-series:", output, StringComparison.Ordinal);
 
@@ -60,5 +61,49 @@ public sealed class BenchmarkConsoleReporterContractTests
         Assert.True(queueIndex > generatedIndex);
         Assert.True(cpuIndex > queueIndex);
         Assert.True(forensicIndex > cpuIndex);
+    }
+
+    /// <summary>
+    /// Ensures queue telemetry output marks the explicit no-sample condition.
+    /// </summary>
+    [Fact]
+    public void PrintFinalReport_WhenQueueDepthHasNoSamples_PrintsExplicitNoSampleMarkers()
+    {
+        TransitBenchmarkConfig config = BenchmarkContractTestHelper.CreateConfig(measurementSeconds: 20);
+        MeasurementSnapshot snapshot = BenchmarkContractTestHelper.CreateMeasurementSnapshot(queueDepthSampleCount: 0);
+
+        BenchmarkResult result = BenchmarkContractTestHelper.InvokeCreateBenchmarkResult(
+            config,
+            snapshot,
+            BenchmarkContractTestHelper.CreateMeasurementMetricsWithForensicSample(),
+            BenchmarkContractTestHelper.CreateRuntimeMetricsWithSnapshotValues(128L * 1024 * 1024, 64L * 1024 * 1024, 32L * 1024 * 1024),
+            BenchmarkContractTestHelper.CreateWorkloadPreparation(),
+            measurementStartUtc: new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero),
+            measurementEndUtc: new DateTimeOffset(2026, 7, 1, 0, 0, 20, TimeSpan.Zero),
+            drainDuration: TimeSpan.FromSeconds(1),
+            outstandingAtMeasurementEnd: 2,
+            drainedAfterMeasurement: 2,
+            allocatedStartBytes: 0,
+            enableForensicDiagnostics: true);
+
+        StringWriter writer = new();
+        TextWriter original = Console.Out;
+
+        try
+        {
+            Console.SetOut(writer);
+            BenchmarkConsoleReporter.PrintFinalReport(result, config);
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        string output = writer.ToString();
+
+        Assert.Contains("Queue depth samples: 0", output, StringComparison.Ordinal);
+        Assert.Contains("Queue minimum depth: (no samples)", output, StringComparison.Ordinal);
+        Assert.Contains("Queue average depth: (no samples)", output, StringComparison.Ordinal);
+        Assert.Contains("Queue average bytes: (no samples)", output, StringComparison.Ordinal);
     }
 }

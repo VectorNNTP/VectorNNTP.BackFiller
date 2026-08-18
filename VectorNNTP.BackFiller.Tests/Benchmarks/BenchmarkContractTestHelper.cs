@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
+using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
 
@@ -18,7 +20,8 @@ internal static class BenchmarkContractTestHelper
         double measurementSeconds = 10,
         long maxResidentBytes = 16L * 1024L * 1024L,
         int articleTargetBytes = 1_024 * 1_024,
-        int maxQueuedArticles = 64)
+        int maxQueuedArticles = 64,
+        int? measurementArticleCount = null)
     {
         return new TransitBenchmarkConfig(
             Mode: BenchmarkMode.Validation,
@@ -29,6 +32,7 @@ internal static class BenchmarkContractTestHelper
             AppSettingsPath: "appsettings.json",
             WarmupDuration: TimeSpan.FromSeconds(5),
             MeasurementDuration: TimeSpan.FromSeconds(measurementSeconds),
+            MeasurementArticleCount: measurementArticleCount,
             ConnectionPoolSize: 4,
             PerConnectionPipelineDepth: 8,
             DispatchWorkerCount: 32,
@@ -64,6 +68,7 @@ internal static class BenchmarkContractTestHelper
         long completedCount = 90,
         long blockedTicks = 4000,
         long activeTicks = 6000,
+        long queueDepthSampleCount = 4,
         long producerQueueWaitTicks = 500,
         int articleBytes = 1_000_000)
     {
@@ -88,6 +93,7 @@ internal static class BenchmarkContractTestHelper
             PeakActualPending: 21,
             MinQueueDepth: 2,
             MinQueueBytes: 2048,
+            QueueDepthSampleCount: queueDepthSampleCount,
             AverageQueueDepth: 13.25,
             AverageQueueBytes: 2_097_152.5,
             ProducerQueueWaitTicks: producerQueueWaitTicks,
@@ -149,7 +155,8 @@ internal static class BenchmarkContractTestHelper
         long outstandingAtMeasurementEnd,
         long drainedAfterMeasurement,
         long allocatedStartBytes,
-        bool enableForensicDiagnostics)
+        bool enableForensicDiagnostics,
+        FixedCountBoundaryTelemetry? fixedCountBoundaryTelemetry = null)
     {
         object? value = CreateBenchmarkResultMethod.Invoke(
             obj: null,
@@ -169,11 +176,41 @@ internal static class BenchmarkContractTestHelper
                 outstandingAtMeasurementEnd,
                 drainedAfterMeasurement,
                 allocatedStartBytes,
-                enableForensicDiagnostics
+                enableForensicDiagnostics,
+                fixedCountBoundaryTelemetry,
+                CreatePublisherForContracts()
             ]);
 
         return value is BenchmarkResult result
             ? result
             : throw new InvalidOperationException("CreateBenchmarkResult invocation did not return BenchmarkResult.");
+    }
+
+    private static TransitPublisher CreatePublisherForContracts()
+    {
+        BackFillerRuntimeOptions runtimeOptions = new(
+            CanonicalBackFillerFqdn: "benchmark.backfiller.usenet.ninja",
+            BackFillerId: 1,
+            CanonicalDnsSuffix: "usenet.ninja",
+            ValidatedLogDirectory: Path.GetTempPath(),
+            ValidatedCertificateDirectory: Path.GetTempPath(),
+            RabbitMqHosts: [],
+            RabbitMqPort: 5672,
+            RabbitMqEnableSsl: false,
+            TransitServerHost: "127.0.0.1",
+            TransitServerPort: 119,
+            TransitServerUseSsl: false,
+            ShutdownGracePeriodSeconds: 120,
+            ShutdownDrainQueuedWork: true,
+            ShutdownFinishActiveArticles: true,
+            RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
+            WriteBatchCoalesceMicroseconds: 250);
+
+        return new TransitPublisher(
+            runtimeOptions,
+            TimeProvider.System,
+            NullLogger<TransitPublisher>.Instance,
+            connectionPoolSize: 1,
+            perConnectionPipelineDepth: 8);
     }
 }

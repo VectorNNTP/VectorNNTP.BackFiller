@@ -14,6 +14,21 @@ internal enum TransitPublishStatus
     Canceled,
 }
 
+internal enum TransitPublishProvenance
+{
+    Response400,
+    ResponseLoopFailure,
+    ConnectionClose,
+    QueuedWriteDrain,
+    Shutdown,
+    Preemption,
+    Cancellation,
+    Timeout,
+    Unavailable,
+    Failed,
+    OtherOrUnknown,
+}
+
 /// <summary>
 /// Immutable publish result returned to callers for each submission.
 /// </summary>
@@ -21,6 +36,19 @@ internal enum TransitPublishStatus
 /// <param name="Status">Submission outcome status.</param>
 /// <param name="ResponseCode">NNTP response code when available.</param>
 /// <param name="ResponseText">Sanitized protocol response text when available.</param>
+/// <param name="T0PublishAsyncEnterTick">Tick when <c>PublishAsync</c> was entered.</param>
+/// <param name="T1DispatcherAssignedTick">Tick when dispatcher assigned the submission to a connection slot.</param>
+/// <param name="T2SocketWriteBeginTick">Tick when socket write staging began.</param>
+/// <param name="T3SocketWriteEndTick">Tick when socket write staging completed.</param>
+/// <param name="T4ResponseAvailableTick">Tick when response bytes became available for parsing.</param>
+/// <param name="T5ResponseParsedTick">Tick when response parsing completed.</param>
+/// <param name="T6ResponseCorrelatedTick">Tick when parsed response was correlated to a pending submission.</param>
+/// <param name="T7PublishAsyncCompleteTick">Tick when <c>PublishAsync</c> completed for the caller.</param>
+/// <param name="Provenance">Root production-path provenance for this terminalization.</param>
+/// <param name="ProvenanceConnectionId">Connection id associated with provenance when available.</param>
+/// <param name="ProvenanceConnectionState">Connection state associated with provenance when available.</param>
+/// <param name="ProvenanceSlotIndex">Publisher slot index associated with provenance when available.</param>
+/// <param name="ProvenanceTick">Timestamp tick captured at provenance origin when available.</param>
 internal sealed record TransitPublishResult(
     string MessageId,
     TransitPublishStatus Status,
@@ -33,7 +61,12 @@ internal sealed record TransitPublishResult(
     long T4ResponseAvailableTick = 0,
     long T5ResponseParsedTick = 0,
     long T6ResponseCorrelatedTick = 0,
-    long T7PublishAsyncCompleteTick = 0);
+    long T7PublishAsyncCompleteTick = 0,
+    TransitPublishProvenance Provenance = TransitPublishProvenance.OtherOrUnknown,
+    string? ProvenanceConnectionId = null,
+    TransitConnectionState? ProvenanceConnectionState = null,
+    int? ProvenanceSlotIndex = null,
+    long ProvenanceTick = 0);
 
 /// <summary>
 /// Publish request metadata and byte payload contract.
@@ -48,11 +81,9 @@ internal sealed record TransitPublishRequest(
 /// Capability snapshot discovered during NNTP CAPABILITIES negotiation.
 /// </summary>
 /// <param name="SupportsStartTls">Whether STARTTLS is advertised.</param>
-/// <param name="SupportsCompressDeflate">Whether COMPRESS DEFLATE is advertised.</param>
 /// <param name="SupportsStreaming">Whether STREAMING/MODE STREAM is advertised.</param>
 internal sealed record TransitCapabilitySnapshot(
     bool SupportsStartTls,
-    bool SupportsCompressDeflate,
     bool SupportsStreaming);
 
 /// <summary>
@@ -66,8 +97,6 @@ internal enum TransitConnectionState
     CapabilitiesNegotiation,
     StartingTls,
     TlsEstablished,
-    StartingCompression,
-    CompressionEstablished,
     StartingStreaming,
     Ready,
     Publishing,

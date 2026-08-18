@@ -494,10 +494,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
 
         private void ThrowIfDisposed()
         {
-            if (_state == ShutdownState.Completed)
-            {
-                throw new ObjectDisposedException(nameof(ShutdownCoordinator));
-            }
+            ObjectDisposedException.ThrowIf(_state == ShutdownState.Completed, this);
         }
 
         private static void CancelGracePeriodTimerSafely(CancellationTokenSource gracePeriodCts)
