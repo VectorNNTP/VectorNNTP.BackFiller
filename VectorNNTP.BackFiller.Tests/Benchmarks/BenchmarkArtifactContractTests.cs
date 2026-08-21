@@ -58,6 +58,12 @@ public sealed class BenchmarkArtifactContractTests
         Assert.Equal(result.SubmissionPumpFault, artifact.SubmissionPumpFault);
         Assert.Equal(result.P1GreetingProvenance, artifact.P1GreetingProvenance);
 
+        Assert.Equal(config.EndpointType, artifact.EndpointType);
+        Assert.Equal(config.EndpointIdentity, artifact.EndpointIdentity);
+        Assert.Equal(config.EndpointHost, artifact.EndpointHost);
+        Assert.Equal(config.EndpointPort, artifact.EndpointPort);
+        Assert.Equal(config.EndpointUseSsl, artifact.EndpointUseSsl);
+
         Assert.Equal(config.Mode.ToString(), artifact.Mode);
         Assert.Equal(config.WarmupDuration.TotalSeconds, artifact.WarmupSeconds);
         Assert.Equal(config.MeasurementDuration.TotalSeconds, artifact.MeasurementSeconds);
@@ -101,6 +107,11 @@ public sealed class BenchmarkArtifactContractTests
         Assert.True(root.TryGetProperty("BenchmarkBuildVersion", out _));
         Assert.True(root.TryGetProperty("RuntimeAssemblyVersion", out _));
         Assert.True(root.TryGetProperty("RuntimeAssemblyPath", out _));
+        Assert.True(root.TryGetProperty("EndpointType", out _));
+        Assert.True(root.TryGetProperty("EndpointIdentity", out _));
+        Assert.True(root.TryGetProperty("EndpointHost", out _));
+        Assert.True(root.TryGetProperty("EndpointPort", out _));
+        Assert.True(root.TryGetProperty("EndpointUseSsl", out _));
         Assert.True(root.TryGetProperty("WorkloadPreGenerationMs", out _));
         Assert.True(root.TryGetProperty("PayloadPreparationMs", out _));
         Assert.True(root.TryGetProperty("GeneratedArticles", out _));

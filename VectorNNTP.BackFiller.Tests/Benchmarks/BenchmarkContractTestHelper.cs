@@ -26,6 +26,8 @@ internal static class BenchmarkContractTestHelper
         return new TransitBenchmarkConfig(
             Mode: BenchmarkMode.Validation,
             BenchmarkInstanceId: 123456789,
+            EndpointType: "TRANSITSERVER",
+            EndpointIdentity: "appsettings:BackFiller:TransitServer",
             EndpointHost: "incoming.usenet.ninja",
             EndpointPort: 563,
             EndpointUseSsl: true,

@@ -43,6 +43,8 @@ internal static class TransitBenchmarkOrchestrator
             : (config.Mode == BenchmarkMode.Saturation ? "Saturation discovery" : "Fixed-duration");
         Console.WriteLine($"Experiment profile: {executionProfile}");
         Console.WriteLine($"Config path: {config.AppSettingsPath}");
+        Console.WriteLine($"Endpoint type: {config.EndpointType}");
+        Console.WriteLine($"Endpoint identity: {config.EndpointIdentity}");
         Console.WriteLine($"Logical Transit endpoint host (TLS/SNI/cert): {config.EndpointHost}");
         Console.WriteLine($"Transit port: {config.EndpointPort}");
         Console.WriteLine($"Transit UseSsl config: {config.EndpointUseSsl}");

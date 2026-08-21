@@ -39,6 +39,10 @@ public sealed class BenchmarkConsoleReporterContractTests
         string output = writer.ToString();
 
         Assert.Contains("Benchmark Build Version:", output, StringComparison.Ordinal);
+        Assert.Contains("Endpoint type:", output, StringComparison.Ordinal);
+        Assert.Contains("Endpoint identity:", output, StringComparison.Ordinal);
+        Assert.Contains("Endpoint host:", output, StringComparison.Ordinal);
+        Assert.Contains("Endpoint port:", output, StringComparison.Ordinal);
         Assert.Contains("Preparation summary:", output, StringComparison.Ordinal);
         Assert.Contains("Generated articles:", output, StringComparison.Ordinal);
         Assert.Contains("Admitted articles:", output, StringComparison.Ordinal);
@@ -49,6 +53,7 @@ public sealed class BenchmarkConsoleReporterContractTests
         Assert.Contains("Forensic timing and time-series:", output, StringComparison.Ordinal);
 
         int benchmarkIndex = output.IndexOf("Benchmark Build Version:", StringComparison.Ordinal);
+        int endpointTypeIndex = output.IndexOf("Endpoint type:", StringComparison.Ordinal);
         int prepIndex = output.IndexOf("Preparation summary:", StringComparison.Ordinal);
         int generatedIndex = output.IndexOf("Generated articles:", StringComparison.Ordinal);
         int queueIndex = output.IndexOf("Queue target depth (articles):", StringComparison.Ordinal);
@@ -56,7 +61,8 @@ public sealed class BenchmarkConsoleReporterContractTests
         int forensicIndex = output.IndexOf("Forensic timing and time-series:", StringComparison.Ordinal);
 
         Assert.True(benchmarkIndex >= 0);
-        Assert.True(prepIndex > benchmarkIndex);
+        Assert.True(endpointTypeIndex > benchmarkIndex);
+        Assert.True(prepIndex > endpointTypeIndex);
         Assert.True(generatedIndex > prepIndex);
         Assert.True(queueIndex > generatedIndex);
         Assert.True(cpuIndex > queueIndex);

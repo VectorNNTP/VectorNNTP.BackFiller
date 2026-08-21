@@ -27,6 +27,13 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && string.Equals(args[0], "transit-benchmark-fakeserver", StringComparison.OrdinalIgnoreCase))
+        {
+            TransitBenchmarkCliOptions options = TransitBenchmarkCliOptions.Parse(args.Skip(1).ToArray());
+            await TransitServerStressRunner.RunFakeServerValidationAsync(options).ConfigureAwait(false);
+            return;
+        }
+
         if (args.Length > 0 && string.Equals(args[0], "transit-saturate", StringComparison.OrdinalIgnoreCase))
         {
             TransitBenchmarkCliOptions options = TransitBenchmarkCliOptions.Parse(args.Skip(1).ToArray());

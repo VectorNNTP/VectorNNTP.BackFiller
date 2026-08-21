@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Transit;
@@ -28,6 +30,41 @@ internal static class TransitServerStressRunner
     {
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(ValidationSeconds), BenchmarkMode.Validation, cliOptions);
         await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs validation benchmark against the benchmark-only dev/null transit fake server.
+    /// </summary>
+    /// <param name="cliOptions">The benchmark CLI options.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A task that completes when benchmark execution has finished.</returns>
+    internal static async Task RunFakeServerValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
+    {
+        await using BenchmarkDevNullTransitServer fakeServer = await BenchmarkDevNullTransitServer.StartAsync(IPAddress.Loopback, port: 0, cancellationToken).ConfigureAwait(false);
+
+        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(
+            TimeSpan.FromSeconds(ValidationSeconds),
+            BenchmarkMode.Validation,
+            cliOptions,
+            endpointHostOverride: IPAddress.Loopback.ToString(),
+            endpointPortOverride: fakeServer.Port,
+            endpointUseSslOverride: false,
+            endpointType: BenchmarkDevNullTransitServer.EndpointTypeLabel,
+            endpointIdentity: BenchmarkDevNullTransitServer.ServerIdentity);
+
+        await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine();
+        Console.WriteLine("=== FakeServer benchmark sink summary ===");
+        Console.WriteLine($"Endpoint type: {BenchmarkDevNullTransitServer.EndpointTypeLabel}");
+        Console.WriteLine($"Host: {IPAddress.Loopback}");
+        Console.WriteLine($"Port: {fakeServer.Port}");
+        Console.WriteLine($"Server identity: {BenchmarkDevNullTransitServer.ServerIdentity}");
+        Console.WriteLine($"Accepted articles: {fakeServer.AcceptedArticles}");
+        Console.WriteLine($"Consumed opaque payload bytes: {fakeServer.ConsumedArticleBytes}");
+        Console.WriteLine($"Accepted TCP connections: {fakeServer.TotalConnections}");
+
+        await VerifyBenchmarkConnectedToFakeServerAsync(fakeServer.Port, cancellationToken).ConfigureAwait(false);
     }
 
     internal static async Task RunSaturationAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
@@ -105,6 +142,26 @@ internal static class TransitServerStressRunner
             RunMeasurementAsync,
             WriteStructuredResultArtifacts,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Verifies benchmark traffic reached the fake server endpoint by probing connection activity.
+    /// </summary>
+    /// <param name="port">The fake server listen port.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A task that completes when verification is done.</returns>
+    private static async Task VerifyBenchmarkConnectedToFakeServerAsync(int port, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using TcpClient probe = new();
+        await probe.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
+        await using NetworkStream stream = probe.GetStream();
+
+        byte[] buffer = new byte[64];
+        _ = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false);
+        string greeting = Encoding.ASCII.GetString(buffer);
+        Console.WriteLine($"FakeServer probe greeting prefix: {greeting.TrimEnd('\0', '\r', '\n')}");
     }
 
     private static async Task<BenchmarkResult> RunMeasurementAsync(

@@ -34,12 +34,13 @@
 - These repairs are validated and should not be casually reclassified as production regressions.
 
 ## Benchmark Topology
-- Known benchmark topology for the current benchmark work:
-  - Benchmark producers
-	-> BackFiller transit pipeline
-	-> Benchmark FakeServer
-- TransitServer has not been used for the current benchmark pipeline measurements referenced here.
-- Do not attribute FakeServer behavior to TransitServer.
+- Topology was explicitly re-validated from canonical command -> config -> runtime connect path:
+  - `transit-validate` currently resolves `BackFiller:TransitServer` and connects to local `198.18.0.66:119` (`incoming.usenet.ninja`) when using canonical mode.
+  - That endpoint was observed as owned by local `Vector.NNTP.NNTPD` process, not a test fixture server.
+- Dedicated benchmark isolation mode now exists for BackFiller ceiling measurement without NNTPD spool/server work:
+  - `transit-benchmark-fakeserver` mode
+  - Benchmark producers -> BackFiller transit pipeline -> benchmark-only `/dev/null` NNTP sink -> `239` correlation response
+- Keep canonical real-endpoint runs and fake-server-isolated runs explicitly separated in reports/artifacts.
 
 ## Benchmark Configuration
 - Canonical baseline stress profile (as previously used):
