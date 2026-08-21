@@ -57,6 +57,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         internal static (int Code, string ResponseText, string[] Tokens) ParseStatusLine(string line)
         {
+            (int code, string responseText) = ParseStatusCodeAndText(line);
+            string[] tokens = string.IsNullOrWhiteSpace(responseText)
+                ? []
+                : responseText.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            return (code, responseText, tokens);
+        }
+
+        internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
+        {
             if (string.IsNullOrWhiteSpace(line))
             {
                 throw new InvalidOperationException("NNTP response line is empty.");
@@ -74,11 +84,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             int code = int.Parse(line.AsSpan(0, 3), NumberStyles.None, CultureInfo.InvariantCulture);
             string responseText = line.Length > 4 ? line[4..] : string.Empty;
-            string[] tokens = string.IsNullOrWhiteSpace(responseText)
-                ? []
-                : responseText.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-            return (code, responseText, tokens);
+            return (code, responseText);
         }
 
         internal static void ValidateGreeting(string greetingLine)
@@ -150,15 +156,36 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private static string DecodeLine(ReadOnlySequence<byte> line)
         {
-            byte[] lineBytes = line.ToArray();
-
-            int length = lineBytes.Length;
-            if (length > 0 && lineBytes[length - 1] == (byte)'\r')
+            if (line.IsSingleSegment)
             {
-                length--;
+                ReadOnlySpan<byte> span = line.FirstSpan;
+                if (!span.IsEmpty && span[^1] == (byte)'\r')
+                {
+                    span = span[..^1];
+                }
+
+                return Encoding.ASCII.GetString(span);
             }
 
-            return Encoding.ASCII.GetString(lineBytes, 0, length);
+            int length = checked((int)line.Length);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(length);
+
+            try
+            {
+                line.CopyTo(rented.AsSpan(0, length));
+
+                int decodeLength = length;
+                if (decodeLength > 0 && rented[decodeLength - 1] == (byte)'\r')
+                {
+                    decodeLength--;
+                }
+
+                return Encoding.ASCII.GetString(rented, 0, decodeLength);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+            }
         }
     }
 }

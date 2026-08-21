@@ -20,6 +20,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     {
         private static readonly byte[] CrLfBytes = "\r\n"u8.ToArray();
         private static readonly byte[] DotTerminatorBytes = ".\r\n"u8.ToArray();
+        private static readonly byte[] TakethisPrefixBytes = "TAKETHIS "u8.ToArray();
         private static readonly TimeSpan DefaultResponseProgressTimeout = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan DefaultResponseProgressCheckInterval = TimeSpan.FromMilliseconds(250);
 
@@ -330,7 +331,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     "MODE STREAM response",
                     cancellationToken).ConfigureAwait(false);
                 Console.WriteLine($"[TRACE-RI-67] {TraceStamp()} Connection.Initialize MODE-STREAM-COMPLETE connectionId={ConnectionId} line='{streamResponse}'");
-                (int streamCode, _, _) = TransitProtocolParser.ParseStatusLine(streamResponse);
+                (int streamCode, _) = TransitProtocolParser.ParseStatusCodeAndText(streamResponse);
                 if (streamCode != 203)
                 {
                     throw new InvalidOperationException($"Unexpected MODE STREAM response code: {streamCode}.");
@@ -950,8 +951,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return null;
             }
 
-            (int code, string responseText, string[] tokens) = TransitProtocolParser.ParseStatusLine(responseLine);
-            string messageId = ResolveResponseMessageId(code, responseText, responseLine, tokens);
+            (int code, string responseText) = TransitProtocolParser.ParseStatusCodeAndText(responseLine);
+            string messageId = ResolveResponseMessageId(code, responseText, responseLine);
 
             TransitPublishStatus status = code switch
             {
@@ -975,15 +976,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 ProvenanceTick: responseAvailableTick);
         }
 
-        private string ResolveResponseMessageId(int code, string responseText, string responseLine, string[] tokens)
+        private string ResolveResponseMessageId(int code, string responseText, string responseLine)
         {
-            if (tokens.Length > 0)
+            if (TryResolveLeadingMessageIdToken(responseText, out string? messageId))
             {
-                string candidate = tokens[0];
-                if (candidate.Length > 0 && candidate[0] == '<')
-                {
-                    return candidate;
-                }
+                return messageId;
             }
 
             if (code == 239 || code == 431 || code == 439)
@@ -1020,6 +1017,32 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             throw new InvalidOperationException($"Unable to resolve response Message-ID from line: {responseLine}");
         }
 
+        private static bool TryResolveLeadingMessageIdToken(string responseText, out string? messageId)
+        {
+            messageId = null;
+
+            if (string.IsNullOrWhiteSpace(responseText))
+            {
+                return false;
+            }
+
+            ReadOnlySpan<char> span = responseText.AsSpan().TrimStart();
+            if (span.IsEmpty || span[0] != '<')
+            {
+                return false;
+            }
+
+            int terminatorIndex = span.IndexOf(' ');
+            ReadOnlySpan<char> token = terminatorIndex < 0 ? span : span[..terminatorIndex];
+            if (token.IsEmpty || token[0] != '<')
+            {
+                return false;
+            }
+
+            messageId = token.ToString();
+            return true;
+        }
+
         private void AcknowledgeSendOrder(string messageId)
         {
             while (_pendingBySendOrder.TryPeek(out string? queued))
@@ -1036,9 +1059,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private int StageTakethisFrame(PipeWriter writer, string messageId, ReadOnlyMemory<byte> articlePayload)
         {
-            byte[] commandPrefix = Encoding.ASCII.GetBytes("TAKETHIS " + messageId);
-
-            WriteBytes(writer, commandPrefix);
+            int commandLength = WriteTakethisCommand(writer, messageId);
             WriteBytes(writer, CrLfBytes);
 
             long dotStuffStageStartTick = Stopwatch.GetTimestamp();
@@ -1052,7 +1073,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             WriteBytes(writer, DotTerminatorBytes);
 
-            return commandPrefix.Length + CrLfBytes.Length + dotStuffMetrics.BytesWritten + DotTerminatorBytes.Length;
+            return commandLength + CrLfBytes.Length + dotStuffMetrics.BytesWritten + DotTerminatorBytes.Length;
+        }
+
+        private static int WriteTakethisCommand(PipeWriter writer, string messageId)
+        {
+            int messageIdByteCount = Encoding.ASCII.GetByteCount(messageId);
+            int totalBytes = TakethisPrefixBytes.Length + messageIdByteCount;
+            Span<byte> destination = writer.GetSpan(totalBytes)[..totalBytes];
+
+            TakethisPrefixBytes.CopyTo(destination);
+            _ = Encoding.ASCII.GetBytes(messageId, destination[TakethisPrefixBytes.Length..]);
+
+            writer.Advance(totalBytes);
+            return totalBytes;
         }
 
         private static DotStuffWriteMetrics WriteDotStuffedArticle(PipeWriter writer, ReadOnlyMemory<byte> payload)
@@ -1190,7 +1224,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             await WriteCommandAsync("STARTTLS", cancellationToken).ConfigureAwait(false);
             string startTlsResponse = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            (int code, string _, _) = TransitProtocolParser.ParseStatusLine(startTlsResponse);
+            (int code, _) = TransitProtocolParser.ParseStatusCodeAndText(startTlsResponse);
 
             if (code != 382)
             {

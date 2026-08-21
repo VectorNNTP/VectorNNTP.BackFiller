@@ -356,22 +356,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
 
+            using CancellationTokenSource workerWaitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            workerWaitCts.CancelAfter(_runtimeOptions.EffectiveTransitShutdownDrainInactivityWatchdog);
+
+            bool workerWaitTimedOut = false;
             foreach (Task worker in _connectionWorkers)
             {
                 try
                 {
-                    await worker.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    await worker.WaitAsync(workerWaitCts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
                     throw;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (workerWaitCts.IsCancellationRequested)
                 {
+                    workerWaitTimedOut = true;
+                    break;
                 }
                 catch
                 {
                 }
+            }
+
+            if (workerWaitTimedOut)
+            {
+                Console.WriteLine("[SHUTDOWN-DIAG] Worker preemption wait timed out; continuing with forced terminalization.");
             }
 
             await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
@@ -390,7 +401,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _connectionWorkersCancellation.Cancel();
             await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
 
-            using CancellationTokenSource shutdownCts = new();
             DateTimeOffset shutdownStart = _timeProvider.GetUtcNow();
             DateTimeOffset graceEnd = shutdownStart.Add(_runtimeOptions.EffectiveTransitShutdownDrainGracePeriod);
             DateTimeOffset inactivityEnd = shutdownStart.Add(_runtimeOptions.EffectiveTransitShutdownDrainInactivityWatchdog);
@@ -446,9 +456,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
             foreach (Task worker in _connectionWorkers)
             {
+                TimeSpan remaining = absoluteEnd - _timeProvider.GetUtcNow();
+                if (remaining <= TimeSpan.Zero)
+                {
+                    Console.WriteLine("[SHUTDOWN-DIAG] Publisher dispose reached absolute shutdown deadline while awaiting connection workers.");
+                    break;
+                }
+
                 try
                 {
-                    await worker.ConfigureAwait(false);
+                    await worker.WaitAsync(remaining).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    Console.WriteLine("[SHUTDOWN-DIAG] Publisher dispose timed out while awaiting connection workers; continuing teardown.");
+                    break;
                 }
                 catch (OperationCanceledException)
                 {

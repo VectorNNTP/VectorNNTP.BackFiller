@@ -120,7 +120,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 {
                     await WriteNntpCommandAsync(writer, "STARTTLS", cancellationToken).ConfigureAwait(false);
                     string startTlsResponse = await ReadNntpLineAsync(reader, cancellationToken).ConfigureAwait(false);
-                    (int startTlsCode, string startTlsText, _) = TransitProtocolParser.ParseStatusLine(startTlsResponse);
+                    (int startTlsCode, string startTlsText) = TransitProtocolParser.ParseStatusCodeAndText(startTlsResponse);
 
                     if (startTlsCode != 382)
                     {
@@ -146,7 +146,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
 
                 await WriteNntpCommandAsync(writer, "MODE STREAM", cancellationToken).ConfigureAwait(false);
                 string modeStreamResponse = await ReadNntpLineAsync(reader, cancellationToken).ConfigureAwait(false);
-                (int modeStreamCode, string modeStreamText, _) = TransitProtocolParser.ParseStatusLine(modeStreamResponse);
+                (int modeStreamCode, string modeStreamText) = TransitProtocolParser.ParseStatusCodeAndText(modeStreamResponse);
 
                 if (modeStreamCode != 203)
                 {
@@ -155,7 +155,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
 
                 await WriteNntpCommandAsync(writer, "QUIT", cancellationToken).ConfigureAwait(false);
                 string quitResponse = await ReadNntpLineAsync(reader, cancellationToken).ConfigureAwait(false);
-                (int quitCode, string quitText, _) = TransitProtocolParser.ParseStatusLine(quitResponse);
+                (int quitCode, string quitText) = TransitProtocolParser.ParseStatusCodeAndText(quitResponse);
 
                 if (quitCode != 205)
                 {
