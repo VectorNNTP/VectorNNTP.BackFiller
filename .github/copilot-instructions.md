@@ -33,3 +33,16 @@
 
 ## Diagnostics Guidelines
 - Keep --diagnostics lightweight and non-invasive: it should only emit runtime/build information and must not initialize DI, hosted services, external dependencies, listeners, or certificate flows.
+
+## Archaeology, Recovery, and Performance Governance
+- Classification requirement: every planned/code change must be explicitly categorized as production, test, benchmark, or documentation/governance. Do not hide production behavior changes inside test fixes.
+- Continuous execution requirement: when an implementation plan is approved, execute end-to-end without pausing for per-step confirmation. Stop only for explicit stop conditions, genuine blockers, compile failures requiring user input, test failures requiring user input, or correctness-critical ambiguity.
+- Read-before-change requirement: inspect relevant implementation, tests, and applicable history before editing. Do not make speculative fixes based only on a failing test outcome.
+- Test-failure classification requirement: classify failing tests as A (production regression), B (production bug exposed by test), C (intentional architecture change requiring test update), D (stale/invalid test contract), E (environment/build/tooling), F (test infrastructure), or UNKNOWN before deciding changes.
+- Archaeology method: establish historical invariants, identify first divergence commit, determine intentional vs accidental divergence, recover the smallest correct behavior, and validate with targeted evidence.
+- No timing hacks: do not add arbitrary Task.Delay, sleeps, polling loops, or arbitrary timeouts to force concurrency/lifecycle tests to pass; prefer deterministic synchronization and explicit lifecycle signaling.
+- Performance method: baseline first, then one meaningful optimization at a time with before/after measurements; keep benchmark configuration stable and record throughput, CPU, allocations, GC, and latency.
+- Benchmark integrity: treat benchmark harness as an instrument and keep production pipeline behavior distinct from harness behavior. Do not optimize the benchmark in ways that misrepresent production pipeline performance.
+- Topology attribution: keep FakeServer behavior attribution separate from TransitServer; do not generalize FakeServer benchmark outcomes as TransitServer behavior.
+- Change-history discipline: record significant recoveries, architectural decisions, test-contract repairs, benchmark changes, reversions, and measured performance results in project changelog/context artifacts.
+- Evidence hierarchy for conflict resolution (highest to lowest): (1) current source code, (2) git history/commits, (3) tests and test results, (4) benchmark artifacts, (5) project documentation, (6) persistent Copilot context, (7) conversational memory. If lower-tier context conflicts with higher-tier evidence, stop and report the conflict.
