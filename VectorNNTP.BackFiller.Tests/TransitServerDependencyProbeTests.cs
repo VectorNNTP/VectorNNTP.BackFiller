@@ -14,32 +14,32 @@ public sealed class TransitServerDependencyProbeTests
     {
         using CancellationTokenSource testTimeout = new(TimeSpan.FromSeconds(10));
 
-        await using ProbeNntpServer server = await ProbeNntpServer.StartAsync(async (stream, cancellationToken) =>
+        ProbeNntpServer serverInstance = await ProbeNntpServer.StartAsync(async (stream, cancellationToken) =>
         {
-            await ProbeNntpServer.WriteLineAsync(stream, "200 transit ready", cancellationToken);
+            await ProbeNntpServer.WriteLineAsync(stream, "200 transit ready", cancellationToken).ConfigureAwait(false);
 
-            string firstCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken);
+            string firstCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
             if (string.Equals(firstCommand, "CAPABILITIES", StringComparison.Ordinal))
             {
-                await ProbeNntpServer.WriteLineAsync(stream, "101 Capability list:", cancellationToken);
-                await ProbeNntpServer.WriteLineAsync(stream, "STARTTLS", cancellationToken);
-                await ProbeNntpServer.WriteLineAsync(stream, "STREAMING", cancellationToken);
-                await ProbeNntpServer.WriteLineAsync(stream, ".", cancellationToken);
+                await ProbeNntpServer.WriteLineAsync(stream, "101 Capability list:", cancellationToken).ConfigureAwait(false);
+                await ProbeNntpServer.WriteLineAsync(stream, "STARTTLS", cancellationToken).ConfigureAwait(false);
+                await ProbeNntpServer.WriteLineAsync(stream, "STREAMING", cancellationToken).ConfigureAwait(false);
+                await ProbeNntpServer.WriteLineAsync(stream, ".", cancellationToken).ConfigureAwait(false);
 
-                string nextCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken);
+                string nextCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
                 if (string.Equals(nextCommand, "STARTTLS", StringComparison.Ordinal))
                 {
-                    await ProbeNntpServer.WriteLineAsync(stream, "580 TLS not available", cancellationToken);
+                    await ProbeNntpServer.WriteLineAsync(stream, "580 TLS not available", cancellationToken).ConfigureAwait(false);
                     return;
                 }
 
                 if (string.Equals(nextCommand, "MODE STREAM", StringComparison.Ordinal))
                 {
-                    await ProbeNntpServer.WriteLineAsync(stream, "203 Streaming permitted", cancellationToken);
-                    string quitCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken);
+                    await ProbeNntpServer.WriteLineAsync(stream, "203 Streaming permitted", cancellationToken).ConfigureAwait(false);
+                    string quitCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
                     if (string.Equals(quitCommand, "QUIT", StringComparison.Ordinal))
                     {
-                        await ProbeNntpServer.WriteLineAsync(stream, "205 closing connection", cancellationToken);
+                        await ProbeNntpServer.WriteLineAsync(stream, "205 closing connection", cancellationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -48,35 +48,38 @@ public sealed class TransitServerDependencyProbeTests
 
             if (string.Equals(firstCommand, "MODE STREAM", StringComparison.Ordinal))
             {
-                await ProbeNntpServer.WriteLineAsync(stream, "203 Streaming permitted", cancellationToken);
-                string quitCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken);
+                await ProbeNntpServer.WriteLineAsync(stream, "203 Streaming permitted", cancellationToken).ConfigureAwait(false);
+                string quitCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
                 if (string.Equals(quitCommand, "QUIT", StringComparison.Ordinal))
                 {
-                    await ProbeNntpServer.WriteLineAsync(stream, "205 closing connection", cancellationToken);
+                    await ProbeNntpServer.WriteLineAsync(stream, "205 closing connection", cancellationToken).ConfigureAwait(false);
                 }
             }
-        });
+        }).ConfigureAwait(false);
 
-        BackFillerOptions options = new()
+        await using (serverInstance.ConfigureAwait(false))
         {
-            TransitServer = new TransitServerOptions
+            BackFillerOptions options = new()
             {
-                Host = IPAddress.Loopback.ToString(),
-                Port = server.Port,
-                UseSsl = false,
-            },
-        };
+                TransitServer = new TransitServerOptions
+                {
+                    Host = IPAddress.Loopback.ToString(),
+                    Port = serverInstance.Port,
+                    UseSsl = false,
+                },
+            };
 
         DependencyValidationResult result = await TransitServerDependencyProbe.ValidateTransitServerConnectivityAsync(
             options,
             TimeSpan.FromSeconds(3),
-            testTimeout.Token);
+            testTimeout.Token).ConfigureAwait(false);
 
-        Assert.False(result.IsValid);
-        Assert.Contains(result.FailedDependencies, static failure =>
-            failure.Dependency == "TransitServer"
-            && failure.Reason.Contains("STARTTLS negotiation rejected", StringComparison.Ordinal));
-    }
+                Assert.False(result.IsValid);
+                Assert.Contains(result.FailedDependencies, static failure =>
+                    failure.Dependency == "TransitServer"
+                    && failure.Reason.Contains("STARTTLS negotiation rejected", StringComparison.Ordinal));
+            }
+        }
 
     private sealed class ProbeNntpServer : IAsyncDisposable
     {
@@ -109,9 +112,9 @@ public sealed class TransitServerDependencyProbeTests
         {
             try
             {
-                using TcpClient client = await _listener.AcceptTcpClientAsync(_cts.Token);
+                using TcpClient client = await _listener.AcceptTcpClientAsync(_cts.Token).ConfigureAwait(false);
                 using NetworkStream stream = client.GetStream();
-                await _session(stream, _cts.Token);
+                await _session(stream, _cts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -128,7 +131,7 @@ public sealed class TransitServerDependencyProbeTests
             while (true)
             {
                 byte[] one = new byte[1];
-                int read = await stream.ReadAsync(one, cancellationToken);
+                int read = await stream.ReadAsync(one, cancellationToken).ConfigureAwait(false);
                 if (read == 0)
                 {
                     throw new InvalidOperationException("Unexpected EOF while reading line.");
@@ -157,8 +160,8 @@ public sealed class TransitServerDependencyProbeTests
             ArgumentException.ThrowIfNullOrWhiteSpace(line);
 
             byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
-            await stream.WriteAsync(bytes, cancellationToken);
-            await stream.FlushAsync(cancellationToken);
+            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public async ValueTask DisposeAsync()
@@ -168,7 +171,7 @@ public sealed class TransitServerDependencyProbeTests
 
             try
             {
-                await _acceptLoopTask;
+                await _acceptLoopTask.ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

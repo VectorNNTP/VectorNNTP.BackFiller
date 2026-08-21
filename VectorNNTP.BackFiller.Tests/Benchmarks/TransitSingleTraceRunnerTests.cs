@@ -44,7 +44,7 @@ public sealed class TransitSingleTraceRunnerTests
     [Fact]
     public async Task PublishSequentiallyAsync_WhenArticleCountTen_PublishesTenSequentially()
     {
-        SequentialGatePublishExecutor executor = new();
+        ControlledPublishExecutor executor = new();
         List<string> logs = [];
 
         Task<TransitSingleTraceRunner.SingleTracePublishBatchResult> publishTask = TransitSingleTraceRunner.PublishSequentiallyAsync(
@@ -62,7 +62,7 @@ public sealed class TransitSingleTraceRunnerTests
             executor.CompleteNext();
         }
 
-        TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask;
+        TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask.ConfigureAwait(false);
 
         Assert.Equal(10, executor.StartedCount);
         Assert.Equal(10, executor.CompletedCount);
@@ -70,6 +70,48 @@ public sealed class TransitSingleTraceRunnerTests
         Assert.Equal(10, result.PublishResults.Count);
         Assert.Equal(0, result.TimeoutCount);
         Assert.Equal(Enumerable.Range(1, 10), executor.CallOrder);
+        Assert.Equal(1, executor.MaxOutstandingObserved);
+    }
+
+    [Fact]
+    public async Task PublishWithPipelineDepthAsync_WhenDepthTwo_CanHaveTwoOutstandingConcurrently()
+    {
+        ControlledPublishExecutor executor = new();
+        List<string> logs = [];
+
+        Task<TransitSingleTraceRunner.SingleTracePublishBatchResult> publishTask = TransitSingleTraceRunner.PublishWithPipelineDepthAsync(
+            executor,
+            requestedArticleCount: 10,
+            articleTargetBytes: 128 * 1024,
+            effectivePipelineDepth: 2,
+            logs.Add,
+            CancellationToken.None);
+
+        await executor.WaitUntilStartedAsync(2);
+        Assert.Equal(2, executor.StartedCount);
+        Assert.Equal(0, executor.CompletedCount);
+        Assert.Equal(2, executor.CurrentOutstandingCount);
+
+        executor.CompleteByCallIndex(1);
+        await executor.WaitUntilStartedAsync(3);
+        Assert.True(executor.MaxOutstandingObserved >= 2);
+
+        executor.CompleteByCallIndex(2);
+        for (int expected = 3; expected <= 10; expected++)
+        {
+            await executor.WaitUntilStartedAsync(expected);
+            executor.CompleteByCallIndex(expected);
+        }
+
+        TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask.ConfigureAwait(false);
+
+        Assert.Equal(10, executor.StartedCount);
+        Assert.Equal(10, executor.CompletedCount);
+        Assert.Equal(10, result.MessageIds.Count);
+        Assert.Equal(10, result.PublishResults.Count);
+        Assert.Equal(0, result.TimeoutCount);
+        Assert.True(executor.MaxOutstandingObserved >= 2);
+        Assert.True(executor.MaxOutstandingObserved <= 2);
     }
 
     private sealed class RecordingPublishExecutor : TransitSingleTraceRunner.ITransitSingleTracePublishExecutor
@@ -103,9 +145,10 @@ public sealed class TransitSingleTraceRunnerTests
         }
     }
 
-    private sealed class SequentialGatePublishExecutor : TransitSingleTraceRunner.ITransitSingleTracePublishExecutor
+    private sealed class ControlledPublishExecutor : TransitSingleTraceRunner.ITransitSingleTracePublishExecutor
     {
-        private readonly Queue<TaskCompletionSource> _completionQueue = new();
+        private readonly Dictionary<int, TaskCompletionSource<bool>> _gatesByCallIndex = [];
+        private readonly Queue<int> _callOrderQueue = new();
         private readonly object _sync = new();
 
         internal List<int> CallOrder { get; } = [];
@@ -113,6 +156,10 @@ public sealed class TransitSingleTraceRunnerTests
         internal int StartedCount { get; private set; }
 
         internal int CompletedCount { get; private set; }
+
+        internal int CurrentOutstandingCount => StartedCount - CompletedCount;
+
+        internal int MaxOutstandingObserved { get; private set; }
 
         internal async Task WaitUntilStartedAsync(int expectedCount)
         {
@@ -126,26 +173,39 @@ public sealed class TransitSingleTraceRunnerTests
                     }
                 }
 
-                await Task.Delay(1);
+                await Task.Delay(1).ConfigureAwait(false);
             }
         }
 
         internal void CompleteNext()
         {
-            TaskCompletionSource gate;
+            int callIndex;
+            TaskCompletionSource<bool> gate;
             lock (_sync)
             {
-                gate = _completionQueue.Dequeue();
+                callIndex = _callOrderQueue.Dequeue();
+                gate = _gatesByCallIndex[callIndex];
             }
 
-            gate.SetResult();
+            gate.SetResult(true);
+        }
+
+        internal void CompleteByCallIndex(int callIndex)
+        {
+            TaskCompletionSource<bool> gate;
+            lock (_sync)
+            {
+                gate = _gatesByCallIndex[callIndex];
+            }
+
+            gate.SetResult(true);
         }
 
         public async ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(messageId);
 
-            TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
             int callIndex;
 
             lock (_sync)
@@ -153,14 +213,21 @@ public sealed class TransitSingleTraceRunnerTests
                 StartedCount++;
                 callIndex = StartedCount;
                 CallOrder.Add(callIndex);
-                _completionQueue.Enqueue(gate);
+                _gatesByCallIndex.Add(callIndex, gate);
+                _callOrderQueue.Enqueue(callIndex);
+                int currentOutstanding = StartedCount - CompletedCount;
+                if (currentOutstanding > MaxOutstandingObserved)
+                {
+                    MaxOutstandingObserved = currentOutstanding;
+                }
             }
 
-            await gate.Task;
+            await gate.Task.ConfigureAwait(false);
 
             lock (_sync)
             {
                 CompletedCount++;
+                _gatesByCallIndex.Remove(callIndex);
             }
 
             return new TransitPublishResult(

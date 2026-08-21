@@ -179,7 +179,7 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert
-            Assert.Contains(diagnostics, e => e.Message.Contains("server", StringComparison.OrdinalIgnoreCase) 
+            Assert.Contains(diagnostics, e => e.Message.Contains("server", StringComparison.OrdinalIgnoreCase)
                                          && e.Message.Contains("host", StringComparison.OrdinalIgnoreCase));
         }
 
@@ -197,7 +197,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             // Assert
             // DbConnectionStringBuilder treats "Server=" as missing, not empty
-            Assert.Contains(diagnostics, e => e.Message.Contains("server", StringComparison.OrdinalIgnoreCase) 
+            Assert.Contains(diagnostics, e => e.Message.Contains("server", StringComparison.OrdinalIgnoreCase)
                                          || e.Message.Contains("host", StringComparison.OrdinalIgnoreCase));
         }
 
@@ -217,7 +217,7 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert
-            Assert.DoesNotContain(diagnostics, e => e.Message.Contains("server", StringComparison.OrdinalIgnoreCase) 
+            Assert.DoesNotContain(diagnostics, e => e.Message.Contains("server", StringComparison.OrdinalIgnoreCase)
                                                || e.Message.Contains("host", StringComparison.OrdinalIgnoreCase));
         }
 
@@ -268,7 +268,7 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert
-            Assert.DoesNotContain(diagnostics, e => e.Message.Contains("database", StringComparison.OrdinalIgnoreCase) 
+            Assert.DoesNotContain(diagnostics, e => e.Message.Contains("database", StringComparison.OrdinalIgnoreCase)
                                                && e.Message.Contains("must specify", StringComparison.OrdinalIgnoreCase));
         }
 
@@ -347,7 +347,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             // Assert - should be a WARNING, not an error
             ConnectionStringValidationResult? poolWarning = diagnostics
-                .FirstOrDefault(e => e.Message.Contains("Min Pool Size", StringComparison.Ordinal) 
+                .FirstOrDefault(e => e.Message.Contains("Min Pool Size", StringComparison.Ordinal)
                                      && e.Message.Contains("control-plane", StringComparison.OrdinalIgnoreCase));
 
             Assert.NotNull(poolWarning);
@@ -368,7 +368,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             // Assert - should be a WARNING, not an error
             ConnectionStringValidationResult? poolWarning = diagnostics
-                .FirstOrDefault(e => e.Message.Contains("Max Pool Size", StringComparison.Ordinal) 
+                .FirstOrDefault(e => e.Message.Contains("Max Pool Size", StringComparison.Ordinal)
                                      && e.Message.Contains("control-plane", StringComparison.OrdinalIgnoreCase));
 
             Assert.NotNull(poolWarning);
@@ -654,8 +654,8 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert - Windows auth is not supported by MySqlConnector, should require User ID
-            Assert.Contains(diagnostics, d => 
-                d.Severity == ValidationSeverity.Error && 
+            Assert.Contains(diagnostics, d =>
+                d.Severity == ValidationSeverity.Error &&
                 d.Message.Contains("user ID", StringComparison.OrdinalIgnoreCase));
         }
 

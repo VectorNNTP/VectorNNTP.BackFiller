@@ -70,7 +70,7 @@ public class ProgramValidationSemanticsTests
             ["BackFiller:Id"] = "12",
             ["BackFiller:DnsSuffix"] = "example.com",
             ["BackFiller:DirCerts"] = "certs",
-                ["BackFiller:DirLogs"] = "logs",
+            ["BackFiller:DirLogs"] = "logs",
             ["BackFiller:LetsEncrypt:Enabled"] = "true",
             ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "",
             ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "",
@@ -83,7 +83,7 @@ public class ProgramValidationSemanticsTests
             ["BackFiller:LetsEncrypt:DomainNames:0"] = "malicious-or-wrong.example.net",
             // Do not inherit the repository-wide RabbitMQ baseline for this test; supply a minimal explicit RabbitMQ block
             // so the full pipeline binding sees exactly the values we intend to exercise.
-            }, includeRabbitMqBaseline: false);
+        }, includeRabbitMqBaseline: false);
 
         List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
 
@@ -111,7 +111,7 @@ public class ProgramValidationSemanticsTests
             ["BackFiller:LetsEncrypt:RenewalJitterRatio"] = "",
             ["BackFiller:LetsEncrypt:RenewBeforeExpiryDays"] = "",
             ["BackFiller:LetsEncrypt:DomainNames:0"] = "malicious-or-wrong.example.net",
-            }, includeRabbitMqBaseline: false);
+        }, includeRabbitMqBaseline: false);
 
         List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
 
@@ -135,7 +135,7 @@ public class ProgramValidationSemanticsTests
             ["BackFiller:LetsEncrypt:Enabled"] = "false",
             ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
             ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
-            }, includeRabbitMqBaseline: false);
+        }, includeRabbitMqBaseline: false);
 
         (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult) =
             await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
@@ -164,7 +164,7 @@ public class ProgramValidationSemanticsTests
             ["BackFiller:LetsEncrypt:Enabled"] = "false",
             ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "",
             ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
-            }, includeRabbitMqBaseline: false);
+        }, includeRabbitMqBaseline: false);
 
         (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult) =
             await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
@@ -344,7 +344,7 @@ public class ProgramValidationSemanticsTests
             await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
                 configuration,
                 TimeSpan.FromSeconds(5),
-                cts.Token));
+                cts.Token).ConfigureAwait(false));
     }
 
     public static TheoryData<TimeSpan> InvalidDependencyTimeouts =>
@@ -387,7 +387,7 @@ public class ProgramValidationSemanticsTests
             await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
                 configuration,
                 invalidTimeout,
-                CancellationToken.None));
+                CancellationToken.None).ConfigureAwait(false));
     }
 
     [Theory]

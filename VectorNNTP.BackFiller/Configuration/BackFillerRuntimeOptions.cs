@@ -19,6 +19,13 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="ShutdownFinishActiveArticles">Validated graceful-shutdown active-work completion flag used by runtime services.</param>
     /// <param name="RabbitMqMaximumShutdownDrainTimeoutSeconds">Validated RabbitMQ shutdown-drain timeout in seconds used by runtime services.</param>
     /// <param name="WriteBatchCoalesceMicroseconds">Configured writer coalescing window in microseconds for transit write batching experiments.</param>
+    /// <param name="TransitQueueMaxItemCount">Global transit queue maximum admitted queued work-item count.</param>
+    /// <param name="TransitQueueMaxPayloadBytes">Global transit queue maximum admitted queued payload bytes.</param>
+    /// <param name="TransitRetryMaxAttempts">Global transit per-item maximum transmission attempts.</param>
+    /// <param name="TransitReconnectInitializationTimeout">Maximum reconnect initialization time when admitted work is outstanding.</param>
+    /// <param name="TransitShutdownDrainGracePeriod">Initial transit shutdown drain grace period.</param>
+    /// <param name="TransitShutdownDrainInactivityWatchdog">Transit shutdown inactivity watchdog duration.</param>
+    /// <param name="TransitShutdownAbsoluteMaximum">Absolute transit shutdown duration ceiling.</param>
     internal sealed record BackFillerRuntimeOptions(
         string CanonicalBackFillerFqdn,
         int BackFillerId,
@@ -35,5 +42,21 @@ namespace VectorNNTP.Backfiller.Configuration
         bool ShutdownDrainQueuedWork,
         bool ShutdownFinishActiveArticles,
         int RabbitMqMaximumShutdownDrainTimeoutSeconds,
-        int WriteBatchCoalesceMicroseconds);
+        int WriteBatchCoalesceMicroseconds,
+        int TransitQueueMaxItemCount = 2048,
+        long TransitQueueMaxPayloadBytes = 536870912,
+        int TransitRetryMaxAttempts = 3,
+        TimeSpan? TransitReconnectInitializationTimeout = null,
+        TimeSpan? TransitShutdownDrainGracePeriod = null,
+        TimeSpan? TransitShutdownDrainInactivityWatchdog = null,
+        TimeSpan? TransitShutdownAbsoluteMaximum = null)
+    {
+        internal TimeSpan EffectiveTransitReconnectInitializationTimeout => TransitReconnectInitializationTimeout ?? TimeSpan.FromSeconds(2);
+
+        internal TimeSpan EffectiveTransitShutdownDrainGracePeriod => TransitShutdownDrainGracePeriod ?? TimeSpan.FromMinutes(5);
+
+        internal TimeSpan EffectiveTransitShutdownDrainInactivityWatchdog => TransitShutdownDrainInactivityWatchdog ?? TimeSpan.FromSeconds(30);
+
+        internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
+    }
 }

@@ -79,18 +79,18 @@ public sealed class MySqlNntpAccountSnapshotProviderRefreshTests
             NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
             async _ =>
             {
-                await unblock.Task;
+                await unblock.Task.ConfigureAwait(false);
                 return [initial];
             });
 
         Task<bool> firstRefresh = provider.RefreshSnapshotAsync(CancellationToken.None);
         Task<bool> secondRefresh = provider.RefreshSnapshotAsync(CancellationToken.None);
 
-        bool secondResult = await secondRefresh;
+        bool secondResult = await secondRefresh.ConfigureAwait(false);
         Assert.False(secondResult);
 
         unblock.SetResult();
-        bool firstResult = await firstRefresh;
+        bool firstResult = await firstRefresh.ConfigureAwait(false);
 
         Assert.True(firstResult);
     }

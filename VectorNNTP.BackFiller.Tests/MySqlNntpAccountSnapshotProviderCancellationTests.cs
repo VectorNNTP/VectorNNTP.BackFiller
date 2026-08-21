@@ -27,7 +27,7 @@ public sealed class MySqlNntpAccountSnapshotProviderCancellationTests
                     return [initial];
                 }
 
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
                 return [];
             });
 
@@ -42,7 +42,7 @@ public sealed class MySqlNntpAccountSnapshotProviderCancellationTests
 
         cts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await reloadTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await reloadTask.ConfigureAwait(false));
 
         Assert.Same(baseline, provider.CurrentSnapshot);
         Assert.Single(provider.CurrentSnapshot.Accounts);

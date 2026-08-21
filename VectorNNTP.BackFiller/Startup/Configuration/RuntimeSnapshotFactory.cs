@@ -59,7 +59,13 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     ShutdownDrainQueuedWork: backFiller.Shutdown?.DrainQueuedWork ?? true,
                     ShutdownFinishActiveArticles: backFiller.Shutdown?.FinishActiveArticles ?? true,
                     RabbitMqMaximumShutdownDrainTimeoutSeconds: backFiller.RabbitMQ?.MaximumShutdownDrainTimeoutSeconds ?? 30,
-                    WriteBatchCoalesceMicroseconds: 250);
+                    WriteBatchCoalesceMicroseconds: 250,
+                    TransitQueueMaxItemCount: 2048,
+                    TransitQueueMaxPayloadBytes: 536_870_912,
+                    TransitRetryMaxAttempts: 3,
+                    TransitShutdownDrainGracePeriod: TimeSpan.FromMinutes(5),
+                    TransitShutdownDrainInactivityWatchdog: TimeSpan.FromSeconds(30),
+                    TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30));
             }
             catch (Exception ex)
             {

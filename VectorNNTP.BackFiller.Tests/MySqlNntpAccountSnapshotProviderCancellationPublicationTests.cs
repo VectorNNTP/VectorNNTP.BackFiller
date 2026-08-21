@@ -36,7 +36,7 @@ public sealed class MySqlNntpAccountSnapshotProviderCancellationPublicationTests
                     static state => ((TaskCompletionSource)state!).TrySetResult(),
                     canceled);
 
-                await canceled.Task;
+                await canceled.Task.ConfigureAwait(false);
                 return [refreshed];
             });
 
@@ -46,10 +46,10 @@ public sealed class MySqlNntpAccountSnapshotProviderCancellationPublicationTests
         using CancellationTokenSource cts = new();
         Task<bool> refreshTask = provider.RefreshSnapshotAsync(cts.Token);
 
-        await secondQueryEntered.Task;
+        await secondQueryEntered.Task.ConfigureAwait(false);
         cts.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await refreshTask);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await refreshTask.ConfigureAwait(false));
 
         Assert.Same(baseline, provider.CurrentSnapshot);
         Assert.Single(provider.CurrentSnapshot.Accounts);

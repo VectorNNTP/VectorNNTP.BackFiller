@@ -6,6 +6,11 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 
 internal static class TransitSingleTraceRunner
 {
+    private const int SmallArticleMinBytes = 64;
+    private const int SmallArticleMaxBytes = 1023;
+    private const int LargeArticleMinBytes = 1_048_577;
+    private const int LargeArticleMaxBytes = 2_097_151;
+
     internal interface ITransitSingleTracePublishExecutor
     {
         ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken);
@@ -14,7 +19,14 @@ internal static class TransitSingleTraceRunner
     internal sealed record SingleTracePublishBatchResult(
         IReadOnlyList<string> MessageIds,
         IReadOnlyList<TransitPublishResult> PublishResults,
-        int TimeoutCount);
+        int TimeoutCount,
+        IReadOnlyList<SingleTraceArticleDescriptor> Articles);
+
+    internal sealed record SingleTraceArticleDescriptor(
+        int ArticleIndex,
+        string MessageId,
+        int ArticleSizeBytes,
+        string SizeClass);
 
     private sealed class TransitPublisherSingleTracePublishExecutor : ITransitSingleTracePublishExecutor
     {
@@ -37,57 +49,206 @@ internal static class TransitSingleTraceRunner
         return measurementArticleCount ?? 1;
     }
 
-    internal static async Task<SingleTracePublishBatchResult> PublishSequentiallyAsync(
+    internal static Task<SingleTracePublishBatchResult> PublishSequentiallyAsync(
         ITransitSingleTracePublishExecutor publishExecutor,
         int requestedArticleCount,
         int articleTargetBytes,
         Action<string> writeLine,
         CancellationToken cancellationToken)
     {
+        return PublishWithPipelineDepthAsync(
+            publishExecutor,
+            requestedArticleCount,
+            articleTargetBytes,
+            effectivePipelineDepth: 1,
+            writeLine,
+            cancellationToken);
+    }
+
+    internal static async Task<SingleTracePublishBatchResult> PublishWithPipelineDepthAsync(
+        ITransitSingleTracePublishExecutor publishExecutor,
+        int requestedArticleCount,
+        int articleTargetBytes,
+        int effectivePipelineDepth,
+        Action<string> writeLine,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(publishExecutor);
         ArgumentNullException.ThrowIfNull(writeLine);
 
-        List<string> publishedMessageIds = new(requestedArticleCount);
-        List<TransitPublishResult> publishResults = new(requestedArticleCount);
-        int timeoutCount = 0;
-
-        for (int articleIndex = 1; articleIndex <= requestedArticleCount; articleIndex++)
+        if (requestedArticleCount < 0)
         {
-            string messageId = $"<single-trace-{articleIndex:D4}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}@benchmark.usenet.ninja>";
-            publishedMessageIds.Add(messageId);
-            writeLine($"TRACE_MESSAGE_ID[{articleIndex}/{requestedArticleCount}]: {messageId}");
+            throw new ArgumentOutOfRangeException(nameof(requestedArticleCount), requestedArticleCount, "Requested article count must be zero or greater.");
+        }
 
-            TransitBenchmarkCore.ArticlePayload payload = TransitBenchmarkCore.ArticlePayload.Create(messageId, articleTargetBytes);
-            DateTimeOffset submitStartUtc = DateTimeOffset.UtcNow;
-            writeLine($"TRACE_SUBMIT_START_UTC[{articleIndex}/{requestedArticleCount}]: {submitStartUtc:O}");
+        if (effectivePipelineDepth <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(effectivePipelineDepth), effectivePipelineDepth, "Pipeline depth must be greater than zero.");
+        }
 
-            try
+        List<string> publishedMessageIds = new(requestedArticleCount);
+        List<SingleTraceArticleDescriptor> articleDescriptors = new(requestedArticleCount);
+        TransitPublishResult?[] publishResultsByArticle = new TransitPublishResult[requestedArticleCount];
+        int timeoutCount = 0;
+        Random random = Random.Shared;
+
+        int boundedDepth = Math.Min(effectivePipelineDepth, Math.Max(1, requestedArticleCount));
+        List<OutstandingPublishOperation> outstanding = new(boundedDepth);
+        int nextArticleIndex = 1;
+
+        while (nextArticleIndex <= requestedArticleCount || outstanding.Count > 0)
+        {
+            while (nextArticleIndex <= requestedArticleCount && outstanding.Count < boundedDepth)
             {
-                using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                int articleIndex = nextArticleIndex;
+                nextArticleIndex++;
+
+                string messageId = $"<single-trace-{articleIndex:D4}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}@benchmark.usenet.ninja>";
+                publishedMessageIds.Add(messageId);
+                writeLine($"TRACE_MESSAGE_ID[{articleIndex}/{requestedArticleCount}]: {messageId}");
+
+                (int articleSizeBytes, string sizeClass) = GenerateRandomArticleSize(random);
+                articleDescriptors.Add(new SingleTraceArticleDescriptor(articleIndex, messageId, articleSizeBytes, sizeClass));
+                writeLine($"TRACE_ARTICLE_SIZE[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, SizeBytes={articleSizeBytes}, SizeClass={sizeClass}");
+
+                TransitBenchmarkCore.ArticlePayload payload = TransitBenchmarkCore.ArticlePayload.Create(messageId, articleSizeBytes);
+                DateTimeOffset submitStartUtc = DateTimeOffset.UtcNow;
+                writeLine($"TRACE_SUBMIT_START_UTC[{articleIndex}/{requestedArticleCount}]: {submitStartUtc:O}");
+
+                CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(90));
 
-                TransitPublishResult publishResult = await publishExecutor.PublishAsync(messageId, payload.AsMemory(), timeoutCts.Token).ConfigureAwait(false);
-                publishResults.Add(publishResult);
+                Task<PublishCompletion> publishTask = ExecutePublishAsync(
+                    publishExecutor,
+                    articleIndex,
+                    requestedArticleCount,
+                    messageId,
+                    payload,
+                    timeoutCts,
+                    writeLine,
+                    cancellationToken);
 
-                DateTimeOffset submitEndUtc = DateTimeOffset.UtcNow;
-                writeLine($"TRACE_SUBMIT_END_UTC[{articleIndex}/{requestedArticleCount}]: {submitEndUtc:O}");
-                writeLine($"TRACE_PUBLISH_RESULT[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, Status={publishResult.Status}, Code={publishResult.ResponseCode}, Text={publishResult.ResponseText}");
+                outstanding.Add(new OutstandingPublishOperation(articleIndex, publishTask));
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+
+            if (outstanding.Count == 0)
+            {
+                break;
+            }
+
+            int completedIndex = -1;
+            for (int i = 0; i < outstanding.Count; i++)
+            {
+                if (outstanding[i].Task.IsCompleted)
+                {
+                    completedIndex = i;
+                    break;
+                }
+            }
+
+            if (completedIndex < 0)
+            {
+                Task<PublishCompletion>[] pending = new Task<PublishCompletion>[outstanding.Count];
+                for (int i = 0; i < outstanding.Count; i++)
+                {
+                    pending[i] = outstanding[i].Task;
+                }
+
+                Task<PublishCompletion> completedTask = await Task.WhenAny(pending).ConfigureAwait(false);
+                for (int i = 0; i < outstanding.Count; i++)
+                {
+                    if (ReferenceEquals(outstanding[i].Task, completedTask))
+                    {
+                        completedIndex = i;
+                        break;
+                    }
+                }
+
+                if (completedIndex < 0)
+                {
+                    throw new InvalidOperationException("Unable to resolve completed single-trace publish task.");
+                }
+            }
+
+            OutstandingPublishOperation completedOperation = outstanding[completedIndex];
+            int lastIndex = outstanding.Count - 1;
+            outstanding[completedIndex] = outstanding[lastIndex];
+            outstanding.RemoveAt(lastIndex);
+
+            PublishCompletion completion = await completedOperation.Task.ConfigureAwait(false);
+            if (completion.TimedOut)
             {
                 timeoutCount++;
-                DateTimeOffset timeoutUtc = DateTimeOffset.UtcNow;
-                writeLine($"TRACE_TIMEOUT_UTC[{articleIndex}/{requestedArticleCount}]: {timeoutUtc:O}");
-                writeLine($"TRACE_PUBLISH_RESULT[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, TIMED_OUT");
             }
-            finally
+            else
             {
-                payload.Dispose();
+                publishResultsByArticle[completion.ArticleIndex - 1] = completion.Result;
             }
         }
 
-        return new SingleTracePublishBatchResult(publishedMessageIds, publishResults, timeoutCount);
+        List<TransitPublishResult> publishResults = new(requestedArticleCount - timeoutCount);
+        for (int i = 0; i < publishResultsByArticle.Length; i++)
+        {
+            TransitPublishResult? result = publishResultsByArticle[i];
+            if (result is not null)
+            {
+                publishResults.Add(result);
+            }
+        }
+
+        return new SingleTracePublishBatchResult(publishedMessageIds, publishResults, timeoutCount, articleDescriptors);
     }
+
+    private static (int ArticleSizeBytes, string SizeClass) GenerateRandomArticleSize(Random random)
+    {
+        ArgumentNullException.ThrowIfNull(random);
+
+        bool useSmall = random.Next(2) == 0;
+        if (useSmall)
+        {
+            int smallBytes = random.Next(SmallArticleMinBytes, SmallArticleMaxBytes + 1);
+            return (smallBytes, "SMALL");
+        }
+
+        int largeBytes = random.Next(LargeArticleMinBytes, LargeArticleMaxBytes + 1);
+        return (largeBytes, "LARGE");
+    }
+
+    private static async Task<PublishCompletion> ExecutePublishAsync(
+        ITransitSingleTracePublishExecutor publishExecutor,
+        int articleIndex,
+        int requestedArticleCount,
+        string messageId,
+        TransitBenchmarkCore.ArticlePayload payload,
+        CancellationTokenSource timeoutCts,
+        Action<string> writeLine,
+        CancellationToken benchmarkCancellationToken)
+    {
+        try
+        {
+            TransitPublishResult publishResult = await publishExecutor.PublishAsync(messageId, payload.AsMemory(), timeoutCts.Token).ConfigureAwait(false);
+            DateTimeOffset submitEndUtc = DateTimeOffset.UtcNow;
+            writeLine($"TRACE_SUBMIT_END_UTC[{articleIndex}/{requestedArticleCount}]: {submitEndUtc:O}");
+            writeLine($"TRACE_PUBLISH_RESULT[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, Status={publishResult.Status}, Code={publishResult.ResponseCode}, Text={publishResult.ResponseText}");
+            return new PublishCompletion(articleIndex, publishResult, TimedOut: false);
+        }
+        catch (OperationCanceledException) when (!benchmarkCancellationToken.IsCancellationRequested)
+        {
+            DateTimeOffset timeoutUtc = DateTimeOffset.UtcNow;
+            writeLine($"TRACE_TIMEOUT_UTC[{articleIndex}/{requestedArticleCount}]: {timeoutUtc:O}");
+            writeLine($"TRACE_PUBLISH_RESULT[{articleIndex}/{requestedArticleCount}]: MessageId={messageId}, TIMED_OUT");
+            return new PublishCompletion(articleIndex, Result: null, TimedOut: true);
+        }
+        finally
+        {
+            timeoutCts.Dispose();
+            payload.Dispose();
+        }
+    }
+
+    private readonly record struct OutstandingPublishOperation(int ArticleIndex, Task<PublishCompletion> Task);
+
+    private readonly record struct PublishCompletion(int ArticleIndex, TransitPublishResult? Result, bool TimedOut);
 
     internal static async Task RunAsync(
         TransitBenchmarkCliOptions cliOptions,
@@ -109,7 +270,7 @@ internal static class TransitSingleTraceRunner
         Console.WriteLine($"Connection pool size: {config.ConnectionPoolSize}");
         Console.WriteLine($"Per-connection pipeline depth: {config.PerConnectionPipelineDepth}");
         Console.WriteLine($"Dispatch worker count: {config.DispatchWorkerCount}");
-        Console.WriteLine($"Target article bytes: {config.ArticleTargetBytes}");
+        Console.WriteLine($"Target article bytes: variable-per-article (SMALL: 64-1023, LARGE: 1048577-2097151)");
         int requestedArticleCount = ResolveRequestedArticleCount(config.MeasurementArticleCount);
         Console.WriteLine($"Requested article count: {requestedArticleCount}");
         Console.WriteLine($"RuntimeAssemblyPath: {runtimeIdentity.RuntimeAssemblyPath}");
@@ -149,10 +310,11 @@ internal static class TransitSingleTraceRunner
         Console.WriteLine("Phase 1: Initialize publisher/connection stack");
         await publisher.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
-        SingleTracePublishBatchResult publishBatch = await PublishSequentiallyAsync(
+        SingleTracePublishBatchResult publishBatch = await PublishWithPipelineDepthAsync(
             new TransitPublisherSingleTracePublishExecutor(publisher),
             requestedArticleCount,
             config.ArticleTargetBytes,
+            config.PerConnectionPipelineDepth,
             Console.WriteLine,
             cancellationToken).ConfigureAwait(false);
 
@@ -177,6 +339,12 @@ internal static class TransitSingleTraceRunner
         string publishResponseCodes = publishBatch.PublishResults.Count == 0
             ? "(none)"
             : string.Join(",", publishBatch.PublishResults.Select(static result => result.ResponseCode?.ToString() ?? "(none)"));
+
+        Console.WriteLine("TRACE_ARTICLE_SIZE_TABLE:");
+        foreach (SingleTraceArticleDescriptor article in publishBatch.Articles.OrderBy(static entry => entry.ArticleIndex))
+        {
+            Console.WriteLine($"  Index={article.ArticleIndex}, MessageId={article.MessageId}, SizeBytes={article.ArticleSizeBytes}, SizeClass={article.SizeClass}");
+        }
 
         Console.WriteLine("TRACE_BACKFILLER_SUMMARY:");
         Console.WriteLine($"  RequestedArticleCount={requestedArticleCount}");

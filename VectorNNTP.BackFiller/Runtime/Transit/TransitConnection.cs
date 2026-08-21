@@ -3,55 +3,39 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Net;
+using System.Threading.Channels;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading.Channels;
+using System.Runtime.ExceptionServices;
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// Manages one outbound NNTP transit connection and protocol negotiation lifecycle.
+    /// Manages one outbound NNTP transit connection lifecycle and per-connection response correlation.
     /// </summary>
     internal sealed partial class TransitConnection : IAsyncDisposable
     {
+        private static readonly byte[] CrLfBytes = "\r\n"u8.ToArray();
+        private static readonly byte[] DotTerminatorBytes = ".\r\n"u8.ToArray();
+        private static readonly TimeSpan DefaultResponseProgressTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan DefaultResponseProgressCheckInterval = TimeSpan.FromMilliseconds(250);
+
         private readonly string _host;
         private readonly int _port;
         private readonly bool _useSsl;
         private readonly ILogger _logger;
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
-
-        private const int DiagnosticMaxOperationRecords = 200_000;
-
-        private static readonly byte[] CrLfBytes = "\r\n"u8.ToArray();
-        private static readonly byte[] DotTerminatorBytes = ".\r\n"u8.ToArray();
+        private readonly int _pipelineDepth;
+        private readonly int _writeBatchCoalesceMicroseconds;
+        private readonly TimeSpan _responseProgressTimeout;
+        private readonly TimeSpan _responseProgressCheckInterval;
+        private readonly TransitTimingCollector? _timingCollector;
 
         private readonly SemaphoreSlim _writeGate = new(1, 1);
         private readonly SemaphoreSlim _tokenlessCorrelationGate = new(1, 1);
-        private readonly ConcurrentDictionary<string, PendingPublishOperation> _pendingByMessageId = new(StringComparer.Ordinal);
-        private readonly ConcurrentQueue<string> _pendingBySendOrder = new();
-        private TaskCompletionSource? _shutdownDrainCompletion;
-        private int _shutdownRequested;
-        private readonly int _maxWriteBatchSize;
-        private readonly int _writeIntentQueueCapacity;
-        private readonly int _writeBatchCoalesceMicroseconds;
-        private readonly object _diagnosticGate = new();
-        private readonly Dictionary<string, int> _diagnosticIndexByMessageId = new(StringComparer.Ordinal);
-        private readonly List<DiagnosticOperationRecord> _diagnosticRecords = [];
-        private readonly List<int> _diagnosticBatchSizes = [];
-        private readonly long[] _diagnosticBatchSizeHistogram;
-        private long _diagnosticBatchIdSequence;
-        private long _diagnosticSendSequence;
-        private long _diagnosticMaxPendingDepth;
-        private long _diagnosticMaxWriteQueueDepth;
-        private long _diagnosticWriteQueueDepth;
-        private long _diagnosticLogicalOutstandingDepthMax;
-        private readonly List<double> _diagnosticCoalescingWaitMicroseconds = [];
-        private Channel<WriteIntent>? _writeIntentChannel;
-        private CancellationTokenSource? _writeLoopCancellation;
-        private Task? _writeLoopTask;
-        private int _tokenlessSuccessModeEnabled;
 
         private TcpClient? _tcpClient;
         private Stream? _transportStream;
@@ -62,48 +46,29 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private CancellationTokenSource? _responseLoopCancellation;
         private Task? _responseLoopTask;
+        private CancellationTokenSource? _responseProgressWatchdogCancellation;
+        private Task? _responseProgressWatchdogTask;
+        private ExceptionDispatchInfo? _responseLoopFault;
+        private int _responseLoopFaulted;
 
-        private TransitCapabilitySnapshot _capabilities = new(
-            SupportsStartTls: false,
-            SupportsStreaming: false);
+        private readonly ConcurrentDictionary<string, PendingOwnedWork> _pendingByMessageId = new(StringComparer.Ordinal);
+        private readonly ConcurrentQueue<string> _pendingBySendOrder = new();
+        private readonly Channel<CompletedWork> _completedQueue = Channel.CreateUnbounded<CompletedWork>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            AllowSynchronousContinuations = false,
+        });
+        private readonly ConcurrentDictionary<long, TaskCompletionSource<TransitPublishResult>> _directSubmitCompletions = new();
+        private readonly ConcurrentDictionary<long, long> _completionEnqueuedTicks = new();
 
+        private TransitCapabilitySnapshot _capabilities = new(SupportsStartTls: false, SupportsStreaming: false);
         private bool _tlsActive;
         private bool _streamingModeNegotiated;
         private TransitConnectionState _state = TransitConnectionState.Disconnected;
-        private const int P1GreetingLifecycleEventHistoryCapacity = 128;
 
-        private int _firstP1GreetingProvenanceCaptured;
-        private int _localDisposeAsyncObserved;
-        private int _localResetTransportStateObserved;
-        private int _localDisposeTransportArtifactsObserved;
-        private int _localRebuildPipesObserved;
-        private int _initializationCancellationPathObserved;
-        private int _initializationAttemptSequence;
-        private int _currentInitializationAttemptId;
-        private int _p1InitializationAttemptId;
-        private string? _currentAttemptLocalIp;
-        private int _currentAttemptLocalPort;
-        private string? _currentAttemptRemoteIp;
-        private int _currentAttemptRemotePort;
-        private long _currentAttemptConnectedUtcTicks;
-        private string? _p1LocalIp;
-        private int _p1LocalPort;
-        private string? _p1RemoteIp;
-        private int _p1RemotePort;
-        private long _p1ConnectedUtcTicks;
-        private long _p1UtcTicks;
-        private long _connectedTick;
-        private long _pipesCreatedTick;
-        private long _awaitingGreetingTick;
-        private long _rebuildPipesTick;
-        private long _resetTransportTick;
-        private long _cleanupFailedInitializationTick;
-        private long _disposeAsyncTick;
-        private long _disposeTransportArtifactsTick;
-        private long _initializationCancellationTick;
-        private long _p1GreetingEofTick;
-        private readonly P1GreetingLifecycleEventRecord[] _p1LifecycleEventHistory = new P1GreetingLifecycleEventRecord[P1GreetingLifecycleEventHistoryCapacity];
-        private int _p1LifecycleEventHistoryCount;
+        private int _shutdownRequested;
+        private int _tokenlessSuccessModeEnabled;
         private long _bytesTransmitted;
         private long _bytesReceived;
         private long _socketOpenCount;
@@ -111,13 +76,44 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private long _submissionsStarted;
         private long _submissionsAccepted;
         private long _submissionsRejected;
+        private long _submissionsFailed;
         private long _submissionsAmbiguous;
         private long _submissionsUnavailable;
-        private long _submissionsFailed;
         private int _maxConcurrentSubmissions;
+        private long _sendSequence;
+        private long _batchCount;
+        private long _batchSizeTotal;
+        private int _maxWriterBatchSize;
+        private long _lastDefinitiveResponseProgressTick;
 
-        internal TransitConnection(string host, int port, bool useSsl, ILogger logger, int perConnectionPipelineDepth = 8, int writeBatchCoalesceMicroseconds = 250)
-            : this(host, port, useSsl, logger, serverCertificateValidationCallback: null, perConnectionPipelineDepth, writeBatchCoalesceMicroseconds)
+        private static string TraceStamp()
+        {
+            return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
+        }
+
+        internal TransitConnection(
+            string host,
+            int port,
+            bool useSsl,
+            ILogger logger,
+            int perConnectionPipelineDepth = 8,
+            int writeBatchCoalesceMicroseconds = 250,
+            Func<int>? expectedBatchIntentCountProvider = null,
+            TimeSpan? responseProgressTimeout = null,
+            TimeSpan? responseProgressCheckInterval = null,
+            TransitTimingCollector? timingCollector = null)
+            : this(
+                host,
+                port,
+                useSsl,
+                logger,
+                serverCertificateValidationCallback: null,
+                perConnectionPipelineDepth,
+                writeBatchCoalesceMicroseconds,
+                expectedBatchIntentCountProvider,
+                responseProgressTimeout,
+                responseProgressCheckInterval,
+                timingCollector)
         {
         }
 
@@ -128,7 +124,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ILogger logger,
             RemoteCertificateValidationCallback? serverCertificateValidationCallback,
             int perConnectionPipelineDepth = 8,
-            int writeBatchCoalesceMicroseconds = 250)
+            int writeBatchCoalesceMicroseconds = 250,
+            Func<int>? expectedBatchIntentCountProvider = null,
+            TimeSpan? responseProgressTimeout = null,
+            TimeSpan? responseProgressCheckInterval = null,
+            TransitTimingCollector? timingCollector = null)
         {
             if (string.IsNullOrWhiteSpace(host))
             {
@@ -152,325 +152,457 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new ArgumentOutOfRangeException(nameof(writeBatchCoalesceMicroseconds), writeBatchCoalesceMicroseconds, "Write batch coalescing window must be greater than zero microseconds.");
             }
 
+            TimeSpan effectiveResponseProgressTimeout = responseProgressTimeout ?? DefaultResponseProgressTimeout;
+            if (effectiveResponseProgressTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(responseProgressTimeout), effectiveResponseProgressTimeout, "Response progress timeout must be greater than zero.");
+            }
+
+            TimeSpan effectiveResponseProgressCheckInterval = responseProgressCheckInterval ?? DefaultResponseProgressCheckInterval;
+            if (effectiveResponseProgressCheckInterval <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(responseProgressCheckInterval), effectiveResponseProgressCheckInterval, "Response progress check interval must be greater than zero.");
+            }
+
             _host = host.Trim();
             _port = port;
             _useSsl = useSsl;
             _logger = logger;
             _serverCertificateValidationCallback = serverCertificateValidationCallback;
-            _maxWriteBatchSize = perConnectionPipelineDepth;
-            _writeIntentQueueCapacity = perConnectionPipelineDepth;
+            _pipelineDepth = perConnectionPipelineDepth;
             _writeBatchCoalesceMicroseconds = writeBatchCoalesceMicroseconds;
-            _diagnosticBatchSizeHistogram = new long[Math.Max(1, perConnectionPipelineDepth) + 1];
+            _responseProgressTimeout = effectiveResponseProgressTimeout;
+            _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
+            _timingCollector = timingCollector;
+            _ = expectedBatchIntentCountProvider;
         }
 
         internal string ConnectionId { get; } = Guid.NewGuid().ToString("N");
 
         internal TransitConnectionState CurrentState => _state;
 
-        internal P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
+        internal bool IsTlsActive => _tlsActive;
+
+        internal TransitCapabilitySnapshot Capabilities => _capabilities;
+
+        internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
+
+        internal int PipelineDepth => _pipelineDepth;
+
+        internal bool IsResponseLoopFaulted => Volatile.Read(ref _responseLoopFaulted) == 1;
+
+        internal void ThrowIfResponseLoopFaulted()
         {
-            if (Volatile.Read(ref _firstP1GreetingProvenanceCaptured) == 0)
-            {
-                return null;
-            }
-
-            int attemptId = Volatile.Read(ref _p1InitializationAttemptId);
-            P1GreetingLifecycleEventRecord[] events = BuildP1GreetingLifecycleEventsForAttempt(attemptId);
-            bool disposeAsyncBeforeP1 = IsEventObservedBeforeP1OnAttempt(
-                attemptId,
-                P1GreetingProvenanceLifecycleEvent.DisposeAsync,
-                events);
-            bool resetTransportBeforeP1 = IsEventObservedBeforeP1OnAttempt(
-                attemptId,
-                P1GreetingProvenanceLifecycleEvent.ResetTransport,
-                events);
-            bool disposeTransportBeforeP1 = IsEventObservedBeforeP1OnAttempt(
-                attemptId,
-                P1GreetingProvenanceLifecycleEvent.DisposeTransportArtifacts,
-                events);
-            bool rebuildPipesBeforeP1 = IsEventObservedBeforeP1OnAttempt(
-                attemptId,
-                P1GreetingProvenanceLifecycleEvent.RebuildPipes,
-                events);
-            bool cleanupFailedInitializationBeforeP1 = IsEventObservedBeforeP1OnAttempt(
-                attemptId,
-                P1GreetingProvenanceLifecycleEvent.CleanupFailedInitialization,
-                events);
-            bool initializationCancellationBeforeP1 = IsEventObservedBeforeP1OnAttempt(
-                attemptId,
-                P1GreetingProvenanceLifecycleEvent.Cancellation,
-                events);
-
-            return new P1GreetingProvenanceSnapshot(
-                ConnectionId: ConnectionId,
-                Host: _host,
-                Port: _port,
-                InitializationAttemptId: attemptId,
-                LocalIp: Volatile.Read(ref _p1LocalIp),
-                LocalPort: Volatile.Read(ref _p1LocalPort),
-                RemoteIp: Volatile.Read(ref _p1RemoteIp),
-                RemotePort: Volatile.Read(ref _p1RemotePort),
-                CapturedAtTick: Volatile.Read(ref _p1GreetingEofTick),
-                ConnectedAtTick: ReadOptionalTick(FindEventTick(events, P1GreetingProvenanceLifecycleEvent.Connected)),
-                PipesCreatedAtTick: ReadOptionalTick(FindEventTick(events, P1GreetingProvenanceLifecycleEvent.PipesCreated)),
-                AwaitingGreetingAtTick: ReadOptionalTick(FindEventTick(events, P1GreetingProvenanceLifecycleEvent.AwaitingGreeting)),
-                ConnectedAtUtc: ReadOptionalUtc(Volatile.Read(ref _p1ConnectedUtcTicks)),
-                P1AtUtc: ReadOptionalUtc(Volatile.Read(ref _p1UtcTicks)),
-                LocalDisposeAsyncBeforeP1: disposeAsyncBeforeP1,
-                LocalResetTransportStateBeforeP1: resetTransportBeforeP1,
-                LocalDisposeTransportArtifactsBeforeP1: disposeTransportBeforeP1,
-                LocalRebuildPipesBeforeP1: rebuildPipesBeforeP1,
-                LocalCleanupFailedInitializationBeforeP1: cleanupFailedInitializationBeforeP1,
-                InitializationCancellationBeforeP1: initializationCancellationBeforeP1,
-                LifecycleEvents: events);
-        }
-
-        private void CaptureP1GreetingEofProvenance()
-        {
-            if (Interlocked.CompareExchange(ref _firstP1GreetingProvenanceCaptured, 1, 0) != 0)
+            if (!IsResponseLoopFaulted)
             {
                 return;
             }
 
-            int attemptId = Volatile.Read(ref _currentInitializationAttemptId);
-            Interlocked.Exchange(ref _p1InitializationAttemptId, attemptId);
-            Volatile.Write(ref _p1LocalIp, Volatile.Read(ref _currentAttemptLocalIp));
-            Interlocked.Exchange(ref _p1LocalPort, Volatile.Read(ref _currentAttemptLocalPort));
-            Volatile.Write(ref _p1RemoteIp, Volatile.Read(ref _currentAttemptRemoteIp));
-            Interlocked.Exchange(ref _p1RemotePort, Volatile.Read(ref _currentAttemptRemotePort));
-            Interlocked.Exchange(ref _p1ConnectedUtcTicks, Volatile.Read(ref _currentAttemptConnectedUtcTicks));
-            Interlocked.Exchange(ref _p1UtcTicks, DateTimeOffset.UtcNow.UtcTicks);
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.P1GreetingEof, ref _p1GreetingEofTick);
+            Exception? inner = _responseLoopFault?.SourceException;
+            throw new IOException("Transit response loop faulted before pending responses completed.", inner);
         }
 
-        private static bool IsP1GreetingEofException(Exception exception)
+        internal bool IsRecordedResponseLoopFault(Exception exception)
         {
-            return exception is InvalidOperationException invalidOperationException
-                && string.Equals(invalidOperationException.Message, "NNTP connection closed while awaiting line response.", StringComparison.Ordinal);
-        }
+            ArgumentNullException.ThrowIfNull(exception);
 
-        private static long? ReadOptionalTick(long tick)
-        {
-            return tick > 0 ? tick : null;
-        }
-
-        private static DateTimeOffset? ReadOptionalUtc(long utcTicks)
-        {
-            return utcTicks > 0
-                ? new DateTimeOffset(utcTicks, TimeSpan.Zero)
-                : null;
-        }
-
-        private bool IsEventObservedBeforeP1OnAttempt(
-            int attemptId,
-            P1GreetingProvenanceLifecycleEvent lifecycleEvent,
-            P1GreetingLifecycleEventRecord[] lifecycleEvents)
-        {
-            if (attemptId <= 0)
+            if (!IsResponseLoopFaulted)
             {
                 return false;
             }
 
-            long p1Tick = Volatile.Read(ref _p1GreetingEofTick);
-            if (p1Tick <= 0)
+            Exception? recorded = _responseLoopFault?.SourceException;
+            if (recorded is null)
             {
                 return false;
             }
 
-            foreach (P1GreetingLifecycleEventRecord @event in lifecycleEvents)
+            if (ReferenceEquals(exception, recorded))
             {
-                if (@event.AttemptId == attemptId
-                    && @event.Event == lifecycleEvent
-                    && @event.Tick <= p1Tick)
+                return true;
+            }
+
+            for (Exception? current = exception.InnerException; current is not null; current = current.InnerException)
+            {
+                if (ReferenceEquals(current, recorded))
                 {
                     return true;
                 }
             }
 
+            return exception is InvalidOperationException candidate
+                && recorded is InvalidOperationException recordedInvalidOperation
+                && string.Equals(candidate.Message, recordedInvalidOperation.Message, StringComparison.Ordinal);
+        }
+
+        internal void NotifyMaterializationReservationChanged()
+        {
+            // Intentionally no-op in global queue architecture.
+        }
+
+        internal void RecordReconnectEvent()
+        {
+            // Intentionally no-op in global queue architecture.
+        }
+
+        internal async Task InitializeAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Console.WriteLine($"[TRACE-RI-60] {TraceStamp()} Connection.Initialize START connectionId={ConnectionId} host={_host} port={_port} timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
+
+            TransitionState(TransitConnectionState.Connecting);
+            _tcpClient = new TcpClient();
+            await AwaitInitializationStageAsync(
+                token => _tcpClient.ConnectAsync(_host, _port, token).AsTask(),
+                "TCP connect",
+                cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"[TRACE-RI-61] {TraceStamp()} Connection.Initialize TCP-CONNECT-COMPLETE connectionId={ConnectionId}");
+            Interlocked.Increment(ref _socketOpenCount);
+
+            _transportStream = _tcpClient.GetStream();
+            _readStream = _transportStream;
+            _writeStream = _transportStream;
+            _tlsActive = false;
+            _streamingModeNegotiated = false;
+
+            if (_useSsl)
+            {
+                TransitionState(TransitConnectionState.StartingTls);
+                await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+                TransitionState(TransitConnectionState.TlsEstablished);
+            }
+
+            _reader = PipeReader.Create(_readStream, new StreamPipeReaderOptions(leaveOpen: true));
+            _writer = PipeWriter.Create(_writeStream, new StreamPipeWriterOptions(leaveOpen: true));
+
+            TransitionState(TransitConnectionState.AwaitingGreeting);
+            Console.WriteLine($"[TRACE-RI-62] {TraceStamp()} Connection.Initialize GREETING-READ-START connectionId={ConnectionId}");
+            string greetingLine = await AwaitInitializationStageAsync(
+                token => ReadLineAsync(token).AsTask(),
+                "greeting response",
+                cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"[TRACE-RI-63] {TraceStamp()} Connection.Initialize GREETING-READ-COMPLETE connectionId={ConnectionId} line='{greetingLine}'");
+            TransitProtocolParser.ValidateGreeting(greetingLine);
+
+            TransitionState(TransitConnectionState.CapabilitiesNegotiation);
+            Console.WriteLine($"[TRACE-RI-64] {TraceStamp()} Connection.Initialize CAPABILITIES-START connectionId={ConnectionId}");
+            _capabilities = await AwaitInitializationStageAsync(
+                token => ReadCapabilitiesAsync(token),
+                "CAPABILITIES exchange",
+                cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
+            LogTransitCapabilities(_logger, ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
+
+            if (!_capabilities.SupportsStreaming)
+            {
+                throw new InvalidOperationException("Transit server does not advertise STREAMING capability.");
+            }
+
+            TransitionState(TransitConnectionState.StartingStreaming);
+            Console.WriteLine($"[TRACE-RI-66] {TraceStamp()} Connection.Initialize MODE-STREAM-START connectionId={ConnectionId}");
+            await WriteCommandAsync("MODE STREAM", cancellationToken).ConfigureAwait(false);
+            string streamResponse = await AwaitInitializationStageAsync(
+                token => ReadLineAsync(token).AsTask(),
+                "MODE STREAM response",
+                cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"[TRACE-RI-67] {TraceStamp()} Connection.Initialize MODE-STREAM-COMPLETE connectionId={ConnectionId} line='{streamResponse}'");
+            (int streamCode, _, _) = TransitProtocolParser.ParseStatusLine(streamResponse);
+            if (streamCode != 203)
+            {
+                throw new InvalidOperationException($"Unexpected MODE STREAM response code: {streamCode}.");
+            }
+
+            _streamingModeNegotiated = true;
+            TransitionState(TransitConnectionState.Ready);
+            Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={_state}");
+            Interlocked.Increment(ref _readyTransitionCount);
+            LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
+
+            _responseLoopCancellation = new CancellationTokenSource();
+            _responseProgressWatchdogCancellation = CancellationTokenSource.CreateLinkedTokenSource(_responseLoopCancellation.Token);
+            _responseLoopFault = null;
+            Volatile.Write(ref _responseLoopFaulted, 0);
+            Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+            _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
+            _responseProgressWatchdogTask = Task.Run(() => ResponseProgressWatchdogLoopAsync(_responseProgressWatchdogCancellation.Token), CancellationToken.None);
+        }
+
+        internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitWorkItem> items, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(items);
+
+            if (items.Count == 0)
+            {
+                return;
+            }
+
+            if (Volatile.Read(ref _shutdownRequested) == 1 || !_streamingModeNegotiated)
+            {
+                throw new InvalidOperationException("Transit connection is not ready for publishing.");
+            }
+
+            bool tokenlessModeEnabled = Volatile.Read(ref _tokenlessSuccessModeEnabled) == 1;
+            if (tokenlessModeEnabled)
+            {
+                await _tokenlessCorrelationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                foreach (TransitWorkItem item in items)
+                {
+                    PendingOwnedWork pending = new(item);
+                    if (!_pendingByMessageId.TryAdd(item.MessageId, pending))
+                    {
+                        throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
+                    }
+
+                    _pendingBySendOrder.Enqueue(item.MessageId);
+                    Interlocked.Increment(ref _submissionsStarted);
+                    ObserveMaxConcurrentSubmissions(_pendingByMessageId.Count);
+                }
+
+                PipeWriter writer = _writer ?? throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterNotInitialized);
+                await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+                try
+                {
+                    long stageStartTick = Stopwatch.GetTimestamp();
+                    long batchBytesStaged = 0;
+
+                    _timingCollector?.RecordStagingStarted(stageStartTick);
+
+                    try
+                    {
+                        foreach (TransitWorkItem item in items)
+                        {
+                            item.MarkStaged();
+                            batchBytesStaged += StageTakethisFrame(writer, item.MessageId, item.Payload);
+                            item.MarkFlushed();
+                        }
+
+                        long flushStartTick = Stopwatch.GetTimestamp();
+                        FlushResult flushResult = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+                        _timingCollector?.RecordFlushWait(Stopwatch.GetTimestamp() - flushStartTick);
+                        if (flushResult.IsCompleted)
+                        {
+                            throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission);
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterDisposedDuringTakethisSubmission);
+                    }
+                    catch (InvalidOperationException ex) when (ex.Message.Contains("Writing is not allowed after writer was completed.", StringComparison.Ordinal))
+                    {
+                        throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterDisposedDuringTakethisSubmission);
+                    }
+
+                    Interlocked.Add(ref _bytesTransmitted, batchBytesStaged);
+                    long stageEndTick = Stopwatch.GetTimestamp();
+
+                    foreach (TransitWorkItem item in items)
+                    {
+                        item.MarkAwaitingResponse();
+                        if (_pendingByMessageId.TryGetValue(item.MessageId, out PendingOwnedWork? pending))
+                        {
+                            pending.T2SocketWriteBeginTick = stageStartTick;
+                            pending.T3SocketWriteEndTick = stageEndTick;
+                            pending.SendSequence = Interlocked.Increment(ref _sendSequence);
+                        }
+                    }
+                }
+                finally
+                {
+                    _writeGate.Release();
+                }
+
+                Interlocked.Increment(ref _batchCount);
+                Interlocked.Add(ref _batchSizeTotal, items.Count);
+                UpdateMaxBatchSize(items.Count);
+            }
+            finally
+            {
+                if (tokenlessModeEnabled)
+                {
+                    _tokenlessCorrelationGate.Release();
+                }
+            }
+        }
+
+        internal bool TryTakeCompleted(out TransitWorkItem item, out TransitPublishResult result)
+        {
+            if (_completedQueue.Reader.TryRead(out CompletedWork? completed) && completed is not null)
+            {
+                item = completed.WorkItem;
+                result = completed.Result;
+
+                if (_timingCollector is not null
+                    && _completionEnqueuedTicks.TryRemove(completed.WorkItem.WorkItemId, out long completionEnqueuedTick))
+                {
+                    _timingCollector.RecordCompletionObserved(completionEnqueuedTick, Stopwatch.GetTimestamp());
+                }
+
+                return true;
+            }
+
+            item = null!;
+            result = null!;
             return false;
         }
 
-        private void MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent lifecycleEvent, ref long tickField)
+        internal async ValueTask<bool> WaitForCompletedAsync(CancellationToken cancellationToken)
         {
-            long tick = Stopwatch.GetTimestamp();
-            int attemptId = Volatile.Read(ref _currentInitializationAttemptId);
-            Interlocked.CompareExchange(ref tickField, tick, 0);
-            AppendP1LifecycleEvent(lifecycleEvent, tick, attemptId);
+            try
+            {
+                return await _completedQueue.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (IsRecordedResponseLoopFault(ex))
+            {
+                throw new IOException("Transit response loop faulted before pending responses completed.", ex);
+            }
         }
 
-        private P1GreetingLifecycleEventRecord[] BuildP1GreetingLifecycleEventsForAttempt(int attemptId)
+        internal async ValueTask<TransitPublishResult> SubmitTakethisAsync(
+            string messageId,
+            ReadOnlyMemory<byte> articlePayload,
+            CancellationToken cancellationToken,
+            long publishAsyncEnterTick,
+            long dispatcherAssignedTick,
+            Action? onWriteIntentMaterialized = null)
         {
-            if (attemptId <= 0)
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+
+            if (messageId.AsSpan().Contains('\r') || messageId.AsSpan().Contains('\n'))
             {
-                return [];
+                throw new ArgumentException("Message-ID must not contain CR or LF characters.", nameof(messageId));
             }
 
-            int count = Volatile.Read(ref _p1LifecycleEventHistoryCount);
-            if (count <= 0)
+            if (articlePayload.IsEmpty)
             {
-                return [];
+                throw new ArgumentException("Article payload must not be empty.", nameof(articlePayload));
             }
 
-            int boundedCount = Math.Min(count, _p1LifecycleEventHistory.Length);
-            List<P1GreetingLifecycleEventRecord> events = [];
-
-            for (int i = 0; i < boundedCount; i++)
+            if (articlePayload.Span[^1] != (byte)'\n')
             {
-                P1GreetingLifecycleEventRecord record = _p1LifecycleEventHistory[i];
-                if (record.Tick <= 0 || record.AttemptId != attemptId)
+                throw new ArgumentException("Article payload must end with LF to preserve byte integrity during TAKETHIS framing.", nameof(articlePayload));
+            }
+
+            if (Volatile.Read(ref _shutdownRequested) == 1 || (_state != TransitConnectionState.Ready && _state != TransitConnectionState.Publishing) || !_streamingModeNegotiated)
+            {
+                Interlocked.Increment(ref _submissionsUnavailable);
+                return new TransitPublishResult(
+                    MessageId: messageId,
+                    Status: TransitPublishStatus.Unavailable,
+                    ResponseCode: null,
+                    ResponseText: "Transit connection is not ready for publishing.",
+                    T0PublishAsyncEnterTick: publishAsyncEnterTick,
+                    T1DispatcherAssignedTick: dispatcherAssignedTick,
+                    Provenance: TransitPublishProvenance.Unavailable,
+                    ProvenanceConnectionId: ConnectionId,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: Stopwatch.GetTimestamp());
+            }
+
+            byte[] payloadCopy = articlePayload.ToArray();
+            TransitWorkItem item = new(Interlocked.Increment(ref _sendSequence), messageId, payloadCopy, maxAttempts: 3);
+            item.MarkClaimed(ConnectionId, DateTimeOffset.UtcNow);
+
+            TaskCompletionSource<TransitPublishResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _directSubmitCompletions[item.WorkItemId] = completion;
+
+            try
+            {
+                await ProcessBatchAsync([item], cancellationToken).ConfigureAwait(false);
+                onWriteIntentMaterialized?.Invoke();
+
+                TransitPublishResult result = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return result with
+                {
+                    T0PublishAsyncEnterTick = publishAsyncEnterTick,
+                    T1DispatcherAssignedTick = dispatcherAssignedTick,
+                };
+            }
+            finally
+            {
+                _directSubmitCompletions.TryRemove(item.WorkItemId, out _);
+            }
+        }
+
+        internal IReadOnlyList<TransitWorkItem> DrainOutstandingOwnedWorkForRetry()
+        {
+            IReadOnlyList<TransitWorkItem> drained = DrainOwnedPendingWork(static _ => true)
+                .Select(static pending => pending.WorkItem)
+                .ToArray();
+            Console.WriteLine($"[TRACE-RI-79] {TraceStamp()} DrainOutstandingOwnedWorkForRetry connectionId={ConnectionId} count={drained.Count} items=[{string.Join(",", drained.Select(static x => $"{x.WorkItemId}:{x.State}:{x.AttemptCount}"))}]");
+            return drained;
+        }
+
+        private IReadOnlyList<PendingOwnedWork> DrainOutstandingDirectSubmitPendingWork()
+        {
+            return DrainOwnedPendingWork(pending => _directSubmitCompletions.ContainsKey(pending.WorkItem.WorkItemId));
+        }
+
+        private IReadOnlyList<PendingOwnedWork> DrainOwnedPendingWork(Func<PendingOwnedWork, bool> shouldDrain)
+        {
+            ArgumentNullException.ThrowIfNull(shouldDrain);
+
+            List<PendingOwnedWork> unresolved = [];
+            foreach ((string messageId, PendingOwnedWork pending) in _pendingByMessageId)
+            {
+                if (!shouldDrain(pending))
                 {
                     continue;
                 }
 
-                events.Add(record);
-            }
-
-            events.Sort(static (left, right) => left.Tick.CompareTo(right.Tick));
-            return events.ToArray();
-        }
-
-        private void AppendP1LifecycleEvent(P1GreetingProvenanceLifecycleEvent lifecycleEvent, long tick, int attemptId)
-        {
-            if (attemptId <= 0 || tick <= 0)
-            {
-                return;
-            }
-
-            int index = Interlocked.Increment(ref _p1LifecycleEventHistoryCount) - 1;
-            if ((uint)index >= (uint)_p1LifecycleEventHistory.Length)
-            {
-                return;
-            }
-
-            _p1LifecycleEventHistory[index] = new P1GreetingLifecycleEventRecord(lifecycleEvent, tick, attemptId);
-        }
-
-        private static long FindEventTick(P1GreetingLifecycleEventRecord[] events, P1GreetingProvenanceLifecycleEvent lifecycleEvent)
-        {
-            foreach (P1GreetingLifecycleEventRecord @event in events)
-            {
-                if (@event.Event == lifecycleEvent)
+                if (_pendingByMessageId.TryRemove(messageId, out PendingOwnedWork? removed) && removed is not null)
                 {
-                    return @event.Tick;
+                    AcknowledgeSendOrder(messageId);
+                    unresolved.Add(removed);
                 }
             }
 
-            return 0;
+            return unresolved;
         }
-
-        private int BeginInitializationAttempt()
-        {
-            int attemptId = Interlocked.Increment(ref _initializationAttemptSequence);
-            Interlocked.Exchange(ref _currentInitializationAttemptId, attemptId);
-            Volatile.Write(ref _currentAttemptLocalIp, null);
-            Interlocked.Exchange(ref _currentAttemptLocalPort, 0);
-            Volatile.Write(ref _currentAttemptRemoteIp, null);
-            Interlocked.Exchange(ref _currentAttemptRemotePort, 0);
-            Interlocked.Exchange(ref _currentAttemptConnectedUtcTicks, 0);
-            return attemptId;
-        }
-
-        private void CaptureAttemptEndpointsAndConnectedUtc(TcpClient tcpClient)
-        {
-            ArgumentNullException.ThrowIfNull(tcpClient);
-
-            (string? localIp, int localPort) = TryGetEndpointParts(tcpClient.Client.LocalEndPoint);
-            (string? remoteIp, int remotePort) = TryGetEndpointParts(tcpClient.Client.RemoteEndPoint);
-
-            Volatile.Write(ref _currentAttemptLocalIp, localIp);
-            Interlocked.Exchange(ref _currentAttemptLocalPort, localPort);
-            Volatile.Write(ref _currentAttemptRemoteIp, remoteIp);
-            Interlocked.Exchange(ref _currentAttemptRemotePort, remotePort);
-            Interlocked.Exchange(ref _currentAttemptConnectedUtcTicks, DateTimeOffset.UtcNow.UtcTicks);
-        }
-
-        private static (string? Ip, int Port) TryGetEndpointParts(EndPoint? endpoint)
-        {
-            if (endpoint is IPEndPoint ipEndPoint)
-            {
-                return (ipEndPoint.Address.ToString(), ipEndPoint.Port);
-            }
-
-            return (null, 0);
-        }
-
-        internal TransitCapabilitySnapshot Capabilities => _capabilities;
-
-        internal bool IsTlsActive => _tlsActive;
-
-        internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
-
-        internal long CurrentWriteIntentQueueDepth => Volatile.Read(ref _diagnosticWriteQueueDepth);
-
-        internal long BytesTransmitted => Interlocked.Read(ref _bytesTransmitted);
-
-        internal long BytesReceived => Interlocked.Read(ref _bytesReceived);
 
         internal TransitConnectionDiagnosticsSnapshot CaptureDiagnosticsSnapshot()
         {
-            int currentInFlight = _pendingByMessageId.Count;
-            OutstandingPublishOperationSnapshot[] outstandingOperations = CaptureOutstandingOperationSnapshots();
-            PipeliningDiagnosticSummary summary;
-            DiagnosticOperationRecord[] sample;
+            OutstandingPublishOperationSnapshot[] outstanding = _pendingByMessageId.Values
+                .Select(static x => new OutstandingPublishOperationSnapshot(
+                    MessageId: x.WorkItem.MessageId,
+                    T2WriteIntentEnqueuedTick: 0,
+                    T6FrameStageEndTick: x.T3SocketWriteEndTick,
+                    T8BatchFlushEndTick: x.T3SocketWriteEndTick,
+                    T9ResponseCorrelatedTick: x.T6ResponseCorrelatedTick,
+                    WriteIntentEnqueued: true,
+                    TakethisStagedForWrite: x.WorkItem.State >= TransitWorkItemState.Staged,
+                    FlushCompleted: x.WorkItem.State >= TransitWorkItemState.Flushed,
+                    WaitingFor239Response: x.WorkItem.State == TransitWorkItemState.AwaitingResponse,
+                    CompletionTaskIsCompleted: false,
+                    CompletionTaskStatus: "Waiting",
+                    CompletionStatus: null,
+                    LikelyAwaitingPath: "ResponseLoop"))
+                .ToArray();
 
-            lock (_diagnosticGate)
+            long numberOfBatches = Interlocked.Read(ref _batchCount);
+            double avgBatch = numberOfBatches == 0 ? 0 : (double)Interlocked.Read(ref _batchSizeTotal) / numberOfBatches;
+
+            string? localEndpoint = null;
+            string? remoteEndpoint = null;
+            TcpClient? tcpClient = _tcpClient;
+            Socket? socket = tcpClient?.Client;
+            if (socket is not null)
             {
-                int[] batchSizes = _diagnosticBatchSizes.ToArray();
-                Array.Sort(batchSizes);
-
-                double[] coalescingWaitMicroseconds = _diagnosticCoalescingWaitMicroseconds.ToArray();
-                Array.Sort(coalescingWaitMicroseconds);
-
-                long numberOfBatches = batchSizes.LongLength;
-                int maxBatchSize = batchSizes.Length == 0 ? 0 : batchSizes[^1];
-                double averageBatchSize = batchSizes.Length == 0 ? 0 : batchSizes.Average();
-                double p50 = PercentileFromSorted(batchSizes, 0.50);
-                double p95 = PercentileFromSorted(batchSizes, 0.95);
-                double p99 = PercentileFromSorted(batchSizes, 0.99);
-                double averageCoalescingWaitMicroseconds = coalescingWaitMicroseconds.Length == 0 ? 0 : coalescingWaitMicroseconds.Average();
-                double p50CoalescingWaitMicroseconds = PercentileFromSorted(coalescingWaitMicroseconds, 0.50);
-                double p95CoalescingWaitMicroseconds = PercentileFromSorted(coalescingWaitMicroseconds, 0.95);
-                double p99CoalescingWaitMicroseconds = PercentileFromSorted(coalescingWaitMicroseconds, 0.99);
-
-                StringBuilder histogramBuilder = new();
-                int histogramLimit = Math.Min(_diagnosticBatchSizeHistogram.Length - 1, _maxWriteBatchSize);
-                long[] batchSizeCounts = new long[histogramLimit + 1];
-                for (int size = 1; size <= histogramLimit; size++)
+                try
                 {
-                    long count = _diagnosticBatchSizeHistogram[size];
-                    batchSizeCounts[size] = count;
-
-                    if (histogramBuilder.Length > 0)
-                    {
-                        histogramBuilder.Append("; ");
-                    }
-
-                    histogramBuilder.Append("size");
-                    histogramBuilder.Append(size);
-                    histogramBuilder.Append('=');
-                    histogramBuilder.Append(count);
+                    localEndpoint = socket.LocalEndPoint?.ToString();
+                    remoteEndpoint = socket.RemoteEndPoint?.ToString();
                 }
-
-                sample = _diagnosticRecords.ToArray();
-
-                summary = new PipeliningDiagnosticSummary(
-                    MaxPendingDepth: _diagnosticMaxPendingDepth,
-                    MaxWriteQueueDepth: _diagnosticMaxWriteQueueDepth,
-                    MaxWriterBatchSize: maxBatchSize,
-                    AverageWriterBatchSize: averageBatchSize,
-                    P50WriterBatchSize: p50,
-                    P95WriterBatchSize: p95,
-                    P99WriterBatchSize: p99,
-                    NumberOfBatches: numberOfBatches,
-                    BatchSizeHistogram: histogramBuilder.ToString(),
-                    BatchSizeCounts: batchSizeCounts,
-                    AverageCoalescingWaitMicroseconds: averageCoalescingWaitMicroseconds,
-                    P50CoalescingWaitMicroseconds: p50CoalescingWaitMicroseconds,
-                    P95CoalescingWaitMicroseconds: p95CoalescingWaitMicroseconds,
-                    P99CoalescingWaitMicroseconds: p99CoalescingWaitMicroseconds,
-                    MaxLogicalOutstandingAheadAtResponse: _diagnosticLogicalOutstandingDepthMax,
-                    CapturedOperationCount: _diagnosticIndexByMessageId.Count,
-                    SampledOperationCount: sample.Length);
+                catch (ObjectDisposedException)
+                {
+                    localEndpoint = null;
+                    remoteEndpoint = null;
+                }
             }
 
             return new TransitConnectionDiagnosticsSnapshot(
@@ -488,721 +620,35 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 SubmissionsUnavailable: Interlocked.Read(ref _submissionsUnavailable),
                 SubmissionsFailed: Interlocked.Read(ref _submissionsFailed),
                 MaxConcurrentSubmissions: Volatile.Read(ref _maxConcurrentSubmissions),
-                CurrentConcurrentSubmissions: currentInFlight,
-                CurrentWriteIntentQueueDepth: Volatile.Read(ref _diagnosticWriteQueueDepth),
-                LocalEndpoint: TryGetEndpointString(static tcpClient => tcpClient.Client.LocalEndPoint),
-                RemoteEndpoint: TryGetEndpointString(static tcpClient => tcpClient.Client.RemoteEndPoint),
-                DiagnosticsSummary: summary,
-                DiagnosticSampleRecords: sample,
-                OutstandingOperations: outstandingOperations);
+                CurrentConcurrentSubmissions: _pendingByMessageId.Count,
+                CurrentWriteIntentQueueDepth: 0,
+                LocalEndpoint: localEndpoint,
+                RemoteEndpoint: remoteEndpoint,
+                DiagnosticsSummary: new PipeliningDiagnosticSummary(
+                    MaxPendingDepth: Volatile.Read(ref _maxConcurrentSubmissions),
+                    MaxWriteQueueDepth: 0,
+                    MaxWriterBatchSize: Volatile.Read(ref _maxWriterBatchSize),
+                    AverageWriterBatchSize: avgBatch,
+                    P50WriterBatchSize: avgBatch,
+                    P95WriterBatchSize: avgBatch,
+                    P99WriterBatchSize: avgBatch,
+                    NumberOfBatches: numberOfBatches,
+                    BatchSizeHistogram: string.Empty,
+                    BatchSizeCounts: [],
+                    AverageCoalescingWaitMicroseconds: 0,
+                    P50CoalescingWaitMicroseconds: 0,
+                    P95CoalescingWaitMicroseconds: 0,
+                    P99CoalescingWaitMicroseconds: 0,
+                    MaxLogicalOutstandingAheadAtResponse: 0,
+                    CapturedOperationCount: outstanding.Length,
+                    SampledOperationCount: outstanding.Length),
+                DiagnosticSampleRecords: [],
+                OutstandingOperations: outstanding);
         }
 
-        internal void RecordReconnectEvent()
+        internal P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
-            Interlocked.Increment(ref _socketOpenCount);
-        }
-
-        private string? TryGetEndpointString(Func<TcpClient, EndPoint?> endpointAccessor)
-        {
-            TcpClient? tcpClient = _tcpClient;
-            if (tcpClient is null)
-            {
-                return null;
-            }
-
-            try
-            {
-                EndPoint? endpoint = endpointAccessor(tcpClient);
-                return endpoint?.ToString();
-            }
-            catch (ObjectDisposedException)
-            {
-                return null;
-            }
-            catch (SocketException)
-            {
-                return null;
-            }
-            catch (InvalidOperationException)
-            {
-                return null;
-            }
-        }
-
-        private static double PercentileFromSorted(int[] sortedValues, double percentile)
-        {
-            if (sortedValues.Length == 0)
-            {
-                return 0;
-            }
-
-            percentile = Math.Clamp(percentile, 0, 1);
-            int index = (int)Math.Ceiling(percentile * sortedValues.Length) - 1;
-            index = Math.Clamp(index, 0, sortedValues.Length - 1);
-            return sortedValues[index];
-        }
-
-        private static double PercentileFromSorted(double[] sortedValues, double percentile)
-        {
-            if (sortedValues.Length == 0)
-            {
-                return 0;
-            }
-
-            percentile = Math.Clamp(percentile, 0, 1);
-            int index = (int)Math.Ceiling(percentile * sortedValues.Length) - 1;
-            index = Math.Clamp(index, 0, sortedValues.Length - 1);
-            return sortedValues[index];
-        }
-
-        private static DiagnosticOperationRecord ToDiagnosticRecord(PendingPublishOperation operation)
-        {
-            return new DiagnosticOperationRecord(
-                MessageId: operation.MessageId,
-                T0SubmitEnterTick: operation.T0PublishAsyncEnterTick,
-                T0SubmitTakethisEnterTick: operation.T0SubmitTakethisEnterTick,
-                T1PendingRegisteredTick: operation.T1PendingRegisteredTick,
-                T2WriteIntentEnqueueStartTick: operation.T2WriteIntentEnqueueStartTick,
-                T2WriteIntentEnqueuedTick: operation.T2WriteIntentEnqueuedTick,
-                T2BeforeCompletionAwaitTick: operation.T2BeforeCompletionAwaitTick,
-                T3WriterDequeuedTick: operation.T3WriterDequeuedTick,
-                T4AssignedToBatchTick: operation.T4AssignedToBatchTick,
-                T5FrameStageBeginTick: operation.T5FrameStageBeginTick,
-                T6FrameStageEndTick: operation.T6FrameStageEndTick,
-                T7BatchFlushBeginTick: operation.T7BatchFlushBeginTick,
-                T8BatchFlushEndTick: operation.T8BatchFlushEndTick,
-                T9ResponseCorrelatedTick: operation.T9ResponseCorrelatedTick,
-                T10SubmitCompletionTick: operation.T10SubmitCompletionTick,
-                PendingDepthAtT1: operation.PendingDepthAtT1,
-                PendingDepthAtT2: operation.PendingDepthAtT2,
-                PendingDepthAtT3: operation.PendingDepthAtT3,
-                PendingDepthAtT4: operation.PendingDepthAtT4,
-                PendingDepthAtT9: operation.PendingDepthAtT9,
-                QueueDepthAtT2: operation.QueueDepthAtT2,
-                QueueDepthAtT3: operation.QueueDepthAtT3,
-                QueueDepthAtBatchStart: operation.QueueDepthAtBatchStart,
-                BatchDequeuedCount: operation.BatchDequeuedCount,
-                QueueDepthAtT9: operation.QueueDepthAtT9,
-                BatchId: operation.BatchId,
-                BatchPosition: operation.BatchPosition,
-                BatchSize: operation.BatchSize,
-                SendSequence: operation.SendSequence,
-                LogicalOutstandingAheadAtResponse: operation.LogicalOutstandingAheadAtResponse);
-        }
-
-        private static OutstandingPublishOperationSnapshot ToOutstandingOperationSnapshot(PendingPublishOperation operation)
-        {
-            Task<TransitPublishResult> completionTask = operation.Completion.Task;
-            TransitPublishStatus? completionStatus = null;
-            if (completionTask.IsCompletedSuccessfully)
-            {
-                completionStatus = completionTask.Result.Status;
-            }
-
-            bool writeIntentEnqueued = operation.T2WriteIntentEnqueuedTick > 0;
-            bool takethisStagedForWrite = operation.T6FrameStageEndTick > 0;
-            bool flushCompleted = operation.T8BatchFlushEndTick > 0;
-            bool waitingFor239Response = writeIntentEnqueued && takethisStagedForWrite && operation.T9ResponseCorrelatedTick == 0;
-
-            string likelyAwaitingPath;
-            if (completionTask.IsCompleted)
-            {
-                likelyAwaitingPath = "Completed";
-            }
-            else if (!writeIntentEnqueued)
-            {
-                likelyAwaitingPath = "PendingWriteIntentEnqueue";
-            }
-            else if (!takethisStagedForWrite)
-            {
-                likelyAwaitingPath = "PendingWriterStage";
-            }
-            else if (!flushCompleted)
-            {
-                likelyAwaitingPath = "PendingWriterFlush";
-            }
-            else
-            {
-                likelyAwaitingPath = "WaitingFor239Response";
-            }
-
-            return new OutstandingPublishOperationSnapshot(
-                MessageId: operation.MessageId,
-                T2WriteIntentEnqueuedTick: operation.T2WriteIntentEnqueuedTick,
-                T6FrameStageEndTick: operation.T6FrameStageEndTick,
-                T8BatchFlushEndTick: operation.T8BatchFlushEndTick,
-                T9ResponseCorrelatedTick: operation.T9ResponseCorrelatedTick,
-                WriteIntentEnqueued: writeIntentEnqueued,
-                TakethisStagedForWrite: takethisStagedForWrite,
-                FlushCompleted: flushCompleted,
-                WaitingFor239Response: waitingFor239Response,
-                CompletionTaskIsCompleted: completionTask.IsCompleted,
-                CompletionTaskStatus: completionTask.Status.ToString(),
-                CompletionStatus: completionStatus,
-                LikelyAwaitingPath: likelyAwaitingPath);
-        }
-
-        private OutstandingPublishOperationSnapshot[] CaptureOutstandingOperationSnapshots()
-        {
-            KeyValuePair<string, PendingPublishOperation>[] pending = _pendingByMessageId.ToArray();
-            OutstandingPublishOperationSnapshot[] snapshots = new OutstandingPublishOperationSnapshot[pending.Length];
-            for (int i = 0; i < pending.Length; i++)
-            {
-                snapshots[i] = ToOutstandingOperationSnapshot(pending[i].Value);
-            }
-
-            Array.Sort(snapshots, static (left, right) => StringComparer.Ordinal.Compare(left.MessageId, right.MessageId));
-            return snapshots;
-        }
-
-        private void TrackMax(ref long target, long observed)
-        {
-            while (true)
-            {
-                long current = Volatile.Read(ref target);
-                if (observed <= current)
-                {
-                    return;
-                }
-
-                if (Interlocked.CompareExchange(ref target, observed, current) == current)
-                {
-                    return;
-                }
-            }
-        }
-
-        private void EnsureDiagnosticOperationTracked(PendingPublishOperation operation)
-        {
-            lock (_diagnosticGate)
-            {
-                if (_diagnosticIndexByMessageId.ContainsKey(operation.MessageId))
-                {
-                    return;
-                }
-
-                if (_diagnosticRecords.Count >= DiagnosticMaxOperationRecords)
-                {
-                    return;
-                }
-
-                int index = _diagnosticRecords.Count;
-                _diagnosticRecords.Add(ToDiagnosticRecord(operation));
-                _diagnosticIndexByMessageId[operation.MessageId] = index;
-            }
-        }
-
-        private void UpdateDiagnosticOperation(PendingPublishOperation operation)
-        {
-            lock (_diagnosticGate)
-            {
-                if (!_diagnosticIndexByMessageId.TryGetValue(operation.MessageId, out int index))
-                {
-                    if (_diagnosticRecords.Count >= DiagnosticMaxOperationRecords)
-                    {
-                        return;
-                    }
-
-                    index = _diagnosticRecords.Count;
-                    _diagnosticIndexByMessageId[operation.MessageId] = index;
-                    _diagnosticRecords.Add(ToDiagnosticRecord(operation));
-                    return;
-                }
-
-                _diagnosticRecords[index] = ToDiagnosticRecord(operation);
-            }
-        }
-
-        private void IncrementBatchHistogram(int batchSize)
-        {
-            if (batchSize <= 0)
-            {
-                return;
-            }
-
-            int histogramIndex = Math.Min(batchSize, _diagnosticBatchSizeHistogram.Length - 1);
-            lock (_diagnosticGate)
-            {
-                _diagnosticBatchSizes.Add(batchSize);
-                _diagnosticBatchSizeHistogram[histogramIndex]++;
-            }
-        }
-
-        private void RecordCoalescingWait(long coalescingWaitTicks)
-        {
-            if (coalescingWaitTicks < 0)
-            {
-                coalescingWaitTicks = 0;
-            }
-
-            double coalescingWaitMicroseconds = coalescingWaitTicks * 1_000_000d / Stopwatch.Frequency;
-            lock (_diagnosticGate)
-            {
-                _diagnosticCoalescingWaitMicroseconds.Add(coalescingWaitMicroseconds);
-            }
-        }
-
-        private long IncrementDiagnosticQueueDepthOnEnqueue()
-        {
-            long depth = Interlocked.Increment(ref _diagnosticWriteQueueDepth);
-            TrackMax(ref _diagnosticMaxWriteQueueDepth, depth);
-            return depth;
-        }
-
-        private long DecrementDiagnosticQueueDepthOnDequeue()
-        {
-            while (true)
-            {
-                long current = Volatile.Read(ref _diagnosticWriteQueueDepth);
-                if (current <= 0)
-                {
-                    return 0;
-                }
-
-                long updated = current - 1;
-                if (Interlocked.CompareExchange(ref _diagnosticWriteQueueDepth, updated, current) == current)
-                {
-                    return updated;
-                }
-            }
-        }
-
-        private int CapturePendingDepthAndTrackMax()
-        {
-            int pendingDepth = _pendingByMessageId.Count;
-            TrackMax(ref _diagnosticMaxPendingDepth, pendingDepth);
-            return pendingDepth;
-        }
-
-        private void RecordSubmissionCompletion(PendingPublishOperation operation)
-        {
-            operation.T10SubmitCompletionTick = Stopwatch.GetTimestamp();
-            UpdateDiagnosticOperation(operation);
-            SignalDrainIfCompleted();
-        }
-
-        /// <summary>
-        /// Waits for all outstanding TAKETHIS operations to correlate and complete.
-        /// </summary>
-        private async Task DrainPendingTakethisAsync()
-        {
-            if (_pendingByMessageId.IsEmpty)
-            {
-                return;
-            }
-
-            TaskCompletionSource drainCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            _shutdownDrainCompletion = drainCompletion;
-            SignalDrainIfCompleted();
-            await drainCompletion.Task.ConfigureAwait(false);
-        }
-
-        /// <summary>
-        /// Signals graceful-shutdown drain completion when no pending TAKETHIS operations remain.
-        /// </summary>
-        private void SignalDrainIfCompleted()
-        {
-            TaskCompletionSource? drainCompletion = _shutdownDrainCompletion;
-            if (drainCompletion is null)
-            {
-                return;
-            }
-
-            if (_pendingByMessageId.IsEmpty)
-            {
-                drainCompletion.TrySetResult();
-            }
-        }
-
-        private void LogSkippedWriteIntent(WriteIntent intent, long batchId, int batchPosition, bool pendingContains, string skipReason)
-        {
-            Task<TransitPublishResult> completionTask = intent.Operation.Completion.Task;
-            string completionTaskState = completionTask.Status.ToString();
-            bool responseLoopPreviouslyCompleted = intent.Operation.T9ResponseCorrelatedTick > 0;
-            string completionStatus = "(unavailable)";
-            string completionReason = "(unavailable)";
-
-            if (completionTask.IsCompletedSuccessfully)
-            {
-                TransitPublishResult completionResult = completionTask.Result;
-                completionStatus = completionResult.Status.ToString();
-                completionReason = completionResult.ResponseText ?? "(none)";
-            }
-
-            _logger.LogInformation(
-                "[WRITE-SKIP-DIAG] connectionId={ConnectionId} messageId={MessageId} batchId={BatchId} batchPosition={BatchPosition} sendSequence={SendSequence} t1PendingRegisteredTick={T1PendingRegisteredTick} t2WriteIntentEnqueuedTick={T2WriteIntentEnqueuedTick} t3WriterDequeuedTick={T3WriterDequeuedTick} pendingContains={PendingContains} completionTaskState={CompletionTaskState} responseLoopPreviouslyCompleted={ResponseLoopPreviouslyCompleted} completionStatus={CompletionStatus} completionReason={CompletionReason} skipReason={SkipReason}",
-                ConnectionId,
-                intent.MessageId,
-                batchId,
-                batchPosition,
-                intent.Operation.SendSequence,
-                intent.Operation.T1PendingRegisteredTick,
-                intent.Operation.T2WriteIntentEnqueuedTick,
-                intent.Operation.T3WriterDequeuedTick,
-                pendingContains,
-                completionTaskState,
-                responseLoopPreviouslyCompleted,
-                completionStatus,
-                completionReason,
-                skipReason);
-        }
-
-        internal async Task InitializeAsync(CancellationToken cancellationToken)
-        {
-            _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync START connectionId={ConnectionId}", ConnectionId);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync BEFORE InitializeCoreAsync connectionId={ConnectionId}", ConnectionId);
-                await InitializeCoreAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeAsync COMPLETE connectionId={ConnectionId}", ConnectionId);
-            }
-            catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
-            {
-                MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.Cancellation, ref _initializationCancellationTick);
-                Interlocked.Exchange(ref _initializationCancellationPathObserved, 1);
-                _logger.LogError(ex, "[INIT-TRACE] TransitConnection.InitializeAsync CANCELED connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
-                await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[INIT-TRACE] TransitConnection.InitializeAsync FAILED connectionId={ConnectionId}: {ExceptionType}: {ExceptionMessage}", ConnectionId, ex.GetType().FullName, ex.Message);
-                await CleanupFailedInitializationAttemptAsync().ConfigureAwait(false);
-                throw;
-            }
-        }
-
-        private async Task InitializeCoreAsync(CancellationToken cancellationToken)
-        {
-            BeginInitializationAttempt();
-            _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeCoreAsync START connectionId={ConnectionId}", ConnectionId);
-            TransitionState(TransitConnectionState.Connecting);
-            _tcpClient = new TcpClient();
-            _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE ConnectAsync connectionId={ConnectionId}, host={Host}, port={Port}", ConnectionId, _host, _port);
-            await _tcpClient.ConnectAsync(_host, _port, cancellationToken).ConfigureAwait(false);
-            CaptureAttemptEndpointsAndConnectedUtc(_tcpClient);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER ConnectAsync connectionId={ConnectionId}", ConnectionId);
-            Interlocked.Increment(ref _socketOpenCount);
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.Connected, ref _connectedTick);
-
-            _transportStream = _tcpClient.GetStream();
-            _readStream = _transportStream;
-            _writeStream = _transportStream;
-            _tlsActive = false;
-            _streamingModeNegotiated = false;
-
-            if (_useSsl)
-            {
-                TransitionState(TransitConnectionState.StartingTls);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE TLS handshake (useSsl=true) connectionId={ConnectionId}", ConnectionId);
-                await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER TLS handshake (useSsl=true) connectionId={ConnectionId}", ConnectionId);
-                TransitionState(TransitConnectionState.TlsEstablished);
-            }
-
-            await RebuildPipesAsync(cancellationToken).ConfigureAwait(false);
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.PipesCreated, ref _pipesCreatedTick);
-
-            TransitionState(TransitConnectionState.AwaitingGreeting);
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.AwaitingGreeting, ref _awaitingGreetingTick);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE greeting read connectionId={ConnectionId}", ConnectionId);
-            string greetingLine;
-            try
-            {
-                greetingLine = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (IsP1GreetingEofException(ex))
-            {
-                CaptureP1GreetingEofProvenance();
-                throw;
-            }
-
-            _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER greeting read connectionId={ConnectionId}, greeting={Greeting}", ConnectionId, greetingLine);
-            TransitProtocolParser.ValidateGreeting(greetingLine);
-
-            TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE capabilities connectionId={ConnectionId}", ConnectionId);
-            _capabilities = await ReadCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER capabilities connectionId={ConnectionId}, startTls={SupportsStartTls}, streaming={SupportsStreaming}", ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
-
-            if (!_useSsl && _capabilities.SupportsStartTls)
-            {
-                TransitionState(TransitConnectionState.StartingTls);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE STARTTLS command/handshake connectionId={ConnectionId}", ConnectionId);
-                await StartTlsAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER STARTTLS command/handshake connectionId={ConnectionId}", ConnectionId);
-                TransitionState(TransitConnectionState.TlsEstablished);
-
-                TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE capabilities (post-STARTTLS) connectionId={ConnectionId}", ConnectionId);
-                _capabilities = await ReadCapabilitiesAsync(cancellationToken).ConfigureAwait(false);
-                _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER capabilities (post-STARTTLS) connectionId={ConnectionId}, startTls={SupportsStartTls}, streaming={SupportsStreaming}", ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
-            }
-
-            if (!_capabilities.SupportsStreaming)
-            {
-                throw new InvalidOperationException("Transit server does not advertise STREAMING capability required for TAKETHIS publishing.");
-            }
-
-            TransitionState(TransitConnectionState.StartingStreaming);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection BEFORE MODE STREAM connectionId={ConnectionId}", ConnectionId);
-            await EnterStreamingModeAsync(cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection AFTER MODE STREAM connectionId={ConnectionId}", ConnectionId);
-
-            if (!_streamingModeNegotiated)
-            {
-                throw new InvalidOperationException("Transit connection cannot enter Ready state before MODE STREAM is successfully negotiated.");
-            }
-
-            TransitionState(TransitConnectionState.Ready);
-            Interlocked.Increment(ref _readyTransitionCount);
-            LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
-
-            _responseLoopCancellation = new CancellationTokenSource();
-            _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
-
-            _writeIntentChannel = Channel.CreateBounded<WriteIntent>(new BoundedChannelOptions(_writeIntentQueueCapacity)
-            {
-                SingleReader = true,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.Wait,
-            });
-
-            CancellationTokenSource writeLoopCancellation = new();
-            _writeLoopCancellation = writeLoopCancellation;
-            _writeLoopTask = Task.Run(() => WriteLoopAsync(writeLoopCancellation.Token), CancellationToken.None);
-            _logger.LogInformation("[INIT-TRACE] TransitConnection.InitializeCoreAsync COMPLETE connectionId={ConnectionId}", ConnectionId);
-        }
-
-        private async Task ResetTransportStateAsync()
-        {
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.ResetTransport, ref _resetTransportTick);
-            Interlocked.Exchange(ref _localResetTransportStateObserved, 1);
-            await StopWriteLoopAsync(requestCancellation: true, drainQueuedWriteIntentsAsAmbiguous: true).ConfigureAwait(false);
-
-            PipeWriter? writer = _writer;
-            _writer = null;
-
-            if (writer is not null)
-            {
-                try
-                {
-                    await writer.CompleteAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or InvalidOperationException)
-                {
-                }
-            }
-
-            PipeReader? reader = _reader;
-            _reader = null;
-
-            if (reader is not null)
-            {
-                try
-                {
-                    await reader.CompleteAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or InvalidOperationException)
-                {
-                }
-            }
-
-            DisposeTransportArtifacts();
-
-            _tlsActive = false;
-            _streamingModeNegotiated = false;
-            _capabilities = new TransitCapabilitySnapshot(
-                SupportsStartTls: false,
-                SupportsStreaming: false);
-        }
-
-        private async Task CleanupFailedInitializationAttemptAsync()
-        {
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.CleanupFailedInitialization, ref _cleanupFailedInitializationTick);
-            try
-            {
-                await ResetTransportStateAsync().ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-
-            if (_responseLoopCancellation is not null)
-            {
-                try
-                {
-                    _responseLoopCancellation.Cancel();
-                }
-                catch (ObjectDisposedException)
-                {
-                }
-
-                _responseLoopCancellation.Dispose();
-                _responseLoopCancellation = null;
-            }
-
-            _responseLoopTask = null;
-            TransitionState(TransitConnectionState.Disconnected);
-        }
-
-        private async Task EnterStreamingModeAsync(CancellationToken cancellationToken)
-        {
-            await WriteCommandAsync("MODE STREAM", cancellationToken).ConfigureAwait(false);
-            string modeStreamResponse = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            (int code, string text, _) = TransitProtocolParser.ParseStatusLine(modeStreamResponse);
-
-            if (code != 203)
-            {
-                throw new InvalidOperationException($"MODE STREAM rejected by transit server ({code}): {text}");
-            }
-
-            _streamingModeNegotiated = true;
-        }
-
-        private async Task StartTlsAsync(CancellationToken cancellationToken)
-        {
-            await WriteCommandAsync("STARTTLS", cancellationToken).ConfigureAwait(false);
-            string startTlsResponse = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            (int code, string text, _) = TransitProtocolParser.ParseStatusLine(startTlsResponse);
-
-            if (code != 382)
-            {
-                throw new InvalidOperationException($"STARTTLS negotiation rejected ({code}): {text}");
-            }
-
-            await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
-            await RebuildPipesAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        private async Task UpgradeToTlsAsync(CancellationToken cancellationToken)
-        {
-            if (_transportStream is null)
-            {
-                throw new InvalidOperationException("Transit connection transport stream is not initialized for TLS negotiation.");
-            }
-
-            SslStream sslStream = new(_transportStream, leaveInnerStreamOpen: false);
-            SslClientAuthenticationOptions options = new()
-            {
-                TargetHost = _host,
-                EnabledSslProtocols = SslProtocols.None,
-                RemoteCertificateValidationCallback = _serverCertificateValidationCallback,
-            };
-
-            await sslStream.AuthenticateAsClientAsync(options, cancellationToken).ConfigureAwait(false);
-
-            _transportStream = sslStream;
-            _readStream = sslStream;
-            _writeStream = sslStream;
-            _tlsActive = true;
-        }
-
-        private async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(CancellationToken cancellationToken)
-        {
-            await WriteCommandAsync("CAPABILITIES", cancellationToken).ConfigureAwait(false);
-
-            List<string> lines = [];
-
-            while (true)
-            {
-                string line = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-                lines.Add(line);
-
-                if (line == ".")
-                {
-                    break;
-                }
-            }
-
-            TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
-            LogTransitCapabilities(_logger, ConnectionId, snapshot.SupportsStartTls, snapshot.SupportsStreaming);
-            return snapshot;
-        }
-
-        private async Task<string> ReadLineAsync(CancellationToken cancellationToken)
-        {
-            if (_reader is null)
-            {
-                throw new InvalidOperationException("Transit protocol reader is not initialized.");
-            }
-
-            (string line, int bytesRead) = await TransitProtocolParser.ReadNntpLineWithByteCountAsync(_reader, cancellationToken).ConfigureAwait(false);
-            Interlocked.Add(ref _bytesReceived, bytesRead);
-            return line;
-        }
-
-        private async Task WriteCommandAsync(string command, CancellationToken cancellationToken)
-        {
-            if (_writer is null)
-            {
-                throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterNotInitialized);
-            }
-
-            ArgumentException.ThrowIfNullOrWhiteSpace(command);
-
-            byte[] commandBytes = Encoding.ASCII.GetBytes(command);
-            byte[] bytes = new byte[commandBytes.Length + CrLfBytes.Length];
-            commandBytes.CopyTo(bytes, 0);
-            CrLfBytes.CopyTo(bytes, commandBytes.Length);
-
-            await _writer.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-            Interlocked.Add(ref _bytesTransmitted, bytes.Length);
-            FlushResult flush = await _writer.FlushAsync(cancellationToken).ConfigureAwait(false);
-
-            if (flush.IsCompleted)
-            {
-                throw new InvalidOperationException("Transit protocol writer was completed while issuing NNTP command.");
-            }
-        }
-
-        private async Task RebuildPipesAsync(CancellationToken cancellationToken)
-        {
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.RebuildPipes, ref _rebuildPipesTick);
-            Interlocked.Exchange(ref _localRebuildPipesObserved, 1);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (_readStream is null || _writeStream is null)
-            {
-                throw new InvalidOperationException("Transit transport streams are not initialized.");
-            }
-
-            if (_reader is not null)
-            {
-                EnsureNoBufferedReadData();
-                await _reader.CompleteAsync().ConfigureAwait(false);
-            }
-
-            if (_writer is not null)
-            {
-                await _writer.CompleteAsync().ConfigureAwait(false);
-            }
-
-            _reader = PipeReader.Create(_readStream, new StreamPipeReaderOptions(leaveOpen: true));
-            _writer = PipeWriter.Create(_writeStream, new StreamPipeWriterOptions(leaveOpen: true));
-        }
-
-        private void EnsureNoBufferedReadData()
-        {
-            if (_reader is null)
-            {
-                return;
-            }
-
-            if (!_reader.TryRead(out ReadResult peek))
-            {
-                return;
-            }
-
-            ReadOnlySequence<byte> buffer = peek.Buffer;
-            _reader.AdvanceTo(buffer.Start, buffer.Start);
-
-            if (!buffer.IsEmpty)
-            {
-                throw new InvalidOperationException("Buffered NNTP data remained in PipeReader during transport-layer transition.");
-            }
+            return null;
         }
 
         private async Task ResponseLoopAsync(CancellationToken cancellationToken)
@@ -1211,49 +657,48 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
+                    long responseReadStartTick = Stopwatch.GetTimestamp();
                     string responseLine = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
-                    long responseAvailableTick = Stopwatch.GetTimestamp();
+                    long responseReadEndTick = Stopwatch.GetTimestamp();
+                    _timingCollector?.RecordResponseLineRead(responseReadEndTick - responseReadStartTick);
+
+                    long responseAvailableTick = responseReadEndTick;
+                    long responseCorrelationStartTick = Stopwatch.GetTimestamp();
                     TransitPublishResult? mapped = MapTakethisResponse(responseLine, responseAvailableTick);
                     if (mapped is null)
                     {
                         continue;
                     }
 
-                    if (_pendingByMessageId.TryRemove(mapped.MessageId, out PendingPublishOperation? pendingCandidate))
+                    if (_pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate) && pendingCandidate is not null)
                     {
-                        if (pendingCandidate is null)
-                        {
-                            continue;
-                        }
-
-                        PendingPublishOperation pending = pendingCandidate;
-                        pending.T9ResponseCorrelatedTick = Stopwatch.GetTimestamp();
-                        pending.PendingDepthAtT9 = CapturePendingDepthAndTrackMax();
-                        pending.QueueDepthAtT9 = Volatile.Read(ref _diagnosticWriteQueueDepth);
-                        long currentSendSequence = Volatile.Read(ref _diagnosticSendSequence);
-                        if (pending.SendSequence > 0)
-                        {
-                            long laterTransmittedCount = currentSendSequence - pending.SendSequence;
-                            if (laterTransmittedCount > 0)
-                            {
-                                pending.LogicalOutstandingAheadAtResponse = laterTransmittedCount;
-                                TrackMax(ref _diagnosticLogicalOutstandingDepthMax, laterTransmittedCount);
-                            }
-                        }
-
-                        UpdateDiagnosticOperation(pending);
-
+                        pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
+                        _timingCollector?.RecordResponseCorrelation(
+                            elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
+                            responseAvailableTick: responseAvailableTick,
+                            correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
+                            definitive: mapped.ResponseCode is 239 or 439);
                         AcknowledgeSendOrder(mapped.MessageId);
                         TransitPublishResult correlatedResult = mapped with
                         {
-                            T0PublishAsyncEnterTick = pending.T0PublishAsyncEnterTick,
-                            T1DispatcherAssignedTick = pending.T1DispatcherAssignedTick,
-                            T2SocketWriteBeginTick = pending.T2SocketWriteBeginTick,
-                            T3SocketWriteEndTick = pending.T3SocketWriteEndTick,
-                            T4ResponseAvailableTick = mapped.T4ResponseAvailableTick == 0 ? responseAvailableTick : mapped.T4ResponseAvailableTick,
-                            T6ResponseCorrelatedTick = pending.T9ResponseCorrelatedTick,
+                            T2SocketWriteBeginTick = pendingCandidate.T2SocketWriteBeginTick,
+                            T3SocketWriteEndTick = pendingCandidate.T3SocketWriteEndTick,
+                            T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
-                        pending.Completion.TrySetResult(correlatedResult);
+
+                        RecordSubmissionResult(correlatedResult.Status);
+                        if (_timingCollector is not null)
+                        {
+                            _completionEnqueuedTicks[pendingCandidate.WorkItem.WorkItemId] = Stopwatch.GetTimestamp();
+                        }
+
+                        _ = _completedQueue.Writer.TryWrite(new CompletedWork(pendingCandidate.WorkItem, correlatedResult));
+                        TryCompleteDirectSubmit(pendingCandidate.WorkItem.WorkItemId, correlatedResult);
+
+                        if (correlatedResult.ResponseCode is 239 or 439)
+                        {
+                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+                        }
                     }
                 }
             }
@@ -1262,478 +707,151 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
             catch (Exception ex)
             {
-                TransitionState(TransitConnectionState.Faulted);
-                LogTransitResponseLoopFaulted(_logger, ex, ConnectionId);
-                FailOutstandingAsAmbiguous("Connection failed before definitive TAKETHIS responses were received.", TransitPublishProvenance.ResponseLoopFailure);
+                TrySignalResponseLoopFault(ex, cancelResponseLoop: false);
             }
         }
 
-        private async Task WriteLoopAsync(CancellationToken cancellationToken)
+        private async Task ResponseProgressWatchdogLoopAsync(CancellationToken cancellationToken)
         {
-            Channel<WriteIntent>? writeIntentChannel = _writeIntentChannel;
-            if (writeIntentChannel is null)
-            {
-                return;
-            }
-
-            ChannelReader<WriteIntent> reader = writeIntentChannel.Reader;
-            List<WriteIntent> batch = new(_maxWriteBatchSize);
-
             try
             {
-                while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    batch.Clear();
+                    await Task.Delay(_responseProgressCheckInterval, cancellationToken).ConfigureAwait(false);
 
-                    int writerThreadId = Environment.CurrentManagedThreadId;
-                    int writerTaskId = Task.CurrentId ?? -1;
-                    long batchId = Interlocked.Increment(ref _diagnosticBatchIdSequence);
-                    long queueDepthBeforeDrain = Volatile.Read(ref _diagnosticWriteQueueDepth);
-                    int dequeueAttempt = 1;
-                    string drainExitReason = "Other";
-                    StringBuilder drainAttemptLog = new();
-
-                    long queueDepthBeforeFirstTryDequeue = Volatile.Read(ref _diagnosticWriteQueueDepth);
-                    bool firstDequeueSucceeded = reader.TryRead(out WriteIntent firstIntent);
-                    drainAttemptLog.Append("attempt=")
-                        .Append(dequeueAttempt)
-                        .Append(" queueBeforeTryDequeue=")
-                        .Append(queueDepthBeforeFirstTryDequeue)
-                        .Append(" success=")
-                        .Append(firstDequeueSucceeded ? "true" : "false");
-
-                    if (!firstDequeueSucceeded)
+                    if (Volatile.Read(ref _shutdownRequested) == 1)
                     {
-                        drainAttemptLog.Append(" batchCount=0");
-                        _logger.LogInformation("[BATCH-DRAIN-DIAG] connectionId={ConnectionId} batchId={BatchId} writerThreadId={WriterThreadId} writerTaskId={WriterTaskId} queueBeforeDrain={QueueBeforeDrain} {DrainAttempts} finalDequeued=0 finalStaged=0 exitReason={ExitReason}", ConnectionId, batchId, writerThreadId, writerTaskId, queueDepthBeforeDrain, drainAttemptLog.ToString(), "QueueEmpty");
                         continue;
                     }
 
-                    batch.Add(firstIntent);
-                    long queueDepthAfterFirstDequeue = DecrementDiagnosticQueueDepthOnDequeue();
-                    firstIntent.Operation.T3WriterDequeuedTick = Stopwatch.GetTimestamp();
-                    firstIntent.Operation.QueueDepthAtT3 = queueDepthAfterFirstDequeue;
-                    firstIntent.Operation.PendingDepthAtT3 = CapturePendingDepthAndTrackMax();
-                    drainAttemptLog.Append(" batchCount=").Append(batch.Count);
-
-                    long coalesceStartTick = Stopwatch.GetTimestamp();
-                    long coalesceEndTick = coalesceStartTick;
-                    long coalesceBudgetTicks = Math.Max(1L, (long)Math.Round(_writeBatchCoalesceMicroseconds * Stopwatch.Frequency / 1_000_000d));
-                    long coalesceDeadlineTick = coalesceStartTick + coalesceBudgetTicks;
-                    int additionalTryReadAttempts = 0;
-                    int successfulAdditionalDequeues = 0;
-
-                    while (batch.Count < _maxWriteBatchSize)
+                    if (_pendingByMessageId.IsEmpty)
                     {
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            drainExitReason = "Cancellation";
-                            break;
-                        }
-
-                        long nowTick = Stopwatch.GetTimestamp();
-                        if (nowTick >= coalesceDeadlineTick)
-                        {
-                            drainExitReason = "CoalesceWindowExpired";
-                            break;
-                        }
-
-                        dequeueAttempt++;
-                        additionalTryReadAttempts++;
-                        long queueDepthBeforeTryDequeue = Volatile.Read(ref _diagnosticWriteQueueDepth);
-                        bool nextDequeueSucceeded = reader.TryRead(out WriteIntent nextIntent);
-
-                        drainAttemptLog.Append(" | attempt=")
-                            .Append(dequeueAttempt)
-                            .Append(" queueBeforeTryDequeue=")
-                            .Append(queueDepthBeforeTryDequeue)
-                            .Append(" success=")
-                            .Append(nextDequeueSucceeded ? "true" : "false");
-
-                        if (!nextDequeueSucceeded)
-                        {
-                            long remainingTicks = coalesceDeadlineTick - nowTick;
-                            if (remainingTicks > 0)
-                            {
-                                long remainingMilliseconds = Math.Max(1L, (long)Math.Ceiling(remainingTicks * 1000d / Stopwatch.Frequency));
-                                await Task.Delay(TimeSpan.FromMilliseconds(remainingMilliseconds), cancellationToken).ConfigureAwait(false);
-                                continue;
-                            }
-
-                            drainAttemptLog.Append(" batchCount=").Append(batch.Count);
-                            drainExitReason = "QueueEmpty";
-                            break;
-                        }
-
-                        batch.Add(nextIntent);
-                        successfulAdditionalDequeues++;
-                        long queueDepthAfterDequeue = DecrementDiagnosticQueueDepthOnDequeue();
-                        nextIntent.Operation.T3WriterDequeuedTick = Stopwatch.GetTimestamp();
-                        nextIntent.Operation.QueueDepthAtT3 = queueDepthAfterDequeue;
-                        nextIntent.Operation.PendingDepthAtT3 = CapturePendingDepthAndTrackMax();
-                        drainAttemptLog.Append(" batchCount=").Append(batch.Count);
+                        continue;
                     }
 
-                    coalesceEndTick = Stopwatch.GetTimestamp();
-                    RecordCoalescingWait(coalesceEndTick - coalesceStartTick);
-                    _logger.LogInformation("[COALESCE-DIAG] connectionId={ConnectionId} batchId={BatchId} coalesceStartTick={CoalesceStartTick} coalesceEndTick={CoalesceEndTick} configuredWindowUs={ConfiguredWindowUs} additionalTryReadAttempts={AdditionalTryReadAttempts} successfulAdditionalDequeues={SuccessfulAdditionalDequeues} finalBatchSize={FinalBatchSize}", ConnectionId, batchId, coalesceStartTick, coalesceEndTick, _writeBatchCoalesceMicroseconds, additionalTryReadAttempts, successfulAdditionalDequeues, batch.Count);
-
-                    if (drainExitReason == "Other")
+                    long lastProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
+                    if (lastProgressTick == 0)
                     {
-                        drainExitReason = batch.Count >= _maxWriteBatchSize ? "ReachedMaxBatchSize" : "Other";
+                        continue;
                     }
 
-                    await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    try
+                    TimeSpan elapsed = Stopwatch.GetElapsedTime(lastProgressTick);
+                    if (elapsed <= _responseProgressTimeout)
                     {
-                        PipeWriter? writer = _writer;
-                        if (writer is null)
-                        {
-                            throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterNotInitialized);
-                        }
-
-                        TransitionState(TransitConnectionState.Publishing);
-                        int batchBytesStaged = 0;
-
-                        int batchDequeuedCount = batch.Count;
-                        int batchSize = 0;
-                        int skippedNotPendingCount = 0;
-                        int skippedCompletedCount = 0;
-                        long flushBeginTick = 0;
-                        long flushEndTick = 0;
-
-                        for (int i = 0; i < batch.Count; i++)
-                        {
-                            WriteIntent intent = batch[i];
-                            int batchPosition = i + 1;
-
-                            if (!_pendingByMessageId.ContainsKey(intent.MessageId))
-                            {
-                                skippedNotPendingCount++;
-                                LogSkippedWriteIntent(intent, batchId, batchPosition, pendingContains: false, skipReason: "NotPendingAtStage");
-                                continue;
-                            }
-
-                            if (intent.Operation.Completion.Task.IsCompleted)
-                            {
-                                skippedCompletedCount++;
-                                bool pendingContains = _pendingByMessageId.ContainsKey(intent.MessageId);
-                                LogSkippedWriteIntent(intent, batchId, batchPosition, pendingContains, skipReason: "CompletionAlreadySetBeforeStage");
-                                _pendingByMessageId.TryRemove(intent.MessageId, out _);
-                                continue;
-                            }
-
-                            intent.Operation.T4AssignedToBatchTick = Stopwatch.GetTimestamp();
-                            intent.Operation.PendingDepthAtT4 = CapturePendingDepthAndTrackMax();
-                            intent.Operation.QueueDepthAtBatchStart = queueDepthBeforeDrain;
-                            intent.Operation.BatchDequeuedCount = batchDequeuedCount;
-                            intent.Operation.BatchId = batchId;
-                            intent.Operation.BatchPosition = batchSize + 1;
-                            intent.Operation.SendSequence = Interlocked.Increment(ref _diagnosticSendSequence);
-                            intent.Operation.T5FrameStageBeginTick = Stopwatch.GetTimestamp();
-                            intent.Operation.T2SocketWriteBeginTick = intent.Operation.T5FrameStageBeginTick;
-                            batchBytesStaged += StageTakethisFrame(writer, intent.MessageId, intent.ArticlePayload);
-                            intent.Operation.T6FrameStageEndTick = Stopwatch.GetTimestamp();
-                            intent.Operation.T3SocketWriteEndTick = intent.Operation.T6FrameStageEndTick;
-
-                            batchSize++;
-                            batch[batchSize - 1] = intent;
-                        }
-
-                        if (batchBytesStaged <= 0)
-                        {
-                            if (batchDequeuedCount > 0)
-                            {
-                                _logger.LogInformation("[BATCH-DIAG] connectionId={ConnectionId} batchId={BatchId} queueBeforeDrain={QueueBeforeDrain} dequeued={Dequeued} staged={Staged} skippedNotPending={SkippedNotPending} skippedCompleted={SkippedCompleted} flushTick=0", ConnectionId, batchId, queueDepthBeforeDrain, batchDequeuedCount, batchSize, skippedNotPendingCount, skippedCompletedCount);
-                            }
-
-                            _logger.LogInformation("[BATCH-DRAIN-DIAG] connectionId={ConnectionId} batchId={BatchId} writerThreadId={WriterThreadId} writerTaskId={WriterTaskId} queueBeforeDrain={QueueBeforeDrain} {DrainAttempts} finalDequeued={FinalDequeued} finalStaged={FinalStaged} exitReason={ExitReason}", ConnectionId, batchId, writerThreadId, writerTaskId, queueDepthBeforeDrain, drainAttemptLog.ToString(), batchDequeuedCount, batchSize, drainExitReason);
-                            continue;
-                        }
-
-                        for (int i = 0; i < batchSize; i++)
-                        {
-                            WriteIntent intent = batch[i];
-                            intent.Operation.BatchSize = batchSize;
-                            UpdateDiagnosticOperation(intent.Operation);
-                        }
-
-                        IncrementBatchHistogram(batchSize);
-                        TrackMax(ref _diagnosticMaxPendingDepth, _pendingByMessageId.Count);
-
-                        Interlocked.Add(ref _bytesTransmitted, batchBytesStaged);
-
-                        flushBeginTick = Stopwatch.GetTimestamp();
-                        for (int i = 0; i < batchSize; i++)
-                        {
-                            batch[i].Operation.T7BatchFlushBeginTick = flushBeginTick;
-                        }
-
-                        FlushResult flush = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
-                        flushEndTick = Stopwatch.GetTimestamp();
-
-                        _logger.LogInformation("[BATCH-DIAG] connectionId={ConnectionId} batchId={BatchId} queueBeforeDrain={QueueBeforeDrain} dequeued={Dequeued} staged={Staged} skippedNotPending={SkippedNotPending} skippedCompleted={SkippedCompleted} flushTick={FlushTick}", ConnectionId, batchId, queueDepthBeforeDrain, batchDequeuedCount, batchSize, skippedNotPendingCount, skippedCompletedCount, flushEndTick);
-                        _logger.LogInformation("[BATCH-DRAIN-DIAG] connectionId={ConnectionId} batchId={BatchId} writerThreadId={WriterThreadId} writerTaskId={WriterTaskId} queueBeforeDrain={QueueBeforeDrain} {DrainAttempts} finalDequeued={FinalDequeued} finalStaged={FinalStaged} exitReason={ExitReason}", ConnectionId, batchId, writerThreadId, writerTaskId, queueDepthBeforeDrain, drainAttemptLog.ToString(), batchDequeuedCount, batchSize, drainExitReason);
-
-                        for (int i = 0; i < batchSize; i++)
-                        {
-                            batch[i].Operation.T8BatchFlushEndTick = flushEndTick;
-                            UpdateDiagnosticOperation(batch[i].Operation);
-                        }
-
-                        if (flush.IsCompleted)
-                        {
-                            throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission);
-                        }
+                        continue;
                     }
-                    finally
-                    {
-                        _writeGate.Release();
-                    }
+
+                    TimeoutException timeout = new($"Transit response progress timeout exceeded for connection {ConnectionId} after {elapsed.TotalSeconds:F3}s with {_pendingByMessageId.Count} outstanding work items.");
+                    TrySignalResponseLoopFault(timeout, cancelResponseLoop: true);
+                    return;
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
             }
-            catch (ChannelClosedException)
-            {
-            }
             catch (Exception ex)
             {
-                TransitionState(TransitConnectionState.Faulted);
-                _logger.LogWarning(ex, "Transit connection {ConnectionId} write loop faulted", ConnectionId);
-                writeIntentChannel.Writer.TryComplete(ex);
-                FailOutstandingAsAmbiguous("Connection failed before definitive TAKETHIS responses were received.", TransitPublishProvenance.ConnectionClose);
-            }
-            finally
-            {
-                DrainQueuedWriteIntentsAsAmbiguous(reader, "Connection closed before definitive TAKETHIS responses were received.");
+                TrySignalResponseLoopFault(ex, cancelResponseLoop: true);
             }
         }
 
-        private async Task StopWriteLoopAsync(bool requestCancellation, bool drainQueuedWriteIntentsAsAmbiguous)
+        private void TrySignalResponseLoopFault(Exception ex, bool cancelResponseLoop)
         {
-            Channel<WriteIntent>? writeIntentChannel = _writeIntentChannel;
-            long pendingBeforeStop = _pendingByMessageId.Count;
-            long queueDepthBeforeStop = Volatile.Read(ref _diagnosticWriteQueueDepth);
-            _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection.StopWriteLoopAsync start connectionId={ConnectionId} pendingMessageIds={PendingMessageIds} writeQueueDepth={WriteQueueDepth}", ConnectionId, pendingBeforeStop, queueDepthBeforeStop);
-            _writeIntentChannel = null;
+            ArgumentNullException.ThrowIfNull(ex);
 
-            if (writeIntentChannel is not null)
+            if (Interlocked.CompareExchange(ref _responseLoopFaulted, 1, 0) != 0)
             {
-                writeIntentChannel.Writer.TryComplete();
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection write-intent channel completed connectionId={ConnectionId}", ConnectionId);
-            }
-
-            CancellationTokenSource? writeLoopCancellation = _writeLoopCancellation;
-            _writeLoopCancellation = null;
-
-            if (requestCancellation && writeLoopCancellation is not null)
-            {
-                try
-                {
-                    writeLoopCancellation.Cancel();
-                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection write loop cancellation requested connectionId={ConnectionId}", ConnectionId);
-                }
-                catch (ObjectDisposedException)
-                {
-                }
-            }
-
-            Task? writeLoopTask = _writeLoopTask;
-            _writeLoopTask = null;
-
-            if (writeLoopTask is not null)
-            {
-                try
-                {
-                    await writeLoopTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection write loop terminated connectionId={ConnectionId}", ConnectionId);
-            }
-
-            if (drainQueuedWriteIntentsAsAmbiguous && writeIntentChannel is not null)
-            {
-                DrainQueuedWriteIntentsAsAmbiguous(writeIntentChannel.Reader, "Connection closed before definitive TAKETHIS responses were received.");
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection drained queued write intents as ambiguous connectionId={ConnectionId}", ConnectionId);
-            }
-
-            if (writeLoopCancellation is not null)
-            {
-                writeLoopCancellation.Dispose();
-            }
-
-            long pendingAfterStop = _pendingByMessageId.Count;
-            long queueDepthAfterStop = Volatile.Read(ref _diagnosticWriteQueueDepth);
-            _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection.StopWriteLoopAsync complete connectionId={ConnectionId} pendingMessageIds={PendingMessageIds} writeQueueDepth={WriteQueueDepth}", ConnectionId, pendingAfterStop, queueDepthAfterStop);
-        }
-
-        private void DrainQueuedWriteIntentsAsAmbiguous(ChannelReader<WriteIntent> reader, string reason)
-        {
-            int drainedCount = 0;
-            while (reader.TryRead(out WriteIntent intent))
-            {
-                if (_pendingByMessageId.TryRemove(intent.MessageId, out PendingPublishOperation? pending))
-                {
-                    pending.Completion.TrySetResult(new TransitPublishResult(
-                        MessageId: intent.MessageId,
-                        Status: TransitPublishStatus.Ambiguous,
-                        ResponseCode: null,
-                        ResponseText: reason,
-                        Provenance: TransitPublishProvenance.QueuedWriteDrain,
-                        ProvenanceConnectionId: ConnectionId,
-                        ProvenanceConnectionState: _state,
-                        ProvenanceTick: Stopwatch.GetTimestamp()));
-                    Interlocked.Increment(ref _submissionsAmbiguous);
-                    drainedCount++;
-                }
-            }
-
-            if (drainedCount > 0)
-            {
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection drained queued write intents count={DrainedCount} connectionId={ConnectionId}", drainedCount, ConnectionId);
-            }
-        }
-
-        /// <summary>
-        /// Sends QUIT over a healthy connection and ensures command bytes are flushed to transport.
-        /// </summary>
-        private async Task SendQuitAsync()
-        {
-            if (_state == TransitConnectionState.Faulted)
-            {
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection skipping QUIT because connection is faulted connectionId={ConnectionId}", ConnectionId);
+                Console.WriteLine($"[TRACE-RI-77] {TraceStamp()} ResponseLoopFault ALREADY-SIGNALED connectionId={ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
                 return;
             }
 
-            if (_writer is null)
+            Console.WriteLine($"[TRACE-RI-78] {TraceStamp()} ResponseLoopFault SIGNAL connectionId={ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message} cancelResponseLoop={cancelResponseLoop}");
+            _responseLoopFault = ExceptionDispatchInfo.Capture(ex);
+            TransitionState(TransitConnectionState.Faulted);
+            LogTransitResponseLoopFaulted(_logger, ex, ConnectionId);
+            SettleUnresolvedDirectSubmitWorkForFault(ex);
+            _completedQueue.Writer.TryComplete(ex);
+
+            if (!cancelResponseLoop)
             {
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection skipping QUIT because protocol writer is not initialized connectionId={ConnectionId}", ConnectionId);
                 return;
             }
 
             try
             {
-                await _writeGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                try
-                {
-                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection sending QUIT connectionId={ConnectionId}", ConnectionId);
-                    await WriteCommandAsync("QUIT", CancellationToken.None).ConfigureAwait(false);
-                }
-                finally
-                {
-                    _writeGate.Release();
-                }
+                _responseLoopCancellation?.Cancel();
             }
-            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or InvalidOperationException)
+            catch
             {
-                _logger.LogWarning(ex, "Transit connection {ConnectionId} failed while sending QUIT.", ConnectionId);
             }
         }
 
         private TransitPublishResult? MapTakethisResponse(string responseLine, long responseAvailableTick)
         {
-            (int code, string responseText, string[] tokens) = TransitProtocolParser.ParseStatusLine(responseLine);
-            long responseParsedTick = Stopwatch.GetTimestamp();
-
-            if (code is 239 or 439 or 431 or 400)
+            if (string.IsNullOrWhiteSpace(responseLine))
             {
-                string messageId = ResolveResponseMessageId(code, responseText, responseLine, tokens);
-
-                return code switch
-                {
-                    239 => new TransitPublishResult(messageId, TransitPublishStatus.Accepted, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.OtherOrUnknown, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
-                    439 => new TransitPublishResult(messageId, TransitPublishStatus.Rejected, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.OtherOrUnknown, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
-                    431 => new TransitPublishResult(messageId, TransitPublishStatus.Rejected, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.OtherOrUnknown, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
-                    400 => new TransitPublishResult(messageId, TransitPublishStatus.Ambiguous, code, responseText, T4ResponseAvailableTick: responseAvailableTick, T5ResponseParsedTick: responseParsedTick, Provenance: TransitPublishProvenance.Response400, ProvenanceConnectionId: ConnectionId, ProvenanceConnectionState: _state, ProvenanceTick: responseAvailableTick),
-                    _ => null,
-                };
+                return null;
             }
 
-            return null;
+            (int code, string responseText, string[] tokens) = TransitProtocolParser.ParseStatusLine(responseLine);
+            string messageId = ResolveResponseMessageId(code, responseText, responseLine, tokens);
+
+            TransitPublishStatus status = code switch
+            {
+                239 => TransitPublishStatus.Accepted,
+                439 => TransitPublishStatus.Rejected,
+                431 => TransitPublishStatus.Rejected,
+                400 => TransitPublishStatus.Failed,
+                _ => TransitPublishStatus.Failed,
+            };
+
+            return new TransitPublishResult(
+                MessageId: messageId,
+                Status: status,
+                ResponseCode: code,
+                ResponseText: responseText,
+                T4ResponseAvailableTick: responseAvailableTick,
+                T5ResponseParsedTick: Stopwatch.GetTimestamp(),
+                Provenance: code == 400 ? TransitPublishProvenance.Response400 : TransitPublishProvenance.OtherOrUnknown,
+                ProvenanceConnectionId: ConnectionId,
+                ProvenanceConnectionState: _state,
+                ProvenanceTick: responseAvailableTick);
         }
 
         private string ResolveResponseMessageId(int code, string responseText, string responseLine, string[] tokens)
         {
             if (tokens.Length > 0)
             {
-                string firstToken = tokens[0];
-                if (firstToken.Length >= 3 && firstToken[0] == '<' && firstToken[^1] == '>')
+                string candidate = tokens[0];
+                if (candidate.Length > 0 && candidate[0] == '<')
                 {
-                    return firstToken;
-                }
-
-                if (!CanCorrelateBySendOrder(code, responseText, tokens))
-                {
-                    throw new InvalidOperationException($"TAKETHIS response contains malformed Message-ID token: '{responseLine}'.");
+                    return candidate;
                 }
             }
 
-            if (!CanCorrelateBySendOrder(code, responseText, tokens))
+            if (code == 239 || code == 431 || code == 439)
             {
-                throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token: '{responseLine}'.");
-            }
-
-            if (_pendingByMessageId.Count != 1)
-            {
-                throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token while {_pendingByMessageId.Count} submissions were outstanding; cannot safely correlate without Message-ID.");
-            }
-
-            while (_pendingBySendOrder.TryDequeue(out string? nextMessageId))
-            {
-                if (nextMessageId is null)
-                {
-                    continue;
-                }
-
-                if (_pendingByMessageId.ContainsKey(nextMessageId))
+                if (_pendingBySendOrder.TryDequeue(out string? pendingId) && !string.IsNullOrWhiteSpace(pendingId))
                 {
                     Interlocked.Exchange(ref _tokenlessSuccessModeEnabled, 1);
-                    return nextMessageId;
+                    return pendingId;
                 }
             }
 
-            throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token and no outstanding submission was available for FIFO correlation: '{responseLine}'.");
-        }
-
-        private static bool CanCorrelateBySendOrder(int code, string responseText, string[] tokens)
-        {
-            if (code != 239)
-            {
-                return false;
-            }
-
-            _ = tokens;
-            return string.Equals(responseText, "Article transferred OK", StringComparison.OrdinalIgnoreCase);
+            throw new InvalidOperationException($"Unable to resolve response Message-ID from line: {responseLine}");
         }
 
         private void AcknowledgeSendOrder(string messageId)
         {
-            while (_pendingBySendOrder.TryPeek(out string? queuedMessageId))
+            while (_pendingBySendOrder.TryPeek(out string? queued))
             {
-                if (queuedMessageId is null)
-                {
-                    _pendingBySendOrder.TryDequeue(out _);
-                    continue;
-                }
-
-                if (string.Equals(queuedMessageId, messageId, StringComparison.Ordinal))
+                if (string.Equals(queued, messageId, StringComparison.Ordinal))
                 {
                     _pendingBySendOrder.TryDequeue(out _);
                     return;
                 }
 
-                if (!_pendingByMessageId.ContainsKey(queuedMessageId))
-                {
-                    _pendingBySendOrder.TryDequeue(out _);
-                    continue;
-                }
-
-                return;
+                _pendingBySendOrder.TryDequeue(out _);
             }
         }
 
@@ -1744,45 +862,43 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             WriteBytes(writer, commandPrefix);
             WriteBytes(writer, CrLfBytes);
 
-            int payloadBytesWritten = WriteDotStuffedArticle(writer, articlePayload);
+            long dotStuffStageStartTick = Stopwatch.GetTimestamp();
+            DotStuffWriteMetrics dotStuffMetrics = WriteDotStuffedArticle(writer, articlePayload);
+            _timingCollector?.RecordDotStuffStage(
+                elapsedTicks: Stopwatch.GetTimestamp() - dotStuffStageStartTick,
+                payloadBytes: articlePayload.Length,
+                getSpanCalls: dotStuffMetrics.GetSpanCalls,
+                advanceCalls: dotStuffMetrics.AdvanceCalls,
+                stuffedDotEvents: dotStuffMetrics.StuffedDotEvents);
+
             WriteBytes(writer, DotTerminatorBytes);
 
-            return commandPrefix.Length + CrLfBytes.Length + payloadBytesWritten + DotTerminatorBytes.Length;
+            return commandPrefix.Length + CrLfBytes.Length + dotStuffMetrics.BytesWritten + DotTerminatorBytes.Length;
         }
 
-        private static int WriteDotStuffedArticle(PipeWriter writer, ReadOnlyMemory<byte> payload)
+        private static DotStuffWriteMetrics WriteDotStuffedArticle(PipeWriter writer, ReadOnlyMemory<byte> payload)
         {
-            ReadOnlySpan<byte> span = payload.Span;
-            bool atLineStart = true;
-            int bytesWritten = 0;
+            ReadOnlySpan<byte> source = payload.Span;
+            int requiredLength = TransitDotStuffing.GetRequiredDestinationLength(source, appendTrailingCrlfWhenMissingLf: true, out int stuffedDotCount);
+            Span<byte> destination = writer.GetSpan(requiredLength)[..requiredLength];
 
-            for (int i = 0; i < span.Length; i++)
+            if (!TransitDotStuffing.TryDotStuff(
+                source,
+                destination,
+                out TransitDotStuffTransformResult transform,
+                algorithm: TransitDotStuffingAlgorithm.BulkLineOrientedSinglePass,
+                appendTrailingCrlfWhenMissingLf: true))
             {
-                byte current = span[i];
-
-                if (atLineStart && current == (byte)'.')
-                {
-                    Span<byte> stuffedDotDestination = writer.GetSpan(1);
-                    stuffedDotDestination[0] = (byte)'.';
-                    writer.Advance(1);
-                    bytesWritten++;
-                }
-
-                Span<byte> destination = writer.GetSpan(1);
-                destination[0] = current;
-                writer.Advance(1);
-                bytesWritten++;
-
-                atLineStart = current == (byte)'\n';
+                throw new InvalidOperationException("Unable to stage dot-stuffed payload due to insufficient writer destination span.");
             }
 
-            if (span.Length > 0 && span[^1] != (byte)'\n')
-            {
-                WriteBytes(writer, CrLfBytes);
-                bytesWritten += CrLfBytes.Length;
-            }
+            writer.Advance(transform.BytesWritten);
 
-            return bytesWritten;
+            return new DotStuffWriteMetrics(
+                BytesWritten: transform.BytesWritten,
+                GetSpanCalls: 1,
+                AdvanceCalls: 1,
+                StuffedDotEvents: stuffedDotCount);
         }
 
         private static void WriteBytes(PipeWriter writer, ReadOnlySpan<byte> bytes)
@@ -1792,38 +908,130 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             writer.Advance(bytes.Length);
         }
 
-        private void FailOutstandingAsAmbiguous(string reason, TransitPublishProvenance provenance)
+        private async ValueTask<string> ReadLineAsync(CancellationToken cancellationToken)
         {
-            int completedAsAmbiguous = 0;
-            foreach ((string messageId, PendingPublishOperation pending) in _pendingByMessageId)
-            {
-                if (!_pendingByMessageId.TryRemove(messageId, out PendingPublishOperation? removedPending))
-                {
-                    continue;
-                }
+            PipeReader reader = _reader ?? throw new InvalidOperationException("Transit protocol reader is not initialized.");
+            (string line, int bytesRead) = await TransitProtocolParser.ReadNntpLineWithByteCountAsync(reader, cancellationToken).ConfigureAwait(false);
+            Interlocked.Add(ref _bytesReceived, bytesRead);
+            return line;
+        }
 
-                PendingPublishOperation completionOwner = removedPending ?? pending;
-                if (completionOwner.Completion.TrySetResult(new TransitPublishResult(
-                    MessageId: messageId,
-                    Status: TransitPublishStatus.Ambiguous,
-                    ResponseCode: null,
-                    ResponseText: reason,
-                    Provenance: provenance,
-                    ProvenanceConnectionId: ConnectionId,
-                    ProvenanceConnectionState: _state,
-                    ProvenanceTick: Stopwatch.GetTimestamp())))
+        private async Task AwaitInitializationStageAsync(
+            Func<CancellationToken, Task> operation,
+            string stageName,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
+
+            Console.WriteLine($"[TRACE-RI-69] {TraceStamp()} InitStage START connectionId={ConnectionId} stage='{stageName}' timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
+            using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            stageTimeout.CancelAfter(_responseProgressTimeout);
+
+            try
+            {
+                await operation(stageTimeout.Token).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-70] {TraceStamp()} InitStage COMPLETE connectionId={ConnectionId} stage='{stageName}'");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stageTimeout.IsCancellationRequested)
+            {
+                Console.WriteLine($"[TRACE-RI-71] {TraceStamp()} InitStage TIMEOUT connectionId={ConnectionId} stage='{stageName}'");
+                throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.InitializationProgressTimeout, stageName);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TRACE-RI-72] {TraceStamp()} InitStage EXCEPTION connectionId={ConnectionId} stage='{stageName}' exType={ex.GetType().FullName} exMessage={ex.Message}");
+                throw;
+            }
+        }
+
+        private async Task<T> AwaitInitializationStageAsync<T>(
+            Func<CancellationToken, Task<T>> operation,
+            string stageName,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
+
+            Console.WriteLine($"[TRACE-RI-73] {TraceStamp()} InitStageT START connectionId={ConnectionId} stage='{stageName}' timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
+            using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            stageTimeout.CancelAfter(_responseProgressTimeout);
+
+            try
+            {
+                T value = await operation(stageTimeout.Token).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-74] {TraceStamp()} InitStageT COMPLETE connectionId={ConnectionId} stage='{stageName}'");
+                return value;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stageTimeout.IsCancellationRequested)
+            {
+                Console.WriteLine($"[TRACE-RI-75] {TraceStamp()} InitStageT TIMEOUT connectionId={ConnectionId} stage='{stageName}'");
+                throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.InitializationProgressTimeout, stageName);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TRACE-RI-76] {TraceStamp()} InitStageT EXCEPTION connectionId={ConnectionId} stage='{stageName}' exType={ex.GetType().FullName} exMessage={ex.Message}");
+                throw;
+            }
+        }
+
+        private async Task<IReadOnlyList<string>> ReadCapabilitiesLinesAsync(CancellationToken cancellationToken)
+        {
+            List<string> responseLines = [];
+            while (true)
+            {
+                string line = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
+                responseLines.Add(line);
+                if (line == ".")
                 {
-                    Interlocked.Increment(ref _submissionsAmbiguous);
-                    completedAsAmbiguous++;
+                    break;
                 }
             }
 
-            if (completedAsAmbiguous > 0)
+            return responseLines;
+        }
+
+        private async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(CancellationToken cancellationToken)
+        {
+            await WriteCommandAsync("CAPABILITIES", cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<string> lines = await ReadCapabilitiesLinesAsync(cancellationToken).ConfigureAwait(false);
+            return TransitProtocolParser.ParseCapabilitiesResponse(lines);
+        }
+
+        private async Task WriteCommandAsync(string command, CancellationToken cancellationToken)
+        {
+            Stream writeStream = _writeStream ?? throw new InvalidOperationException("Transit transport write stream is not initialized.");
+            byte[] commandBytes = Encoding.ASCII.GetBytes(command + "\r\n");
+            await writeStream.WriteAsync(commandBytes, cancellationToken).ConfigureAwait(false);
+            await writeStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            Interlocked.Add(ref _bytesTransmitted, commandBytes.Length);
+        }
+
+        private async Task UpgradeToTlsAsync(CancellationToken cancellationToken)
+        {
+            if (_transportStream is null)
             {
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection completed outstanding operations as ambiguous count={OutstandingCount} connectionId={ConnectionId}", completedAsAmbiguous, ConnectionId);
+                throw new InvalidOperationException("Transit transport stream is not initialized.");
             }
 
-            SignalDrainIfCompleted();
+            RemoteCertificateValidationCallback certificateValidationCallback = _serverCertificateValidationCallback
+                ?? ((object _, X509Certificate? _, X509Chain? _, SslPolicyErrors _) => true);
+
+            SslClientAuthenticationOptions options = new()
+            {
+                TargetHost = _host,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                RemoteCertificateValidationCallback = certificateValidationCallback,
+            };
+
+            SslStream sslStream = new(_transportStream, leaveInnerStreamOpen: true, certificateValidationCallback);
+            await sslStream.AuthenticateAsClientAsync(options, cancellationToken).ConfigureAwait(false);
+
+            _readStream = sslStream;
+            _writeStream = sslStream;
+            _transportStream = sslStream;
+            _tlsActive = true;
         }
 
         private void ObserveMaxConcurrentSubmissions(int currentConcurrent)
@@ -1843,6 +1051,23 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        private void UpdateMaxBatchSize(int batchSize)
+        {
+            while (true)
+            {
+                int observed = Volatile.Read(ref _maxWriterBatchSize);
+                if (batchSize <= observed)
+                {
+                    return;
+                }
+
+                if (Interlocked.CompareExchange(ref _maxWriterBatchSize, batchSize, observed) == observed)
+                {
+                    return;
+                }
+            }
+        }
+
         private void RecordSubmissionResult(TransitPublishStatus status)
         {
             switch (status)
@@ -1853,14 +1078,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 case TransitPublishStatus.Rejected:
                     Interlocked.Increment(ref _submissionsRejected);
                     break;
+                case TransitPublishStatus.Failed:
+                    Interlocked.Increment(ref _submissionsFailed);
+                    break;
                 case TransitPublishStatus.Ambiguous:
                     Interlocked.Increment(ref _submissionsAmbiguous);
                     break;
                 case TransitPublishStatus.Unavailable:
                     Interlocked.Increment(ref _submissionsUnavailable);
-                    break;
-                case TransitPublishStatus.Failed:
-                    Interlocked.Increment(ref _submissionsFailed);
                     break;
             }
         }
@@ -1871,322 +1096,191 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             LogTransitStateTransition(_logger, ConnectionId, state);
         }
 
-        internal async ValueTask<TransitPublishResult> SubmitTakethisAsync(
-            string messageId,
-            ReadOnlyMemory<byte> articlePayload,
-            CancellationToken cancellationToken,
-            long publishAsyncEnterTick,
-            long dispatcherAssignedTick)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
-
-            if (messageId.AsSpan().Contains('\r') || messageId.AsSpan().Contains('\n'))
-            {
-                throw new ArgumentException("Message-ID must not contain CR or LF characters.", nameof(messageId));
-            }
-
-            if (articlePayload.IsEmpty)
-            {
-                throw new ArgumentException("Article payload must not be empty.", nameof(articlePayload));
-            }
-
-            if (articlePayload.Span[^1] != (byte)'\n')
-            {
-                throw new ArgumentException("Article payload must end with LF to preserve byte integrity during TAKETHIS framing.", nameof(articlePayload));
-            }
-
-            if (Volatile.Read(ref _shutdownRequested) == 1
-                || (_state != TransitConnectionState.Ready && _state != TransitConnectionState.Publishing)
-                || !_streamingModeNegotiated)
-            {
-                Interlocked.Increment(ref _submissionsUnavailable);
-                return new TransitPublishResult(
-                    MessageId: messageId,
-                    Status: TransitPublishStatus.Unavailable,
-                    ResponseCode: null,
-                    ResponseText: "Transit connection is not ready for publishing.",
-                    T0PublishAsyncEnterTick: publishAsyncEnterTick,
-                    T1DispatcherAssignedTick: dispatcherAssignedTick,
-                    Provenance: TransitPublishProvenance.Unavailable,
-                    ProvenanceConnectionId: ConnectionId,
-                    ProvenanceConnectionState: _state,
-                    ProvenanceTick: Stopwatch.GetTimestamp());
-            }
-
-            bool tokenlessModeEnabled = Volatile.Read(ref _tokenlessSuccessModeEnabled) == 1;
-            if (tokenlessModeEnabled)
-            {
-                await _tokenlessCorrelationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            try
-            {
-                PendingPublishOperation operation = new(messageId, publishAsyncEnterTick, dispatcherAssignedTick);
-                operation.T0SubmitTakethisEnterTick = Stopwatch.GetTimestamp();
-                _logger.LogInformation("[SUBMIT-PATH] stage=submit-takethis-entry messageId={MessageId} tick={Tick}", messageId, operation.T0SubmitTakethisEnterTick);
-
-                if (!_pendingByMessageId.TryAdd(messageId, operation))
-                {
-                    Interlocked.Increment(ref _submissionsFailed);
-                    return new TransitPublishResult(
-                        MessageId: messageId,
-                        Status: TransitPublishStatus.Failed,
-                        ResponseCode: null,
-                        ResponseText: "Duplicate in-flight Message-ID on same connection.",
-                        T0PublishAsyncEnterTick: publishAsyncEnterTick,
-                        T1DispatcherAssignedTick: dispatcherAssignedTick,
-                        Provenance: TransitPublishProvenance.Failed,
-                        ProvenanceConnectionId: ConnectionId,
-                        ProvenanceConnectionState: _state,
-                        ProvenanceTick: Stopwatch.GetTimestamp());
-                }
-
-                operation.T1PendingRegisteredTick = Stopwatch.GetTimestamp();
-                _logger.LogInformation("[SUBMIT-PATH] stage=pending-registered messageId={MessageId} tick={Tick}", messageId, operation.T1PendingRegisteredTick);
-                operation.PendingDepthAtT1 = CapturePendingDepthAndTrackMax();
-                EnsureDiagnosticOperationTracked(operation);
-
-                Interlocked.Increment(ref _submissionsStarted);
-                ObserveMaxConcurrentSubmissions(_pendingByMessageId.Count);
-                _pendingBySendOrder.Enqueue(messageId);
-
-                try
-                {
-                    Channel<WriteIntent>? writeIntentChannel = _writeIntentChannel;
-                    if (writeIntentChannel is null)
-                    {
-                        _pendingByMessageId.TryRemove(messageId, out _);
-                        Interlocked.Increment(ref _submissionsUnavailable);
-                        return new TransitPublishResult(
-                            MessageId: messageId,
-                            Status: TransitPublishStatus.Unavailable,
-                            ResponseCode: null,
-                            ResponseText: "Transit write channel is not available.",
-                            T0PublishAsyncEnterTick: publishAsyncEnterTick,
-                            T1DispatcherAssignedTick: dispatcherAssignedTick,
-                            Provenance: TransitPublishProvenance.Unavailable,
-                            ProvenanceConnectionId: ConnectionId,
-                            ProvenanceConnectionState: _state,
-                            ProvenanceTick: Stopwatch.GetTimestamp());
-                    }
-
-                    byte[] retainedPayload = articlePayload.ToArray();
-                    WriteIntent intent = new(messageId, retainedPayload, operation);
-                    operation.T2WriteIntentEnqueueStartTick = Stopwatch.GetTimestamp();
-                    await writeIntentChannel.Writer.WriteAsync(intent, cancellationToken).ConfigureAwait(false);
-
-                    operation.T2WriteIntentEnqueuedTick = Stopwatch.GetTimestamp();
-                    _logger.LogInformation("[SUBMIT-PATH] stage=write-intent-enqueued messageId={MessageId} tick={Tick}", messageId, operation.T2WriteIntentEnqueuedTick);
-                    operation.QueueDepthAtT2 = IncrementDiagnosticQueueDepthOnEnqueue();
-                    operation.PendingDepthAtT2 = CapturePendingDepthAndTrackMax();
-                    operation.T2BeforeCompletionAwaitTick = Stopwatch.GetTimestamp();
-                    UpdateDiagnosticOperation(operation);
-
-                    TransitPublishResult result = await operation.Completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    RecordSubmissionCompletion(operation);
-                    if (result.T2SocketWriteBeginTick == 0 || result.T3SocketWriteEndTick == 0)
-                    {
-                        result = result with
-                        {
-                            T2SocketWriteBeginTick = result.T2SocketWriteBeginTick == 0 ? operation.T2SocketWriteBeginTick : result.T2SocketWriteBeginTick,
-                            T3SocketWriteEndTick = result.T3SocketWriteEndTick == 0 ? operation.T3SocketWriteEndTick : result.T3SocketWriteEndTick,
-                        };
-                    }
-
-                    RecordSubmissionResult(result.Status);
-                    return result;
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    if (operation.Completion.Task.IsCompletedSuccessfully)
-                    {
-                        TransitPublishResult completedResult = operation.Completion.Task.Result;
-                        RecordSubmissionCompletion(operation);
-                        RecordSubmissionResult(completedResult.Status);
-                        return completedResult;
-                    }
-
-                    if (operation.T2SocketWriteBeginTick == 0 && _pendingByMessageId.TryRemove(messageId, out PendingPublishOperation? pending))
-                    {
-                        pending.Completion.TrySetResult(new TransitPublishResult(
-                            MessageId: messageId,
-                            Status: TransitPublishStatus.Canceled,
-                            ResponseCode: null,
-                            ResponseText: "Transit publisher canceled.",
-                            Provenance: TransitPublishProvenance.Preemption,
-                            ProvenanceConnectionId: ConnectionId,
-                            ProvenanceConnectionState: _state,
-                            ProvenanceTick: Stopwatch.GetTimestamp()));
-                        _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection canceled pending operation before write begin connectionId={ConnectionId} messageId={MessageId}", ConnectionId, messageId);
-                    }
-
-                    RecordSubmissionCompletion(operation);
-                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection SubmitTakethisAsync cancellation path connectionId={ConnectionId} messageId={MessageId} writeIntentEnqueued={WriteIntentEnqueued} writeBeginTick={WriteBeginTick} responseCorrelatedTick={ResponseCorrelatedTick}", ConnectionId, messageId, operation.T2WriteIntentEnqueuedTick > 0, operation.T2SocketWriteBeginTick, operation.T9ResponseCorrelatedTick);
-                    return new TransitPublishResult(
-                        MessageId: messageId,
-                        Status: TransitPublishStatus.Canceled,
-                        ResponseCode: null,
-                        ResponseText: "Transit publisher canceled.",
-                        Provenance: TransitPublishProvenance.Preemption,
-                        ProvenanceConnectionId: ConnectionId,
-                        ProvenanceConnectionState: _state,
-                        ProvenanceTick: Stopwatch.GetTimestamp());
-                }
-                catch
-                {
-                    if (_pendingByMessageId.TryRemove(messageId, out PendingPublishOperation? pending))
-                    {
-                        pending.Completion.TrySetResult(new TransitPublishResult(
-                            MessageId: messageId,
-                            Status: TransitPublishStatus.Ambiguous,
-                            ResponseCode: null,
-                            ResponseText: "Connection failed before definitive TAKETHIS responses were received.",
-                            T0PublishAsyncEnterTick: pending.T0PublishAsyncEnterTick,
-                            T1DispatcherAssignedTick: pending.T1DispatcherAssignedTick,
-                            T2SocketWriteBeginTick: pending.T2SocketWriteBeginTick,
-                            T3SocketWriteEndTick: pending.T3SocketWriteEndTick,
-                            Provenance: TransitPublishProvenance.ConnectionClose,
-                            ProvenanceConnectionId: ConnectionId,
-                            ProvenanceConnectionState: _state,
-                            ProvenanceTick: Stopwatch.GetTimestamp()));
-                        Interlocked.Increment(ref _submissionsAmbiguous);
-                    }
-
-                    RecordSubmissionCompletion(operation);
-                    throw;
-                }
-            }
-            finally
-            {
-                if (tokenlessModeEnabled)
-                {
-                    _tokenlessCorrelationGate.Release();
-                }
-            }
-        }
-
         public async ValueTask DisposeAsync()
         {
-            if (Interlocked.Exchange(ref _shutdownRequested, 1) == 1)
+            if (Interlocked.Exchange(ref _shutdownRequested, 1) != 0)
             {
                 return;
             }
 
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.DisposeAsync, ref _disposeAsyncTick);
-            Interlocked.Exchange(ref _localDisposeAsyncObserved, 1);
-            TransitConnectionState stateBeforeShutdown = _state;
-            TransitionState(TransitConnectionState.Disconnecting);
-
-            TransitConnectionDiagnosticsSnapshot preDisposeSnapshot = CaptureDiagnosticsSnapshot();
-            _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection.DisposeAsync start connectionId={ConnectionId} pendingMessageIds={PendingMessageIds} writeQueueDepth={WriteQueueDepth} outstandingOps={OutstandingOps}", ConnectionId, preDisposeSnapshot.CurrentConcurrentSubmissions, preDisposeSnapshot.CurrentWriteIntentQueueDepth, preDisposeSnapshot.OutstandingOperations.Length);
-
             try
             {
-                await StopWriteLoopAsync(requestCancellation: false, drainQueuedWriteIntentsAsAmbiguous: false).ConfigureAwait(false);
-                FailOutstandingAsAmbiguous("Connection closed before definitive TAKETHIS responses were received.", TransitPublishProvenance.ConnectionClose);
-                _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection outstanding operations completed as ambiguous before drain connectionId={ConnectionId}", ConnectionId);
-                await DrainPendingTakethisAsync().ConfigureAwait(false);
+                TransitionState(TransitConnectionState.Disconnecting);
 
-                if (stateBeforeShutdown is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
+                CancellationTokenSource? responseLoopCancellation = _responseLoopCancellation;
+                if (responseLoopCancellation is not null)
                 {
-                    await SendQuitAsync().ConfigureAwait(false);
-                }
-                else
-                {
-                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection skipping QUIT because pre-shutdown state was {State} connectionId={ConnectionId}", stateBeforeShutdown, ConnectionId);
+                    responseLoopCancellation.Cancel();
                 }
 
-                if (_responseLoopCancellation is not null)
+                CancellationTokenSource? responseProgressWatchdogCancellation = _responseProgressWatchdogCancellation;
+                if (responseProgressWatchdogCancellation is not null)
                 {
+                    responseProgressWatchdogCancellation.Cancel();
+                }
+
+                Task? responseLoopTask = _responseLoopTask;
+                Task? responseProgressWatchdogTask = _responseProgressWatchdogTask;
+                if (responseLoopTask is not null || responseProgressWatchdogTask is not null)
+                {
+                    List<Task> lifecycleTasks = [];
+                    if (responseLoopTask is not null)
+                    {
+                        lifecycleTasks.Add(responseLoopTask);
+                    }
+
+                    if (responseProgressWatchdogTask is not null)
+                    {
+                        lifecycleTasks.Add(responseProgressWatchdogTask);
+                    }
+
                     try
                     {
-                        _responseLoopCancellation.Cancel();
-                        _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection response loop cancellation requested connectionId={ConnectionId}", ConnectionId);
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                    }
-                }
-
-                if (_responseLoopTask is not null)
-                {
-                    try
-                    {
-                        await _responseLoopTask.ConfigureAwait(false);
+                        Task allTasks = Task.WhenAll(lifecycleTasks);
+                        using CancellationTokenSource stopWait = new(TimeSpan.FromSeconds(5));
+                        await allTasks.WaitAsync(stopWait.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
                     {
                     }
+                }
 
-                    _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection response loop terminated connectionId={ConnectionId}", ConnectionId);
-                    _responseLoopTask = null;
+                SettleUnresolvedOwnedWorkDuringDispose();
+
+                try
+                {
+                    await WriteCommandAsync("QUIT", CancellationToken.None).ConfigureAwait(false);
+                }
+                catch
+                {
                 }
             }
             finally
             {
-                _shutdownDrainCompletion = null;
-            }
+                try
+                {
+                    if (_reader is not null)
+                    {
+                        await _reader.CompleteAsync().ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                }
 
-            if (_writer is not null)
-            {
-                await _writer.CompleteAsync().ConfigureAwait(false);
-                _writer = null;
-            }
+                try
+                {
+                    if (_writer is not null)
+                    {
+                        await _writer.CompleteAsync().ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                }
 
-            if (_reader is not null)
-            {
-                await _reader.CompleteAsync().ConfigureAwait(false);
+                _readStream?.Dispose();
+                _writeStream?.Dispose();
+                _transportStream?.Dispose();
+                _tcpClient?.Dispose();
+
+                _completedQueue.Writer.TryComplete();
+                _responseLoopCancellation?.Dispose();
+                _responseProgressWatchdogCancellation?.Dispose();
+                _writeGate.Dispose();
+                _tokenlessCorrelationGate.Dispose();
+
+                _readStream = null;
+                _writeStream = null;
+                _transportStream = null;
+                _tcpClient = null;
                 _reader = null;
-            }
-
-            DisposeTransportArtifacts();
-            _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection transport disposed connectionId={ConnectionId}", ConnectionId);
-
-            if (_responseLoopCancellation is not null)
-            {
-                _responseLoopCancellation.Dispose();
+                _writer = null;
+                _responseLoopTask = null;
                 _responseLoopCancellation = null;
+                _responseProgressWatchdogTask = null;
+                _responseProgressWatchdogCancellation = null;
+                TransitionState(TransitConnectionState.Disconnected);
             }
-
-            TransitConnectionDiagnosticsSnapshot postDisposeSnapshot = CaptureDiagnosticsSnapshot();
-            _logger.LogInformation("[SHUTDOWN-DIAG] TransitConnection.DisposeAsync complete connectionId={ConnectionId} pendingMessageIds={PendingMessageIds} writeQueueDepth={WriteQueueDepth} outstandingOps={OutstandingOps}", ConnectionId, postDisposeSnapshot.CurrentConcurrentSubmissions, postDisposeSnapshot.CurrentWriteIntentQueueDepth, postDisposeSnapshot.OutstandingOperations.Length);
-            TransitionState(TransitConnectionState.Disconnected);
         }
 
-        private void DisposeTransportArtifacts()
+        private void SettleUnresolvedOwnedWorkDuringDispose()
         {
-            MarkP1GreetingLifecycleEvent(P1GreetingProvenanceLifecycleEvent.DisposeTransportArtifacts, ref _disposeTransportArtifactsTick);
-            Interlocked.Exchange(ref _localDisposeTransportArtifactsObserved, 1);
-            DisposeStreamArtifactSafely(_readStream, "read-stream");
-            DisposeStreamArtifactSafely(_writeStream, "write-stream");
-            DisposeStreamArtifactSafely(_transportStream, "transport-stream");
-
-            _tcpClient?.Dispose();
-
-            _readStream = null;
-            _writeStream = null;
-            _transportStream = null;
-            _tcpClient = null;
+            IReadOnlyList<PendingOwnedWork> unresolved = DrainOwnedPendingWork(static _ => true);
+            SettlePendingAsAmbiguous(unresolved, TransitPublishProvenance.Shutdown, "Transit connection shutdown before definitive TAKETHIS response.", enqueueCompletion: true);
         }
 
-        private void DisposeStreamArtifactSafely(Stream? artifact, string artifactName)
+        private void SettleUnresolvedDirectSubmitWorkForFault(Exception ex)
         {
-            if (artifact is null)
+            ArgumentNullException.ThrowIfNull(ex);
+
+            IReadOnlyList<PendingOwnedWork> unresolved = DrainOutstandingDirectSubmitPendingWork();
+            if (unresolved.Count == 0)
             {
                 return;
             }
 
-            try
+            TransitPublishProvenance provenance = ex is IOException or SocketException
+                ? TransitPublishProvenance.ConnectionClose
+                : TransitPublishProvenance.ResponseLoopFailure;
+
+            SettlePendingAsAmbiguous(
+                unresolved,
+                provenance,
+                "Transit connection closed before definitive TAKETHIS response.",
+                enqueueCompletion: false);
+        }
+
+        private void SettlePendingAsAmbiguous(
+            IReadOnlyList<PendingOwnedWork> unresolved,
+            TransitPublishProvenance provenance,
+            string responseText,
+            bool enqueueCompletion)
+        {
+            ArgumentNullException.ThrowIfNull(unresolved);
+            ArgumentException.ThrowIfNullOrWhiteSpace(responseText);
+
+            if (unresolved.Count == 0)
             {
-                artifact.Dispose();
+                return;
             }
-            catch (ObjectDisposedException ex)
+
+            long settledAtTick = Stopwatch.GetTimestamp();
+            foreach (PendingOwnedWork pending in unresolved)
             {
-                LogTransportArtifactAlreadyDisposed(_logger, ConnectionId, artifactName, ex.GetType().FullName ?? ex.GetType().Name, ex);
+                TransitPublishResult ambiguous = new(
+                    MessageId: pending.WorkItem.MessageId,
+                    Status: TransitPublishStatus.Ambiguous,
+                    ResponseCode: null,
+                    ResponseText: responseText,
+                    T2SocketWriteBeginTick: pending.T2SocketWriteBeginTick,
+                    T3SocketWriteEndTick: pending.T3SocketWriteEndTick,
+                    T6ResponseCorrelatedTick: settledAtTick,
+                    Provenance: provenance,
+                    ProvenanceConnectionId: ConnectionId,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: settledAtTick);
+
+                RecordSubmissionResult(ambiguous.Status);
+                if (_timingCollector is not null)
+                {
+                    _completionEnqueuedTicks[pending.WorkItem.WorkItemId] = Stopwatch.GetTimestamp();
+                }
+
+                if (enqueueCompletion)
+                {
+                    _ = _completedQueue.Writer.TryWrite(new CompletedWork(pending.WorkItem, ambiguous));
+                }
+
+                TryCompleteDirectSubmit(pending.WorkItem.WorkItemId, ambiguous);
             }
-            catch (Exception ex) when (ex is IOException or SocketException)
+        }
+
+        private void TryCompleteDirectSubmit(long workItemId, TransitPublishResult result)
+        {
+            if (_directSubmitCompletions.TryRemove(workItemId, out TaskCompletionSource<TransitPublishResult>? directCompletion))
             {
-                LogTransportArtifactDisposeFailed(_logger, ConnectionId, artifactName, ex.GetType().FullName ?? ex.GetType().Name, ex);
+                _ = directCompletion.TrySetResult(result);
             }
         }
 
@@ -2213,25 +1307,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             DiagnosticOperationRecord[] DiagnosticSampleRecords,
             OutstandingPublishOperationSnapshot[] OutstandingOperations);
 
-        internal enum P1GreetingProvenanceLifecycleEvent
-        {
-            Connected = 1,
-            RebuildPipes = 2,
-            PipesCreated = 3,
-            AwaitingGreeting = 4,
-            ResetTransport = 5,
-            CleanupFailedInitialization = 6,
-            DisposeAsync = 7,
-            DisposeTransportArtifacts = 8,
-            Cancellation = 9,
-            P1GreetingEof = 10,
-        }
-
-        internal readonly record struct P1GreetingLifecycleEventRecord(
-            P1GreetingProvenanceLifecycleEvent Event,
-            long Tick,
-            int AttemptId);
-
         internal sealed record P1GreetingProvenanceSnapshot(
             string ConnectionId,
             string Host,
@@ -2255,50 +1330,24 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             bool InitializationCancellationBeforeP1,
             P1GreetingLifecycleEventRecord[] LifecycleEvents);
 
-        [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
-        private static partial void LogTransitStateTransition(ILogger logger, string connectionId, TransitConnectionState state);
-
-        [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
-        private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsStreaming);
-
-        [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
-        private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive);
-
-        [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
-        private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
-
-        [LoggerMessage(EventId = 2215, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} disposal artifact {ArtifactName} was already disposed ({ExceptionType}).")]
-        private static partial void LogTransportArtifactAlreadyDisposed(ILogger logger, string connectionId, string artifactName, string exceptionType, Exception exception);
-
-        [LoggerMessage(EventId = 2216, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} disposal artifact {ArtifactName} failed with {ExceptionType}; continuing non-throwing teardown.")]
-        private static partial void LogTransportArtifactDisposeFailed(ILogger logger, string connectionId, string artifactName, string exceptionType, Exception exception);
-
-        internal enum TransitConnectionLifecycleFailure
+        internal enum P1GreetingProvenanceLifecycleEvent
         {
-            WriterNotInitialized,
-            WriterCompletedDuringTakethisSubmission,
+            Connected = 1,
+            RebuildPipes = 2,
+            PipesCreated = 3,
+            AwaitingGreeting = 4,
+            ResetTransport = 5,
+            CleanupFailedInitialization = 6,
+            DisposeAsync = 7,
+            DisposeTransportArtifacts = 8,
+            Cancellation = 9,
+            P1GreetingEof = 10,
         }
 
-        internal sealed class TransitConnectionLifecycleException : InvalidOperationException
-        {
-            internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure)
-                : base(failure switch
-                {
-                    TransitConnectionLifecycleFailure.WriterNotInitialized => "Transit protocol writer is not initialized.",
-                    TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission => "Transit protocol writer completed during TAKETHIS submission.",
-                    _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown transit lifecycle failure."),
-                })
-            {
-                Failure = failure;
-            }
-
-            internal TransitConnectionLifecycleFailure Failure { get; }
-        }
-
-        private readonly record struct WriteIntent(
-            string MessageId,
-            ReadOnlyMemory<byte> ArticlePayload,
-            PendingPublishOperation Operation);
+        internal readonly record struct P1GreetingLifecycleEventRecord(
+            P1GreetingProvenanceLifecycleEvent Event,
+            long Tick,
+            int AttemptId);
 
         internal readonly record struct DiagnosticOperationRecord(
             string MessageId,
@@ -2366,82 +1415,68 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long CapturedOperationCount,
             int SampledOperationCount);
 
-        private sealed class PendingPublishOperation
+        private sealed class PendingOwnedWork
         {
-            internal PendingPublishOperation(string messageId, long publishAsyncEnterTick, long dispatcherAssignedTick)
+            internal PendingOwnedWork(TransitWorkItem workItem)
             {
-                MessageId = messageId;
-                T0PublishAsyncEnterTick = publishAsyncEnterTick;
-                T1DispatcherAssignedTick = dispatcherAssignedTick;
+                WorkItem = workItem;
             }
 
-            internal string MessageId { get; }
-
-            internal long T0PublishAsyncEnterTick { get; }
-
-            internal long T1DispatcherAssignedTick { get; }
-
-            internal long T0SubmitTakethisEnterTick;
-
-            internal long T1PendingRegisteredTick;
-
-            internal long T2WriteIntentEnqueueStartTick;
-
-            internal long T2WriteIntentEnqueuedTick;
-
-            internal long T2BeforeCompletionAwaitTick;
-
-            internal long T3WriterDequeuedTick;
-
-            internal long T4AssignedToBatchTick;
-
-            internal long T5FrameStageBeginTick;
-
-            internal long T6FrameStageEndTick;
-
-            internal long T7BatchFlushBeginTick;
-
-            internal long T8BatchFlushEndTick;
-
-            internal long T9ResponseCorrelatedTick;
-
-            internal long T10SubmitCompletionTick;
-
-            internal long PendingDepthAtT1;
-
-            internal long PendingDepthAtT2;
-
-            internal long PendingDepthAtT3;
-
-            internal long PendingDepthAtT4;
-
-            internal long PendingDepthAtT9;
-
-            internal long QueueDepthAtT2;
-
-            internal long QueueDepthAtT3;
-
-            internal long QueueDepthAtBatchStart;
-
-            internal int BatchDequeuedCount;
-
-            internal long QueueDepthAtT9;
-
-            internal long BatchId;
-
-            internal int BatchPosition;
-
-            internal int BatchSize;
-
-            internal long SendSequence;
-
-            internal long LogicalOutstandingAheadAtResponse;
+            internal TransitWorkItem WorkItem { get; }
 
             internal long T2SocketWriteBeginTick;
 
             internal long T3SocketWriteEndTick;
 
-            internal TaskCompletionSource<TransitPublishResult> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            internal long T6ResponseCorrelatedTick;
+
+            internal long SendSequence;
         }
+
+        private sealed record CompletedWork(TransitWorkItem WorkItem, TransitPublishResult Result);
+
+        private readonly record struct DotStuffWriteMetrics(
+            int BytesWritten,
+            long GetSpanCalls,
+            long AdvanceCalls,
+            long StuffedDotEvents);
+
+        internal enum TransitConnectionLifecycleFailure
+        {
+            WriterNotInitialized,
+            WriterCompletedDuringTakethisSubmission,
+            InitializationProgressTimeout,
+            WriterDisposedDuringTakethisSubmission,
+        }
+
+        internal sealed class TransitConnectionLifecycleException : InvalidOperationException
+        {
+            internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure, string? stageName = null)
+                : base(failure switch
+                {
+                    TransitConnectionLifecycleFailure.WriterNotInitialized => "Transit protocol writer is not initialized.",
+                    TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission => "Transit protocol writer completed during TAKETHIS submission.",
+                    TransitConnectionLifecycleFailure.InitializationProgressTimeout => $"Transit connection initialization timed out while awaiting {stageName ?? "protocol progress"}.",
+                    TransitConnectionLifecycleFailure.WriterDisposedDuringTakethisSubmission => "Transit protocol writer was disposed during TAKETHIS submission.",
+                    _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown transit lifecycle failure."),
+                })
+            {
+                Failure = failure;
+            }
+
+            internal TransitConnectionLifecycleFailure Failure { get; }
+        }
+
+        [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
+        private static partial void LogTransitStateTransition(ILogger logger, string connectionId, TransitConnectionState state);
+
+        [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
+        private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsStreaming);
+
+        [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
+        private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive);
+
+        [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
+        private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
     }
 }

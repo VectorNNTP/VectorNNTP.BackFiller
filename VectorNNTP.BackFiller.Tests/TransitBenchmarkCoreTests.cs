@@ -53,7 +53,7 @@ public sealed class TransitBenchmarkCoreTests
             dequeuedFirst.Payload.Dispose();
             firstReleased = true;
 
-            bool secondQueued = await secondAdmissionTask;
+            bool secondQueued = await secondAdmissionTask.ConfigureAwait(false);
             Assert.True(secondQueued);
 
             Assert.True(queue.TryRead(out TransitBenchmarkCore.QueuedArticle dequeuedSecond));
@@ -84,7 +84,7 @@ public sealed class TransitBenchmarkCoreTests
         using CancellationTokenSource cts = new(TimeSpan.FromMilliseconds(50));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
-            await budget.AcquireAsync(1, cts.Token);
+            await budget.AcquireAsync(1, cts.Token).ConfigureAwait(false);
         });
     }
 
@@ -97,7 +97,7 @@ public sealed class TransitBenchmarkCoreTests
         ValueTask pending = budget.AcquireAsync(1, CancellationToken.None);
         budget.Dispose();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending.ConfigureAwait(false));
     }
 
     [Fact]

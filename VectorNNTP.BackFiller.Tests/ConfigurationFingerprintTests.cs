@@ -202,7 +202,7 @@ public class ConfigurationFingerprintTests
     public void SanitizeConnectionString_PreservesOperationalProperties()
     {
         // Arrange: Connection string with many operational properties and credentials
-        const string original = 
+        const string original =
             "Server=db01.example.com;" +
             "Port=5432;" +
             "Database=MyDatabase;" +

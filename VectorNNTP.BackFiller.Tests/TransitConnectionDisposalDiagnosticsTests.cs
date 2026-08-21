@@ -20,41 +20,44 @@ public sealed class TransitConnectionDisposalDiagnosticsTests
     {
         CapturingLoggerProvider provider = new();
 
-        await using TransitConnection connection = new(
+        TransitConnection connection = new(
             host: "superSecretPassword-host",
             port: 119,
             useSsl: false,
             provider.CreateLogger<TransitPublisher>());
 
-        Exception exception = exceptionKind switch
+        await using (connection.ConfigureAwait(false))
         {
-            "object-disposed" => new ObjectDisposedException("artifact"),
-            "io" => new IOException("simulated io failure"),
-            "socket" => new SocketException((int)SocketError.ConnectionReset),
-            _ => throw new ArgumentOutOfRangeException(nameof(exceptionKind), exceptionKind, "Unknown exception kind."),
-        };
+            Exception exception = exceptionKind switch
+            {
+                "object-disposed" => new ObjectDisposedException("artifact"),
+                "io" => new IOException("simulated io failure"),
+                "socket" => new SocketException((int)SocketError.ConnectionReset),
+                _ => throw new ArgumentOutOfRangeException(nameof(exceptionKind), exceptionKind, "Unknown exception kind."),
+            };
 
-        SetTransportArtifact(connection, artifactName, new ThrowingDisposeStream(exception));
+            SetTransportArtifact(connection, artifactName, new ThrowingDisposeStream(exception));
 
-        Exception? invocationException = Record.Exception(() => InvokeDisposeTransportArtifacts(connection));
-        Assert.Null(invocationException);
+            Exception? invocationException = Record.Exception(() => InvokeDisposeTransportArtifacts(connection));
+            Assert.Null(invocationException);
 
-        int expectedEventId = exception is ObjectDisposedException ? 2215 : 2216;
-        LogLevel expectedLevel = exception is ObjectDisposedException ? LogLevel.Debug : LogLevel.Warning;
+            int expectedEventId = exception is ObjectDisposedException ? 2215 : 2216;
+            LogLevel expectedLevel = exception is ObjectDisposedException ? LogLevel.Debug : LogLevel.Warning;
 
-        CapturingLoggerProvider.LogEntry entry = Assert.Single(provider.Entries, candidate =>
-            candidate.EventId.Id == expectedEventId
-            && string.Equals(candidate.StateValues.GetValueOrDefault("ArtifactName") as string, artifactName, StringComparison.Ordinal));
+            CapturingLoggerProvider.LogEntry entry = Assert.Single(provider.Entries, candidate =>
+                candidate.EventId.Id == expectedEventId
+                && string.Equals(candidate.StateValues.GetValueOrDefault("ArtifactName") as string, artifactName, StringComparison.Ordinal));
 
-        Assert.Equal(expectedLevel, entry.LogLevel);
-        Assert.NotNull(entry.Exception);
-        Assert.IsType(exception.GetType(), entry.Exception);
+            Assert.Equal(expectedLevel, entry.LogLevel);
+            Assert.NotNull(entry.Exception);
+            Assert.IsType(exception.GetType(), entry.Exception);
 
-        Assert.Equal(connection.ConnectionId, entry.StateValues.GetValueOrDefault("ConnectionId") as string);
-        Assert.Equal(exception.GetType().FullName ?? exception.GetType().Name, entry.StateValues.GetValueOrDefault("ExceptionType") as string);
+            Assert.Equal(connection.ConnectionId, entry.StateValues.GetValueOrDefault("ConnectionId") as string);
+            Assert.Equal(exception.GetType().FullName ?? exception.GetType().Name, entry.StateValues.GetValueOrDefault("ExceptionType") as string);
 
-        string rendered = entry.Message + string.Join('|', entry.StateValues.Values.Select(static value => value?.ToString() ?? string.Empty));
-        Assert.DoesNotContain("superSecretPassword", rendered, StringComparison.OrdinalIgnoreCase);
+            string rendered = entry.Message + string.Join('|', entry.StateValues.Values.Select(static value => value?.ToString() ?? string.Empty));
+            Assert.DoesNotContain("superSecretPassword", rendered, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
@@ -65,28 +68,31 @@ public sealed class TransitConnectionDisposalDiagnosticsTests
         TrackingDisposeStream write = new();
         TrackingDisposeStream transport = new();
 
-        await using TransitConnection connection = new(
+        TransitConnection connection = new(
             host: "localhost",
             port: 119,
             useSsl: false,
             provider.CreateLogger<TransitPublisher>());
 
-        SetTransportArtifact(connection, "read-stream", read);
-        SetTransportArtifact(connection, "write-stream", write);
-        SetTransportArtifact(connection, "transport-stream", transport);
+        await using (connection.ConfigureAwait(false))
+        {
+            SetTransportArtifact(connection, "read-stream", read);
+            SetTransportArtifact(connection, "write-stream", write);
+            SetTransportArtifact(connection, "transport-stream", transport);
 
-        Exception? invocationException = Record.Exception(() => InvokeDisposeTransportArtifacts(connection));
-        Assert.Null(invocationException);
+            Exception? invocationException = Record.Exception(() => InvokeDisposeTransportArtifacts(connection));
+            Assert.Null(invocationException);
 
-        Assert.Equal(1, read.DisposeCount);
-        Assert.Equal(1, write.DisposeCount);
-        Assert.Equal(1, transport.DisposeCount);
+            Assert.Equal(1, read.DisposeCount);
+            Assert.Equal(1, write.DisposeCount);
+            Assert.Equal(1, transport.DisposeCount);
 
-        Assert.Null(GetFieldValue<Stream>(connection, "_readStream"));
-        Assert.Null(GetFieldValue<Stream>(connection, "_writeStream"));
-        Assert.Null(GetFieldValue<Stream>(connection, "_transportStream"));
+            Assert.Null(GetFieldValue<Stream>(connection, "_readStream"));
+            Assert.Null(GetFieldValue<Stream>(connection, "_writeStream"));
+            Assert.Null(GetFieldValue<Stream>(connection, "_transportStream"));
 
-        Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
+            Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
+        }
     }
 
     private static void InvokeDisposeTransportArtifacts(TransitConnection connection)
@@ -228,3 +234,4 @@ public sealed class TransitConnectionDisposalDiagnosticsTests
         }
     }
 }
+

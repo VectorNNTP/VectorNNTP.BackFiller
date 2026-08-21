@@ -160,7 +160,7 @@ public sealed class TransitProtocolParserTests
         await pipe.Writer.CompleteAsync();
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None));
+            await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public sealed class TransitProtocolParserTests
         await pipe.Writer.WriteAsync(oversizedLine);
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None));
+            await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
 
         Assert.Contains("exceeded maximum length", ex.Message, StringComparison.OrdinalIgnoreCase);
     }

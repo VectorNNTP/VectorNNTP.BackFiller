@@ -74,6 +74,12 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && string.Equals(args[0], "dotstuff-bench", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = BenchmarkRunner.Run<TransitDotStuffingBenchmarks>();
+            return;
+        }
+
         _ = BenchmarkRunner.Run<LoggingApiBenchmarks>();
     }
 }

@@ -213,7 +213,7 @@ public sealed class ShutdownCoordinatorTests
         Task completedTask = await Task.WhenAny(signalTask, Task.Delay(TimeSpan.FromSeconds(2)));
 
         Assert.Same(signalTask, completedTask);
-        await signalTask;
+        await signalTask.ConfigureAwait(false);
         Assert.Equal(ShutdownCoordinator.ShutdownState.ForcedShutdown, coordinator.State);
         Assert.True(coordinator.ForcedShutdownToken.IsCancellationRequested);
 
@@ -287,14 +287,14 @@ public sealed class ShutdownCoordinatorTests
             Task immediateForced = Task.Run(async () =>
             {
                 startBarrier.SignalAndWait();
-                await Task.Delay(gracePeriod);
+                await Task.Delay(gracePeriod).ConfigureAwait(false);
                 coordinator.SignalForcedShutdown(ShutdownCoordinator.ShutdownReason.OperatorRequest);
             });
 
             startBarrier.SignalAndWait();
 
             bool forcedSignaled = coordinator.ForcedShutdownToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(2));
-            await immediateForced;
+            await immediateForced.ConfigureAwait(false);
 
             Assert.True(forcedSignaled);
             Assert.Equal(ShutdownCoordinator.ShutdownState.ForcedShutdown, coordinator.State);
@@ -328,7 +328,7 @@ public sealed class ShutdownCoordinatorTests
                     _ => TimeSpan.FromMilliseconds(10),
                 };
 
-                await Task.Delay(disposeDelay);
+                await Task.Delay(disposeDelay).ConfigureAwait(false);
                 coordinator.Dispose();
             });
 
