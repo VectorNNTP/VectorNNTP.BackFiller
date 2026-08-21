@@ -250,81 +250,188 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             cancellationToken.ThrowIfCancellationRequested();
             Console.WriteLine($"[TRACE-RI-60] {TraceStamp()} Connection.Initialize START connectionId={ConnectionId} host={_host} port={_port} timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
 
-            TransitionState(TransitConnectionState.Connecting);
-            _tcpClient = new TcpClient();
-            await AwaitInitializationStageAsync(
-                token => _tcpClient.ConnectAsync(_host, _port, token).AsTask(),
-                "TCP connect",
-                cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"[TRACE-RI-61] {TraceStamp()} Connection.Initialize TCP-CONNECT-COMPLETE connectionId={ConnectionId}");
-            Interlocked.Increment(ref _socketOpenCount);
-
-            _transportStream = _tcpClient.GetStream();
-            _readStream = _transportStream;
-            _writeStream = _transportStream;
-            _tlsActive = false;
-            _streamingModeNegotiated = false;
-
-            if (_useSsl)
+            try
             {
-                TransitionState(TransitConnectionState.StartingTls);
-                await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
-                TransitionState(TransitConnectionState.TlsEstablished);
+                TransitionState(TransitConnectionState.Connecting);
+                _tcpClient = new TcpClient();
+                await AwaitInitializationStageAsync(
+                    token => _tcpClient.ConnectAsync(_host, _port, token).AsTask(),
+                    "TCP connect",
+                    cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-61] {TraceStamp()} Connection.Initialize TCP-CONNECT-COMPLETE connectionId={ConnectionId}");
+                Interlocked.Increment(ref _socketOpenCount);
+
+                _transportStream = _tcpClient.GetStream();
+                _readStream = _transportStream;
+                _writeStream = _transportStream;
+                _tlsActive = false;
+                _streamingModeNegotiated = false;
+
+                if (_useSsl)
+                {
+                    TransitionState(TransitConnectionState.StartingTls);
+                    await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+                    TransitionState(TransitConnectionState.TlsEstablished);
+                }
+
+                _reader = PipeReader.Create(_readStream, new StreamPipeReaderOptions(leaveOpen: true));
+                _writer = PipeWriter.Create(_writeStream, new StreamPipeWriterOptions(leaveOpen: true));
+
+                TransitionState(TransitConnectionState.AwaitingGreeting);
+                Console.WriteLine($"[TRACE-RI-62] {TraceStamp()} Connection.Initialize GREETING-READ-START connectionId={ConnectionId}");
+                string greetingLine = await AwaitInitializationStageAsync(
+                    token => ReadLineAsync(token).AsTask(),
+                    "greeting response",
+                    cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-63] {TraceStamp()} Connection.Initialize GREETING-READ-COMPLETE connectionId={ConnectionId} line='{greetingLine}'");
+                TransitProtocolParser.ValidateGreeting(greetingLine);
+
+                TransitionState(TransitConnectionState.CapabilitiesNegotiation);
+                Console.WriteLine($"[TRACE-RI-64] {TraceStamp()} Connection.Initialize CAPABILITIES-START connectionId={ConnectionId}");
+                _capabilities = await AwaitInitializationStageAsync(
+                    token => ReadCapabilitiesAsync(token),
+                    "CAPABILITIES exchange",
+                    cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
+                LogTransitCapabilities(_logger, ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
+
+                if (!_useSsl && _capabilities.SupportsStartTls)
+                {
+                    TransitionState(TransitConnectionState.StartingTls);
+                    await AwaitInitializationStageAsync(
+                        token => StartTlsAsync(token),
+                        "STARTTLS negotiation",
+                        cancellationToken).ConfigureAwait(false);
+                    TransitionState(TransitConnectionState.TlsEstablished);
+
+                    _reader = PipeReader.Create(_readStream ?? throw new InvalidOperationException("Transit transport read stream is not initialized."), new StreamPipeReaderOptions(leaveOpen: true));
+                    _writer = PipeWriter.Create(_writeStream ?? throw new InvalidOperationException("Transit transport write stream is not initialized."), new StreamPipeWriterOptions(leaveOpen: true));
+
+                    TransitionState(TransitConnectionState.CapabilitiesNegotiation);
+                    Console.WriteLine($"[TRACE-RI-64A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-START connectionId={ConnectionId}");
+                    _capabilities = await AwaitInitializationStageAsync(
+                        token => ReadCapabilitiesAsync(token),
+                        "CAPABILITIES exchange (post-STARTTLS)",
+                        cancellationToken).ConfigureAwait(false);
+                    Console.WriteLine($"[TRACE-RI-65A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
+                    LogTransitCapabilities(_logger, ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
+                }
+
+                if (!_capabilities.SupportsStreaming)
+                {
+                    throw new InvalidOperationException("Transit server does not advertise STREAMING capability.");
+                }
+
+                TransitionState(TransitConnectionState.StartingStreaming);
+                Console.WriteLine($"[TRACE-RI-66] {TraceStamp()} Connection.Initialize MODE-STREAM-START connectionId={ConnectionId}");
+                await WriteCommandAsync("MODE STREAM", cancellationToken).ConfigureAwait(false);
+                string streamResponse = await AwaitInitializationStageAsync(
+                    token => ReadLineAsync(token).AsTask(),
+                    "MODE STREAM response",
+                    cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-67] {TraceStamp()} Connection.Initialize MODE-STREAM-COMPLETE connectionId={ConnectionId} line='{streamResponse}'");
+                (int streamCode, _, _) = TransitProtocolParser.ParseStatusLine(streamResponse);
+                if (streamCode != 203)
+                {
+                    throw new InvalidOperationException($"Unexpected MODE STREAM response code: {streamCode}.");
+                }
+
+                _streamingModeNegotiated = true;
+                TransitionState(TransitConnectionState.Ready);
+                Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={_state}");
+                Interlocked.Increment(ref _readyTransitionCount);
+                LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
+
+                _responseLoopCancellation = new CancellationTokenSource();
+                _responseProgressWatchdogCancellation = CancellationTokenSource.CreateLinkedTokenSource(_responseLoopCancellation.Token);
+                _responseLoopFault = null;
+                Volatile.Write(ref _responseLoopFaulted, 0);
+                Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+                _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
+                _responseProgressWatchdogTask = Task.Run(() => ResponseProgressWatchdogLoopAsync(_responseProgressWatchdogCancellation.Token), CancellationToken.None);
+            }
+            catch
+            {
+                try
+                {
+                    await CleanupInitializationFailureAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+
+                throw;
+            }
+        }
+
+        private async Task CleanupInitializationFailureAsync()
+        {
+            try
+            {
+                _responseLoopCancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
             }
 
-            _reader = PipeReader.Create(_readStream, new StreamPipeReaderOptions(leaveOpen: true));
-            _writer = PipeWriter.Create(_writeStream, new StreamPipeWriterOptions(leaveOpen: true));
-
-            TransitionState(TransitConnectionState.AwaitingGreeting);
-            Console.WriteLine($"[TRACE-RI-62] {TraceStamp()} Connection.Initialize GREETING-READ-START connectionId={ConnectionId}");
-            string greetingLine = await AwaitInitializationStageAsync(
-                token => ReadLineAsync(token).AsTask(),
-                "greeting response",
-                cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"[TRACE-RI-63] {TraceStamp()} Connection.Initialize GREETING-READ-COMPLETE connectionId={ConnectionId} line='{greetingLine}'");
-            TransitProtocolParser.ValidateGreeting(greetingLine);
-
-            TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-            Console.WriteLine($"[TRACE-RI-64] {TraceStamp()} Connection.Initialize CAPABILITIES-START connectionId={ConnectionId}");
-            _capabilities = await AwaitInitializationStageAsync(
-                token => ReadCapabilitiesAsync(token),
-                "CAPABILITIES exchange",
-                cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
-            LogTransitCapabilities(_logger, ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
-
-            if (!_capabilities.SupportsStreaming)
+            try
             {
-                throw new InvalidOperationException("Transit server does not advertise STREAMING capability.");
+                _responseProgressWatchdogCancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
             }
 
-            TransitionState(TransitConnectionState.StartingStreaming);
-            Console.WriteLine($"[TRACE-RI-66] {TraceStamp()} Connection.Initialize MODE-STREAM-START connectionId={ConnectionId}");
-            await WriteCommandAsync("MODE STREAM", cancellationToken).ConfigureAwait(false);
-            string streamResponse = await AwaitInitializationStageAsync(
-                token => ReadLineAsync(token).AsTask(),
-                "MODE STREAM response",
-                cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"[TRACE-RI-67] {TraceStamp()} Connection.Initialize MODE-STREAM-COMPLETE connectionId={ConnectionId} line='{streamResponse}'");
-            (int streamCode, _, _) = TransitProtocolParser.ParseStatusLine(streamResponse);
-            if (streamCode != 203)
+            try
             {
-                throw new InvalidOperationException($"Unexpected MODE STREAM response code: {streamCode}.");
+                if (_reader is not null)
+                {
+                    await _reader.CompleteAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+            {
             }
 
-            _streamingModeNegotiated = true;
-            TransitionState(TransitConnectionState.Ready);
-            Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={_state}");
-            Interlocked.Increment(ref _readyTransitionCount);
-            LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
+            try
+            {
+                if (_writer is not null)
+                {
+                    await _writer.CompleteAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+            }
 
-            _responseLoopCancellation = new CancellationTokenSource();
-            _responseProgressWatchdogCancellation = CancellationTokenSource.CreateLinkedTokenSource(_responseLoopCancellation.Token);
+            _readStream?.Dispose();
+            _writeStream?.Dispose();
+            _transportStream?.Dispose();
+            _tcpClient?.Dispose();
+
+            _reader = null;
+            _writer = null;
+            _readStream = null;
+            _writeStream = null;
+            _transportStream = null;
+            _tcpClient = null;
+
+            _responseLoopTask = null;
+            _responseProgressWatchdogTask = null;
             _responseLoopFault = null;
             Volatile.Write(ref _responseLoopFaulted, 0);
-            Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
-            _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
-            _responseProgressWatchdogTask = Task.Run(() => ResponseProgressWatchdogLoopAsync(_responseProgressWatchdogCancellation.Token), CancellationToken.None);
+            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+
+            _responseLoopCancellation?.Dispose();
+            _responseProgressWatchdogCancellation?.Dispose();
+            _responseLoopCancellation = null;
+            _responseProgressWatchdogCancellation = null;
+
+            _tlsActive = false;
+            _streamingModeNegotiated = false;
+            _capabilities = new TransitCapabilitySnapshot(SupportsStartTls: false, SupportsStreaming: false);
+
+            TransitionState(TransitConnectionState.Disconnected);
         }
 
         internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitWorkItem> items, CancellationToken cancellationToken)
@@ -513,7 +620,26 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             try
             {
-                await ProcessBatchAsync([item], cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await ProcessBatchAsync([item], cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex) when (string.Equals(ex.Message, "Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref _submissionsFailed);
+                    return new TransitPublishResult(
+                        MessageId: messageId,
+                        Status: TransitPublishStatus.Failed,
+                        ResponseCode: null,
+                        ResponseText: "Duplicate in-flight Message-ID on same connection.",
+                        T0PublishAsyncEnterTick: publishAsyncEnterTick,
+                        T1DispatcherAssignedTick: dispatcherAssignedTick,
+                        Provenance: TransitPublishProvenance.Failed,
+                        ProvenanceConnectionId: ConnectionId,
+                        ProvenanceConnectionState: _state,
+                        ProvenanceTick: Stopwatch.GetTimestamp());
+                }
+
                 onWriteIntentMaterialized?.Invoke();
 
                 TransitPublishResult result = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -522,6 +648,37 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     T0PublishAsyncEnterTick = publishAsyncEnterTick,
                     T1DispatcherAssignedTick = dispatcherAssignedTick,
                 };
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                if (completion.Task.IsCompletedSuccessfully)
+                {
+                    TransitPublishResult completedResult = completion.Task.Result;
+                    return completedResult with
+                    {
+                        T0PublishAsyncEnterTick = publishAsyncEnterTick,
+                        T1DispatcherAssignedTick = dispatcherAssignedTick,
+                    };
+                }
+
+                if (_pendingByMessageId.TryGetValue(messageId, out PendingOwnedWork? pending)
+                    && pending.T2SocketWriteBeginTick == 0
+                    && _pendingByMessageId.TryRemove(messageId, out _))
+                {
+                    AcknowledgeSendOrder(messageId);
+                }
+
+                return new TransitPublishResult(
+                    MessageId: messageId,
+                    Status: TransitPublishStatus.Canceled,
+                    ResponseCode: null,
+                    ResponseText: "Transit publisher canceled.",
+                    T0PublishAsyncEnterTick: publishAsyncEnterTick,
+                    T1DispatcherAssignedTick: dispatcherAssignedTick,
+                    Provenance: TransitPublishProvenance.Preemption,
+                    ProvenanceConnectionId: ConnectionId,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: Stopwatch.GetTimestamp());
             }
             finally
             {
@@ -801,7 +958,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 239 => TransitPublishStatus.Accepted,
                 439 => TransitPublishStatus.Rejected,
                 431 => TransitPublishStatus.Rejected,
-                400 => TransitPublishStatus.Failed,
+                400 => TransitPublishStatus.Ambiguous,
                 _ => TransitPublishStatus.Failed,
             };
 
@@ -831,11 +988,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             if (code == 239 || code == 431 || code == 439)
             {
-                if (_pendingBySendOrder.TryDequeue(out string? pendingId) && !string.IsNullOrWhiteSpace(pendingId))
+                bool tokenlessCorrelatable = code == 239
+                    && string.Equals(responseText, "Article transferred OK", StringComparison.OrdinalIgnoreCase);
+                if (!tokenlessCorrelatable)
                 {
-                    Interlocked.Exchange(ref _tokenlessSuccessModeEnabled, 1);
-                    return pendingId;
+                    throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token: '{responseLine}'.");
                 }
+
+                if (_pendingByMessageId.Count != 1)
+                {
+                    throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token while {_pendingByMessageId.Count} submissions were outstanding; cannot safely correlate without Message-ID.");
+                }
+
+                while (_pendingBySendOrder.TryDequeue(out string? pendingId))
+                {
+                    if (string.IsNullOrWhiteSpace(pendingId))
+                    {
+                        continue;
+                    }
+
+                    if (_pendingByMessageId.ContainsKey(pendingId))
+                    {
+                        Interlocked.Exchange(ref _tokenlessSuccessModeEnabled, 1);
+                        return pendingId;
+                    }
+                }
+
+                throw new InvalidOperationException($"TAKETHIS response omitted Message-ID token and no outstanding submission was available for FIFO correlation: '{responseLine}'.");
             }
 
             throw new InvalidOperationException($"Unable to resolve response Message-ID from line: {responseLine}");
@@ -1007,6 +1186,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Interlocked.Add(ref _bytesTransmitted, commandBytes.Length);
         }
 
+        private async Task StartTlsAsync(CancellationToken cancellationToken)
+        {
+            await WriteCommandAsync("STARTTLS", cancellationToken).ConfigureAwait(false);
+            string startTlsResponse = await ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            (int code, string _, _) = TransitProtocolParser.ParseStatusLine(startTlsResponse);
+
+            if (code != 382)
+            {
+                throw new InvalidOperationException($"Unexpected STARTTLS response code: {code}.");
+            }
+
+            await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         private async Task UpgradeToTlsAsync(CancellationToken cancellationToken)
         {
             if (_transportStream is null)
@@ -1103,6 +1296,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return;
             }
 
+            TransitConnectionState stateBeforeShutdown = _state;
+
             try
             {
                 TransitionState(TransitConnectionState.Disconnecting);
@@ -1147,12 +1342,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 SettleUnresolvedOwnedWorkDuringDispose();
 
-                try
+                if (stateBeforeShutdown is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
                 {
-                    await WriteCommandAsync("QUIT", CancellationToken.None).ConfigureAwait(false);
-                }
-                catch
-                {
+                    try
+                    {
+                        await WriteCommandAsync("QUIT", CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                    }
                 }
             }
             finally

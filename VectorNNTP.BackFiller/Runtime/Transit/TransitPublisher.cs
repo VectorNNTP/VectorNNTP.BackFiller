@@ -354,6 +354,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _globalQueue.FreezeAdmission();
             _connectionWorkersCancellation.Cancel();
 
+            await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
+
             foreach (Task worker in _connectionWorkers)
             {
                 try

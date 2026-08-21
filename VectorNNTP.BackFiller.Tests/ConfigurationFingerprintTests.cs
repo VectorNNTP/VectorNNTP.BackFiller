@@ -1101,18 +1101,7 @@ public class ConfigurationFingerprintTests
     public void FingerprintCode_NeverCallsTryGetPassword()
     {
         // Arrange: Read the fingerprint source file
-        string workspaceRoot = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            "..", "..", "..", ".."
-        );
-
-        string fingerprintSourcePath = Path.Combine(
-            workspaceRoot,
-            "VectorNNTP.BackFiller",
-            "Startup",
-            "Configuration",
-            "ConfigurationFingerprintService.cs"
-        );
+        string fingerprintSourcePath = ResolveConfigurationFingerprintSourcePath();
 
         // Act: Read source code and strip comments/strings to avoid false positives
         string sourceCode = File.ReadAllText(fingerprintSourcePath);
@@ -1136,6 +1125,38 @@ public class ConfigurationFingerprintTests
         // Assert: SECURITY CRITICAL - TryGetPassword must NEVER appear in actual code
         // (Comments have been stripped, so this only catches real method calls)
         Assert.DoesNotContain("TryGetPassword", sourceCode, StringComparison.Ordinal);
+    }
+
+    private static string ResolveConfigurationFingerprintSourcePath()
+    {
+        const string solutionMarker = "VectorNNTP.BackFiller.slnx";
+        string? current = AppContext.BaseDirectory;
+
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            string markerPath = Path.Combine(current, solutionMarker);
+            if (File.Exists(markerPath))
+            {
+                string sourcePath = Path.Combine(
+                    current,
+                    "VectorNNTP.BackFiller",
+                    "Startup",
+                    "Configuration",
+                    "ConfigurationFingerprintService.cs");
+
+                if (File.Exists(sourcePath))
+                {
+                    return sourcePath;
+                }
+
+                break;
+            }
+
+            DirectoryInfo? parent = Directory.GetParent(current);
+            current = parent?.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root for ConfigurationFingerprintService source contract test.");
     }
 }
 

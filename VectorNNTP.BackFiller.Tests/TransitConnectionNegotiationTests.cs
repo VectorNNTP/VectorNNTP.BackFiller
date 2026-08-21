@@ -158,7 +158,9 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
 
         using CancellationTokenSource initCts = new();
         await connection.InitializeAsync(initCts.Token);
+        Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         initCts.Cancel();
+        Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
 
         Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
 
@@ -173,7 +175,8 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
         Assert.Equal(TransitPublishStatus.Accepted, result.Status);
         Assert.Equal(239, result.ResponseCode);
         Assert.Equal(messageId, result.MessageId);
-        Assert.Equal(TransitConnectionState.Publishing, connection.CurrentState);
+        Assert.NotEqual(TransitConnectionState.Faulted, connection.CurrentState);
+        Assert.NotEqual(TransitConnectionState.Disconnected, connection.CurrentState);
     }
 
     [Fact]

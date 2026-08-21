@@ -1,6 +1,5 @@
 using System.Net.Sockets;
 using System.Reflection;
-using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
@@ -16,7 +15,7 @@ public sealed class TransitConnectionDisposalDiagnosticsTests
     [InlineData("read-stream", "object-disposed")]
     [InlineData("write-stream", "io")]
     [InlineData("transport-stream", "socket")]
-    public async Task DisposeTransportArtifacts_WhenSuppressedDisposeExceptionThrown_RemainsNonThrowingAndLogsStructuredContext(string artifactName, string exceptionKind)
+    public async Task DisposeAsync_WhenTransportArtifactDisposeThrows_PropagatesExceptionWithoutLeakingSensitiveHost(string artifactName, string exceptionKind)
     {
         CapturingLoggerProvider provider = new();
 
@@ -26,42 +25,30 @@ public sealed class TransitConnectionDisposalDiagnosticsTests
             useSsl: false,
             provider.CreateLogger<TransitPublisher>());
 
-        await using (connection.ConfigureAwait(false))
+        Exception expected = exceptionKind switch
         {
-            Exception exception = exceptionKind switch
-            {
-                "object-disposed" => new ObjectDisposedException("artifact"),
-                "io" => new IOException("simulated io failure"),
-                "socket" => new SocketException((int)SocketError.ConnectionReset),
-                _ => throw new ArgumentOutOfRangeException(nameof(exceptionKind), exceptionKind, "Unknown exception kind."),
-            };
+            "object-disposed" => new ObjectDisposedException("artifact"),
+            "io" => new IOException("simulated io failure"),
+            "socket" => new SocketException((int)SocketError.ConnectionReset),
+            _ => throw new ArgumentOutOfRangeException(nameof(exceptionKind), exceptionKind, "Unknown exception kind."),
+        };
 
-            SetTransportArtifact(connection, artifactName, new ThrowingDisposeStream(exception));
+        SetTransportArtifact(connection, artifactName, new ThrowingDisposeStream(expected));
 
-            Exception? invocationException = Record.Exception(() => InvokeDisposeTransportArtifacts(connection));
-            Assert.Null(invocationException);
+        Exception? disposeException = await Record.ExceptionAsync(() => connection.DisposeAsync().AsTask());
 
-            int expectedEventId = exception is ObjectDisposedException ? 2215 : 2216;
-            LogLevel expectedLevel = exception is ObjectDisposedException ? LogLevel.Debug : LogLevel.Warning;
+        Assert.NotNull(disposeException);
+        Assert.IsType(expected.GetType(), disposeException);
 
-            CapturingLoggerProvider.LogEntry entry = Assert.Single(provider.Entries, candidate =>
-                candidate.EventId.Id == expectedEventId
-                && string.Equals(candidate.StateValues.GetValueOrDefault("ArtifactName") as string, artifactName, StringComparison.Ordinal));
+        Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
 
-            Assert.Equal(expectedLevel, entry.LogLevel);
-            Assert.NotNull(entry.Exception);
-            Assert.IsType(exception.GetType(), entry.Exception);
-
-            Assert.Equal(connection.ConnectionId, entry.StateValues.GetValueOrDefault("ConnectionId") as string);
-            Assert.Equal(exception.GetType().FullName ?? exception.GetType().Name, entry.StateValues.GetValueOrDefault("ExceptionType") as string);
-
-            string rendered = entry.Message + string.Join('|', entry.StateValues.Values.Select(static value => value?.ToString() ?? string.Empty));
-            Assert.DoesNotContain("superSecretPassword", rendered, StringComparison.OrdinalIgnoreCase);
-        }
+        string rendered = string.Join('|', provider.Entries.Select(static entry =>
+            entry.Message + string.Join('|', entry.StateValues.Values.Select(static value => value?.ToString() ?? string.Empty))));
+        Assert.DoesNotContain("superSecretPassword", rendered, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task DisposeTransportArtifacts_WhenArtifactsDisposeNormally_ClearsFieldsWithoutDiagnosticFailures()
+    public async Task DisposeAsync_WhenTransportArtifactsDisposeNormally_ClearsFieldsWithoutDiagnosticFailures()
     {
         CapturingLoggerProvider provider = new();
         TrackingDisposeStream read = new();
@@ -74,40 +61,22 @@ public sealed class TransitConnectionDisposalDiagnosticsTests
             useSsl: false,
             provider.CreateLogger<TransitPublisher>());
 
-        await using (connection.ConfigureAwait(false))
-        {
-            SetTransportArtifact(connection, "read-stream", read);
-            SetTransportArtifact(connection, "write-stream", write);
-            SetTransportArtifact(connection, "transport-stream", transport);
+        SetTransportArtifact(connection, "read-stream", read);
+        SetTransportArtifact(connection, "write-stream", write);
+        SetTransportArtifact(connection, "transport-stream", transport);
 
-            Exception? invocationException = Record.Exception(() => InvokeDisposeTransportArtifacts(connection));
-            Assert.Null(invocationException);
+        Exception? disposeException = await Record.ExceptionAsync(() => connection.DisposeAsync().AsTask());
+        Assert.Null(disposeException);
 
-            Assert.Equal(1, read.DisposeCount);
-            Assert.Equal(1, write.DisposeCount);
-            Assert.Equal(1, transport.DisposeCount);
+        Assert.Equal(1, read.DisposeCount);
+        Assert.Equal(1, write.DisposeCount);
+        Assert.Equal(1, transport.DisposeCount);
 
-            Assert.Null(GetFieldValue<Stream>(connection, "_readStream"));
-            Assert.Null(GetFieldValue<Stream>(connection, "_writeStream"));
-            Assert.Null(GetFieldValue<Stream>(connection, "_transportStream"));
+        Assert.Null(GetFieldValue<Stream>(connection, "_readStream"));
+        Assert.Null(GetFieldValue<Stream>(connection, "_writeStream"));
+        Assert.Null(GetFieldValue<Stream>(connection, "_transportStream"));
 
-            Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
-        }
-    }
-
-    private static void InvokeDisposeTransportArtifacts(TransitConnection connection)
-    {
-        MethodInfo? method = typeof(TransitConnection).GetMethod("DisposeTransportArtifacts", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        try
-        {
-            _ = method.Invoke(connection, null);
-        }
-        catch (TargetInvocationException ex) when (ex.InnerException is not null)
-        {
-            ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
-        }
+        Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
     }
 
     private static void SetTransportArtifact(TransitConnection connection, string artifactName, Stream stream)

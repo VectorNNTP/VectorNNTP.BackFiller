@@ -54,10 +54,7 @@ public sealed class MeasurementRunCoordinatorFixedCountContractTests
     /// </summary>
     private static string ReadCoordinatorSource()
     {
-        string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        string path = Path.Combine(repoRoot, "VectorNNTP.BackFiller.Benchmarks", "Execution", "MeasurementRunCoordinator.cs");
-
-        return File.ReadAllText(path);
+        return ReadBenchmarkSource("Execution", "MeasurementRunCoordinator.cs");
     }
 
     /// <summary>
@@ -65,10 +62,7 @@ public sealed class MeasurementRunCoordinatorFixedCountContractTests
     /// </summary>
     private static string ReadOrchestratorSource()
     {
-        string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        string path = Path.Combine(repoRoot, "VectorNNTP.BackFiller.Benchmarks", "Execution", "TransitBenchmarkOrchestrator.cs");
-
-        return File.ReadAllText(path);
+        return ReadBenchmarkSource("Execution", "TransitBenchmarkOrchestrator.cs");
     }
 
     /// <summary>
@@ -76,9 +70,38 @@ public sealed class MeasurementRunCoordinatorFixedCountContractTests
     /// </summary>
     private static string ReadDrainSource()
     {
-        string repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        string path = Path.Combine(repoRoot, "VectorNNTP.BackFiller.Benchmarks", "Execution", "MeasurementExecutionEngine.Drain.cs");
+        return ReadBenchmarkSource("Execution", "MeasurementExecutionEngine.Drain.cs");
+    }
 
+    private static string ReadBenchmarkSource(params string[] pathSegments)
+    {
+        string repoRoot = ResolveRepositoryRoot();
+        string[] allSegments = [repoRoot, "VectorNNTP.BackFiller.Benchmarks", .. pathSegments];
+        string path = Path.Combine(allSegments);
         return File.ReadAllText(path);
+    }
+
+    private static string ResolveRepositoryRoot()
+    {
+        foreach (string startPath in EnumerateRootCandidates())
+        {
+            for (DirectoryInfo? current = new(startPath); current is not null; current = current.Parent)
+            {
+                string solutionPath = Path.Combine(current.FullName, "VectorNNTP.BackFiller.slnx");
+                string benchmarksProjectPath = Path.Combine(current.FullName, "VectorNNTP.BackFiller.Benchmarks", "Execution", "MeasurementRunCoordinator.cs");
+                if (File.Exists(solutionPath) && File.Exists(benchmarksProjectPath))
+                {
+                    return current.FullName;
+                }
+            }
+        }
+
+        throw new DirectoryNotFoundException("Unable to locate repository root for benchmark source-contract tests.");
+    }
+
+    private static IEnumerable<string> EnumerateRootCandidates()
+    {
+        yield return AppContext.BaseDirectory;
+        yield return Directory.GetCurrentDirectory();
     }
 }
