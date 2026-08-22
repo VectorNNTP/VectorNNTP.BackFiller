@@ -597,6 +597,11 @@ internal sealed class AbTrialState
             CalcDist(tryRead));
     }
 
+    /// <summary>
+    /// Calculates a percentile distribution from sorted lightweight trial samples.
+    /// </summary>
+    /// <param name="v">The samples in microseconds.</param>
+    /// <returns>The distribution summary, or <see langword="default"/> when <paramref name="v"/> is empty.</returns>
     private static AbLatencyDist CalcDist(List<double> v)
     {
         if (v.Count == 0)
@@ -614,14 +619,30 @@ internal sealed class AbTrialState
             v[^1]);
     }
 
+    /// <summary>
+    /// Selects a nearest-rank percentile from a sorted sample collection.
+    /// </summary>
+    /// <param name="v">The sorted samples.</param>
+    /// <param name="p">The requested percentile in [0, 1].</param>
+    /// <returns>The selected sample value.</returns>
     private static double Pct(IReadOnlyList<double> v, double p)
     {
         int idx = Math.Clamp((int)Math.Ceiling(v.Count * p) - 1, 0, v.Count - 1);
         return v[idx];
     }
 
+    /// <summary>
+    /// Converts stopwatch ticks to microseconds using the current platform frequency.
+    /// </summary>
+    /// <param name="ticks">The elapsed stopwatch ticks.</param>
+    /// <returns>The elapsed duration in microseconds.</returns>
     private static double ToUs(long ticks) => ticks * 1_000_000d / Stopwatch.Frequency;
 
+    /// <summary>
+    /// Updates an <see cref="int"/> maximum using atomic compare-exchange.
+    /// </summary>
+    /// <param name="loc">The maximum location to update.</param>
+    /// <param name="candidate">The candidate value.</param>
     private static void UpdateMax(ref int loc, int candidate)
     {
         while (true)
@@ -634,6 +655,11 @@ internal sealed class AbTrialState
         }
     }
 
+    /// <summary>
+    /// Updates a <see cref="long"/> maximum using atomic compare-exchange.
+    /// </summary>
+    /// <param name="loc">The maximum location to update.</param>
+    /// <param name="candidate">The candidate value.</param>
     private static void UpdateMax(ref long loc, long candidate)
     {
         while (true)
@@ -646,6 +672,11 @@ internal sealed class AbTrialState
         }
     }
 
+    /// <summary>
+    /// Updates an <see cref="int"/> minimum using atomic compare-exchange.
+    /// </summary>
+    /// <param name="loc">The minimum location to update.</param>
+    /// <param name="candidate">The candidate value.</param>
     private static void UpdateMin(ref int loc, int candidate)
     {
         while (true)
@@ -658,6 +689,10 @@ internal sealed class AbTrialState
         }
     }
 
+    /// <summary>
+    /// Creates a continuation-asynchronous waiter-quorum completion source.
+    /// </summary>
+    /// <returns>The completion source.</returns>
     private static TaskCompletionSource NewQuorum() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 }
 
