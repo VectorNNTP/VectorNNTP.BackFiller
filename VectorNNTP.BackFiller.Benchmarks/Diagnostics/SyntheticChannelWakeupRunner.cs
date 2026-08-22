@@ -24,9 +24,11 @@ internal static class SyntheticChannelWakeupRunner
         {
             foreach (int producerCount in ProducerCounts)
             {
+                Console.WriteLine($"Starting consumers={consumerCount} producers={producerCount} warmup.");
                 _ = await RunTrialAsync(consumerCount, producerCount, options.WarmupWaves, collectMeasurements: false).ConfigureAwait(false);
                 for (int trial = 1; trial <= options.Trials; trial++)
                 {
+                    Console.WriteLine($"Starting consumers={consumerCount} producers={producerCount} trial={trial}.");
                     trials.Add(await RunTrialAsync(consumerCount, producerCount, options.MeasuredWaves, collectMeasurements: true).ConfigureAwait(false));
                 }
             }
