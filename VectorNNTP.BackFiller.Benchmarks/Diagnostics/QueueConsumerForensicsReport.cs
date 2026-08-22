@@ -134,6 +134,7 @@ internal sealed record LongWaitRecord(
     double TotalWaitUs,
     int ThreadPoolThreadCountAtWaitReturn,
     int ThreadPoolAvailableWorkerThreadsAtWaitReturn,
+    int ThreadPoolAvailableCompletionPortThreadsAtWaitReturn,
     long ThreadPoolPendingWorkItemsAtWaitReturn,
     string SynchronizationContextAtWaitReturn,
     string TaskSchedulerAtWaitReturn,

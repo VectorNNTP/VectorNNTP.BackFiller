@@ -163,7 +163,7 @@ internal static class QueueConsumerForensicsWriter
         builder.AppendLine(Invariant($"    TRYREAD_START  t={wait.TryReadStartMs:F3}ms depth={wait.QueueDepthBeforeTryRead}"));
         builder.AppendLine(Invariant($"    TRYREAD_END    t={wait.TryReadEndMs:F3}ms depth={wait.QueueDepthAfterTryRead} result={wait.TryReadResult}"));
         builder.AppendLine(Invariant($"    A={FormatUs(wait.IntervalAWaitStartToFirstEnqueueUs)} B={FormatUs(wait.IntervalBFirstEnqueueToBatchEligibleUs)} C={FormatUs(wait.IntervalCBatchEligibleToWaitReturnUs)} D={FormatUs(wait.IntervalDWaitReturnToTryReadStartUs)} E={FormatUs(wait.IntervalETryReadDurationUs)} total={FormatUs(wait.TotalWaitUs)}"));
-        builder.AppendLine(Invariant($"    threadPool@WAIT_RETURN: threads={wait.ThreadPoolThreadCountAtWaitReturn} availableWorkers={wait.ThreadPoolAvailableWorkerThreadsAtWaitReturn} pendingWorkItems={wait.ThreadPoolPendingWorkItemsAtWaitReturn}"));
+        builder.AppendLine(Invariant($"    threadPool@WAIT_RETURN: threads={wait.ThreadPoolThreadCountAtWaitReturn} availableWorkers={wait.ThreadPoolAvailableWorkerThreadsAtWaitReturn} availableIocp={wait.ThreadPoolAvailableCompletionPortThreadsAtWaitReturn} pendingWorkItems={wait.ThreadPoolPendingWorkItemsAtWaitReturn}"));
         builder.AppendLine(Invariant($"    syncContext={wait.SynchronizationContextAtWaitReturn} taskScheduler={wait.TaskSchedulerAtWaitReturn}"));
 
         AppendOptionalStack(builder, "WAIT_START stack", wait.WaitStartStack);

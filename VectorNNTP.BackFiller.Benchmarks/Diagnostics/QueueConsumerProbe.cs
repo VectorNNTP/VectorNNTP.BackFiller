@@ -40,6 +40,7 @@ internal sealed class QueueConsumerProbe
     private EnqueueCorrelation _enqueueCorrelation;
     private int _threadPoolThreadCountAtWaitReturn;
     private int _threadPoolAvailableWorkersAtWaitReturn;
+    private int _threadPoolAvailableCompletionPortsAtWaitReturn;
     private long _threadPoolPendingWorkItemsAtWaitReturn;
     private string _syncContextAtWaitReturn = "(none)";
     private string _taskSchedulerAtWaitReturn = "(unknown)";
@@ -269,9 +270,9 @@ internal sealed class QueueConsumerProbe
     {
         ThreadPool.GetAvailableThreads(out int availableWorkers, out int availableCompletionPorts);
         _threadPoolThreadCountAtWaitReturn = ThreadPool.ThreadCount;
+        _threadPoolAvailableCompletionPortsAtWaitReturn = availableCompletionPorts;
         _threadPoolAvailableWorkersAtWaitReturn = availableWorkers;
         _threadPoolPendingWorkItemsAtWaitReturn = ThreadPool.PendingWorkItemCount;
-        _ = availableCompletionPorts;
     }
 
     private void FinalizeLongWait(bool tryReadResult, int queueDepthAfter, long tryReadTicks, long tryReadEndTicks)
@@ -325,6 +326,7 @@ internal sealed class QueueConsumerProbe
                 TotalWaitUs: MetricMathHelpers.TicksToUs(totalWaitTicks),
                 ThreadPoolThreadCountAtWaitReturn: _threadPoolThreadCountAtWaitReturn,
                 ThreadPoolAvailableWorkerThreadsAtWaitReturn: _threadPoolAvailableWorkersAtWaitReturn,
+                ThreadPoolAvailableCompletionPortThreadsAtWaitReturn: _threadPoolAvailableCompletionPortsAtWaitReturn,
                 ThreadPoolPendingWorkItemsAtWaitReturn: _threadPoolPendingWorkItemsAtWaitReturn,
                 SynchronizationContextAtWaitReturn: _syncContextAtWaitReturn,
                 TaskSchedulerAtWaitReturn: _taskSchedulerAtWaitReturn,

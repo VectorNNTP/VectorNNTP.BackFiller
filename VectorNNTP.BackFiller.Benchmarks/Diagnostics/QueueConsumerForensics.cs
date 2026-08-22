@@ -16,7 +16,6 @@ internal sealed class QueueConsumerForensics
     internal const int DefaultLongWaitThresholdMilliseconds = 10;
     private const int EnqueueRingCapacity = 4096;
     private const int MaxStackSamplesPerBucket = 4;
-    private const int MaxRecordedLongWaits = 20_000;
     private const int MaxExportedLongWaits = 20;
     private const int MaxRecordedTryReadFailures = 4096;
     private const int MaxIntervalSamples = 50_000;
@@ -45,7 +44,6 @@ internal sealed class QueueConsumerForensics
     private long _waitEpisodeCount;
     private long _waitEpisodesCompletedSynchronously;
     private long _longWaitCount;
-    private long _recordedLongWaitCount;
     private long _recordedTryReadFailureCount;
     private long _tryReadAttempts;
     private long _tryReadSuccesses;
@@ -511,7 +509,7 @@ internal sealed class QueueConsumerForensics
             AddIntervalSample(_totalWaitTicks, totalWaitTicks);
         }
 
-        if (Interlocked.Increment(ref _recordedLongWaitCount) <= MaxRecordedLongWaits && ordinal <= MaxExportedLongWaits)
+        if (ordinal <= MaxExportedLongWaits)
         {
             _longWaits.Enqueue(factory((int)ordinal));
         }

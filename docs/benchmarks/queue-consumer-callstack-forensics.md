@@ -202,9 +202,9 @@ synchronously (`ValueTask.IsCompleted` observed before the await) and (b) whethe
 
 ## 10. ThreadPool / scheduler forensics
 
-`ThreadPool.ThreadCount`, `ThreadPool.GetAvailableThreads`, and `ThreadPool.PendingWorkItemCount` are sampled at
-WAIT_RETURN for long waits. Reference run, per long wait:
-`threads=3 availableWorkers≈32 764 pendingWorkItems=40–51`.
+`ThreadPool.ThreadCount`, `ThreadPool.GetAvailableThreads` (worker *and* I/O completion threads), and
+`ThreadPool.PendingWorkItemCount` are sampled at WAIT_RETURN for long waits. Reference run, per long wait:
+`threads=3 availableWorkers≈32 764 availableIocp=1000 pendingWorkItems=40–51`.
 
 Interpretation limited to what the evidence supports: worker threads are few (3) while ~40–50 work items are pending, so
 woken consumer continuations queue behind other thread-pool work. That is *continuation scheduling delay*, consistent
