@@ -81,6 +81,13 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && string.Equals(args[0], "channel-continuation-ab", StringComparison.OrdinalIgnoreCase))
+        {
+            SyntheticChannelContinuationAbOptions options = SyntheticChannelContinuationAbOptions.Parse(args.Skip(1).ToArray());
+            await SyntheticChannelContinuationAbRunner.RunAsync(options).ConfigureAwait(false);
+            return;
+        }
+
         if (args.Length > 0 && string.Equals(args[0], "channel-wakeup-forensic", StringComparison.OrdinalIgnoreCase))
         {
             SyntheticChannelWakeupOptions options = SyntheticChannelWakeupOptions.Parse(args.Skip(1).ToArray());
