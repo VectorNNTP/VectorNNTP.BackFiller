@@ -65,6 +65,7 @@ internal static class SyntheticChannelWakeupRunner
         Channel<SyntheticItem> channel = Channel.CreateUnbounded<SyntheticItem>(
             new UnboundedChannelOptions { SingleWriter = producerCount == 1, SingleReader = consumerCount == 1, AllowSynchronousContinuations = false });
         TrialState state = new(consumerCount, waves * consumerCount, collectMeasurements);
+        Task waiterQuorum = state.WaitForWaiterQuorumAsync();
         Task[] consumers = new Task[consumerCount];
         for (int consumerId = 0; consumerId < consumerCount; consumerId++)
         {
@@ -77,7 +78,8 @@ internal static class SyntheticChannelWakeupRunner
         long start = Stopwatch.GetTimestamp();
         for (int wave = 0; wave < waves; wave++)
         {
-            await state.WaitForWaiterQuorumAsync().ConfigureAwait(false);
+            await waiterQuorum.ConfigureAwait(false);
+            waiterQuorum = state.WaitForWaiterQuorumAsync();
             Task[] producers = new Task[producerCount];
             for (int producerId = 0; producerId < producerCount; producerId++)
             {
