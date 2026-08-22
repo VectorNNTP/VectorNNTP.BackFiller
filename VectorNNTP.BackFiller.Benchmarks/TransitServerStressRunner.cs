@@ -40,7 +40,7 @@ internal static class TransitServerStressRunner
     /// <returns>A task that completes when benchmark execution has finished.</returns>
     internal static async Task RunFakeServerValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
-        await using BenchmarkDevNullTransitServer fakeServer = await BenchmarkDevNullTransitServer.StartAsync(IPAddress.Loopback, port: 0, cancellationToken).ConfigureAwait(false);
+        await using BenchmarkDevNullTransitServer fakeServer = await BenchmarkDevNullTransitServer.StartAsync(IPAddress.Loopback, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(
             TimeSpan.FromSeconds(ValidationSeconds),
