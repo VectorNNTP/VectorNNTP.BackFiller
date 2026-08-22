@@ -156,13 +156,15 @@ internal static class QueueConsumerForensicsWriter
         builder.AppendLine();
         builder.AppendLine(Invariant($"#{wait.Ordinal} consumer={wait.ConsumerId} waitStartUtc={wait.WaitStartUtc:O}"));
         builder.AppendLine(Invariant($"    threads: waitStart={wait.WaitStartThreadId} waitReturn={wait.WaitReturnThreadId} | tasks: waitStart={FormatTaskId(wait.WaitStartTaskId)} waitReturn={FormatTaskId(wait.WaitReturnTaskId)}"));
-        builder.AppendLine(Invariant($"    WAIT_START     t={wait.WaitStartMs:F3}ms depth={wait.QueueDepthAtWaitStart} bytes={wait.QueueBytesAtWaitStart} waiters={wait.ConcurrentWaitersAtWaitStart} completedSynchronously={wait.WaitCompletedSynchronously}"));
-        builder.AppendLine(Invariant($"    FIRST_ENQUEUE  t={FormatMs(wait.FirstEnqueueMs)} correlation={wait.EnqueueCorrelation}"));
-        builder.AppendLine(Invariant($"    BATCH_ELIGIBLE t={FormatMs(wait.BatchEligibleMs)}"));
-        builder.AppendLine(Invariant($"    WAIT_RETURN    t={wait.WaitReturnMs:F3}ms depth={wait.QueueDepthAtWaitReturn} bytes={wait.QueueBytesAtWaitReturn} waiters={wait.ConcurrentWaitersAtWaitReturn} result={wait.WaitResult}"));
-        builder.AppendLine(Invariant($"    TRYREAD_START  t={wait.TryReadStartMs:F3}ms depth={wait.QueueDepthBeforeTryRead}"));
-        builder.AppendLine(Invariant($"    TRYREAD_END    t={wait.TryReadEndMs:F3}ms depth={wait.QueueDepthAfterTryRead} result={wait.TryReadResult}"));
-        builder.AppendLine(Invariant($"    A={FormatUs(wait.IntervalAWaitStartToFirstEnqueueUs)} B={FormatUs(wait.IntervalBFirstEnqueueToBatchEligibleUs)} C={FormatUs(wait.IntervalCBatchEligibleToWaitReturnUs)} D={FormatUs(wait.IntervalDWaitReturnToTryReadStartUs)} E={FormatUs(wait.IntervalETryReadDurationUs)} total={FormatUs(wait.TotalWaitUs)}"));
+        builder.AppendLine(Invariant($"    WAIT_START       t={wait.WaitStartMs:F3}ms depth={wait.QueueDepthAtWaitStart} bytes={wait.QueueBytesAtWaitStart} waiters={wait.ConcurrentWaitersAtWaitStart} completedSynchronously={wait.WaitCompletedSynchronously}"));
+        builder.AppendLine(Invariant($"    CHANNEL_WRITE_T0 t={FormatMs(wait.ChannelWriteStartMs)} (before WriteAsync)"));
+        builder.AppendLine(Invariant($"    FIRST_ENQUEUE T1 t={FormatMs(wait.FirstEnqueueMs)} (WriteAsync returned, item readable) correlation={wait.EnqueueCorrelation}"));
+        builder.AppendLine(Invariant($"    BATCH_ELIGIBLE   t={FormatMs(wait.BatchEligibleMs)} (accounting updated)"));
+        builder.AppendLine(Invariant($"    WAIT_RETURN T2   t={wait.WaitReturnMs:F3}ms depth={wait.QueueDepthAtWaitReturn} bytes={wait.QueueBytesAtWaitReturn} waiters={wait.ConcurrentWaitersAtWaitReturn} result={wait.WaitResult}"));
+        builder.AppendLine(Invariant($"    TRYREAD_START    t={wait.TryReadStartMs:F3}ms depth={wait.QueueDepthBeforeTryRead}"));
+        builder.AppendLine(Invariant($"    TRYREAD_END      t={wait.TryReadEndMs:F3}ms depth={wait.QueueDepthAfterTryRead} result={wait.TryReadResult}"));
+        builder.AppendLine(Invariant($"    A={FormatUs(wait.IntervalAWaitStartToFirstEnqueueUs)} B={FormatUs(wait.IntervalBFirstEnqueueToBatchEligibleUs)} C0={FormatUs(wait.IntervalC0ChannelWriteAsyncDurationUs)} C={FormatUs(wait.IntervalCBatchEligibleToWaitReturnUs)} D={FormatUs(wait.IntervalDWaitReturnToTryReadStartUs)} E={FormatUs(wait.IntervalETryReadDurationUs)} total={FormatUs(wait.TotalWaitUs)}"));
+        builder.AppendLine(Invariant($"    threadPool@CHANNEL_WRITE: pendingWorkItems={wait.ThreadPoolPendingWorkItemsAtChannelWrite} consumersWaiting={wait.ConsumersWaitingAtChannelWrite}"));
         builder.AppendLine(Invariant($"    threadPool@WAIT_RETURN: threads={wait.ThreadPoolThreadCountAtWaitReturn} availableWorkers={wait.ThreadPoolAvailableWorkerThreadsAtWaitReturn} availableIocp={wait.ThreadPoolAvailableCompletionPortThreadsAtWaitReturn} pendingWorkItems={wait.ThreadPoolPendingWorkItemsAtWaitReturn}"));
         builder.AppendLine(Invariant($"    syncContext={wait.SynchronizationContextAtWaitReturn} taskScheduler={wait.TaskSchedulerAtWaitReturn}"));
 
