@@ -80,7 +80,7 @@ public sealed class QueueConsumerForensicsTests
 
         probe.RecordWaitStart(queueDepth: 0, queueBytes: 0, waitCompletedSynchronously: false);
         await Task.Delay(millisecondsDelay: 25).ConfigureAwait(true);
-        forensics.RecordEnqueue(System.Diagnostics.Stopwatch.GetTimestamp(), System.Diagnostics.Stopwatch.GetTimestamp());
+        forensics.RecordEnqueue(System.Diagnostics.Stopwatch.GetTimestamp(), System.Diagnostics.Stopwatch.GetTimestamp(), threadPoolPendingAtWrite: 0, System.Diagnostics.Stopwatch.GetTimestamp());
         await Task.Delay(millisecondsDelay: 5).ConfigureAwait(true);
         probe.RecordWaitReturn(waitResult: true, queueDepth: 1, queueBytes: 4096);
         probe.RecordTryReadStart(queueDepth: 1, queueBytes: 4096);

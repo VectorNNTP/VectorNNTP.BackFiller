@@ -35,8 +35,11 @@ internal sealed class QueueConsumerProbe
     private bool _waitCompletedSynchronously;
     private bool _waitResult;
     private bool _longWaitPending;
+    private long _channelWriteStartTicks;
     private long _firstEnqueueTicks;
     private long _batchEligibleTicks;
+    private long _threadPoolPendingAtWrite;
+    private int _consumersWaitingAtWrite;
     private EnqueueCorrelation _enqueueCorrelation;
     private int _threadPoolThreadCountAtWaitReturn;
     private int _threadPoolAvailableWorkersAtWaitReturn;
@@ -131,7 +134,13 @@ internal sealed class QueueConsumerProbe
 
         if (_longWaitPending)
         {
-            _enqueueCorrelation = _owner.TryResolveFirstEnqueueAfter(_enqueueSequenceAtWaitStart, out _firstEnqueueTicks, out _batchEligibleTicks);
+            _enqueueCorrelation = _owner.TryResolveFirstEnqueueAfter(
+                _enqueueSequenceAtWaitStart,
+                out _channelWriteStartTicks,
+                out _firstEnqueueTicks,
+                out _threadPoolPendingAtWrite,
+                out _consumersWaitingAtWrite,
+                out _batchEligibleTicks);
             CaptureThreadPoolState();
             _syncContextAtWaitReturn = SynchronizationContext.Current?.GetType().FullName ?? "(none)";
             _taskSchedulerAtWaitReturn = TaskScheduler.Current.GetType().FullName ?? "(unknown)";
@@ -280,12 +289,16 @@ internal sealed class QueueConsumerProbe
         long totalWaitTicks = Math.Max(0, _waitReturnTicks - _waitStartTicks);
         long intervalATicks = _enqueueCorrelation == EnqueueCorrelation.Resolved ? Math.Max(0, _firstEnqueueTicks - _waitStartTicks) : -1;
         long intervalBTicks = _enqueueCorrelation == EnqueueCorrelation.Resolved ? Math.Max(0, _batchEligibleTicks - _firstEnqueueTicks) : -1;
+        long intervalC0Ticks = _enqueueCorrelation == EnqueueCorrelation.Resolved ? Math.Max(0, _firstEnqueueTicks - _channelWriteStartTicks) : -1;
         long intervalCTicks = _enqueueCorrelation == EnqueueCorrelation.Resolved ? Math.Max(0, _waitReturnTicks - _batchEligibleTicks) : -1;
         long intervalDTicks = Math.Max(0, _tryReadStartTicks - _waitReturnTicks);
 
         int queueDepthBeforeTryRead = _queueDepthBeforeTryRead;
+        long channelWriteStartTicks = _channelWriteStartTicks;
         long firstEnqueueTicks = _firstEnqueueTicks;
         long batchEligibleTicks = _batchEligibleTicks;
+        long threadPoolPendingAtWrite = _threadPoolPendingAtWrite;
+        int consumersWaitingAtWrite = _consumersWaitingAtWrite;
         EnqueueCorrelation correlation = _enqueueCorrelation;
         string? waitStartStack = _waitStartStack;
         string? waitReturnStack = _waitReturnStack;
@@ -301,6 +314,7 @@ internal sealed class QueueConsumerProbe
                 WaitReturnTaskId: _waitReturnTaskId,
                 WaitStartUtc: _owner.ToUtcTimestamp(_waitStartTicks),
                 WaitStartMs: _owner.ElapsedMilliseconds(_waitStartTicks),
+                ChannelWriteStartMs: correlation == EnqueueCorrelation.Resolved ? _owner.ElapsedMilliseconds(channelWriteStartTicks) : double.NaN,
                 FirstEnqueueMs: correlation == EnqueueCorrelation.Resolved ? _owner.ElapsedMilliseconds(firstEnqueueTicks) : double.NaN,
                 BatchEligibleMs: correlation == EnqueueCorrelation.Resolved ? _owner.ElapsedMilliseconds(batchEligibleTicks) : double.NaN,
                 WaitReturnMs: _owner.ElapsedMilliseconds(_waitReturnTicks),
@@ -320,6 +334,7 @@ internal sealed class QueueConsumerProbe
                 ConcurrentWaitersAtWaitReturn: Math.Max(0, _waitersAtWaitReturn),
                 IntervalAWaitStartToFirstEnqueueUs: intervalATicks < 0 ? double.NaN : MetricMathHelpers.TicksToUs(intervalATicks),
                 IntervalBFirstEnqueueToBatchEligibleUs: intervalBTicks < 0 ? double.NaN : MetricMathHelpers.TicksToUs(intervalBTicks),
+                IntervalC0ChannelWriteAsyncDurationUs: intervalC0Ticks < 0 ? double.NaN : MetricMathHelpers.TicksToUs(intervalC0Ticks),
                 IntervalCBatchEligibleToWaitReturnUs: intervalCTicks < 0 ? double.NaN : MetricMathHelpers.TicksToUs(intervalCTicks),
                 IntervalDWaitReturnToTryReadStartUs: MetricMathHelpers.TicksToUs(intervalDTicks),
                 IntervalETryReadDurationUs: MetricMathHelpers.TicksToUs(tryReadTicks),
@@ -328,6 +343,8 @@ internal sealed class QueueConsumerProbe
                 ThreadPoolAvailableWorkerThreadsAtWaitReturn: _threadPoolAvailableWorkersAtWaitReturn,
                 ThreadPoolAvailableCompletionPortThreadsAtWaitReturn: _threadPoolAvailableCompletionPortsAtWaitReturn,
                 ThreadPoolPendingWorkItemsAtWaitReturn: _threadPoolPendingWorkItemsAtWaitReturn,
+                ThreadPoolPendingWorkItemsAtChannelWrite: threadPoolPendingAtWrite,
+                ConsumersWaitingAtChannelWrite: consumersWaitingAtWrite,
                 SynchronizationContextAtWaitReturn: _syncContextAtWaitReturn,
                 TaskSchedulerAtWaitReturn: _taskSchedulerAtWaitReturn,
                 WaitStartStack: waitStartStack,
@@ -335,6 +352,7 @@ internal sealed class QueueConsumerProbe
                 TryReadStartStack: tryReadStartStack),
             intervalATicks,
             intervalBTicks,
+            intervalC0Ticks,
             intervalCTicks,
             intervalDTicks,
             tryReadTicks,

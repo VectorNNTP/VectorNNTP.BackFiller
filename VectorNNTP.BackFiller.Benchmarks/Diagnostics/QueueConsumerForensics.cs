@@ -32,6 +32,7 @@ internal sealed class QueueConsumerForensics
     private readonly object _intervalGate = new();
     private readonly List<long> _intervalATicks = [];
     private readonly List<long> _intervalBTicks = [];
+    private readonly List<long> _intervalC0Ticks = [];
     private readonly List<long> _intervalCTicks = [];
     private readonly List<long> _intervalDTicks = [];
     private readonly List<long> _intervalETicks = [];
@@ -125,17 +126,31 @@ internal sealed class QueueConsumerForensics
     }
 
     /// <summary>
-    /// Records a producer enqueue, capturing both the channel-visible and accounting-visible instants.
+    /// Records a producer enqueue, capturing the write-start (T0), write-complete (T1), accounting-visible, and
+    /// producer-side ThreadPool state.
     /// </summary>
-    /// <param name="channelWriteCompletedTicks">Stopwatch tick at which the channel write completed (item becomes readable).</param>
-    /// <param name="accountingVisibleTicks">Stopwatch tick at which the queue depth accounting was updated.</param>
-    internal void RecordEnqueue(long channelWriteCompletedTicks, long accountingVisibleTicks)
+    /// <param name="channelWriteStartTicks">
+    /// Stopwatch tick immediately before <c>ChannelWriter.WriteAsync</c> was called (T0).
+    /// Captures any byte-budget wait that preceded the write.  The difference between this value and
+    /// <paramref name="channelWriteCompletedTicks"/> (interval C0) reveals bounded-channel backpressure.
+    /// </param>
+    /// <param name="channelWriteCompletedTicks">Stopwatch tick at which the channel write completed — the item is now readable (T1).</param>
+    /// <param name="threadPoolPendingAtWrite">
+    /// <see cref="ThreadPool.PendingWorkItemCount"/> captured immediately after the write completed (at T1).
+    /// This is the number of ThreadPool work items ahead of the woken consumer continuations at the moment of wake.
+    /// High values here directly predict long C intervals.
+    /// </param>
+    /// <param name="accountingVisibleTicks">Stopwatch tick at which the queue depth accounting was updated (T1+ε).</param>
+    internal void RecordEnqueue(long channelWriteStartTicks, long channelWriteCompletedTicks, long threadPoolPendingAtWrite, long accountingVisibleTicks)
     {
         long sequence = Interlocked.Increment(ref _enqueueSequence) - 1;
         int index = (int)(sequence % EnqueueRingCapacity);
         ref EnqueueRecord slot = ref _enqueueRing[index];
         Volatile.Write(ref slot.Sequence, -1);
+        slot.ChannelWriteStartTicks = channelWriteStartTicks;
         slot.ChannelWriteCompletedTicks = channelWriteCompletedTicks;
+        slot.ThreadPoolPendingAtWrite = threadPoolPendingAtWrite;
+        slot.ConsumersWaitingAtWrite = Volatile.Read(ref _currentWaiters);
         slot.AccountingVisibleTicks = accountingVisibleTicks;
         Volatile.Write(ref slot.Sequence, sequence);
     }
@@ -221,6 +236,7 @@ internal sealed class QueueConsumerForensics
             [
                 BuildIntervalStatistics("A", "WAIT_START -> first producer enqueue (channel write completed)", _intervalATicks),
                 BuildIntervalStatistics("B", "first enqueue -> batch eligibility (queue depth accounting updated)", _intervalBTicks),
+                BuildIntervalStatistics("C0", "T0 (before WriteAsync) -> T1 (WriteAsync returned): channel write duration including any backpressure wait", _intervalC0Ticks),
                 BuildIntervalStatistics("C", "batch eligibility -> WAIT_RETURN (channel wake + continuation scheduling)", _intervalCTicks),
                 BuildIntervalStatistics("D", "WAIT_RETURN -> TRYREAD_START", _intervalDTicks),
                 BuildIntervalStatistics("E", "TRYREAD_START -> TRYREAD_END", _intervalETicks),
@@ -402,12 +418,24 @@ internal sealed class QueueConsumerForensics
     /// Resolves the first producer enqueue that happened at or after the supplied enqueue sequence.
     /// </summary>
     /// <param name="sequenceAtWaitStart">Enqueue sequence observed at WAIT_START.</param>
-    /// <param name="channelWriteCompletedTicks">Tick at which the enqueued item became readable.</param>
-    /// <param name="accountingVisibleTicks">Tick at which the depth accounting reflected the enqueue.</param>
+    /// <param name="channelWriteStartTicks">Tick immediately before <c>WriteAsync</c> was called (T0); zero when unresolved.</param>
+    /// <param name="channelWriteCompletedTicks">Tick at which the enqueued item became readable (T1); zero when unresolved.</param>
+    /// <param name="threadPoolPendingAtWrite">ThreadPool pending work-item count captured at T1; zero when unresolved.</param>
+    /// <param name="consumersWaitingAtWrite">Number of consumers parked in <c>WaitToReadAsync</c> at the moment of write; zero when unresolved.</param>
+    /// <param name="accountingVisibleTicks">Tick at which the depth accounting reflected the enqueue (T1+ε); zero when unresolved.</param>
     /// <returns>The correlation outcome.</returns>
-    internal EnqueueCorrelation TryResolveFirstEnqueueAfter(long sequenceAtWaitStart, out long channelWriteCompletedTicks, out long accountingVisibleTicks)
+    internal EnqueueCorrelation TryResolveFirstEnqueueAfter(
+        long sequenceAtWaitStart,
+        out long channelWriteStartTicks,
+        out long channelWriteCompletedTicks,
+        out long threadPoolPendingAtWrite,
+        out int consumersWaitingAtWrite,
+        out long accountingVisibleTicks)
     {
+        channelWriteStartTicks = 0;
         channelWriteCompletedTicks = 0;
+        threadPoolPendingAtWrite = 0;
+        consumersWaitingAtWrite = 0;
         accountingVisibleTicks = 0;
 
         long currentSequence = Volatile.Read(ref _enqueueSequence);
@@ -424,14 +452,20 @@ internal sealed class QueueConsumerForensics
         int index = (int)(sequenceAtWaitStart % EnqueueRingCapacity);
         ref EnqueueRecord slot = ref _enqueueRing[index];
         long observedSequence = Volatile.Read(ref slot.Sequence);
+        long writeStartTicks = slot.ChannelWriteStartTicks;
         long writeTicks = slot.ChannelWriteCompletedTicks;
+        long tpPending = slot.ThreadPoolPendingAtWrite;
+        int waitersAtWrite = slot.ConsumersWaitingAtWrite;
         long accountingTicks = slot.AccountingVisibleTicks;
         if (observedSequence != sequenceAtWaitStart || Volatile.Read(ref slot.Sequence) != sequenceAtWaitStart)
         {
             return EnqueueCorrelation.Undeterminable;
         }
 
+        channelWriteStartTicks = writeStartTicks;
         channelWriteCompletedTicks = writeTicks;
+        threadPoolPendingAtWrite = tpPending;
+        consumersWaitingAtWrite = waitersAtWrite;
         accountingVisibleTicks = accountingTicks;
         return EnqueueCorrelation.Resolved;
     }
@@ -482,6 +516,7 @@ internal sealed class QueueConsumerForensics
     /// <param name="factory">Factory producing the record once an ordinal has been assigned.</param>
     /// <param name="intervalATicks">Interval A duration in stopwatch ticks, or a negative value when unresolved.</param>
     /// <param name="intervalBTicks">Interval B duration in stopwatch ticks, or a negative value when unresolved.</param>
+    /// <param name="intervalC0Ticks">Interval C0 duration (T0→T1, WriteAsync duration) in stopwatch ticks, or a negative value when unresolved.</param>
     /// <param name="intervalCTicks">Interval C duration in stopwatch ticks, or a negative value when unresolved.</param>
     /// <param name="intervalDTicks">Interval D duration in stopwatch ticks.</param>
     /// <param name="intervalETicks">Interval E duration in stopwatch ticks.</param>
@@ -490,6 +525,7 @@ internal sealed class QueueConsumerForensics
         Func<int, LongWaitRecord> factory,
         long intervalATicks,
         long intervalBTicks,
+        long intervalC0Ticks,
         long intervalCTicks,
         long intervalDTicks,
         long intervalETicks,
@@ -503,6 +539,7 @@ internal sealed class QueueConsumerForensics
         {
             AddIntervalSample(_intervalATicks, intervalATicks);
             AddIntervalSample(_intervalBTicks, intervalBTicks);
+            AddIntervalSample(_intervalC0Ticks, intervalC0Ticks);
             AddIntervalSample(_intervalCTicks, intervalCTicks);
             AddIntervalSample(_intervalDTicks, intervalDTicks);
             AddIntervalSample(_intervalETicks, intervalETicks);
@@ -567,6 +604,10 @@ internal sealed class QueueConsumerForensics
             "Inline versus asynchronous continuation execution cannot be determined reliably from runtime APIs. What is determined here is (a) whether WaitToReadAsync completed synchronously (ValueTask.IsCompleted observed before the await) and (b) whether the consumer resumed on a different managed thread than it parked on.",
             "Interval E measures only the TryRead call itself; the forensic stack capture happens before the TryRead start timestamp, so it is accounted to interval D. Interval D is therefore an upper bound for instrumented episodes.",
             "TryRead failures are classified against CurrentQueuedCount, which is an Interlocked counter maintained by BoundedArticleQueue and is not the Channel's readable item count; both counters are updated after the corresponding channel operation.",
+            "Interval C0 (T0→T1) measures the duration of ChannelWriter.WriteAsync itself, capturing any bounded-channel backpressure wait. When the channel has capacity C0 is in the low-microsecond range; a large C0 indicates the channel was full and the producer was blocked behind a consumer drain.",
+            "Interval C (T1+ε→T2) measures from immediately after the channel write completed (item is readable) until the consumer continuation actually executed on the ThreadPool. This is the Channel wake-up and ThreadPool scheduling latency. A large C with a small C0 indicates the write itself was instant but the consumer continuation was delayed in the ThreadPool queue.",
+            "ThreadPoolPendingWorkItemsAtChannelWrite is captured at T1 (immediately after WriteAsync) and represents the number of ThreadPool work items already queued at the exact moment the consumer continuations were enqueued by the Channel. High values here directly predict large C intervals because the consumer continuations must queue behind that many items.",
+            "ConsumersWaitingAtChannelWrite is the number of consumers parked in WaitToReadAsync at the moment of the channel write. When this is zero the write found no waiting consumers, meaning C does not measure wake-up latency for that episode — it measures how long before any consumer called WaitToReadAsync and found the item.",
         ];
 
         notes.Add(classBFailures > 0
@@ -579,7 +620,10 @@ internal sealed class QueueConsumerForensics
     private struct EnqueueRecord
     {
         internal long Sequence;
+        internal long ChannelWriteStartTicks;
         internal long ChannelWriteCompletedTicks;
+        internal long ThreadPoolPendingAtWrite;
+        internal int ConsumersWaitingAtWrite;
         internal long AccountingVisibleTicks;
     }
 }

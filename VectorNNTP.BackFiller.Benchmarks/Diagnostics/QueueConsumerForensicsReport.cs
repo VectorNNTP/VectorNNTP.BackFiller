@@ -98,8 +98,32 @@ internal sealed record TryReadFailureRecord(
     string Classification);
 
 /// <summary>
-/// A wait episode longer than the configured long-wait threshold, decomposed into the A-E intervals.
+/// A wait episode longer than the configured long-wait threshold, decomposed into the A-E intervals plus the
+/// new C0 sub-interval (T0→T1: channel <c>WriteAsync</c> duration) and the producer-side ThreadPool snapshot.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Timestamp decomposition reference for this record:
+/// <list type="bullet">
+///   <item><description>T0 (<c>ChannelWriteStartMs</c>): immediately before <c>_channel.Writer.WriteAsync</c> was called — after the byte-budget was acquired.</description></item>
+///   <item><description>T1 (<c>FirstEnqueueMs</c>): immediately after <c>WriteAsync</c> returned — the item is readable by consumers.</description></item>
+///   <item><description>T1+ε (<c>BatchEligibleMs</c>): after the two post-write <c>Interlocked</c> accounting updates — the application depth counter caught up.</description></item>
+///   <item><description>T2 (<c>WaitReturnMs</c>): the instant the consumer's <c>await WaitToReadAsync</c> resumed on the ThreadPool — the continuation actually executed.</description></item>
+/// </list>
+/// </para>
+/// <para>
+/// Interval C0 (<c>IntervalC0ChannelWriteAsyncDurationUs</c>) = T1 − T0: how long <c>WriteAsync</c> itself took, including any
+/// channel-capacity backpressure wait.  When the channel was empty or had space this will be ≈ 0–5 µs.  A large C0 indicates
+/// the bounded channel was full and the producer was blocked waiting for consumers to drain it.
+/// </para>
+/// <para>
+/// Interval C (<c>IntervalCBatchEligibleToWaitReturnUs</c>) ≈ T2 − T1: the Channel wake-up and continuation-scheduling latency.
+/// This is the primary interval of interest for the 150–200 ms production anomaly.  When C is large while C0 is small, the
+/// write itself was instant but the consumer continuation sat in the ThreadPool queue for the full C duration.
+/// <c>ThreadPoolPendingWorkItemsAtChannelWrite</c> (captured at T1) quantifies the ThreadPool backlog that the consumer
+/// continuation had to queue behind.
+/// </para>
+/// </remarks>
 internal sealed record LongWaitRecord(
     int Ordinal,
     int ConsumerId,
@@ -109,6 +133,7 @@ internal sealed record LongWaitRecord(
     int? WaitReturnTaskId,
     DateTimeOffset WaitStartUtc,
     double WaitStartMs,
+    double ChannelWriteStartMs,
     double FirstEnqueueMs,
     double BatchEligibleMs,
     double WaitReturnMs,
@@ -128,6 +153,7 @@ internal sealed record LongWaitRecord(
     int ConcurrentWaitersAtWaitReturn,
     double IntervalAWaitStartToFirstEnqueueUs,
     double IntervalBFirstEnqueueToBatchEligibleUs,
+    double IntervalC0ChannelWriteAsyncDurationUs,
     double IntervalCBatchEligibleToWaitReturnUs,
     double IntervalDWaitReturnToTryReadStartUs,
     double IntervalETryReadDurationUs,
@@ -136,6 +162,8 @@ internal sealed record LongWaitRecord(
     int ThreadPoolAvailableWorkerThreadsAtWaitReturn,
     int ThreadPoolAvailableCompletionPortThreadsAtWaitReturn,
     long ThreadPoolPendingWorkItemsAtWaitReturn,
+    long ThreadPoolPendingWorkItemsAtChannelWrite,
+    int ConsumersWaitingAtChannelWrite,
     string SynchronizationContextAtWaitReturn,
     string TaskSchedulerAtWaitReturn,
     string? WaitStartStack,

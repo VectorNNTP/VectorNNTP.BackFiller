@@ -39,11 +39,13 @@ internal sealed class BoundedArticleQueue : IDisposable
 
         try
         {
+            long channelWriteStartTicks = _forensics is null ? 0 : Stopwatch.GetTimestamp();
             await _channel.Writer.WriteAsync(article, cancellationToken).ConfigureAwait(false);
             long channelWriteCompletedTicks = _forensics is null ? 0 : Stopwatch.GetTimestamp();
+            long threadPoolPendingAtWrite = _forensics is null ? 0 : ThreadPool.PendingWorkItemCount;
             Interlocked.Increment(ref _queuedCount);
             Interlocked.Add(ref _queuedBytes, article.PayloadLength);
-            _forensics?.RecordEnqueue(channelWriteCompletedTicks, Stopwatch.GetTimestamp());
+            _forensics?.RecordEnqueue(channelWriteStartTicks, channelWriteCompletedTicks, threadPoolPendingAtWrite, Stopwatch.GetTimestamp());
             return true;
         }
         catch
