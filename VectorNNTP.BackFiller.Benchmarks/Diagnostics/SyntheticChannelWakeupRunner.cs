@@ -344,9 +344,9 @@ internal sealed class TrialState
         bool completedSynchronously)
     {
         Interlocked.Increment(ref _successfulReads);
-        Interlocked.Increment(ref _waitCount);
         if (completedSynchronously)
         {
+            Interlocked.Increment(ref _waitCount);
             Interlocked.Increment(ref _synchronousWaits);
         }
 
