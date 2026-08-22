@@ -2,6 +2,43 @@
 
 This changelog records significant engineering events, archaeology recoveries, architectural decisions, test-contract repairs, benchmark changes, and measured performance outcomes.
 
+## 2026-08-22
+
+### Category: Benchmark Instrumentation / Forensics
+
+#### Summary
+Added opt-in dispatch-consumer queue-read forensics to the benchmark harness and documented the resulting evidence in
+`docs/benchmarks/queue-consumer-callstack-forensics.md`.
+
+#### Why
+An unexplained ~150-200 ms delay obtaining an article from the queue had to be attributed to a measured cause rather
+than a hypothesis, without changing architecture, `Channel<T>` usage, consumer count, batching, pipeline depth, socket
+behaviour, or ThreadPool settings.
+
+#### Files / Components
+- Benchmark: `Diagnostics/QueueConsumerForensics.cs`, `Diagnostics/QueueConsumerProbe.cs`,
+  `Diagnostics/QueueConsumerForensicsReport.cs`, `Diagnostics/QueueConsumerForensicsWriter.cs`
+- Benchmark wiring: `Execution/BoundedArticleQueue.cs`, `Execution/MeasurementExecutionEngine.cs`,
+  `Execution/MeasurementRunCoordinator.cs`, `Configuration/TransitBenchmarkConfig.cs`, `TransitBenchmarkCliOptions.cs`
+  (new `--queue-consumer-forensics <true|false>` flag, inert by default)
+- Tests: `VectorNNTP.BackFiller.Tests/Benchmarks/QueueConsumerForensicsTests.cs`
+- Documentation: `docs/benchmarks/queue-consumer-callstack-forensics.md`
+
+#### Test / Validation
+- 9 focused unit tests pass.
+- Identity-guarded fake-server benchmark run exported `queue-consumer-callstacks.json` / `.txt`.
+
+#### Performance Impact
+No optimization claim. Instrumentation is opt-in and disabled by default. Measured findings: consumers are
+asynchronously parked in `await WaitToReadAsync(...)`; there is no synchronous blocking wait, lock, or semaphore between
+`WaitToReadAsync` and `TryRead`; `TryRead` is sub-microsecond (interval E p50 0.6 us); the wait resides in interval C
+(wake/continuation scheduling) and interval A (queue genuinely empty). No failed `TryRead` occurred while
+`CurrentQueuedCount > 0` and unchanged.
+
+#### Notes
+`CurrentQueuedCount` is an independent counter, not the Channel's readable item count; it was observed transiently
+negative.
+
 ## 2026-08-21
 
 ### Commit: b8d557f9696c2d9d919241852e12b43541e2a1de (b8d557f)

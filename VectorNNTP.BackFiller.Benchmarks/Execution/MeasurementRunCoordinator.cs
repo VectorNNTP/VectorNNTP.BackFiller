@@ -14,7 +14,11 @@ internal static class MeasurementRunCoordinator
         CancellationToken cancellationToken,
         bool enableForensicDiagnostics)
     {
-        using BoundedArticleQueue queue = new(config.MaxQueuedArticles, config.MaxResidentBytes);
+        QueueConsumerForensics? queueConsumerForensics = config.EnableQueueConsumerForensics
+            ? new QueueConsumerForensics(config.DispatchWorkerCount)
+            : null;
+
+        using BoundedArticleQueue queue = new(config.MaxQueuedArticles, config.MaxResidentBytes, queueConsumerForensics);
         MeasurementMetrics metrics = new(config.ArticleTargetBytes);
         RuntimeMetrics runtime = new();
 
@@ -59,12 +63,14 @@ internal static class MeasurementRunCoordinator
             publisher,
             producerQueueTargetArticles,
             enableForensicDiagnostics,
-            producerStopCts.Token), CancellationToken.None);
+            producerStopCts.Token,
+            queueConsumerForensics), CancellationToken.None);
 
         Task[] dispatchers = new Task[config.DispatchWorkerCount];
         for (int i = 0; i < dispatchers.Length; i++)
         {
-            dispatchers[i] = Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, cancellationToken, enableForensicDiagnostics), CancellationToken.None);
+            QueueConsumerProbe? consumerProbe = queueConsumerForensics?.GetProbe(i);
+            dispatchers[i] = Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, cancellationToken, enableForensicDiagnostics, consumerProbe), CancellationToken.None);
         }
 
         if (config.MeasurementArticleCount is null)
@@ -76,7 +82,7 @@ internal static class MeasurementRunCoordinator
             await Task.WhenAll(producerTasks).ConfigureAwait(false);
         }
 
-        return await MeasurementExecutionEngine.DrainAndShutdownAsync(
+        BenchmarkResult benchmarkResult = await MeasurementExecutionEngine.DrainAndShutdownAsync(
             queue,
             metrics,
             runtime,
@@ -110,5 +116,40 @@ internal static class MeasurementRunCoordinator
                     forensicEnabled,
                     fixedCountBoundaryTelemetry,
                     publisher)).ConfigureAwait(false);
+
+        if (queueConsumerForensics is not null)
+        {
+            ExportQueueConsumerForensics(queueConsumerForensics, queue, publisher);
+        }
+
+        return benchmarkResult;
+    }
+
+    private static void ExportQueueConsumerForensics(
+        QueueConsumerForensics forensics,
+        BoundedArticleQueue queue,
+        TransitPublisher publisher)
+    {
+        try
+        {
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+            long transportInFlight = diagnostics.Connections.Sum(static entry => (long)entry.Snapshot.CurrentConcurrentSubmissions);
+
+            QueueConsumerForensicsReport report = forensics.BuildReport(
+                queue.CurrentQueuedCount,
+                queue.CurrentQueuedBytes,
+                transportInFlight);
+
+            (string jsonPath, string textPath) = QueueConsumerForensicsWriter.Write(report, AppContext.BaseDirectory);
+
+            Console.WriteLine();
+            Console.WriteLine("Queue consumer call-stack forensics written:");
+            Console.WriteLine($"JSON: {jsonPath}");
+            Console.WriteLine($"TEXT: {textPath}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"WARNING: Failed to write queue consumer forensic artifacts: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }

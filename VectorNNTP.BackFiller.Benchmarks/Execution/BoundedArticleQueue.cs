@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
@@ -6,12 +7,14 @@ internal sealed class BoundedArticleQueue : IDisposable
 {
     private readonly Channel<QueuedArticle> _channel;
     private readonly ByteBudget _byteBudget;
+    private readonly QueueConsumerForensics? _forensics;
     private long _queuedBytes;
     private int _queuedCount;
     private volatile bool _admissionStopped;
 
-    internal BoundedArticleQueue(int maxArticles, long maxResidentBytes)
+    internal BoundedArticleQueue(int maxArticles, long maxResidentBytes, QueueConsumerForensics? forensics = null)
     {
+        _forensics = forensics;
         _channel = Channel.CreateBounded<QueuedArticle>(new BoundedChannelOptions(maxArticles)
         {
             SingleWriter = true,
@@ -37,8 +40,10 @@ internal sealed class BoundedArticleQueue : IDisposable
         try
         {
             await _channel.Writer.WriteAsync(article, cancellationToken).ConfigureAwait(false);
+            long channelWriteCompletedTicks = _forensics is null ? 0 : Stopwatch.GetTimestamp();
             Interlocked.Increment(ref _queuedCount);
             Interlocked.Add(ref _queuedBytes, article.PayloadLength);
+            _forensics?.RecordEnqueue(channelWriteCompletedTicks, Stopwatch.GetTimestamp());
             return true;
         }
         catch

@@ -31,7 +31,8 @@ internal readonly record struct TransitBenchmarkConfig(
     long MaxResidentBytes,
     int ArticleTargetBytes,
     int ProducerQueueTargetArticles,
-    RuntimeIdentityExpectation ExpectedRuntimeIdentity)
+    RuntimeIdentityExpectation ExpectedRuntimeIdentity,
+    bool EnableQueueConsumerForensics = false)
 {
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
@@ -197,7 +198,8 @@ internal readonly record struct TransitBenchmarkConfig(
             MaxResidentBytes: maxResidentBytes,
             ArticleTargetBytes: articleTargetBytes,
             ProducerQueueTargetArticles: producerQueueTargetArticles,
-            ExpectedRuntimeIdentity: expectedRuntimeIdentity);
+            ExpectedRuntimeIdentity: expectedRuntimeIdentity,
+            EnableQueueConsumerForensics: cliOptions.EnableQueueConsumerForensics ?? false);
     }
 
     private static string FindBackFillerAppSettingsPath()

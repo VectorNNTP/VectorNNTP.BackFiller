@@ -12,6 +12,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
     int? GeneratorWorkers,
     int? WriteBatchCoalesceMicroseconds,
     int? ArticleCount = null,
+    bool? EnableQueueConsumerForensics = null,
     string? ExpectedAssemblyPath = null,
     string? ExpectedAssemblyVersion = null,
     string? ExpectedFileVersion = null,
@@ -42,6 +43,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
         int? generatorWorkers = null;
         int? writeBatchCoalesceMicroseconds = null;
         int? articleCount = null;
+        bool? enableQueueConsumerForensics = null;
         string? expectedAssemblyPath = null;
         string? expectedAssemblyVersion = null;
         string? expectedFileVersion = null;
@@ -117,6 +119,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
                 case "article-count":
                     articleCount = ParsePositiveInt(key, value);
                     break;
+                case "queue-consumer-forensics":
+                    enableQueueConsumerForensics = ParseBoolean(key, value);
+                    break;
                 case "expected-assembly-path":
                     expectedAssemblyPath = ParseRequiredString(key, value);
                     break;
@@ -167,6 +172,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
             GeneratorWorkers: generatorWorkers,
             WriteBatchCoalesceMicroseconds: writeBatchCoalesceMicroseconds,
             ArticleCount: articleCount,
+            EnableQueueConsumerForensics: enableQueueConsumerForensics,
             ExpectedAssemblyPath: expectedAssemblyPath,
             ExpectedAssemblyVersion: expectedAssemblyVersion,
             ExpectedFileVersion: expectedFileVersion,
@@ -185,6 +191,16 @@ internal readonly record struct TransitBenchmarkCliOptions(
         if (!int.TryParse(raw, out int parsed) || parsed <= 0)
         {
             throw new ArgumentException($"Option '--{key}' requires a positive integer value. Received '{raw}'.");
+        }
+
+        return parsed;
+    }
+
+    private static bool ParseBoolean(string key, string raw)
+    {
+        if (!bool.TryParse(raw, out bool parsed))
+        {
+            throw new ArgumentException($"Option '--{key}' requires a boolean value ('true' or 'false'). Received '{raw}'.");
         }
 
         return parsed;

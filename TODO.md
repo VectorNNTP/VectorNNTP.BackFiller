@@ -54,3 +54,34 @@ The current FakeServer has already proven valuable for isolating BackFiller perf
 **Scope Notes**
 - Backlog item only. Do not implement this refactor without explicit scoped authorization.
 - Before execution, define migration scope, project boundaries, ownership, and compatibility with active governance/performance checkpoints.
+
+### 2) [OPEN] Reduce dispatch-consumer wake-to-run latency (interval C)
+
+**What**
+Queue-read forensics (`docs/benchmarks/queue-consumer-callstack-forensics.md`) established that dispatch consumers are
+purely async-parked in `await BoundedArticleQueue.WaitToReadAsync(...)` and that the observed wait time resides in
+interval C (item becomes eligible -> the parked consumer's continuation actually runs) plus interval A (queue genuinely
+empty). `TryRead` itself is sub-microsecond and no lock, semaphore, or synchronous blocking wait exists between
+`WaitToReadAsync` and `TryRead`.
+
+**Why**
+Any future latency work on the dispatch path must target continuation scheduling / producer supply, not the queue read
+itself. Recording it here prevents rediscovering the same evidence.
+
+**Scope Notes**
+- Backlog item only. Forensics work was instrumentation-only and changed no architecture, batching, consumer count, or
+  ThreadPool settings; the same constraints apply until an optimization phase is explicitly authorized.
+
+### 3) [OPEN] Decide whether `BoundedArticleQueue` depth accounting should be exact
+
+**What**
+`BoundedArticleQueue.CurrentQueuedCount` is an independent counter updated *after* the corresponding channel operation
+in both directions, so it can transiently under-count, over-count, and even read negative. Forensic runs observed
+negative depths at WAIT_START and classified 92 failed `TryRead`s as "undeterminable" for that reason.
+
+**Why**
+Reported queue depth is used for reasoning about backlog; it is currently an approximation and must not be treated as
+"items `ChannelReader.TryRead` can return".
+
+**Scope Notes**
+- Backlog item only. Changing the accounting is a behaviour change and requires explicit authorization.

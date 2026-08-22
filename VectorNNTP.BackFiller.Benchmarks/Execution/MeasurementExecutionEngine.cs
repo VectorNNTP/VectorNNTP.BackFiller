@@ -65,73 +65,110 @@ internal static partial class MeasurementExecutionEngine
         MeasurementMetrics metrics,
         PreparedBenchmarkWorkload workload,
         CancellationToken cancellationToken,
-        bool enableForensicDiagnostics)
+        bool enableForensicDiagnostics,
+        QueueConsumerProbe? consumerProbe = null)
     {
         bool forensicSnapshotFailureLogged = false;
 
-        while (await queue.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+        try
         {
-            while (queue.TryRead(out QueuedArticle queuedArticle))
+            while (true)
             {
-                long dequeuedTick = Stopwatch.GetTimestamp();
-                metrics.OnDequeued(dequeuedTick);
-                Interlocked.Increment(ref metrics.InFlightSubmissions);
+                ValueTask<bool> waitToRead = queue.WaitToReadAsync(cancellationToken);
+                consumerProbe?.RecordWaitStart(queue.CurrentQueuedCount, queue.CurrentQueuedBytes, waitToRead.IsCompleted);
+                bool canRead = await waitToRead.ConfigureAwait(false);
+                consumerProbe?.RecordWaitReturn(canRead, queue.CurrentQueuedCount, queue.CurrentQueuedBytes);
 
-                try
+                if (!canRead)
                 {
-                    int pendingAtSubmit = 0;
-                    if (enableForensicDiagnostics)
-                    {
-                        try
-                        {
-                            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
-                            pendingAtSubmit = beforeSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
-                        }
-                        catch (Exception ex)
-                        {
-                            if (!forensicSnapshotFailureLogged)
-                            {
-                                forensicSnapshotFailureLogged = true;
-                                Console.WriteLine("[TELEMETRY-WARN] Forensic pre-submit diagnostics capture failed; continuing. exceptionType={0} message={1}",
-                                    ex.GetType().Name,
-                                    ex.Message);
-                            }
-                        }
-                    }
-
-                    metrics.OnAdmitted(queuedArticle.PayloadLength, dequeuedTick);
-                    long publishStartTick = Stopwatch.GetTimestamp();
-                    TransitPublishResult result = await publisher.PublishAsync(queuedArticle.MessageId, workload.ReusableArticlePayload, cancellationToken).ConfigureAwait(false);
-                    long publishEndTick = Stopwatch.GetTimestamp();
-
-                    int pendingAtComplete = 0;
-                    if (enableForensicDiagnostics)
-                    {
-                        try
-                        {
-                            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
-                            pendingAtComplete = afterSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
-                        }
-                        catch (Exception ex)
-                        {
-                            if (!forensicSnapshotFailureLogged)
-                            {
-                                forensicSnapshotFailureLogged = true;
-                                Console.WriteLine("[TELEMETRY-WARN] Forensic post-submit diagnostics capture failed; continuing. exceptionType={0} message={1}",
-                                    ex.GetType().Name,
-                                    ex.Message);
-                            }
-                        }
-                    }
-
-                    metrics.OnPublishResult(result, queuedArticle.PayloadLength, dequeuedTick, publishStartTick, publishEndTick, pendingAtSubmit, pendingAtComplete);
+                    break;
                 }
-                finally
+
+                while (true)
                 {
-                    Interlocked.Decrement(ref metrics.InFlightSubmissions);
-                    queue.ReleaseReservation(queuedArticle.PayloadLength);
+                    QueuedArticle queuedArticle;
+                    bool hasArticle;
+                    if (consumerProbe is null)
+                    {
+                        hasArticle = queue.TryRead(out queuedArticle);
+                    }
+                    else
+                    {
+                        consumerProbe.RecordTryReadStart(queue.CurrentQueuedCount, queue.CurrentQueuedBytes);
+                        hasArticle = queue.TryRead(out queuedArticle);
+                        consumerProbe.RecordTryReadEnd(hasArticle, queue.CurrentQueuedCount, queue.CurrentQueuedBytes);
+                    }
+
+                    if (!hasArticle)
+                    {
+                        break;
+                    }
+
+                    long dequeuedTick = Stopwatch.GetTimestamp();
+                    metrics.OnDequeued(dequeuedTick);
+                    Interlocked.Increment(ref metrics.InFlightSubmissions);
+
+                    try
+                    {
+                        int pendingAtSubmit = 0;
+                        if (enableForensicDiagnostics)
+                        {
+                            try
+                            {
+                                TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
+                                pendingAtSubmit = beforeSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
+                            }
+                            catch (Exception ex)
+                            {
+                                if (!forensicSnapshotFailureLogged)
+                                {
+                                    forensicSnapshotFailureLogged = true;
+                                    Console.WriteLine("[TELEMETRY-WARN] Forensic pre-submit diagnostics capture failed; continuing. exceptionType={0} message={1}",
+                                        ex.GetType().Name,
+                                        ex.Message);
+                                }
+                            }
+                        }
+
+                        metrics.OnAdmitted(queuedArticle.PayloadLength, dequeuedTick);
+                        long publishStartTick = Stopwatch.GetTimestamp();
+                        TransitPublishResult result = await publisher.PublishAsync(queuedArticle.MessageId, workload.ReusableArticlePayload, cancellationToken).ConfigureAwait(false);
+                        long publishEndTick = Stopwatch.GetTimestamp();
+
+                        int pendingAtComplete = 0;
+                        if (enableForensicDiagnostics)
+                        {
+                            try
+                            {
+                                TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
+                                pendingAtComplete = afterSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
+                            }
+                            catch (Exception ex)
+                            {
+                                if (!forensicSnapshotFailureLogged)
+                                {
+                                    forensicSnapshotFailureLogged = true;
+                                    Console.WriteLine("[TELEMETRY-WARN] Forensic post-submit diagnostics capture failed; continuing. exceptionType={0} message={1}",
+                                        ex.GetType().Name,
+                                        ex.Message);
+                                }
+                            }
+                        }
+
+                        metrics.OnPublishResult(result, queuedArticle.PayloadLength, dequeuedTick, publishStartTick, publishEndTick, pendingAtSubmit, pendingAtComplete);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref metrics.InFlightSubmissions);
+                        queue.ReleaseReservation(queuedArticle.PayloadLength);
+                        consumerProbe?.RecordProcessingComplete();
+                    }
                 }
             }
+        }
+        finally
+        {
+            consumerProbe?.RecordExit();
         }
 
         TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot dispatcherExitDiagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
@@ -152,7 +189,8 @@ internal static partial class MeasurementExecutionEngine
         TransitPublisher publisher,
         int queueTargetArticles,
         bool enableForensicDiagnostics,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        QueueConsumerForensics? queueConsumerForensics = null)
     {
         Console.WriteLine("elapsed_s gen_art_s gen_MB_s gen_Gbps adm_art_s adm_MB_s acc_art_s acc_MB_s acc_Gbps rej_art_s amb_art_s q_depth q_bytes inflight dispatch_pending actual_pending peak_conn_inflight conn_ready active_slots host_cpu_pct transit_cpu_pct cpu_pct ws_mb heap_mb alloc_mb gen0 gen1 gen2 prod_active_pct prod_blocked_pct prod_active_ms prod_blocked_ms queue_wait_ms");
         Console.WriteLine("NOTE: generated/admitted/accepted are distinct throughput classes; accepted is based on definitive TransitServer success responses.");
@@ -191,6 +229,7 @@ internal static partial class MeasurementExecutionEngine
                 int queueDepth = queue.CurrentQueuedCount;
                 long queueBytes = queue.CurrentQueuedBytes;
                 int inFlight = Volatile.Read(ref metrics.InFlightSubmissions);
+                _ = queueConsumerForensics?.CaptureStateCensus();
 
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
                 int actualPending = diagnostics.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
