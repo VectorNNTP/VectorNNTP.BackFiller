@@ -48,6 +48,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         private static ReadOnlySpan<byte> YEncBegin => "=ybegin "u8;
 
         /// <summary>
+        /// <c>=ybegin</c> control-line stem used to validate required delimiter spacing.
+        /// </summary>
+        private static ReadOnlySpan<byte> YEncBeginStem => "=ybegin"u8;
+
+        /// <summary>
         /// <c>=ypart</c> control-line prefix including required trailing space.
         /// </summary>
         private static ReadOnlySpan<byte> YEncPart => "=ypart "u8;
@@ -100,7 +105,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
             while (position < articleBody.Length)
             {
                 int beginLineStart = ArticleLineScanner.FindLineStartingWith(articleBody, position, YEncBegin);
-                int beginStemLineStart = ArticleLineScanner.FindLineStartingWith(articleBody, position, YEncBegin);
+                int beginStemLineStart = ArticleLineScanner.FindLineStartingWith(articleBody, position, YEncBeginStem);
 
                 if (beginStemLineStart >= 0 && (beginLineStart < 0 || beginStemLineStart <= beginLineStart))
                 {
@@ -108,7 +113,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                     int beginStemContentEnd = beginStemLineEnd >= 0 ? beginStemLineEnd : articleBody.Length;
                     ReadOnlySpan<byte> beginStemLine = articleBody[beginStemLineStart..beginStemContentEnd];
 
-                    bool hasRequiredSpaceAfterYBegin = beginStemLine.Length > YEncBegin.Length && beginStemLine[YEncBegin.Length] == (byte)' ';
+                    bool hasRequiredSpaceAfterYBegin = beginStemLine.Length > YEncBeginStem.Length && beginStemLine[YEncBeginStem.Length] == (byte)' ';
                     if (!hasRequiredSpaceAfterYBegin)
                     {
                         return new YEncArticleValidationResult(YEncArticleValidationStatus.InvalidMetadata, sectionsValidated);

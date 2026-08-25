@@ -87,6 +87,12 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && string.Equals(args[0], "article-parse-bench", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = BenchmarkRunner.Run<NntpArticleParserBenchmarks>();
+            return;
+        }
+
         _ = BenchmarkRunner.Run<LoggingApiBenchmarks>();
     }
 }
