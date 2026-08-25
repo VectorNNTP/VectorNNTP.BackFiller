@@ -61,6 +61,9 @@ VectorNNTP.BackFiller.Benchmarks/**/transit-benchmark-result-*.json
 VectorNNTP.BackFiller.Benchmarks/**/transit-benchmark-result-*.csv
 VectorNNTP.BackFiller.Benchmarks/**/transit-benchmark-result-*.log
 
+# Local NNTP corpus fixtures (development-only, never committed)
+VectorNNTP.BackFiller.Tests/LocalCorpus/
+
 # .NET Core
 project.lock.json
 project.fragment.lock.json

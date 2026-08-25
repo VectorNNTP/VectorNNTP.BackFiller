@@ -1,7 +1,14 @@
+// <copyright file="ProcessBootstrapper.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Startup
+// Process bootstrap orchestration for invariant culture, bootstrap logging, and fatal diagnostic handlers.
+
 using System.Globalization;
 using Serilog;
-
 using Serilog.Events;
+using VectorNNTP.Backfiller.Startup.Logging;
 
 namespace VectorNNTP.Backfiller.Startup
 {
@@ -30,7 +37,8 @@ namespace VectorNNTP.Backfiller.Startup
         {
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
-                .WriteTo.Console()
+                .Enrich.With(new UtcTimestampEnricher())
+                .WriteTo.Console(outputTemplate: "[{UtcTimestamp:HH:mm:ss} UTC {Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateBootstrapLogger();
         }
 

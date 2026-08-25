@@ -29,7 +29,32 @@ Use these explicit markers and keep history:
 
 ## Backlog Items
 
-### 1) [OPEN] Separate FakeServer into a dedicated solution project
+### 1) [OPEN] Extract temporary BackFiller-local validation implementations into a shared validation library
+
+**What**
+Extract the temporary NNTP validation implementations currently duplicated/adapted inside BackFiller into a dedicated shared validation package once architecture boundaries are stable.
+
+Current temporary local implementation locations:
+- `VectorNNTP.BackFiller/Runtime/Articles/Validation/NntpMessageIdValidation.cs`
+- `VectorNNTP.BackFiller/Runtime/Articles/Validation/NntpMessageIdValidationSimd.cs`
+- `VectorNNTP.BackFiller/Runtime/Articles/Validation/NntpMessageIdCharClasses.cs`
+
+Reference implementation provenance:
+- `C:\Users\chrisk\source\repos\Vector.NNTP\Vector.NNTP.Utilities\Validation`
+
+Desired future direction:
+- one authoritative shared validation library
+- no duplicated Message-ID grammar/SIMD/bitmap logic across repos
+- explicit compatibility and allocation-behavior tests during extraction
+
+**Why**
+BackFiller currently uses controlled temporary duplication by decision to avoid coupling to an immature shared boundary. This preserves delivery velocity now, but long-term maintainability requires one authoritative shared validation package to prevent behavioral drift and duplicated optimization work.
+
+**Scope Notes**
+- Backlog item only. Do not perform extraction in the current acquisition task.
+- Extraction must preserve NNTP/INN Message-ID grammar behavior and hot-path allocation characteristics.
+
+### 2) [OPEN] Separate FakeServer into a dedicated solution project
 
 **What**
 Move the benchmark FakeServer implementation out of `VectorNNTP.BackFiller.Benchmarks` and establish a reusable, independently maintained FakeServer/test-server project in the solution.

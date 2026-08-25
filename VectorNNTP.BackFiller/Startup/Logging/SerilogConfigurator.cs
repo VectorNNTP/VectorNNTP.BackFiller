@@ -1,3 +1,10 @@
+// <copyright file="SerilogConfigurator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Startup / Logging
+// Production Serilog pipeline construction, bootstrap logger replacement, and sink configuration.
+
 using Serilog;
 using Serilog.Events;
 
@@ -42,16 +49,17 @@ namespace VectorNNTP.Backfiller.Startup.Logging
                     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
                     .MinimumLevel.Override("System", LogEventLevel.Warning)
                     .Enrich.FromLogContext()
+                    .Enrich.With(new UtcTimestampEnricher())
                     .Enrich.WithProperty("Application", serviceName)
                     .Enrich.WithProperty("ProcessId", Environment.ProcessId)
                     .WriteTo.Async(
-                        configure: sink => sink.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"),
+                        configure: sink => sink.Console(outputTemplate: "[{UtcTimestamp:HH:mm:ss} UTC {Level:u3}] {Message:lj}{NewLine}{Exception}"),
                         blockWhenFull: true)
                     .WriteTo.Async(
                         configure: sink => sink.File(
                             path: logFilePath,
                             rollingInterval: RollingInterval.Day,
-                            outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                            outputTemplate: "{UtcTimestamp:yyyy-MM-ddTHH:mm:ss.fff'Z'} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
                             retainedFileCountLimit: 30,
                             fileSizeLimitBytes: 1073741824,
                             rollOnFileSizeLimit: true),
@@ -113,22 +121,16 @@ namespace VectorNNTP.Backfiller.Startup.Logging
 
         private static LogLevel ParseMicrosoftLogLevel(string? configuredLevel)
         {
-            if (string.IsNullOrWhiteSpace(configuredLevel))
-            {
-                return LogLevel.Information;
-            }
-
-            if (Enum.TryParse(configuredLevel, ignoreCase: true, out LogLevel level))
-            {
-                return level;
-            }
-
-            return configuredLevel.Trim().ToLowerInvariant() switch
-            {
-                "verbose" => LogLevel.Trace,
-                "fatal" => LogLevel.Critical,
-                _ => LogLevel.Information,
-            };
+            return string.IsNullOrWhiteSpace(configuredLevel)
+                ? LogLevel.Information
+                : Enum.TryParse(configuredLevel, ignoreCase: true, out LogLevel level)
+                ? level
+                : configuredLevel.Trim().ToLowerInvariant() switch
+                {
+                    "verbose" => LogLevel.Trace,
+                    "fatal" => LogLevel.Critical,
+                    _ => LogLevel.Information,
+                };
         }
     }
 }

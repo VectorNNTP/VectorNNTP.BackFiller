@@ -1,0 +1,852 @@
+// <copyright file="NntpArticleAcquisitionSession.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Long-lived NNTP ARTICLE acquisition session with byte-preserving multiline framing,
+// deterministic failure classification, redacted protocol logging, and pooled ownership semantics.
+
+using System.Buffers;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO.Pipelines;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Text;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
+using VectorNNTP.Backfiller.Runtime.Transit;
+
+namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
+{
+    /// <summary>
+    /// Reusable authenticated NNTP session that executes multiple sequential ARTICLE operations.
+    /// </summary>
+    internal sealed class NntpArticleAcquisitionSession : IAsyncDisposable
+    {
+        /// <summary>
+        /// Endpoint settings.
+        /// </summary>
+        private readonly NntpArticleAcquisitionEndpoint _endpoint;
+
+        /// <summary>
+        /// Acquisition guardrails.
+        /// </summary>
+        private readonly NntpArticleAcquisitionOptions _options;
+
+        /// <summary>
+        /// Session logger.
+        /// </summary>
+        private readonly ILogger<NntpArticleAcquisitionSession> _logger;
+
+        /// <summary>
+        /// Connected client.
+        /// </summary>
+        private readonly TcpClient _tcpClient;
+
+        /// <summary>
+        /// Active transport stream.
+        /// </summary>
+        private readonly Stream _stream;
+
+        /// <summary>
+        /// Reader over transport stream.
+        /// </summary>
+        private readonly PipeReader _reader;
+
+        /// <summary>
+        /// Disposal marker.
+        /// </summary>
+        private bool _disposed;
+
+        /// <summary>
+        /// Initializes a new acquisition session.
+        /// </summary>
+        /// <param name="endpoint">Endpoint settings.</param>
+        /// <param name="options">Acquisition options.</param>
+        /// <param name="logger">Logger.</param>
+        /// <param name="tcpClient">Connected client.</param>
+        /// <param name="stream">Transport stream.</param>
+        private NntpArticleAcquisitionSession(
+            NntpArticleAcquisitionEndpoint endpoint,
+            NntpArticleAcquisitionOptions options,
+            ILogger<NntpArticleAcquisitionSession> logger,
+            TcpClient tcpClient,
+            Stream stream)
+        {
+            _endpoint = endpoint;
+            _options = options;
+            _logger = logger;
+            _tcpClient = tcpClient;
+            _stream = stream;
+            _reader = PipeReader.Create(stream, new StreamPipeReaderOptions(leaveOpen: true));
+        }
+
+        /// <summary>
+        /// Connects and initializes a reusable acquisition session.
+        /// </summary>
+        /// <param name="endpoint">Endpoint settings.</param>
+        /// <param name="options">Acquisition options.</param>
+        /// <param name="logger">Logger.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Connected session or deterministic failure result.</returns>
+        internal static async ValueTask<(NntpArticleAcquisitionSession? Session, NntpArticleAcquisitionResult Result)> ConnectAsync(
+            NntpArticleAcquisitionEndpoint endpoint,
+            NntpArticleAcquisitionOptions options,
+            ILogger<NntpArticleAcquisitionSession> logger,
+            CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(logger);
+
+            NntpArticleAcquisitionResult? optionsFailure = ValidateOptions(endpoint, options);
+            if (optionsFailure is not null)
+            {
+                return (null, optionsFailure);
+            }
+
+            TcpClient tcpClient = new()
+            {
+                ReceiveBufferSize = options.ReceiveBufferBytes,
+                SendBufferSize = options.ReceiveBufferBytes
+            };
+            Stream? stream = null;
+
+            try
+            {
+                LogSessionConnecting(logger, endpoint.Host, endpoint.Port, endpoint.UseSsl);
+
+                _ = await ExecuteWithTimeoutAsync(
+                    options.ConnectTimeout,
+                    cancellationToken,
+                    async token =>
+                    {
+                        await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
+                        return true;
+                    }).ConfigureAwait(false);
+
+                stream = tcpClient.GetStream();
+                if (endpoint.UseSsl)
+                {
+                    SslStream sslStream = new(stream, leaveInnerStreamOpen: false);
+                    _ = await ExecuteWithTimeoutAsync(
+                        options.ConnectTimeout,
+                        cancellationToken,
+                        async token =>
+                        {
+                            await sslStream.AuthenticateAsClientAsync(
+                                new SslClientAuthenticationOptions
+                                {
+                                    TargetHost = endpoint.Host,
+                                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                                },
+                                token).ConfigureAwait(false);
+
+                            return true;
+                        }).ConfigureAwait(false);
+
+                    stream = sslStream;
+                }
+
+                NntpArticleAcquisitionSession session = new(endpoint, options, logger, tcpClient, stream);
+
+                NntpArticleAcquisitionTraceContext greetingContext = new(NntpArticleAcquisitionOperation.Connect, MessageId: null, MaximumValue: null, ActualValue: null);
+                string greetingLine = await session.ReadProtocolLineAsync(options.CommandTimeout, cancellationToken, greetingContext).ConfigureAwait(false);
+                if (!TryParseStatusLine(greetingLine, out int greetingCode, out string greetingText))
+                {
+                    throw new NntpArticleAcquisitionException(
+                        NntpArticleAcquisitionFailureCode.MalformedResponse,
+                        greetingContext,
+                        "Malformed NNTP greeting status line.");
+                }
+
+                if (greetingCode is not 200 and not 201)
+                {
+                    await session.DisposeAsync().ConfigureAwait(false);
+                    return (null, NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, greetingCode, greetingText));
+                }
+
+                NntpArticleAcquisitionResult? authFailure = await session.AuthenticateIfConfiguredAsync(cancellationToken).ConfigureAwait(false);
+                if (authFailure is not null)
+                {
+                    await session.DisposeAsync().ConfigureAwait(false);
+                    return (null, authFailure);
+                }
+
+                LogSessionConnected(logger, endpoint.Host, endpoint.Port, endpoint.UseSsl);
+                return (session, NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.None, greetingCode, greetingText));
+            }
+            catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
+            {
+                if (stream is not null)
+                {
+                    await stream.DisposeAsync().ConfigureAwait(false);
+                }
+
+                tcpClient.Dispose();
+                return (null, failure);
+            }
+        }
+
+        /// <summary>
+        /// Downloads one article by Message-ID over existing session.
+        /// </summary>
+        /// <param name="messageId">Message-ID argument.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Deterministic acquisition result.</returns>
+        internal async ValueTask<NntpArticleAcquisitionResult> DownloadArticleAsync(string messageId, CancellationToken cancellationToken)
+        {
+            if (_disposed)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
+            }
+
+            if (!NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan()))
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.InvalidMessageId, null, "Message-ID does not satisfy NNTP/INN grammar.");
+            }
+
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            NntpArticleAcquisitionTraceContext writeContext = new(NntpArticleAcquisitionOperation.CommandWrite, messageId, null, null);
+            NntpArticleAcquisitionTraceContext statusContext = new(NntpArticleAcquisitionOperation.StatusRead, messageId, null, null);
+            NntpArticleAcquisitionTraceContext payloadContext = new(NntpArticleAcquisitionOperation.ArticleReceive, messageId, _options.MaxArticleBytes, null);
+
+            try
+            {
+                string command = string.Create(CultureInfo.InvariantCulture, $"ARTICLE {messageId}");
+                await WriteCommandAsync(command, _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
+
+                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
+                if (!TryParseStatusLine(statusLine, out int statusCode, out string statusText))
+                {
+                    throw new NntpArticleAcquisitionException(
+                        NntpArticleAcquisitionFailureCode.MalformedResponse,
+                        statusContext,
+                        "Malformed NNTP ARTICLE status line.");
+                }
+
+                if (statusCode == 220)
+                {
+                    DownloadedArticleBuffer buffer = await ReadArticlePayloadAsync(cancellationToken, payloadContext).ConfigureAwait(false);
+                    NntpArticleAcquisitionResult success = NntpArticleAcquisitionResult.Success(statusCode, statusText, buffer);
+                    LogArticleOutcome(_logger, messageId, "downloaded", stopwatch.Elapsed, success.ArticleLength, failureReason: null);
+                    return success;
+                }
+
+                if (statusCode == 430)
+                {
+                    LogArticleOutcome(_logger, messageId, "not found", stopwatch.Elapsed, articleSizeBytes: null, NntpArticleAcquisitionFailureCode.ArticleNotFound);
+                    return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ArticleNotFound, statusCode, statusText);
+                }
+
+                if (statusCode is >= 400 and <= 599)
+                {
+                    LogArticleOutcome(_logger, messageId, "remote rejection", stopwatch.Elapsed, articleSizeBytes: null, NntpArticleAcquisitionFailureCode.RemoteRejected);
+                    return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText);
+                }
+
+                LogArticleFailure(_logger, messageId, NntpArticleAcquisitionFailureCode.ProtocolFailure, stopwatch.Elapsed, articleSizeBytes: null);
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText);
+            }
+            catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
+            {
+                LogArticleFailure(_logger, messageId, failure.FailureCode, stopwatch.Elapsed, articleSizeBytes: null);
+                return failure;
+            }
+        }
+
+        /// <summary>
+        /// Disposes session transport resources.
+        /// </summary>
+        /// <returns>Completion task.</returns>
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            try
+            {
+                await _reader.CompleteAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                await _stream.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
+            _tcpClient.Dispose();
+        }
+
+        /// <summary>
+        /// Performs AUTHINFO USER/PASS flow when credentials are configured.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Failure result or null on success.</returns>
+        private async Task<NntpArticleAcquisitionResult?> AuthenticateIfConfiguredAsync(CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(_endpoint.Username) && string.IsNullOrWhiteSpace(_endpoint.Password))
+            {
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(_endpoint.Username) || string.IsNullOrWhiteSpace(_endpoint.Password))
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, null, "Both Username and Password must be configured together.");
+            }
+
+            NntpArticleAcquisitionTraceContext userWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
+            NntpArticleAcquisitionTraceContext userRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
+            await WriteCommandAsync($"AUTHINFO USER {_endpoint.Username}", _options.CommandTimeout, cancellationToken, userWrite, redactCredentials: true).ConfigureAwait(false);
+            string userLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, userRead).ConfigureAwait(false);
+            if (!TryParseStatusLine(userLine, out int userCode, out string userText))
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO USER status line.");
+            }
+
+            if (userCode == 281)
+            {
+                return null;
+            }
+
+            if (userCode != 381)
+            {
+                NntpArticleAcquisitionFailureCode userFailure = userCode is >= 400 and <= 599
+                    ? NntpArticleAcquisitionFailureCode.AuthenticationFailure
+                    : NntpArticleAcquisitionFailureCode.ProtocolFailure;
+                return NntpArticleAcquisitionResult.Failure(userFailure, userCode, userText);
+            }
+
+            NntpArticleAcquisitionTraceContext passWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
+            NntpArticleAcquisitionTraceContext passRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
+            await WriteCommandAsync($"AUTHINFO PASS {_endpoint.Password}", _options.CommandTimeout, cancellationToken, passWrite, redactCredentials: true).ConfigureAwait(false);
+            string passLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, passRead).ConfigureAwait(false);
+            if (!TryParseStatusLine(passLine, out int passCode, out string passText))
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO PASS status line.");
+            }
+
+            if (passCode == 281)
+            {
+                return null;
+            }
+
+            NntpArticleAcquisitionFailureCode passFailure = passCode is >= 400 and <= 599
+                ? NntpArticleAcquisitionFailureCode.AuthenticationFailure
+                : NntpArticleAcquisitionFailureCode.ProtocolFailure;
+            return NntpArticleAcquisitionResult.Failure(passFailure, passCode, passText);
+        }
+
+        /// <summary>
+        /// Reads one status line with timeout, length guardrails, and debug logging.
+        /// </summary>
+        /// <param name="timeout">Operation timeout.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="context">Trace context.</param>
+        /// <returns>Status line text.</returns>
+        private async ValueTask<string> ReadProtocolLineAsync(
+            TimeSpan timeout,
+            CancellationToken cancellationToken,
+            NntpArticleAcquisitionTraceContext context)
+        {
+            string line = await ExecuteWithTimeoutAsync(
+                timeout,
+                cancellationToken,
+                token => TransitProtocolParser.ReadNntpLineAsync(_reader, token)).ConfigureAwait(false);
+
+            int bytes = Encoding.ASCII.GetByteCount(line);
+            if (bytes > _options.MaxStatusLineBytes)
+            {
+                throw new NntpArticleAcquisitionException(
+                    NntpArticleAcquisitionFailureCode.MalformedResponse,
+                    context with { MaximumValue = _options.MaxStatusLineBytes, ActualValue = bytes },
+                    string.Create(CultureInfo.InvariantCulture, $"NNTP status line exceeded configured maximum length ({bytes}>{_options.MaxStatusLineBytes})."));
+            }
+
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", line, context.MessageId ?? string.Empty);
+            }
+
+            return line;
+        }
+
+        /// <summary>
+        /// Writes one command line with timeout and optional credential redaction.
+        /// </summary>
+        /// <param name="command">Command text.</param>
+        /// <param name="timeout">Operation timeout.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="context">Trace context.</param>
+        /// <param name="redactCredentials">Whether authentication arguments should be redacted in logs.</param>
+        /// <returns>Completion task.</returns>
+        private async Task WriteCommandAsync(
+            string command,
+            TimeSpan timeout,
+            CancellationToken cancellationToken,
+            NntpArticleAcquisitionTraceContext context,
+            bool redactCredentials)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                string safeCommand = command;
+                if (redactCredentials)
+                {
+                    if (command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        safeCommand = "AUTHINFO USER ***";
+                    }
+                    else if (command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        safeCommand = "AUTHINFO PASS ***";
+                    }
+                }
+
+                _logger.LogDebug("TX: {Command} MessageId={MessageId}", safeCommand, context.MessageId ?? string.Empty);
+            }
+
+            byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
+            await ExecuteWithTimeoutAsync(
+                timeout,
+                cancellationToken,
+                async token =>
+                {
+                    await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
+                    await _stream.FlushAsync(token).ConfigureAwait(false);
+                    return true;
+                }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Reads multiline ARTICLE payload and removes one level of NNTP dot-stuffing.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="context">Trace context.</param>
+        /// <returns>Owned downloaded article buffer.</returns>
+        private async ValueTask<DownloadedArticleBuffer> ReadArticlePayloadAsync(
+            CancellationToken cancellationToken,
+            NntpArticleAcquisitionTraceContext context)
+        {
+            PooledArticleBuilder builder = new(_options.MaxArticleBytes, context);
+            bool atLineStart = true;
+
+            try
+            {
+                while (true)
+                {
+                    ReadResult readResult = await ExecuteWithTimeoutAsync(
+                        _options.ReceiveTimeout,
+                        cancellationToken,
+                        token => _reader.ReadAsync(token)).ConfigureAwait(false);
+
+                    ReadOnlySequence<byte> sequence = readResult.Buffer;
+                    SequenceReader<byte> reader = new(sequence);
+
+                    while (reader.TryPeek(out byte current))
+                    {
+                        if (atLineStart && current == (byte)'.')
+                        {
+                            SequenceReader<byte> lookAhead = reader;
+                            lookAhead.Advance(1);
+                            if (!lookAhead.TryPeek(out byte next))
+                            {
+                                break;
+                            }
+
+                            if (next == (byte)'.')
+                            {
+                                reader.Advance(2);
+                                builder.WriteByte((byte)'.');
+                                atLineStart = false;
+                                continue;
+                            }
+
+                            if (next == (byte)'\n')
+                            {
+                                reader.Advance(2);
+                                _reader.AdvanceTo(reader.Position, sequence.End);
+                                return builder.Build();
+                            }
+
+                            if (next == (byte)'\r')
+                            {
+                                SequenceReader<byte> afterCarriageReturn = lookAhead;
+                                afterCarriageReturn.Advance(1);
+                                if (!afterCarriageReturn.TryPeek(out byte lineFeed))
+                                {
+                                    break;
+                                }
+
+                                if (lineFeed == (byte)'\n')
+                                {
+                                    reader.Advance(3);
+                                    _reader.AdvanceTo(reader.Position, sequence.End);
+                                    return builder.Build();
+                                }
+
+                                reader.Advance(1);
+                                builder.WriteByte((byte)'.');
+                                atLineStart = false;
+                                continue;
+                            }
+
+                            reader.Advance(1);
+                            builder.WriteByte((byte)'.');
+                            atLineStart = false;
+                            continue;
+                        }
+
+                        reader.Advance(1);
+                        builder.WriteByte(current);
+                        atLineStart = current is (byte)'\r' or (byte)'\n';
+                    }
+
+                    _reader.AdvanceTo(reader.Position, sequence.End);
+                    if (readResult.IsCompleted)
+                    {
+                        throw new NntpArticleAcquisitionException(
+                            NntpArticleAcquisitionFailureCode.TruncatedArticle,
+                            context,
+                            "NNTP article response ended before terminator line.");
+                    }
+                }
+            }
+            catch
+            {
+                builder.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Parses one status line into code/text tuple.
+        /// </summary>
+        /// <param name="line">Status line text.</param>
+        /// <param name="code">Parsed status code.</param>
+        /// <param name="text">Parsed status text.</param>
+        /// <returns><see langword="true"/> when parse succeeded.</returns>
+        private static bool TryParseStatusLine(string line, out int code, out string text)
+        {
+            try
+            {
+                (code, text) = TransitProtocolParser.ParseStatusCodeAndText(line);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                code = 0;
+                text = string.Empty;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Validates endpoint/options guardrails before connect.
+        /// </summary>
+        /// <param name="endpoint">Endpoint settings.</param>
+        /// <param name="options">Options settings.</param>
+        /// <returns>Failure result when invalid, otherwise null.</returns>
+        private static NntpArticleAcquisitionResult? ValidateOptions(
+            NntpArticleAcquisitionEndpoint endpoint,
+            NntpArticleAcquisitionOptions options)
+        {
+            if (string.IsNullOrWhiteSpace(endpoint.Host))
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP host is required.");
+            }
+
+            if (endpoint.Port is <= 0 or > 65535)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP port must be between 1 and 65535.");
+            }
+
+            if (options.MaxArticleBytes <= 0 || options.ReceiveBufferBytes < 1024 || options.MaxStatusLineBytes < 256)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition options are out of range.");
+            }
+
+            if (options.ConnectTimeout <= TimeSpan.Zero || options.CommandTimeout <= TimeSpan.Zero || options.ReceiveTimeout <= TimeSpan.Zero)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition timeouts must be greater than zero.");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Executes operation with timeout and cancellation composition.
+        /// </summary>
+        /// <typeparam name="T">Operation result type.</typeparam>
+        /// <param name="timeout">Timeout.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="operation">Operation delegate.</param>
+        /// <returns>Operation result.</returns>
+        private static async ValueTask<T> ExecuteWithTimeoutAsync<T>(
+            TimeSpan timeout,
+            CancellationToken cancellationToken,
+            Func<CancellationToken, ValueTask<T>> operation)
+        {
+            using CancellationTokenSource timeoutSource = new(timeout);
+            using CancellationTokenSource linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+
+            try
+            {
+                return await operation(linkedSource.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutSource.IsCancellationRequested)
+            {
+                throw new TimeoutException("NNTP operation timed out.");
+            }
+        }
+
+        /// <summary>
+        /// Maps runtime exceptions to deterministic acquisition failures.
+        /// </summary>
+        /// <param name="exception">Thrown exception.</param>
+        /// <param name="callerCancellation">Caller cancellation token.</param>
+        /// <param name="failure">Mapped acquisition failure.</param>
+        /// <returns><see langword="true"/> when mapped.</returns>
+        private static bool TryMapFailure(
+            Exception exception,
+            CancellationToken callerCancellation,
+            out NntpArticleAcquisitionResult failure)
+        {
+            if (exception is NntpArticleAcquisitionException acquisitionException)
+            {
+                failure = NntpArticleAcquisitionResult.Failure(acquisitionException.FailureCode, null, acquisitionException.Message);
+                return true;
+            }
+
+            if (exception is TimeoutException)
+            {
+                failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.Timeout, null, exception.Message);
+                return true;
+            }
+
+            if (exception is OperationCanceledException)
+            {
+                failure = NntpArticleAcquisitionResult.Failure(
+                    callerCancellation.IsCancellationRequested ? NntpArticleAcquisitionFailureCode.Cancelled : NntpArticleAcquisitionFailureCode.Timeout,
+                    null,
+                    exception.Message);
+                return true;
+            }
+
+            if (exception is SocketException or IOException or AuthenticationException)
+            {
+                failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, exception.Message);
+                return true;
+            }
+
+            if (exception is InvalidOperationException)
+            {
+                failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, exception.Message);
+                return true;
+            }
+
+            failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, exception.Message);
+            return true;
+        }
+
+        /// <summary>
+        /// Formats elapsed duration with invariant machine-facing representation.
+        /// </summary>
+        /// <param name="elapsed">Elapsed duration.</param>
+        /// <returns>Formatted duration.</returns>
+        private static string FormatElapsed(TimeSpan elapsed)
+        {
+            return elapsed.TotalSeconds.ToString("F2", CultureInfo.InvariantCulture) + "s";
+        }
+
+        /// <summary>
+        /// Logs session connect start.
+        /// </summary>
+        /// <param name="logger">Logger.</param>
+        /// <param name="host">Host.</param>
+        /// <param name="port">Port.</param>
+        /// <param name="useSsl">SSL flag.</param>
+        private static void LogSessionConnecting(ILogger logger, string host, int port, bool useSsl)
+        {
+            logger.LogInformation("Connecting article acquisition session to {Host}:{Port} (SSL={UseSsl})", host, port, useSsl);
+        }
+
+        /// <summary>
+        /// Logs session connect completion.
+        /// </summary>
+        /// <param name="logger">Logger.</param>
+        /// <param name="host">Host.</param>
+        /// <param name="port">Port.</param>
+        /// <param name="useSsl">SSL flag.</param>
+        private static void LogSessionConnected(ILogger logger, string host, int port, bool useSsl)
+        {
+            logger.LogInformation("Connected article acquisition session to {Host}:{Port} (SSL={UseSsl})", host, port, useSsl);
+        }
+
+        /// <summary>
+        /// Logs successful/non-fatal article outcomes.
+        /// </summary>
+        /// <param name="logger">Logger.</param>
+        /// <param name="messageId">Message-ID.</param>
+        /// <param name="outcome">Outcome text.</param>
+        /// <param name="elapsed">Elapsed operation duration measured by monotonic stopwatch.</param>
+        /// <param name="articleSizeBytes">Optional downloaded article payload size in bytes.</param>
+        /// <param name="failureReason">Optional failure reason classification for non-success outcomes.</param>
+        private static void LogArticleOutcome(
+            ILogger logger,
+            string messageId,
+            string outcome,
+            TimeSpan elapsed,
+            int? articleSizeBytes,
+            NntpArticleAcquisitionFailureCode? failureReason)
+        {
+            logger.LogInformation(
+                "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
+                messageId,
+                outcome,
+                FormatElapsed(elapsed),
+                failureReason?.ToString() ?? string.Empty,
+                articleSizeBytes);
+        }
+
+        /// <summary>
+        /// Logs failed article outcomes.
+        /// </summary>
+        /// <param name="logger">Logger.</param>
+        /// <param name="messageId">Message-ID.</param>
+        /// <param name="failureCode">Failure classification.</param>
+        /// <param name="elapsed">Elapsed operation duration measured by monotonic stopwatch.</param>
+        /// <param name="articleSizeBytes">Optional article size associated with the failed operation.</param>
+        private static void LogArticleFailure(
+            ILogger logger,
+            string messageId,
+            NntpArticleAcquisitionFailureCode failureCode,
+            TimeSpan elapsed,
+            int? articleSizeBytes)
+        {
+            logger.LogInformation(
+                "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
+                messageId,
+                FormatElapsed(elapsed),
+                failureCode,
+                failureCode,
+                articleSizeBytes);
+        }
+
+        /// <summary>
+        /// Pooled byte accumulator for article payload receive path.
+        /// </summary>
+        private sealed class PooledArticleBuilder : IDisposable
+        {
+            /// <summary>
+            /// Initial rented buffer size.
+            /// </summary>
+            private const int InitialBufferBytes = 4096;
+
+            /// <summary>
+            /// Current rented buffer.
+            /// </summary>
+            private byte[] _buffer;
+
+            /// <summary>
+            /// Current valid length.
+            /// </summary>
+            private int _length;
+
+            /// <summary>
+            /// Maximum allowed bytes.
+            /// </summary>
+            private readonly int _maximumArticleBytes;
+
+            /// <summary>
+            /// Exception trace context.
+            /// </summary>
+            private readonly NntpArticleAcquisitionTraceContext _context;
+
+            /// <summary>
+            /// Initializes a new pooled builder.
+            /// </summary>
+            /// <param name="maximumArticleBytes">Maximum allowed bytes.</param>
+            /// <param name="context">Operation context.</param>
+            internal PooledArticleBuilder(int maximumArticleBytes, NntpArticleAcquisitionTraceContext context)
+            {
+                _maximumArticleBytes = maximumArticleBytes;
+                _context = context;
+                _buffer = ArrayPool<byte>.Shared.Rent(Math.Min(maximumArticleBytes, InitialBufferBytes));
+            }
+
+            /// <summary>
+            /// Appends one byte.
+            /// </summary>
+            /// <param name="value">Byte value.</param>
+            internal void WriteByte(byte value)
+            {
+                if (_length >= _maximumArticleBytes)
+                {
+                    throw new NntpArticleAcquisitionException(
+                        NntpArticleAcquisitionFailureCode.ArticleTooLarge,
+                        _context with { ActualValue = _length, MaximumValue = _maximumArticleBytes },
+                        string.Create(CultureInfo.InvariantCulture, $"Article exceeded configured maximum of {_maximumArticleBytes} bytes."));
+                }
+
+                if (_length == _buffer.Length)
+                {
+                    Grow();
+                }
+
+                _buffer[_length++] = value;
+            }
+
+            /// <summary>
+            /// Transfers pooled ownership to result buffer.
+            /// </summary>
+            /// <returns>Downloaded article buffer owner.</returns>
+            internal DownloadedArticleBuffer Build()
+            {
+                byte[] owned = Interlocked.Exchange(ref _buffer, Array.Empty<byte>());
+                return new DownloadedArticleBuffer(owned, _length);
+            }
+
+            /// <summary>
+            /// Returns owned pool buffer when not yet transferred.
+            /// </summary>
+            public void Dispose()
+            {
+                byte[] owned = Interlocked.Exchange(ref _buffer, Array.Empty<byte>());
+                if (owned.Length > 0)
+                {
+                    ArrayPool<byte>.Shared.Return(owned);
+                }
+            }
+
+            /// <summary>
+            /// Grows rented buffer capacity up to configured maximum.
+            /// </summary>
+            private void Grow()
+            {
+                int currentLength = _buffer.Length;
+                int candidateLength = currentLength <= int.MaxValue / 2 ? currentLength * 2 : _maximumArticleBytes;
+                int nextLength = Math.Min(_maximumArticleBytes, candidateLength);
+                if (nextLength <= currentLength)
+                {
+                    throw new NntpArticleAcquisitionException(
+                        NntpArticleAcquisitionFailureCode.ArticleTooLarge,
+                        _context with { ActualValue = _length, MaximumValue = _maximumArticleBytes },
+                        string.Create(CultureInfo.InvariantCulture, $"Article exceeded configured maximum of {_maximumArticleBytes} bytes."));
+                }
+
+                byte[] next = ArrayPool<byte>.Shared.Rent(nextLength);
+                _buffer.AsSpan(0, _length).CopyTo(next);
+                ArrayPool<byte>.Shared.Return(_buffer);
+                _buffer = next;
+            }
+        }
+    }
+}
