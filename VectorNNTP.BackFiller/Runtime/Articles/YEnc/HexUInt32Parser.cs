@@ -18,34 +18,31 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// <summary>
         /// Parses hexadecimal ASCII bytes into a <see cref="uint"/> value.
         /// </summary>
-        /// <param name="hexBytes">Hexadecimal byte span; parsing stops at first non-hex byte.</param>
+        /// <param name="hexBytes">Hexadecimal byte span that must contain only hexadecimal characters.</param>
         /// <param name="value">Parsed value when the method returns <see langword="true"/>.</param>
-        /// <returns><see langword="true"/> when at least one hex digit (maximum eight) was parsed; otherwise <see langword="false"/>.</returns>
+        /// <returns><see langword="true"/> when one to eight hexadecimal digits were parsed and consumed fully; otherwise <see langword="false"/>.</returns>
         internal static bool TryParseHexUInt32(ReadOnlySpan<byte> hexBytes, out uint value)
         {
             value = 0;
-            int digits = 0;
+
+            if (hexBytes.IsEmpty || hexBytes.Length > 8)
+            {
+                return false;
+            }
 
             for (int i = 0; i < hexBytes.Length; i++)
             {
                 int nibble = HexByteToNibble(hexBytes[i]);
-
                 if (nibble < 0)
-                {
-                    break;
-                }
-
-                if (digits == 8)
                 {
                     value = 0;
                     return false;
                 }
 
                 value = (value << 4) | (uint)nibble;
-                digits++;
             }
 
-            return digits > 0;
+            return true;
         }
 
         /// <summary>

@@ -93,6 +93,12 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && string.Equals(args[0], "yenc-validator-bench", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = BenchmarkRunner.Run<YEncArticleValidatorBenchmarks>();
+            return;
+        }
+
         _ = BenchmarkRunner.Run<LoggingApiBenchmarks>();
     }
 }

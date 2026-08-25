@@ -48,11 +48,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         private static ReadOnlySpan<byte> YEncBegin => "=ybegin "u8;
 
         /// <summary>
-        /// <c>=ybegin</c> control-line stem used to validate required delimiter spacing.
-        /// </summary>
-        private static ReadOnlySpan<byte> YEncBeginStem => "=ybegin"u8;
-
-        /// <summary>
         /// <c>=ypart</c> control-line prefix including required trailing space.
         /// </summary>
         private static ReadOnlySpan<byte> YEncPart => "=ypart "u8;
@@ -105,7 +100,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
             while (position < articleBody.Length)
             {
                 int beginLineStart = ArticleLineScanner.FindLineStartingWith(articleBody, position, YEncBegin);
-                int beginStemLineStart = ArticleLineScanner.FindLineStartingWith(articleBody, position, YEncBeginStem);
+                int beginStemLineStart = ArticleLineScanner.FindLineStartingWith(articleBody, position, "=ybegin"u8);
 
                 if (beginStemLineStart >= 0 && (beginLineStart < 0 || beginStemLineStart <= beginLineStart))
                 {
@@ -113,7 +108,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                     int beginStemContentEnd = beginStemLineEnd >= 0 ? beginStemLineEnd : articleBody.Length;
                     ReadOnlySpan<byte> beginStemLine = articleBody[beginStemLineStart..beginStemContentEnd];
 
-                    bool hasRequiredSpaceAfterYBegin = beginStemLine.Length > YEncBeginStem.Length && beginStemLine[YEncBeginStem.Length] == (byte)' ';
+                    bool hasRequiredSpaceAfterYBegin = beginStemLine.Length > "=ybegin"u8.Length && beginStemLine["=ybegin"u8.Length] == (byte)' ';
                     if (!hasRequiredSpaceAfterYBegin)
                     {
                         return new YEncArticleValidationResult(YEncArticleValidationStatus.InvalidMetadata, sectionsValidated);
@@ -298,6 +293,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 
                 if (!IsLikelyYEncMetadataLine(candidateLine))
                 {
+                    if (candidateLine.StartsWith(YEncEnd))
+                    {
+                        metadata = default;
+                        failureStatus = candidateEnd < 0
+                            ? YEncArticleValidationStatus.Truncated
+                            : YEncArticleValidationStatus.InvalidMetadata;
+                        return false;
+                    }
+
                     if (candidateEnd < 0)
                     {
                         metadata = default;
@@ -309,12 +313,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                     continue;
                 }
 
-                bool hasSizeKey = candidateLine.IndexOf(YEncSizeKeyWithLeadingSpace) >= 0;
-                bool hasPreferredCrcKey = candidateLine.IndexOf(isMultipart ? YEncPcrc32KeyWithLeadingSpace : YEncCrc32KeyWithLeadingSpace) >= 0;
-                bool hasFallbackCrcKey = isMultipart && candidateLine.IndexOf(YEncCrc32KeyWithLeadingSpace) >= 0;
-                bool hasAnyCrcKey = hasPreferredCrcKey || hasFallbackCrcKey;
-
-                if (!hasSizeKey && !hasAnyCrcKey)
+                bool hasPotentialYEndMetadata = candidateLine.IndexOf(YEncSizeKeyWithLeadingSpace) >= 0
+                    || candidateLine.IndexOf(YEncPcrc32KeyWithLeadingSpace) >= 0
+                    || candidateLine.IndexOf(YEncCrc32KeyWithLeadingSpace) >= 0;
+                if (!hasPotentialYEndMetadata)
                 {
                     if (candidateEnd < 0)
                     {
@@ -327,30 +329,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                     continue;
                 }
 
-                if (!TryParseDecimalValue(candidateLine, YEncSizeKeyWithLeadingSpace, out long declaredSize) || declaredSize < 0)
-                {
-                    metadata = default;
-                    failureStatus = YEncArticleValidationStatus.InvalidMetadata;
-                    return false;
-                }
-
-                ReadOnlySpan<byte> crcKey = isMultipart ? YEncPcrc32KeyWithLeadingSpace : YEncCrc32KeyWithLeadingSpace;
-                int crcKeyIndex = candidateLine.IndexOf(crcKey);
-                if (crcKeyIndex < 0 && isMultipart)
-                {
-                    crcKey = YEncCrc32KeyWithLeadingSpace;
-                    crcKeyIndex = candidateLine.IndexOf(crcKey);
-                }
-
-                if (crcKeyIndex < 0)
-                {
-                    metadata = default;
-                    failureStatus = YEncArticleValidationStatus.InvalidMetadata;
-                    return false;
-                }
-
-                ReadOnlySpan<byte> crcValueBytes = candidateLine[(crcKeyIndex + crcKey.Length)..];
-                if (!HexUInt32Parser.TryParseHexUInt32(crcValueBytes, out uint declaredCrc32))
+                if (!TryParseYEndMetadata(candidateLine, isMultipart, out long declaredSize, out uint declaredCrc32))
                 {
                     metadata = default;
                     failureStatus = YEncArticleValidationStatus.InvalidMetadata;
@@ -488,6 +467,111 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// <returns><see langword="true"/> when at least one decimal digit was parsed without overflow.</returns>
         private static bool TryParseDecimalValue(ReadOnlySpan<byte> line, ReadOnlySpan<byte> key, out long value)
         {
+            return TryParseStrictDecimalValue(line, key, out value);
+        }
+
+        /// <summary>
+        /// Parses one strict <c>=yend</c> metadata line and validates token uniqueness and ordering semantics.
+        /// </summary>
+        /// <param name="line">Candidate <c>=yend</c> line without line terminator bytes.</param>
+        /// <param name="isMultipart">Whether multipart semantics apply for preferred CRC key selection.</param>
+        /// <param name="declaredSize">Parsed declared decoded size.</param>
+        /// <param name="declaredCrc32">Parsed declared CRC value.</param>
+        /// <returns><see langword="true"/> when metadata is structurally valid and complete.</returns>
+        private static bool TryParseYEndMetadata(ReadOnlySpan<byte> line, bool isMultipart, out long declaredSize, out uint declaredCrc32)
+        {
+            declaredSize = 0;
+            declaredCrc32 = 0;
+
+            if (!line.StartsWith(YEncEnd))
+            {
+                return false;
+            }
+
+            int tokenStart = YEncEnd.Length;
+            bool sawSize = false;
+            bool sawCrc32 = false;
+            bool sawPcrc32 = false;
+
+            while (tokenStart < line.Length)
+            {
+                int tokenEnd = line[tokenStart..].IndexOf((byte)' ');
+                tokenEnd = tokenEnd < 0 ? line.Length : tokenStart + tokenEnd;
+
+                ReadOnlySpan<byte> token = line[tokenStart..tokenEnd];
+                int equalsIndex = token.IndexOf((byte)'=');
+                if (equalsIndex <= 0 || equalsIndex == token.Length - 1)
+                {
+                    return false;
+                }
+
+                ReadOnlySpan<byte> key = token[..equalsIndex];
+                ReadOnlySpan<byte> valueBytes = token[(equalsIndex + 1)..];
+
+                if (key.SequenceEqual("size"u8))
+                {
+                    if (sawSize || !TryParseStrictDecimalBytes(valueBytes, out declaredSize))
+                    {
+                        return false;
+                    }
+
+                    sawSize = true;
+                }
+                else if (key.SequenceEqual("pcrc32"u8))
+                {
+                    if (sawPcrc32 || !HexUInt32Parser.TryParseHexUInt32(valueBytes, out uint pcrc32))
+                    {
+                        return false;
+                    }
+
+                    declaredCrc32 = pcrc32;
+                    sawPcrc32 = true;
+                }
+                else if (key.SequenceEqual("crc32"u8))
+                {
+                    if (sawCrc32 || !HexUInt32Parser.TryParseHexUInt32(valueBytes, out uint crc32))
+                    {
+                        return false;
+                    }
+
+                    if (!sawPcrc32)
+                    {
+                        declaredCrc32 = crc32;
+                    }
+
+                    sawCrc32 = true;
+                }
+                else if (!key.SequenceEqual("part"u8) && !key.SequenceEqual("line"u8) && !key.SequenceEqual("name"u8) && !key.SequenceEqual("total"u8))
+                {
+                    return false;
+                }
+
+                if (tokenEnd == line.Length)
+                {
+                    break;
+                }
+
+                tokenStart = tokenEnd + 1;
+                if (tokenStart == line.Length)
+                {
+                    return false;
+                }
+            }
+
+            return sawSize && (isMultipart
+                ? sawPcrc32 || sawCrc32
+                : sawCrc32);
+        }
+
+        /// <summary>
+        /// Parses and validates a decimal metadata field requiring complete token consumption.
+        /// </summary>
+        /// <param name="line">Line bytes containing metadata key-value pairs.</param>
+        /// <param name="key">Metadata key including leading space and trailing equals sign.</param>
+        /// <param name="value">Parsed decimal value when parsing succeeds.</param>
+        /// <returns><see langword="true"/> when the decimal value is non-empty, overflow-safe, and token-delimited.</returns>
+        private static bool TryParseStrictDecimalValue(ReadOnlySpan<byte> line, ReadOnlySpan<byte> key, out long value)
+        {
             value = 0;
 
             int keyIndex = line.IndexOf(key);
@@ -497,9 +581,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
             }
 
             int digitIndex = keyIndex + key.Length;
+            if (digitIndex >= line.Length)
+            {
+                return false;
+            }
+
+            int i = digitIndex;
             bool hasDigits = false;
 
-            for (int i = digitIndex; i < line.Length; i++)
+            for (; i < line.Length; i++)
             {
                 int digit = line[i] - (byte)'0';
                 if ((uint)digit > 9)
@@ -516,7 +606,43 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                 hasDigits = true;
             }
 
-            return hasDigits;
+            return hasDigits && (i >= line.Length || line[i] == (byte)' ');
+        }
+
+        /// <summary>
+        /// Parses strict decimal ASCII bytes where the full span must be decimal digits.
+        /// </summary>
+        /// <param name="valueBytes">Decimal value bytes.</param>
+        /// <param name="value">Parsed decimal value when parsing succeeds.</param>
+        /// <returns><see langword="true"/> when all bytes are decimal digits and the value fits in <see cref="long"/>.</returns>
+        private static bool TryParseStrictDecimalBytes(ReadOnlySpan<byte> valueBytes, out long value)
+        {
+            value = 0;
+
+            if (valueBytes.IsEmpty)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < valueBytes.Length; i++)
+            {
+                int digit = valueBytes[i] - (byte)'0';
+                if ((uint)digit > 9)
+                {
+                    value = 0;
+                    return false;
+                }
+
+                if (value > ((long.MaxValue - digit) / 10))
+                {
+                    value = 0;
+                    return false;
+                }
+
+                value = (value * 10) + digit;
+            }
+
+            return true;
         }
 
         /// <summary>

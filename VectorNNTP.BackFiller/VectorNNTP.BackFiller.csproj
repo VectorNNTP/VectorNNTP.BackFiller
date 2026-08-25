@@ -11,6 +11,12 @@
 		<RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
+	<ItemGroup>
+	  <Compile Remove="Startup\Shutdown\**" />
+	  <Content Remove="Startup\Shutdown\**" />
+	  <EmbeddedResource Remove="Startup\Shutdown\**" />
+	  <None Remove="Startup\Shutdown\**" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="VectorNNTP.BackFiller.Tests" />
@@ -235,6 +241,5 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Docs\" />
-	  <Folder Include="Startup\Shutdown\" />
 	</ItemGroup>
 </Project>

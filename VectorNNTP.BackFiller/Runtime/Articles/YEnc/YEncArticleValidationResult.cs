@@ -24,8 +24,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         ValidSinglePart = 1,
 
         /// <summary>
-        /// One or more multipart yEnc sections validated successfully.
+        /// One or more multipart yEnc sections validated successfully as independent per-section validations.
         /// </summary>
+        /// <remarks>
+        /// This status does not imply complete-file reconstruction or proof that all sections required for final file assembly are present.
+        /// </remarks>
         ValidMultiPart = 2,
 
         /// <summary>
@@ -63,7 +66,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
     /// Compact, allocation-free validation result for yEnc article verification.
     /// </summary>
     /// <param name="Status">Terminal validation status.</param>
-    /// <param name="SectionsValidated">Number of yEnc sections successfully validated.</param>
+    /// <param name="SectionsValidated">Number of independently validated yEnc sections encountered during the forward scan.</param>
     internal readonly record struct YEncArticleValidationResult(
         YEncArticleValidationStatus Status,
         int SectionsValidated)

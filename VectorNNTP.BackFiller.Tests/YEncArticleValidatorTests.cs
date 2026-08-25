@@ -421,6 +421,398 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
+        /// Verifies that decimal metadata fields reject numeric prefixes with trailing garbage in <c>=ybegin</c>.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYBeginSizeContainsGarbageSuffix_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=123abc name=test.bin\r\nabc\r\n=yend size=3 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that decimal metadata fields reject numeric prefixes with trailing garbage in <c>=ypart begin=</c>.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYPartBeginContainsGarbageSuffix_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin part=1 line=128 size=3 name=test.bin\r\n=ypart begin=1foo end=3\r\nabc\r\n=yend size=3 pcrc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that decimal metadata fields reject numeric prefixes with trailing garbage in <c>=ypart end=</c>.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYPartEndContainsGarbageSuffix_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin part=1 line=128 size=3 name=test.bin\r\n=ypart begin=1 end=3bar\r\nabc\r\n=yend size=3 pcrc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that CRC metadata rejects valid hexadecimal prefixes followed by trailing garbage.
+        /// </summary>
+        [Theory]
+        [InlineData(" crc32=ABCDEF12G")]
+        [InlineData(" crc32=12345678XYZ")]
+        public void Validate_WhenYEndCrcContainsGarbageSuffix_ReturnsInvalidMetadata(string crcField)
+        {
+            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3{crcField}\r\n.\r\n");
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that duplicate <c>size=</c> tokens are rejected in <c>=yend</c> metadata.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndContainsDuplicateSizeFields_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3 size=3 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that duplicate <c>crc32=</c> tokens are rejected in <c>=yend</c> metadata.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndContainsDuplicateCrcFields_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3 crc32=352441c2 crc32=00000000\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that unknown metadata keys in <c>=yend</c> are rejected.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndContainsUnknownMetadataKey_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3 crc32=352441c2 unknown=1\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that empty metadata values in <c>=yend</c> are rejected.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndContainsEmptyMetadataValue_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size= crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that malformed <c>=ybegin</c> stem delimiter usage is rejected.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYBeginStemDelimiterIsMissing_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybeginfoo\r\nabc\r\n=yend size=3 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that malformed <c>=ypart</c> and <c>=yend</c> delimiter usage in payload is not treated as control boundaries.
+        /// </summary>
+        [Theory]
+        [InlineData("=ypartfoo")]
+        [InlineData("=yendfoo")]
+        public void Validate_WhenPayloadControlLineDelimiterIsMissing_DoesNotBecomeBoundary(string malformedControlLine)
+        {
+            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\n{malformedControlLine}\r\nabc\r\n=yend size=3 crc32=352441c2\r\n.\r\n");
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.DecodedSizeMismatch, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that yend-like payload lines without parseable metadata do not terminate decoding and lead to integrity mismatch.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenPayloadContainsYEndLikeNoiseLine_RejectsWithDecodedSizeMismatch()
+        {
+            byte[] payload = BuildPayload(64, 66);
+            byte[] baseArticle = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
+
+            int yendIndex = IndexOfAscii(baseArticle, "=yend ");
+            byte[] prefix = baseArticle[..yendIndex];
+            byte[] noise = "=yend not metadata\r\n"u8.ToArray();
+            byte[] suffix = baseArticle[yendIndex..];
+            byte[] article = new byte[prefix.Length + noise.Length + suffix.Length];
+            Buffer.BlockCopy(prefix, 0, article, 0, prefix.Length);
+            Buffer.BlockCopy(noise, 0, article, prefix.Length, noise.Length);
+            Buffer.BlockCopy(suffix, 0, article, prefix.Length + noise.Length, suffix.Length);
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.DecodedSizeMismatch, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies multipart status semantics by validating independent overlapping sections without file reconstruction.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenMultipartSectionsOverlap_ReportsSectionValidationContract()
+        {
+            byte[] firstPayload = BuildPayload(64, 61);
+            byte[] secondPayload = BuildPayload(64, 62);
+
+            byte[] first = BuildMultiPartArticle(firstPayload, begin: 1, end: 64, malformedYPart: false);
+            byte[] second = BuildMultiPartArticle(secondPayload, begin: 32, end: 95, malformedYPart: false);
+            byte[] combined = new byte[first.Length + second.Length];
+            Buffer.BlockCopy(first, 0, combined, 0, first.Length);
+            Buffer.BlockCopy(second, 0, combined, first.Length, second.Length);
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(combined);
+
+            Assert.Equal(YEncArticleValidationStatus.ValidMultiPart, result.Status);
+            Assert.Equal(2, result.SectionsValidated);
+            Assert.True(result.IsValid);
+        }
+
+        /// <summary>
+        /// Verifies that payload lines starting with control-like stems are treated as payload bytes and not rejected by stem heuristics.
+        /// </summary>
+        /// <param name="payloadLine">Payload line inserted before the real trailer.</param>
+        [Theory]
+        [InlineData("=ybegin")]
+        [InlineData("=ypart")]
+        [InlineData("=yend")]
+        [InlineData("=ybeginfoo")]
+        [InlineData("=ypartfoo")]
+        [InlineData("=yendfoo")]
+        public void Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(string payloadLine)
+        {
+            byte[] payload = BuildPayload(48, 71);
+            byte[] baseArticle = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
+
+            int yendIndex = IndexOfAscii(baseArticle, "=yend ");
+            byte[] prefix = baseArticle[..yendIndex];
+            byte[] inserted = System.Text.Encoding.ASCII.GetBytes(payloadLine + "\r\n");
+            byte[] suffix = baseArticle[yendIndex..];
+            byte[] article = new byte[prefix.Length + inserted.Length + suffix.Length];
+            Buffer.BlockCopy(prefix, 0, article, 0, prefix.Length);
+            Buffer.BlockCopy(inserted, 0, article, prefix.Length, inserted.Length);
+            Buffer.BlockCopy(suffix, 0, article, prefix.Length + inserted.Length, suffix.Length);
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.NotEqual(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that malformed key/value pairs with tab separators are rejected when metadata key hints exist.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndContainsTabSeparatorWithMetadataHint_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3\tcrc32=352441c2 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that repeated spaces in metadata are rejected.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndContainsRepeatedSpaces_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3  crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that malformed key/value forms are rejected.
+        /// </summary>
+        [Theory]
+        [InlineData("=yend size==3 crc32=352441c2")]
+        [InlineData("=yend =3 crc32=352441c2")]
+        [InlineData("=yend size=3 =352441c2")]
+        [InlineData("=yend size=3 key==value crc32=352441c2")]
+        public void Validate_WhenYEndContainsMalformedKeyValue_ReturnsInvalidMetadata(string yendLine)
+        {
+            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n{yendLine}\r\n.\r\n");
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies decimal parser boundaries for non-negative and malformed forms.
+        /// </summary>
+        [Theory]
+        [InlineData("+3")]
+        [InlineData("-3")]
+        [InlineData("3x")]
+        [InlineData(" 3")]
+        [InlineData("")]
+        public void Validate_WhenYBeginSizeHasMalformedDecimal_ReturnsInvalidMetadata(string sizeValue)
+        {
+            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <id>\r\n\r\n=ybegin line=128 size={sizeValue} name=test.bin\r\nabc\r\n=yend size=3 crc32=352441c2\r\n.\r\n");
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that an Int64 maximum value parses but cannot match decoded size for tiny payloads.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYBeginSizeIsInt64Max_ParsesAndFailsBySizeMismatch()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=9223372036854775807 name=test.bin\r\nabc\r\n=yend size=9223372036854775807 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.DecodedSizeMismatch, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that a non-ASCII digit in size metadata is rejected.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYBeginSizeContainsNonAsciiDigit_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=１２3 name=test.bin\r\nabc\r\n=yend size=3 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies full-byte-range yEnc escape/decode correctness for single-byte payloads.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenAllByteValuesAreRoundTripped_ValidatesEachValue()
+        {
+            for (int value = 0; value <= 255; value++)
+            {
+                byte[] payload = [(byte)value];
+                byte[] article = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
+                YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+                Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, result.Status);
+            }
+        }
+
+        /// <summary>
+        /// Verifies explicit dot-stuffing line patterns decode using logical content semantics.
+        /// </summary>
+        [Theory]
+        [InlineData(".")]
+        [InlineData("..")]
+        [InlineData("...")]
+        [InlineData("....")]
+        [InlineData("..=...")]
+        [InlineData("...=...")]
+        [InlineData("..=y")]
+        public void Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(string payloadLine)
+        {
+            byte[] decoded = DecodeLiteralPayloadLine(payloadLine);
+            uint crc = Crc32(decoded);
+            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <id>\r\n\r\n=ybegin line=128 size={decoded.Length} name=test.bin\r\n{payloadLine}\r\n=yend size={decoded.Length} crc32={crc:x8}\r\n.\r\n");
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies section sequencing semantics across valid/corrupt/overlapping/repeated combinations.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenMultipleSectionsAreProvided_StopsOnFirstFailureAndCountsValidSections()
+        {
+            byte[] aPayload = BuildPayload(32, 81);
+            byte[] bPayload = BuildPayload(32, 82);
+            byte[] cPayload = BuildPayload(32, 83);
+
+            byte[] a = BuildMultiPartArticle(aPayload, begin: 1, end: 32, malformedYPart: false);
+            byte[] b = BuildMultiPartArticle(bPayload, begin: 33, end: 64, malformedYPart: false);
+            byte[] c = BuildMultiPartArticle(cPayload, begin: 17, end: 48, malformedYPart: false);
+
+            byte[] combinedValid = Concatenate(a, b, c);
+            YEncArticleValidationResult validResult = YEncArticleValidator.Validate(combinedValid);
+            Assert.Equal(YEncArticleValidationStatus.ValidMultiPart, validResult.Status);
+            Assert.Equal(3, validResult.SectionsValidated);
+
+            byte[] corrupt = (byte[])b.Clone();
+            int payloadOffset = FindPayloadOffset(corrupt);
+            corrupt[payloadOffset + 8] ^= 0x04;
+            byte[] combinedCorruptSecond = Concatenate(a, corrupt, c);
+            YEncArticleValidationResult corruptResult = YEncArticleValidator.Validate(combinedCorruptSecond);
+            Assert.Equal(YEncArticleValidationStatus.CrcMismatch, corruptResult.Status);
+            Assert.Equal(1, corruptResult.SectionsValidated);
+        }
+
+        /// <summary>
+        /// Verifies article-boundary behavior for empty and malformed framing variants.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenArticleBoundaryVariantsAreProvided_ReturnsExpectedStatuses()
+        {
+            Assert.Equal(YEncArticleValidationStatus.ValidNonYEnc, YEncArticleValidator.Validate(ReadOnlySpan<byte>.Empty).Status);
+
+            byte[] beginOnly = "=ybegin line=128 size=1 name=test.bin\r\n"u8.ToArray();
+            Assert.Equal(YEncArticleValidationStatus.Truncated, YEncArticleValidator.Validate(beginOnly).Status);
+
+            byte[] beginPayloadNoEnd = "=ybegin line=128 size=1 name=test.bin\r\n.\r\n"u8.ToArray();
+            Assert.Equal(YEncArticleValidationStatus.Truncated, YEncArticleValidator.Validate(beginPayloadNoEnd).Status);
+
+            byte[] beginEndNoPayload = "=ybegin line=128 size=0 name=test.bin\r\n=yend size=0 crc32=00000000\r\n"u8.ToArray();
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, YEncArticleValidator.Validate(beginEndNoPayload).Status);
+
+            byte[] lfDecoded = [4];
+            uint lfCrc = Crc32(lfDecoded);
+            byte[] lfOnly = System.Text.Encoding.ASCII.GetBytes($"=ybegin line=128 size=1 name=test.bin\n.\n=yend size=1 crc32={lfCrc:x8}\n");
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, YEncArticleValidator.Validate(lfOnly).Status);
+
+            byte[] crOnly = "=ybegin line=128 size=1 name=test.bin\r.\r=yend size=1 crc32=1d3d839a\r"u8.ToArray();
+            Assert.Equal(YEncArticleValidationStatus.Truncated, YEncArticleValidator.Validate(crOnly).Status);
+
+            byte[] trailingDecoded = [4];
+            uint trailingCrc = Crc32(trailingDecoded);
+            byte[] trailingBytes = System.Text.Encoding.ASCII.GetBytes($"=ybegin line=128 size=1 name=test.bin\r\n.\r\n=yend size=1 crc32={trailingCrc:x8}\r\nGARBAGE\r\n");
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, YEncArticleValidator.Validate(trailingBytes).Status);
+        }
+
+        /// <summary>
         /// Loads one yEnc fixture as raw bytes for validation.
         /// </summary>
         /// <param name="fixtureName">Fixture file name under the SABCTools fixture directory.</param>
@@ -680,6 +1072,62 @@ namespace VectorNNTP.Backfiller.Tests
 
             replacementBytes.CopyTo(source.AsSpan(idx, replacementBytes.Length));
             return source;
+        }
+
+        /// <summary>
+        /// Decodes one literal yEnc payload line as the validator would decode it.
+        /// </summary>
+        /// <param name="payloadLine">Payload line without CRLF terminator.</param>
+        /// <returns>Decoded bytes for CRC generation in dot-stuffing tests.</returns>
+        private static byte[] DecodeLiteralPayloadLine(string payloadLine)
+        {
+            ReadOnlySpan<byte> line = System.Text.Encoding.ASCII.GetBytes(payloadLine);
+            if (line.Length >= 2 && line[0] == (byte)'.' && line[1] == (byte)'.')
+            {
+                line = line[1..];
+            }
+
+            List<byte> decoded = new(line.Length);
+            for (int i = 0; i < line.Length; i++)
+            {
+                byte current = line[i];
+                if (current == (byte)'=')
+                {
+                    Assert.True(i + 1 < line.Length, "Expected escaped payload byte after '='.");
+                    decoded.Add(unchecked((byte)(line[i + 1] - 42 - 64)));
+                    i++;
+                }
+                else
+                {
+                    decoded.Add(unchecked((byte)(current - 42)));
+                }
+            }
+
+            return [.. decoded];
+        }
+
+        /// <summary>
+        /// Concatenates article byte blocks in order.
+        /// </summary>
+        /// <param name="segments">Segments to concatenate.</param>
+        /// <returns>Single concatenated buffer.</returns>
+        private static byte[] Concatenate(params byte[][] segments)
+        {
+            int total = 0;
+            for (int i = 0; i < segments.Length; i++)
+            {
+                total += segments[i].Length;
+            }
+
+            byte[] result = new byte[total];
+            int offset = 0;
+            for (int i = 0; i < segments.Length; i++)
+            {
+                Buffer.BlockCopy(segments[i], 0, result, offset, segments[i].Length);
+                offset += segments[i].Length;
+            }
+
+            return result;
         }
 
         /// <summary>
