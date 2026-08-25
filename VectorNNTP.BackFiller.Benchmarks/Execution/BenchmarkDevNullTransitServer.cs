@@ -5,6 +5,7 @@ using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Channels;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
@@ -21,6 +22,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     private static readonly ReadOnlyMemory<byte> StreamingPermittedBytes = Encoding.ASCII.GetBytes("203 Streaming permitted\r\n");
     private static readonly ReadOnlyMemory<byte> QuitResponseBytes = Encoding.ASCII.GetBytes("205 closing connection\r\n");
     private static readonly ReadOnlyMemory<byte> UnknownCommandBytes = Encoding.ASCII.GetBytes("500 unknown command\r\n");
+    private static ReadOnlySpan<byte> CapabilitiesCommandBytes => "CAPABILITIES"u8;
+    private static ReadOnlySpan<byte> ModeStreamCommandBytes => "MODE STREAM"u8;
+    private static ReadOnlySpan<byte> QuitCommandBytes => "QUIT"u8;
+    private static ReadOnlySpan<byte> CheckPrefixBytes => "CHECK "u8;
+    private static ReadOnlySpan<byte> TakethisPrefixBytes => "TAKETHIS "u8;
     private static readonly byte[] ArticleTerminator = "\r\n.\r\n"u8.ToArray();
 
     private readonly TcpListener _listener;
@@ -41,6 +47,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         _listener = new TcpListener(listenAddress, port);
         ListenAddress = listenAddress;
     }
+
+    /// <summary>
+    /// Gets the default fixed TCP listen port for benchmark fake-server runs.
+    /// </summary>
+    internal const int DefaultListenPort = 1190;
 
     /// <summary>
     /// Gets the benchmark endpoint type label emitted by this sink.
@@ -87,10 +98,10 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// Starts the benchmark sink server and returns the running instance.
     /// </summary>
     /// <param name="listenAddress">The local address to bind.</param>
-    /// <param name="port">The local port to bind, or zero for ephemeral.</param>
+    /// <param name="port">The local port to bind. Defaults to fixed benchmark port 1190.</param>
     /// <param name="cancellationToken">A cancellation token used while starting.</param>
     /// <returns>A running sink server instance.</returns>
-    internal static Task<BenchmarkDevNullTransitServer> StartAsync(IPAddress listenAddress, int port = 0, CancellationToken cancellationToken = default)
+    internal static Task<BenchmarkDevNullTransitServer> StartAsync(IPAddress listenAddress, int port = DefaultListenPort, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -163,7 +174,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
 
             Interlocked.Increment(ref _totalConnections);
             int taskId = Interlocked.Increment(ref _clientTaskId);
-            Task clientTask = Task.Run(() => HandleClientAsync(client, cancellationToken), CancellationToken.None);
+            string remoteEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "<unknown>";
+            string localEndpoint = client.Client.LocalEndPoint?.ToString() ?? "<unknown>";
+            Console.WriteLine($"[FAKE-LC] ACCEPT taskId={taskId} remote={remoteEndpoint} local={localEndpoint}");
+
+            Task clientTask = Task.Run(() => HandleClientAsync(client, taskId, cancellationToken), CancellationToken.None);
             _clientTasks[taskId] = clientTask;
             _ = clientTask.ContinueWith(
                 _ => _clientTasks.TryRemove(taskId, out _),
@@ -179,8 +194,16 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <param name="client">The connected client.</param>
     /// <param name="cancellationToken">The server shutdown token.</param>
     /// <returns>A task representing the client session.</returns>
-    private async Task HandleClientAsync(TcpClient client, CancellationToken cancellationToken)
+    private async Task HandleClientAsync(TcpClient client, int taskId, CancellationToken cancellationToken)
     {
+        string remoteEndpoint = client.Client.RemoteEndPoint?.ToString() ?? "<unknown>";
+        string sessionId = $"{taskId:D4}-{Guid.NewGuid():N}";
+        long commandsReceived = 0;
+        long bytesConsumed = 0;
+        long responsesSent = 0;
+        string lastProtocolEvent = "Accepted";
+        string closeReason = "Unspecified";
+
         try
         {
             using (client)
@@ -188,55 +211,128 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
                 using NetworkStream stream = client.GetStream();
                 PipeReader reader = PipeReader.Create(stream, new StreamPipeReaderOptions(leaveOpen: true));
                 PipeWriter writer = PipeWriter.Create(stream, new StreamPipeWriterOptions(leaveOpen: true));
+                Channel<ResponseWorkItem> responseQueue = Channel.CreateUnbounded<ResponseWorkItem>(new UnboundedChannelOptions
+                {
+                    SingleReader = true,
+                    SingleWriter = true,
+                    AllowSynchronousContinuations = true,
+                });
 
+                lastProtocolEvent = "WriteGreeting";
                 await WriteAsync(writer, GreetingBytes, cancellationToken).ConfigureAwait(false);
+                Interlocked.Increment(ref responsesSent);
 
-                if (!await ExpectCommandAndReplyAsync(reader, writer, expectedCommand: "CAPABILITIES", cancellationToken).ConfigureAwait(false))
+                lastProtocolEvent = "ExpectCapabilities";
+                (bool capabilitiesMatched, string? capabilitiesFailureReason) = await ExpectCommandAndReplyAsync(reader, writer, ExpectedCommand.Capabilities, cancellationToken).ConfigureAwait(false);
+                if (!capabilitiesMatched)
                 {
+                    closeReason = $"CapabilitiesNegotiationFailed:{capabilitiesFailureReason}";
                     return;
                 }
 
+                lastProtocolEvent = "WriteCapabilities";
                 await WriteAsync(writer, CapabilitiesHeaderBytes, cancellationToken).ConfigureAwait(false);
+                Interlocked.Increment(ref responsesSent);
                 await WriteAsync(writer, CapabilitiesStreamingBytes, cancellationToken).ConfigureAwait(false);
+                Interlocked.Increment(ref responsesSent);
                 await WriteAsync(writer, DotLineBytes, cancellationToken).ConfigureAwait(false);
+                Interlocked.Increment(ref responsesSent);
 
-                if (!await ExpectCommandAndReplyAsync(reader, writer, expectedCommand: "MODE STREAM", cancellationToken).ConfigureAwait(false))
+                lastProtocolEvent = "ExpectModeStream";
+                (bool modeStreamMatched, string? modeStreamFailureReason) = await ExpectCommandAndReplyAsync(reader, writer, ExpectedCommand.ModeStream, cancellationToken).ConfigureAwait(false);
+                if (!modeStreamMatched)
                 {
+                    closeReason = $"ModeStreamNegotiationFailed:{modeStreamFailureReason}";
                     return;
                 }
 
+                lastProtocolEvent = "WriteModeStreamPermitted";
                 await WriteAsync(writer, StreamingPermittedBytes, cancellationToken).ConfigureAwait(false);
+                Interlocked.Increment(ref responsesSent);
 
-                while (!cancellationToken.IsCancellationRequested)
+                TransmitLoopMetrics txMetrics = new();
+                TransmitLoopControl txControl = new();
+                Task txTask = RunTransmitLoopAsync(writer, responseQueue.Reader, txControl, txMetrics, () => Interlocked.Increment(ref responsesSent));
+
+                try
                 {
-                    string? commandLine = await ReadLineAsync(reader, cancellationToken).ConfigureAwait(false);
-                    if (commandLine is null)
+                    while (!cancellationToken.IsCancellationRequested)
                     {
-                        return;
-                    }
+                        lastProtocolEvent = "ReadCommand";
+                        (ParsedCommand? command, string? parserFailureReason) = await ReadCommandAsync(reader, cancellationToken).ConfigureAwait(false);
+                        if (command is null)
+                        {
+                            closeReason = parserFailureReason is null
+                                ? "PeerDisconnectOrProtocolReadFailure"
+                                : $"ParserInvalidOperation:{parserFailureReason}";
+                            break;
+                        }
 
-                    if (string.Equals(commandLine, "QUIT", StringComparison.OrdinalIgnoreCase))
-                    {
-                        await WriteAsync(writer, QuitResponseBytes, cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
+                        commandsReceived++;
 
-                    if (TryParseTakethisMessageId(commandLine, out string? messageId))
-                    {
-                        long payloadLength = await ConsumeArticlePayloadAsync(reader, cancellationToken).ConfigureAwait(false);
-                        Interlocked.Add(ref _consumedArticleBytes, payloadLength);
-                        Interlocked.Increment(ref _acceptedArticles);
-                        await WriteTakethisAcceptedAsync(writer, messageId, cancellationToken).ConfigureAwait(false);
-                        continue;
-                    }
+                        if (command.Value.Kind == CommandKind.Quit)
+                        {
+                            lastProtocolEvent = "SignalQuit";
+                            closeReason = "PeerQuit";
+                            txControl.RequestQuit();
+                            responseQueue.Writer.TryComplete();
+                            break;
+                        }
 
-                    await WriteAsync(writer, UnknownCommandBytes, cancellationToken).ConfigureAwait(false);
+                        if (command.Value.Kind == CommandKind.Takethis)
+                        {
+                            lastProtocolEvent = "ConsumeTakethisPayload";
+                            long payloadLength = await ConsumeArticlePayloadAsync(reader, cancellationToken).ConfigureAwait(false);
+                            bytesConsumed += payloadLength;
+                            Interlocked.Add(ref _consumedArticleBytes, payloadLength);
+                            Interlocked.Increment(ref _acceptedArticles);
+
+                            lastProtocolEvent = "QueueTakethisAccepted";
+                            EnqueueResponse(responseQueue.Writer, ResponseWorkItem.Takethis(command.Value.MessageId));
+                            continue;
+                        }
+
+                        if (command.Value.Kind == CommandKind.Check)
+                        {
+                            lastProtocolEvent = "QueueCheckResponse";
+                            EnqueueResponse(responseQueue.Writer, ResponseWorkItem.Check(command.Value.MessageId));
+                            continue;
+                        }
+
+                        lastProtocolEvent = "QueueUnknownCommand";
+                        EnqueueResponse(responseQueue.Writer, ResponseWorkItem.Unknown());
+                    }
+                }
+                finally
+                {
+                    responseQueue.Writer.TryComplete();
+                    await AwaitNoThrowAsync(txTask).ConfigureAwait(false);
+                }
+
+                Console.WriteLine($"[FAKE-TX] sessionId={sessionId} iterations={txMetrics.Iterations} flushes={txMetrics.FlushCount} responses={txMetrics.TotalResponsesSent} avgResponsesPerFlush={txMetrics.AverageResponsesPerFlush:F2} maxResponsesPerFlush={txMetrics.MaxResponsesPerFlush} quitRequested={txControl.IsQuitRequested}");
+
+                if (closeReason == "Unspecified")
+                {
+                    closeReason = "ServerShutdownCancellation";
                 }
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException and not TaskCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            Console.WriteLine($"BenchmarkDevNullTransitServer client handler error: {ex.GetType().Name}: {ex.Message}");
+            closeReason = "ServerShutdownCancellation";
+        }
+        catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            closeReason = "ServerShutdownCancellation";
+        }
+        catch (Exception ex)
+        {
+            closeReason = $"Exception:{ex.GetType().Name}";
+            Console.WriteLine($"BenchmarkDevNullTransitServer client handler error: {ex}");
+        }
+        finally
+        {
+            Console.WriteLine($"[FAKE-LC] CLOSE sessionId={sessionId} taskId={taskId} remote={remoteEndpoint} commands={commandsReceived} bytesConsumed={bytesConsumed} responses={responsesSent} lastEvent={lastProtocolEvent} reason={closeReason} socketState={DescribeSocketState(client)}");
         }
     }
 
@@ -245,42 +341,225 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// </summary>
     /// <param name="reader">The command reader.</param>
     /// <param name="writer">The response writer.</param>
-    /// <param name="expectedCommand">The expected exact command.</param>
+    /// <param name="expectedCommand">The expected command discriminator.</param>
     /// <param name="cancellationToken">The operation cancellation token.</param>
     /// <returns><see langword="true"/> when the command matched; otherwise <see langword="false"/>.</returns>
-    private static async Task<bool> ExpectCommandAndReplyAsync(PipeReader reader, PipeWriter writer, string expectedCommand, CancellationToken cancellationToken)
+    private static async Task<(bool Matched, string? FailureReason)> ExpectCommandAndReplyAsync(PipeReader reader, PipeWriter writer, ExpectedCommand expectedCommand, CancellationToken cancellationToken)
     {
-        string? line = await ReadLineAsync(reader, cancellationToken).ConfigureAwait(false);
-        if (line is null)
+        (ParsedCommand? command, string? parserFailureReason) = await ReadCommandAsync(reader, cancellationToken).ConfigureAwait(false);
+        if (command is null)
+        {
+            string? failureReason = parserFailureReason is null
+                ? "ReadLineReturnedNull"
+                : $"ParserInvalidOperation:{parserFailureReason}";
+            return (false, failureReason);
+        }
+
+        bool matched = expectedCommand switch
+        {
+            ExpectedCommand.Capabilities => command.Value.Kind == CommandKind.Capabilities,
+            ExpectedCommand.ModeStream => command.Value.Kind == CommandKind.ModeStream,
+            _ => false,
+        };
+
+        if (!matched)
+        {
+            await WriteAsync(writer, UnknownCommandBytes, cancellationToken).ConfigureAwait(false);
+            return (false, $"UnexpectedCommand:{command.Value.Kind}");
+        }
+
+        return (true, null);
+    }
+
+    /// <summary>
+    /// Reads one CRLF-terminated command from the connection and parses it using byte-oriented dispatch.
+    /// </summary>
+    /// <param name="reader">The pipe reader.</param>
+    /// <param name="cancellationToken">The operation cancellation token.</param>
+    /// <returns>The parsed command, or <see langword="null"/> when disconnected or parse failed.</returns>
+    private static async Task<(ParsedCommand? Command, string? ParserFailureReason)> ReadCommandAsync(PipeReader reader, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            ReadResult result;
+            try
+            {
+                result = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return (null, ex.Message);
+            }
+
+            ReadOnlySequence<byte> buffer = result.Buffer;
+            SequenceReader<byte> sequenceReader = new(buffer);
+            if (!sequenceReader.TryReadTo(out ReadOnlySequence<byte> line, (byte)'\n', advancePastDelimiter: true))
+            {
+                if (result.IsCompleted)
+                {
+                    reader.AdvanceTo(buffer.End);
+                    return (null, "NNTP connection closed while awaiting line response.");
+                }
+
+                if (buffer.Length > 16 * 1024)
+                {
+                    reader.AdvanceTo(buffer.End);
+                    return (null, "NNTP response line exceeded maximum length of 16384 bytes.");
+                }
+
+                reader.AdvanceTo(buffer.Start, buffer.End);
+                continue;
+            }
+
+            if (TryGetLastByte(line, out byte lastByte) && lastByte == (byte)'\r')
+            {
+                line = line.Slice(0, line.Length - 1);
+            }
+
+            ParsedCommand parsedCommand = TryParseCommand(line, out ParsedCommand parsed)
+                ? parsed
+                : new ParsedCommand(CommandKind.Unknown, string.Empty);
+
+            SequencePosition consumed = sequenceReader.Position;
+            reader.AdvanceTo(consumed, consumed);
+            return (parsedCommand, null);
+        }
+    }
+
+    private static bool TryParseCommand(in ReadOnlySequence<byte> line, out ParsedCommand command)
+    {
+        if (line.IsEmpty)
+        {
+            command = default;
+            return false;
+        }
+
+        if (AsciiEqualsIgnoreCase(line, CapabilitiesCommandBytes))
+        {
+            command = new ParsedCommand(CommandKind.Capabilities, string.Empty);
+            return true;
+        }
+
+        if (AsciiEqualsIgnoreCase(line, ModeStreamCommandBytes))
+        {
+            command = new ParsedCommand(CommandKind.ModeStream, string.Empty);
+            return true;
+        }
+
+        if (AsciiEqualsIgnoreCase(line, QuitCommandBytes))
+        {
+            command = new ParsedCommand(CommandKind.Quit, string.Empty);
+            return true;
+        }
+
+        if (AsciiStartsWithIgnoreCase(line, TakethisPrefixBytes))
+        {
+            ReadOnlySequence<byte> messageIdBytes = line.Slice(TakethisPrefixBytes.Length);
+            string messageId = DecodeMessageIdOrDefault(messageIdBytes);
+            command = new ParsedCommand(CommandKind.Takethis, messageId);
+            return true;
+        }
+
+        if (AsciiStartsWithIgnoreCase(line, CheckPrefixBytes))
+        {
+            ReadOnlySequence<byte> messageIdBytes = line.Slice(CheckPrefixBytes.Length);
+            string messageId = DecodeMessageIdOrDefault(messageIdBytes);
+            command = new ParsedCommand(CommandKind.Check, messageId);
+            return true;
+        }
+
+        command = new ParsedCommand(CommandKind.Unknown, string.Empty);
+        return true;
+    }
+
+    private static string DecodeMessageIdOrDefault(in ReadOnlySequence<byte> messageIdBytes)
+    {
+        string raw = Encoding.ASCII.GetString(messageIdBytes.ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(raw)
+            ? "<missing-message-id@benchmark.devnull>"
+            : raw;
+    }
+
+    private static bool AsciiEqualsIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> expected)
+    {
+        if (value.Length != expected.Length)
         {
             return false;
         }
 
-        if (!string.Equals(line, expectedCommand, StringComparison.OrdinalIgnoreCase))
+        int index = 0;
+        foreach (ReadOnlyMemory<byte> segment in value)
         {
-            await WriteAsync(writer, UnknownCommandBytes, cancellationToken).ConfigureAwait(false);
+            ReadOnlySpan<byte> span = segment.Span;
+            for (int i = 0; i < span.Length; i++)
+            {
+                if (index >= expected.Length || ToUpperAsciiInvariant(span[i]) != expected[index])
+                {
+                    return false;
+                }
+
+                index++;
+            }
+        }
+
+        return index == expected.Length;
+    }
+
+    private static bool AsciiStartsWithIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> prefix)
+    {
+        if (value.Length < prefix.Length)
+        {
             return false;
+        }
+
+        int index = 0;
+        foreach (ReadOnlyMemory<byte> segment in value)
+        {
+            ReadOnlySpan<byte> span = segment.Span;
+            for (int i = 0; i < span.Length && index < prefix.Length; i++)
+            {
+                if (ToUpperAsciiInvariant(span[i]) != prefix[index])
+                {
+                    return false;
+                }
+
+                index++;
+            }
+
+            if (index == prefix.Length)
+            {
+                return true;
+            }
+        }
+
+        return index == prefix.Length;
+    }
+
+    private static bool TryGetLastByte(in ReadOnlySequence<byte> sequence, out byte value)
+    {
+        value = 0;
+        if (sequence.IsEmpty)
+        {
+            return false;
+        }
+
+        foreach (ReadOnlyMemory<byte> segment in sequence)
+        {
+            ReadOnlySpan<byte> span = segment.Span;
+            if (!span.IsEmpty)
+            {
+                value = span[^1];
+            }
         }
 
         return true;
     }
 
-    /// <summary>
-    /// Reads one CRLF-terminated command line from the connection.
-    /// </summary>
-    /// <param name="reader">The pipe reader.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>The decoded command line without CRLF, or <see langword="null"/> when disconnected.</returns>
-    private static async Task<string?> ReadLineAsync(PipeReader reader, CancellationToken cancellationToken)
+    private static byte ToUpperAsciiInvariant(byte value)
     {
-        try
-        {
-            return await TransitProtocolParser.ReadNntpLineAsync(reader, cancellationToken).ConfigureAwait(false);
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
+        return value is >= (byte)'a' and <= (byte)'z'
+            ? (byte)(value - 32)
+            : value;
     }
 
     /// <summary>
@@ -302,38 +581,37 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         {
             ReadResult result = await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
             ReadOnlySequence<byte> buffer = result.Buffer;
+            SequenceReader<byte> sequenceReader = new(buffer);
 
-            foreach (ReadOnlyMemory<byte> segment in buffer)
+            while (!sequenceReader.End)
             {
-                ReadOnlySpan<byte> span = segment.Span;
-                for (int i = 0; i < span.Length; i++)
+                byte current = sequenceReader.CurrentSpan[sequenceReader.CurrentSpanIndex];
+                sequenceReader.Advance(1);
+                payloadBytes++;
+
+                if (trailingCount < terminatorLength)
                 {
-                    byte current = span[i];
-                    payloadBytes++;
+                    trailingWindow[trailingCount++] = current;
+                }
+                else
+                {
+                    trailingWindow[0] = trailingWindow[1];
+                    trailingWindow[1] = trailingWindow[2];
+                    trailingWindow[2] = trailingWindow[3];
+                    trailingWindow[3] = trailingWindow[4];
+                    trailingWindow[4] = current;
+                }
 
-                    if (trailingCount < terminatorLength)
-                    {
-                        trailingWindow[trailingCount++] = current;
-                    }
-                    else
-                    {
-                        trailingWindow[0] = trailingWindow[1];
-                        trailingWindow[1] = trailingWindow[2];
-                        trailingWindow[2] = trailingWindow[3];
-                        trailingWindow[3] = trailingWindow[4];
-                        trailingWindow[4] = current;
-                    }
-
-                    if (trailingCount == terminatorLength
-                        && trailingWindow[0] == (byte)'\r'
-                        && trailingWindow[1] == (byte)'\n'
-                        && trailingWindow[2] == (byte)'.'
-                        && trailingWindow[3] == (byte)'\r'
-                        && trailingWindow[4] == (byte)'\n')
-                    {
-                        reader.AdvanceTo(buffer.End);
-                        return payloadBytes - terminatorLength;
-                    }
+                if (trailingCount == terminatorLength
+                    && trailingWindow[0] == (byte)'\r'
+                    && trailingWindow[1] == (byte)'\n'
+                    && trailingWindow[2] == (byte)'.'
+                    && trailingWindow[3] == (byte)'\r'
+                    && trailingWindow[4] == (byte)'\n')
+                {
+                    SequencePosition consumedUpTo = sequenceReader.Position;
+                    reader.AdvanceTo(consumedUpTo, consumedUpTo);
+                    return payloadBytes - terminatorLength;
                 }
             }
 
@@ -348,41 +626,241 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Parses the message-id from a TAKETHIS command line.
+    /// Runs the single-writer response path for a client connection.
     /// </summary>
-    /// <param name="commandLine">The received command line.</param>
-    /// <param name="messageId">The parsed message-id when successful.</param>
-    /// <returns><see langword="true"/> when TAKETHIS command syntax is present.</returns>
-    private static bool TryParseTakethisMessageId(string commandLine, out string messageId)
+    /// <param name="writer">The socket-bound protocol writer.</param>
+    /// <param name="queueReader">The FIFO response queue reader.</param>
+    /// <param name="cancellationToken">Connection shutdown token.</param>
+    /// <param name="onResponseWritten">Callback invoked after each response is staged.</param>
+    /// <returns>A task representing the transmit loop.</returns>
+    private static async Task RunTransmitLoopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopControl control, TransmitLoopMetrics metrics, Action onResponseWritten)
     {
-        ArgumentNullException.ThrowIfNull(commandLine);
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(queueReader);
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(metrics);
+        ArgumentNullException.ThrowIfNull(onResponseWritten);
 
-        const string prefix = "TAKETHIS ";
-        if (!commandLine.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        while (true)
         {
-            messageId = string.Empty;
-            return false;
+            if (control.IsQuitRequested)
+            {
+                await SendQuitAndStopAsync(writer, queueReader, metrics, onResponseWritten).ConfigureAwait(false);
+                return;
+            }
+
+            bool canRead = await queueReader.WaitToReadAsync().ConfigureAwait(false);
+            if (!canRead)
+            {
+                if (control.IsQuitRequested)
+                {
+                    await SendQuitAndStopAsync(writer, queueReader, metrics, onResponseWritten).ConfigureAwait(false);
+                }
+
+                return;
+            }
+
+            if (control.IsQuitRequested)
+            {
+                await SendQuitAndStopAsync(writer, queueReader, metrics, onResponseWritten).ConfigureAwait(false);
+                return;
+            }
+
+            if (!queueReader.TryRead(out ResponseWorkItem firstResponse))
+            {
+                continue;
+            }
+
+            int stagedCount = 0;
+            metrics.Iterations++;
+
+            WriteResponse(writer, firstResponse);
+            onResponseWritten();
+            stagedCount++;
+
+            while (stagedCount < 11 && queueReader.TryRead(out ResponseWorkItem response))
+            {
+                WriteResponse(writer, response);
+                onResponseWritten();
+                stagedCount++;
+            }
+
+            metrics.RecordFlush(stagedCount);
+            FlushResult flushResult = await writer.FlushAsync().ConfigureAwait(false);
+            if (flushResult.IsCompleted)
+            {
+                return;
+            }
+        }
+    }
+
+    private static async Task SendQuitAndStopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopMetrics metrics, Action onResponseWritten)
+    {
+        while (queueReader.TryRead(out _))
+        {
         }
 
-        string rawMessageId = commandLine[prefix.Length..].Trim();
-        if (string.IsNullOrWhiteSpace(rawMessageId))
+        metrics.Iterations++;
+        writer.Write(QuitResponseBytes.Span);
+        onResponseWritten();
+        metrics.RecordFlush(1);
+
+        FlushResult flushResult = await writer.FlushAsync().ConfigureAwait(false);
+        if (flushResult.IsCompleted)
         {
-            messageId = "<missing-message-id@benchmark.devnull>";
-            return true;
+            return;
+        }
+    }
+
+    private static void EnqueueResponse(ChannelWriter<ResponseWorkItem> writer, in ResponseWorkItem workItem)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+
+        if (writer.TryWrite(workItem))
+        {
+            return;
         }
 
-        messageId = rawMessageId;
-        return true;
+        ValueTask writeTask = writer.WriteAsync(workItem);
+        if (writeTask.IsCompletedSuccessfully)
+        {
+            writeTask.GetAwaiter().GetResult();
+            return;
+        }
+
+        writeTask.AsTask().GetAwaiter().GetResult();
+    }
+
+    private static void WriteResponse(PipeWriter writer, in ResponseWorkItem response)
+    {
+        switch (response.Kind)
+        {
+            case ResponseKind.TakethisAccepted:
+                WriteTakethisAccepted(writer, response.MessageId);
+                return;
+            case ResponseKind.CheckSend:
+                WriteCheckSend(writer, response.MessageId);
+                return;
+            case ResponseKind.UnknownCommand:
+                writer.Write(UnknownCommandBytes.Span);
+                return;
+            default:
+                throw new InvalidOperationException($"Unexpected response kind '{response.Kind}'.");
+        }
+    }
+
+    private sealed class TransmitLoopControl
+    {
+        private int _quitRequested;
+
+        internal bool IsQuitRequested => Volatile.Read(ref _quitRequested) == 1;
+
+        internal void RequestQuit()
+        {
+            Interlocked.Exchange(ref _quitRequested, 1);
+        }
+    }
+
+    private sealed class TransmitLoopMetrics
+    {
+        private long _flushCount;
+        private long _totalResponsesSent;
+        private int _maxResponsesPerFlush;
+
+        internal long Iterations { get; set; }
+
+        internal long FlushCount => Interlocked.Read(ref _flushCount);
+
+        internal long TotalResponsesSent => Interlocked.Read(ref _totalResponsesSent);
+
+        internal int MaxResponsesPerFlush => Volatile.Read(ref _maxResponsesPerFlush);
+
+        internal double AverageResponsesPerFlush => FlushCount == 0
+            ? 0d
+            : (double)TotalResponsesSent / FlushCount;
+
+        internal void RecordFlush(int responsesInFlush)
+        {
+            Interlocked.Increment(ref _flushCount);
+            Interlocked.Add(ref _totalResponsesSent, responsesInFlush);
+
+            while (true)
+            {
+                int current = Volatile.Read(ref _maxResponsesPerFlush);
+                if (responsesInFlush <= current)
+                {
+                    return;
+                }
+
+                if (Interlocked.CompareExchange(ref _maxResponsesPerFlush, responsesInFlush, current) == current)
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    private enum ExpectedCommand
+    {
+        Capabilities,
+        ModeStream,
+    }
+
+    private enum CommandKind
+    {
+        Unknown,
+        Capabilities,
+        ModeStream,
+        Takethis,
+        Check,
+        Quit,
+    }
+
+    private readonly record struct ParsedCommand(CommandKind Kind, string MessageId);
+
+    private enum ResponseKind
+    {
+        TakethisAccepted,
+        CheckSend,
+        UnknownCommand,
+    }
+
+    private readonly record struct ResponseWorkItem(ResponseKind Kind, string MessageId)
+    {
+        public static ResponseWorkItem Takethis(string messageId) => new(ResponseKind.TakethisAccepted, messageId);
+
+        public static ResponseWorkItem Check(string messageId) => new(ResponseKind.CheckSend, messageId);
+
+        public static ResponseWorkItem Unknown() => new(ResponseKind.UnknownCommand, string.Empty);
     }
 
     /// <summary>
-    /// Writes a 239 TAKETHIS success response preserving message-id correlation.
+    /// Stages a 238 CHECK success response preserving message-id correlation.
+    /// </summary>
+    /// <param name="writer">The response writer.</param>
+    /// <param name="messageId">The message-id from the CHECK command line.</param>
+    private static void WriteCheckSend(PipeWriter writer, string messageId)
+    {
+        ArgumentNullException.ThrowIfNull(messageId);
+
+        const string responsePrefix = "238 ";
+        const string responseSuffix = " send article to be transferred\r\n";
+
+        int maxBytes = responsePrefix.Length + messageId.Length + responseSuffix.Length;
+        Span<byte> span = writer.GetSpan(maxBytes);
+        int written = 0;
+        written += Encoding.ASCII.GetBytes(responsePrefix, span[written..]);
+        written += Encoding.ASCII.GetBytes(messageId, span[written..]);
+        written += Encoding.ASCII.GetBytes(responseSuffix, span[written..]);
+        writer.Advance(written);
+    }
+
+    /// <summary>
+    /// Stages a 239 TAKETHIS success response preserving message-id correlation.
     /// </summary>
     /// <param name="writer">The response writer.</param>
     /// <param name="messageId">The message-id from the TAKETHIS command line.</param>
-    /// <param name="cancellationToken">The operation cancellation token.</param>
-    /// <returns>A task that completes when the response is flushed.</returns>
-    private static async Task WriteTakethisAcceptedAsync(PipeWriter writer, string messageId, CancellationToken cancellationToken)
+    private static void WriteTakethisAccepted(PipeWriter writer, string messageId)
     {
         ArgumentNullException.ThrowIfNull(messageId);
 
@@ -396,12 +874,6 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         written += Encoding.ASCII.GetBytes(messageId, span[written..]);
         written += Encoding.ASCII.GetBytes(responseSuffix, span[written..]);
         writer.Advance(written);
-
-        FlushResult flushResult = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
-        if (flushResult.IsCanceled)
-        {
-            throw new OperationCanceledException(cancellationToken);
-        }
     }
 
     /// <summary>
@@ -442,6 +914,37 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
         catch (SocketException)
         {
+        }
+    }
+
+    private static string DescribeSocketState(TcpClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+
+        try
+        {
+            Socket? socket = client.Client;
+            if (socket is null)
+            {
+                return "socket-null";
+            }
+
+            bool pollRead = socket.Poll(0, SelectMode.SelectRead);
+            bool pollWrite = socket.Poll(0, SelectMode.SelectWrite);
+            bool pollError = socket.Poll(0, SelectMode.SelectError);
+            return $"connected={socket.Connected},available={socket.Available},pollRead={pollRead},pollWrite={pollWrite},pollError={pollError}";
+        }
+        catch (ObjectDisposedException)
+        {
+            return "disposed";
+        }
+        catch (SocketException ex)
+        {
+            return $"socketException:{ex.SocketErrorCode}";
+        }
+        catch (NullReferenceException)
+        {
+            return "socket-unavailable";
         }
     }
 }
