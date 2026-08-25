@@ -199,8 +199,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     originalDateValue: originalDateValue);
             }
 
-            NntpArticleType articleType = ClassifyArticle(articleSpan, headerOutcome);
             bool yEncDetected = DetectYEnc(headerOutcome.BodyBytes.Span, _options.YEncDetectionScanBytes);
+            NntpArticleType articleType = ClassifyArticle(articleSpan, headerOutcome, yEncDetected);
             YEncArticleValidationResult yEncValidation = YEncArticleValidationResult.ValidNonYEnc();
             if (yEncDetected)
             {
@@ -804,12 +804,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Performs low-cost content classification based on headers and body signatures.
+        /// Performs low-cost content classification based on header hints and previously computed yEnc detection state.
         /// </summary>
         /// <param name="articleSpan">Article bytes.</param>
         /// <param name="headerOutcome">Header parse outcome.</param>
+        /// <param name="yEncDetected">Precomputed yEnc marker detection result for the configured scan window.</param>
         /// <returns>Detected article type.</returns>
-        private static NntpArticleType ClassifyArticle(ReadOnlySpan<byte> articleSpan, HeaderParseOutcome headerOutcome)
+        private static NntpArticleType ClassifyArticle(ReadOnlySpan<byte> articleSpan, HeaderParseOutcome headerOutcome, bool yEncDetected)
         {
             bool mimeMultipart = false;
             bool binaryTransferEncoding = false;
@@ -835,7 +836,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 }
             }
 
-            return DetectYEnc(headerOutcome.BodyBytes.Span, 32 * 1024)
+            return yEncDetected
                 ? NntpArticleType.YEnc
                 : mimeMultipart
                 ? NntpArticleType.MimeMultipart
@@ -907,7 +908,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Finds one line terminator from an index, supporting CRLF and LF.
+        /// Finds one line terminator from an index, supporting CRLF, LF-only, and CR-only separators.
         /// </summary>
         /// <param name="buffer">Input bytes.</param>
         /// <param name="start">Start offset.</param>
@@ -917,9 +918,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             for (int i = start; i < buffer.Length; i++)
             {
                 byte b = buffer[i];
+                if (b == (byte)'\r')
+                {
+                    return i;
+                }
+
                 if (b == (byte)'\n')
                 {
-                    return i > start && buffer[i - 1] == (byte)'\r' ? i - 1 : i;
+                    return i;
                 }
 
                 if (b == 0)

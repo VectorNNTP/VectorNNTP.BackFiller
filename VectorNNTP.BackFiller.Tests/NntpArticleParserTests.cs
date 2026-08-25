@@ -377,6 +377,674 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
+        /// Verifies CR-only separators are accepted for both header lines and header/body boundary.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenArticleUsesCrOnlySeparators_AcceptsAndSeparatesBodyCorrectly()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r" +
+                "Message-ID: <m16@example.test>\r" +
+                "Newsgroups: alt.test\r" +
+                "From: user@example.test\r" +
+                "\r" +
+                "body-cr-only\r");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(NntpArticleType.Text, result.ArticleType);
+            Assert.NotEqual(0, result.HeaderBytes.Length);
+            Assert.NotEqual(0, result.BodyBytes.Length);
+            Assert.Equal("body-cr-only\r", Encoding.ASCII.GetString(result.BodyBytes.Span));
+        }
+
+        /// <summary>
+        /// Verifies yEnc body classification remains deterministic when yEnc detection scan bytes are smaller than the marker offset.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenYEncMarkerIsBeyondDetectionScanWindow_DoesNotClassifyAsYEnc()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    YEncDetectionScanBytes = 64,
+                });
+
+            byte[] yEncBody = BuildSyntheticSinglePartYEncBody(512, "late-marker.bin");
+            byte[] paddedBody = new byte[1024 + yEncBody.Length];
+            for (int i = 0; i < 1024; i++)
+            {
+                paddedBody[i] = (byte)'A';
+            }
+
+            Buffer.BlockCopy(yEncBody, 0, paddedBody, 1024, yEncBody.Length);
+
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m17@example.test>",
+                    "Newsgroups: alt.binaries.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: paddedBody);
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.False(result.YEncDetected);
+            Assert.NotEqual(NntpArticleType.YEnc, result.ArticleType);
+            Assert.Equal(YEncArticleValidationStatus.ValidNonYEnc, result.YEncValidation.Status);
+        }
+
+        /// <summary>
+        /// Verifies malformed Path separators are normalized by dropping empty path components while preserving deterministic local prepend behavior.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenPathContainsRepeatedSeparators_NormalizesAndPrependsLocalHostOnce()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m18@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Path: !!feed1!!!feed2!!",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal("bf01.usenet.ninja!feed1!feed2", result.CanonicalPath);
+        }
+
+        /// <summary>
+        /// Verifies duplicate Path headers are rejected deterministically.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenPathDuplicated_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m19@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Path: feed1",
+                    "Path: feed2",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.DuplicatePath, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies body lines that begin with dot sequences preserve bytes exactly and are not treated as transport terminators.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenBodyContainsDotLines_PreservesBodyBytesExactly()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            string body = ".\r\n..\r\n...\r\n....\r\n";
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m20@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: body);
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(body, Encoding.ASCII.GetString(result.BodyBytes.Span));
+        }
+
+        /// <summary>
+        /// Verifies an article with headers and an explicitly empty body is accepted with a zero-length body slice.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderOnlyArticleHasSeparator_AcceptsWithEmptyBody()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m21@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: string.Empty);
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(0, result.BodyBytes.Length);
+            Assert.Equal(NntpArticleType.Text, result.ArticleType);
+        }
+
+        /// <summary>
+        /// Verifies invalid Newsgroups header values with consecutive separators are rejected.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenNewsgroupsContainsEmptyToken_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m22@example.test>",
+                    "Newsgroups: alt.test,,alt.misc",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.InvalidNewsgroups, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies date resolver integration uses fallback candidate headers when primary Date is absent.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenDateMissingAndInjectionDatePresent_UsesFallbackDateHeader()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Injection-Date: Fri, 23 Aug 2024 07:30:10 +0200",
+                    "Message-ID: <m23@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal("Fri, 23 Aug 2024 05:30:10 +0000", result.CanonicalUtcDate);
+        }
+
+        /// <summary>
+        /// Verifies malformed Date with a valid fallback date header is accepted using resolver candidate ordering.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenDateIsMalformedButInjectionDateValid_UsesFallbackAndAccepts()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: BAD-DATE",
+                    "Injection-Date: Fri, 23 Aug 2024 07:30:10 +0200",
+                    "Message-ID: <m24@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal("Fri, 23 Aug 2024 05:30:10 +0000", result.CanonicalUtcDate);
+        }
+
+        /// <summary>
+        /// Verifies malformed Date is rejected when no fallback date headers can be resolved.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenAllCandidateDateHeadersAreMalformed_RejectsWithInvalidDate()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: BAD-DATE",
+                    "Injection-Date: ALSO-BAD",
+                    "NNTP-Posting-Date: STILL-BAD",
+                    "Message-ID: <m25@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.MissingOrInvalidDate, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies body bytes can include NUL and arbitrary binary content without parser rejection when headers are valid.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenBodyContainsBinaryBytesIncludingNul_AcceptsAndPreservesBody()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] body = [0x00, 0x01, 0x02, 0x03, (byte)'A', (byte)'\r', (byte)'\n', 0xFF];
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m26@example.test>",
+                    "Newsgroups: alt.binaries.test",
+                    "From: user@example.test",
+                    "Content-Transfer-Encoding: binary",
+                ],
+                bodyBytes: body);
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(NntpArticleType.BinaryEncoded, result.ArticleType);
+            Assert.Equal(body, result.BodyBytes.ToArray());
+        }
+
+        /// <summary>
+        /// Verifies parser rejects overly long header sections using configured guardrails without throwing.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderSectionExceedsConfiguredLimit_RejectsWithHeaderSectionTooLarge()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderSectionBytes = 128,
+                });
+
+            StringBuilder oversizedHeaderValueBuilder = new(512);
+            for (int i = 0; i < 256; i++)
+            {
+                _ = oversizedHeaderValueBuilder.Append('x');
+            }
+
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m27@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    $"X-Long: {oversizedHeaderValueBuilder}",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderSectionTooLarge, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects missing required Newsgroups header.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenNewsgroupsMissing_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m28@example.test>",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.MissingNewsgroups, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects missing required Message-ID header.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenMessageIdMissing_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.MissingMessageId, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies malformed Message-ID syntax is rejected.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenMessageIdMalformed_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: malformed-id",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.InvalidMessageId, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects duplicate Newsgroups headers.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenNewsgroupsDuplicated_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m29@example.test>",
+                    "Newsgroups: alt.test",
+                    "Newsgroups: alt.misc",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.DuplicateNewsgroups, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies malformed first line without colon is treated as non-header input and accepted as article body.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenFirstLineHasNoColon_TreatsWholeArticleAsBodyAndRejectsByMissingRequiredHeaders()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes("not-a-header-line\r\nsecond line\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.MissingMessageId, result.FailureCode);
+            Assert.Equal(0, result.HeaderBytes.Length);
+            Assert.Equal(article, result.BodyBytes.ToArray());
+        }
+
+        /// <summary>
+        /// Verifies parser accepts LF-only header/body separators and preserves body bytes.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenArticleUsesLfOnlySeparators_AcceptsAndSeparatesBodyCorrectly()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\n" +
+                "Message-ID: <m30@example.test>\n" +
+                "Newsgroups: alt.test\n" +
+                "From: user@example.test\n" +
+                "\n" +
+                "body-lf-only\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal("body-lf-only\n", Encoding.ASCII.GetString(result.BodyBytes.Span));
+        }
+
+        /// <summary>
+        /// Verifies parser classifies MIME multipart without requiring yEnc detection.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenMimeMultipartAndNoYEncMarkers_ClassifiesAsMimeMultipart()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m31@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Content-Type: multipart/alternative; boundary=b",
+                ],
+                body: "--b\r\ntext\r\n--b--\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(NntpArticleType.MimeMultipart, result.ArticleType);
+            Assert.False(result.YEncDetected);
+        }
+
+        /// <summary>
+        /// Verifies parser classifies binary transfer encoded content without yEnc markers.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenBinaryTransferEncodingAndNoYEncMarkers_ClassifiesAsBinaryEncoded()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m32@example.test>",
+                    "Newsgroups: alt.binaries.test",
+                    "From: user@example.test",
+                    "Content-Transfer-Encoding: binary",
+                ],
+                body: "\u0001\u0002\u0003\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(NntpArticleType.BinaryEncoded, result.ArticleType);
+            Assert.False(result.YEncDetected);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects completely empty input deterministically.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenArticleIsEmpty_RejectsAsEmptyArticle()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+
+            NntpArticleParseResult result = parser.Parse(ReadOnlyMemory<byte>.Empty);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.EmptyArticle, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects malformed header continuation with no preceding header while using CR-only separators.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCrOnlyArticleStartsWithContinuation_RejectsMalformedHeaderContinuation()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes("\tbroken\r\rbody\r");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.MalformedHeaderContinuation, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies malformed yEnc payload is rejected after detection and validator integration.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenYEncPayloadHasInvalidEscape_RejectsAsYEncDecodingFailed()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] body = File.ReadAllBytes(Path.Combine(FixtureRoot, "test_invalid_escape.yenc"));
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m33@example.test>",
+                    "Newsgroups: alt.binaries.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: body);
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.True(result.YEncDetected);
+            Assert.Equal(NntpArticleParseFailureCode.YEncDecodingFailed, result.FailureCode);
+            Assert.Equal(YEncArticleValidationStatus.InvalidEscapeSequence, result.YEncValidation.Status);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects Path values that contain only separators and whitespace by normalizing to local FQDN.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenPathContainsOnlySeparatorsAndWhitespace_UsesLocalFqdnCanonicalPath()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m34@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Path:   ! !   !!  ",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(LocalFqdn, result.CanonicalPath);
+        }
+
+        /// <summary>
+        /// Verifies parser retains unknown headers without rejecting valid articles.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenUnknownHeadersPresent_AcceptsAndPreservesHeaderEntries()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m35@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "X-Custom-One: alpha",
+                    "X-Custom-Two: beta",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.True(result.Headers.Count >= 6);
+        }
+
+        /// <summary>
+        /// Verifies parser can parse very large header count within configured guardrails.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderCountIsLargeButWithinLimit_Accepts()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderCount = 1100,
+                });
+
+            List<string> headers =
+            [
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                "Message-ID: <m36@example.test>",
+                "Newsgroups: alt.test",
+                "From: user@example.test",
+            ];
+
+            for (int i = 0; i < 1000; i++)
+            {
+                headers.Add($"X-Extra-{i}: value-{i}");
+            }
+
+            byte[] article = BuildArticle(headers, body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+        }
+
+        /// <summary>
+        /// Verifies parser enforces header-count limit deterministically.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderCountExceedsLimit_Rejects()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderCount = 8,
+                });
+
+            List<string> headers =
+            [
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                "Message-ID: <m37@example.test>",
+                "Newsgroups: alt.test",
+                "From: user@example.test",
+            ];
+
+            for (int i = 0; i < 12; i++)
+            {
+                headers.Add($"X-Limit-{i}: value-{i}");
+            }
+
+            byte[] article = BuildArticle(headers, body: "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.TooManyHeaders, result.FailureCode);
+        }
+
+        /// <summary>
         /// Verifies deterministic parser behavior for random hostile input and absence of runtime exceptions.
         /// </summary>
         [Fact]
