@@ -339,20 +339,45 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies that a large valid payload still validates successfully while preserving non-negative per-thread allocation accounting.
+        /// Verifies that a payload line starting with escaped bytes that textually resemble <c>=yend</c> does not terminate parsing.
         /// </summary>
         [Fact]
-        public void Validate_WhenLargeSinglePartPayloadIsValid_ReturnsSuccessWithoutAllocationPressure()
+        public void Validate_WhenPayloadLineStartsWithEscapedYEndText_DoesNotFalseTerminate()
+        {
+            byte[] payload = [(byte)119, (byte)59, (byte)68, (byte)67, (byte)58, (byte)246, (byte)59, (byte)72, (byte)57, (byte)9, (byte)57, (byte)56];
+            byte[] article = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that repeated validation of a large valid payload does not allocate on the current thread after warmup.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenLargeSinglePartPayloadIsValid_DoesNotAllocateOnHotPath()
         {
             byte[] payload = BuildPayload(4 * 1024 * 1024, 41);
             byte[] article = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
 
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
-            long after = GC.GetAllocatedBytesForCurrentThread();
+            YEncArticleValidationResult warmup = YEncArticleValidator.Validate(article);
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, warmup.Status);
 
-            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, result.Status);
-            Assert.True(after >= before);
+            const int iterations = 16;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            YEncArticleValidationStatus lastStatus = YEncArticleValidationStatus.ValidNonYEnc;
+
+            for (int i = 0; i < iterations; i++)
+            {
+                lastStatus = YEncArticleValidator.Validate(article).Status;
+            }
+
+            long after = GC.GetAllocatedBytesForCurrentThread();
+            long allocatedBytes = after - before;
+
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, lastStatus);
+            Assert.Equal(0, allocatedBytes);
         }
 
         /// <summary>
@@ -416,6 +441,19 @@ namespace VectorNNTP.Backfiller.Tests
             byte[] mutated = ReplaceAsciiInCopy(article, " crc32=", " crc32=123456789");
 
             YEncArticleValidationResult result = YEncArticleValidator.Validate(mutated);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that an overflowing decimal <c>size=</c> value in <c>=yend</c> is rejected during strict decimal parsing.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenYEndSizeOverflowsLong_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=9223372036854775808 crc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
 
             Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
         }
@@ -498,6 +536,70 @@ namespace VectorNNTP.Backfiller.Tests
             YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
 
             Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that duplicate <c>pcrc32=</c> tokens are rejected in multipart <c>=yend</c> metadata.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenMultipartYEndContainsDuplicatePartCrcFields_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin part=1 line=128 size=3 name=test.bin\r\n=ypart begin=1 end=3\r\nabc\r\n=yend size=3 pcrc32=352441c2 pcrc32=00000000\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that single-part trailers reject <c>pcrc32=</c> when <c>crc32=</c> is missing.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenSinglePartYEndContainsOnlyPartCrc_ReturnsInvalidMetadata()
+        {
+            byte[] article = "220 0 <id>\r\n\r\n=ybegin line=128 size=3 name=test.bin\r\nabc\r\n=yend size=3 pcrc32=352441c2\r\n.\r\n"u8.ToArray();
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
+
+            Assert.Equal(YEncArticleValidationStatus.InvalidMetadata, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that single-part trailers use <c>crc32=</c> for validation when <c>pcrc32=</c> is also present and fields conflict.
+        /// </summary>
+        [Theory]
+        [InlineData(" pcrc32=00000000 crc32={0:x8}")]
+        [InlineData(" crc32={0:x8} pcrc32=00000000")]
+        public void Validate_WhenSinglePartYEndContainsConflictingCrcAndPartCrc_UsesCrc32Field(string fieldTemplate)
+        {
+            byte[] payload = BuildPayload(512, 67);
+            byte[] article = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
+            uint crc = Crc32(payload);
+            string replacement = string.Format(System.Globalization.CultureInfo.InvariantCulture, fieldTemplate, crc);
+            byte[] mutated = ReplaceAsciiInCopy(article, " crc32=", replacement);
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(mutated);
+
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that multipart trailers prefer <c>pcrc32=</c> over conflicting <c>crc32=</c> in either field order.
+        /// </summary>
+        [Theory]
+        [InlineData(" pcrc32={0:x8} crc32=00000000")]
+        [InlineData(" crc32=00000000 pcrc32={0:x8}")]
+        public void Validate_WhenMultipartYEndContainsConflictingCrcAndPartCrc_UsesPartCrcField(string fieldTemplate)
+        {
+            byte[] payload = BuildPayload(512, 68);
+            byte[] article = BuildMultiPartArticle(payload, begin: 1, end: payload.Length, malformedYPart: false);
+            uint crc = Crc32(payload);
+            string replacement = string.Format(System.Globalization.CultureInfo.InvariantCulture, fieldTemplate, crc);
+            byte[] mutated = ReplaceAsciiInCopy(article, " pcrc32=", replacement);
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(mutated);
+
+            Assert.Equal(YEncArticleValidationStatus.ValidMultiPart, result.Status);
         }
 
         /// <summary>

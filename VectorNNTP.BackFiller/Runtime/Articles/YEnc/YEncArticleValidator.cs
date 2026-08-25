@@ -524,7 +524,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                         return false;
                     }
 
-                    declaredCrc32 = pcrc32;
+                    if (isMultipart)
+                    {
+                        declaredCrc32 = pcrc32;
+                    }
+
                     sawPcrc32 = true;
                 }
                 else if (key.SequenceEqual("crc32"u8))
@@ -534,7 +538,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                         return false;
                     }
 
-                    if (!sawPcrc32)
+                    if (!isMultipart || !sawPcrc32)
                     {
                         declaredCrc32 = crc32;
                     }
