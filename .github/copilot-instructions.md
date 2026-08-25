@@ -1,7 +1,7 @@
 # Copilot Instructions
 
 ## Project Guidelines
-- User/project coding standard: every method must have XML documentation comments; enforce this especially in Program.Validation.cs.
+- User/project coding standard: every documentable C# symbol (regardless of accessibility) must have meaningful XML documentation comments; enforce this especially in Program.Validation.cs.
 - Preferred startup architecture: no expensive, irreversible, or externally visible operations before configuration and startup validation pass; flow should be bind -> validate -> canonicalize runtime snapshot -> directory validation -> dependency validation -> DI/service startup.
 - Runtime listener creation must explicitly map null/empty BackFiller:BindAddress to independent wildcard endpoints (0.0.0.0 and ::) rather than relying on implicit framework behavior or dual-stack defaults.
 - For dual-stack wildcard binds, runtime listener implementation should explicitly configure IPv6-only behavior (IPV6_V6ONLY) to enforce the intended independent IPv4 and IPv6 endpoint model, rather than relying on OS defaults.
@@ -30,6 +30,36 @@
 - For regression-validation phases, require fully autonomous execution with one isolated test/method per process, stale test process cleanup, 45-second no-progress watchdog monitoring of testhost, automatic forensic capture/analysis on hangs, no manual user intervention, and no speculative code changes. Do not rely on Visual Studio/DevHub test runner; use watchdog + CLI infrastructure for potentially blocking/concurrency/lifecycle tests and capture forensics before termination.
 - Phase 2 workflow for this repo is benchmark-first: no production code changes before readiness assessment approval, use CLI + watchdog (not Visual Studio runner), and evaluate one optimization at a time with before/after evidence artifacts.
 - For transit transport performance work, require staged workflow: static investigation first, then minimal event-driven completion signaling change preserving ownership/recovery semantics, focused bounded tests only, depth-1 benchmark only (3 runs), no depth-2/full-suite, and explicit artifact documentation.
+
+## Engineering Quality and Documentation Standards (Repository-Wide)
+- Scope and permanence: these standards apply to all future repository coding tasks unless a future task explicitly overrides a specific rule.
+- Zero-warning completion requirement: a task is incomplete while warnings remain in the affected scope. Completion requires zero compiler errors, zero compiler warnings, zero analyzer/style/documentation/naming/nullable warnings, and zero IDE/analyzer diagnostics attributable to changed code.
+- No warning hiding: never use pragma suppression, `NoWarn`, analyzer/ruleset/editorconfig severity suppression, `SuppressMessage`, file exclusion, or equivalent warning-hiding mechanisms to mark work complete.
+- Warning remediation policy: warnings are considered fixed only when underlying source/design issues are corrected. If a warning cannot be resolved without changing behavior, stop and report the blocker explicitly.
+- Completion validation gate: before reporting completion, build affected projects, inspect full output, fix warnings attributable to changed code, run relevant tests, and rebuild to confirm warning-free affected scope.
+- Documentation coverage rule: if a C# symbol can legally have XML documentation, it must be documented regardless of accessibility (`public`, `internal`, `protected`, `private`, and combinations).
+- Documentation scope includes types and members: classes, structs, records, enums and enum members, interfaces, delegates, constructors, methods, properties, fields, constants, events, operators, indexers, nested types, helper symbols, and test symbols.
+- Documentation quality rule: XML docs must describe real engineering intent and contracts (purpose, invariants, failure semantics, assumptions, ownership/lifetime/threading where relevant, and verified performance/protocol behaviors) and must not be filler.
+- Private-code documentation rule: private/internal helpers must document why they exist, what contract they implement, and non-obvious behavior/performance assumptions.
+- Test documentation rule: test classes, test methods, and test helpers must document scenario, expected behavior, and protected contract; do not remove tests or weaken assertions to satisfy warnings.
+- File header rule: every `.cs` file must start with a file header before namespace declarations that includes copyright, attribution, file purpose, and primary engineering responsibility.
+- Required attribution text for repository file headers: `Copyright © Chris Knipe cknipe@opticnetworks.net`.
+- Header specificity rule: file-header descriptions must be file-specific and technically meaningful; do not use generic copy/paste descriptions.
+- Source style enforcement: follow established repository conventions (including namespace style, naming, collection initialization, formatting, modifier/accessibility ordering, and nullable annotations) by fixing source, not suppressing diagnostics.
+- Performance documentation rule: document intentional performance properties (for example allocation behavior, span/byte processing, bounded memory, lock-free characteristics) only when those properties are verified by implementation/evidence.
+- Scope discipline: remain within requested subsystem/task scope; do not perform unrelated cleanup/refactoring/configuration/benchmark changes unless explicitly requested. Still fix warnings caused by changed code.
+- Do-not-manufacture-work rule: prefer the smallest correct change that satisfies the task; avoid speculative redesigns, abstractions, diagnostics, benchmarks, or micro-optimizations without request/evidence.
+- Performance-work method: use evidence-driven workflow (correctness first, baseline where applicable, measure bottlenecks, optimize, re-measure) and avoid purely theoretical micro-optimizations.
+- Validation requirement: run appropriate build/analyzer/tests for the changed scope and do not claim performance improvements without measurement.
+- Final self-audit requirement before completion reporting:
+  - Code: requested behavior implemented, no unintended behavior changes, no unrelated file changes.
+  - Warnings: zero errors/warnings attributable to changed code, and no warning suppressions added.
+  - Documentation: changed `.cs` files include headers + required attribution, all documentable symbols are documented, and docs remain accurate.
+  - Tests: relevant tests pass and coverage/contracts are preserved.
+  - Scope: no accidental benchmark/configuration/architectural expansion.
+- Diagnostics standard clarity: clean completion means clean build + clean analyzers/style diagnostics + complete documentation + passing relevant tests.
+- Continuous execution rule: execute approved implementation plans end-to-end without per-step permission prompts; stop only for explicit stop conditions, genuine blockers, or failures requiring user input.
+- Instruction-file maintenance rule: when adding standards, integrate and consolidate with existing instructions; avoid duplicating equivalent rules with conflicting wording.
 
 ## Diagnostics Guidelines
 - Keep --diagnostics lightweight and non-invasive: it should only emit runtime/build information and must not initialize DI, hosted services, external dependencies, listeners, or certificate flows.
