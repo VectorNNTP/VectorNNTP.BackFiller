@@ -4579,6 +4579,12 @@ public sealed class TransitPublisherTests
                         {
                             await session(stream, _cts.Token);
                         }
+                        catch (IOException)
+                        {
+                        }
+                        catch (SocketException)
+                        {
+                        }
                         finally
                         {
                             _sessionRemoteEndpoints.TryRemove(stream, out _);

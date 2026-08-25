@@ -294,7 +294,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
             NullLogger<TransitPublisher>.Instance);
 
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
-        Assert.Contains("MODE STREAM rejected", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Unexpected MODE STREAM response code", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -328,7 +328,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
         await connection.InitializeAsync(CancellationToken.None);
         TransitPublishResult result = await connection.SubmitTakethisAsync("<compress-ignored@example.com>", new byte[] { (byte)'N', (byte)'\n' }, CancellationToken.None, 0L, 0L);
 
-        Assert.Equal(TransitConnectionState.Publishing, connection.CurrentState);
+        Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         Assert.Equal(TransitPublishStatus.Accepted, result.Status);
         Assert.True(connection.Capabilities.SupportsStreaming);
     }
@@ -703,7 +703,7 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
         await connection.InitializeAsync(CancellationToken.None);
         TransitPublishResult result = await connection.SubmitTakethisAsync("<uncompressed@example.com>", new byte[] { (byte)'Z', (byte)'\n' }, CancellationToken.None, 0L, 0L);
 
-        Assert.Equal(TransitConnectionState.Publishing, connection.CurrentState);
+        Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         Assert.Equal(TransitPublishStatus.Accepted, result.Status);
     }
 

@@ -33,7 +33,18 @@ public sealed class TransitBenchmarkConfigArticleCountValidationTests
             ?? throw new InvalidOperationException("TransitBenchmarkConfig.Load was not found.");
 
         TargetInvocationException ex = Assert.Throws<TargetInvocationException>(() =>
-            loadMethod.Invoke(null, [TimeSpan.FromSeconds(10), BenchmarkMode.Validation, options]));
+            loadMethod.Invoke(
+                null,
+                [
+                    TimeSpan.FromSeconds(10),
+                    BenchmarkMode.Validation,
+                    options,
+                    Type.Missing,
+                    Type.Missing,
+                    Type.Missing,
+                    Type.Missing,
+                    Type.Missing,
+                ]));
 
         Assert.IsType<InvalidOperationException>(ex.InnerException);
         Assert.Contains("mutually exclusive", ex.InnerException!.Message, StringComparison.OrdinalIgnoreCase);
