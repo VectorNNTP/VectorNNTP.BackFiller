@@ -600,8 +600,23 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, CancellationToken.None).ConfigureAwait(false);
-                    _ = TrackDeferredConnectionDisposal(connection);
+                    if (connection is not null)
+                    {
+                        await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, CancellationToken.None).ConfigureAwait(false);
+                        _ = TrackDeferredConnectionDisposal(connection);
+                    }
+                    else if (claimed is not null)
+                    {
+                        foreach (TransitWorkItem claimedItem in claimed)
+                        {
+                            await RequeueOrTerminalizeFailureAsync(
+                                claimedItem,
+                                TransitWorkFailureClass.ConnectionDisposed,
+                                TransitTransmissionUncertainty.ConnectionFailedDuringSend,
+                                CancellationToken.None).ConfigureAwait(false);
+                        }
+                    }
+
                     break;
                 }
                 catch (Exception ex) when (connection is not null && IsConnectionLifecycleSubmitFailure(connection, ex))

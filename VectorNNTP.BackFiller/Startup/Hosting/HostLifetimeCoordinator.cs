@@ -220,22 +220,46 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
                 await host.StartAsync().ConfigureAwait(false);
 
-                serviceLifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Ready, "Host started; ready to process work");
-
                 if (ShouldPublishReadiness(hostLifetime))
                 {
-                    SignalReadinessAfterStartupMetrics(systemdNotifierLogger);
+                    serviceLifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Ready, "Host started; ready to process work");
+
+                    if (ShouldPublishReadiness(hostLifetime))
+                    {
+                        SignalReadinessAfterStartupMetrics(systemdNotifierLogger);
+                    }
+                    else
+                    {
+                        LogReadinessSuppressedDueToShutdown(logger);
+                        serviceLifecycle.TransitionTo(
+                            ServiceLifecycle.LifecycleState.Draining,
+                            "Shutdown signal received during startup readiness publication; startup readiness suppressed and shutdown drain continues");
+                    }
                 }
                 else
                 {
                     LogReadinessSuppressedDueToShutdown(logger);
+
+                    if (serviceLifecycle.CurrentState == ServiceLifecycle.LifecycleState.Initializing)
+                    {
+                        serviceLifecycle.TransitionTo(
+                            ServiceLifecycle.LifecycleState.Draining,
+                            "Host start completed after shutdown signal; startup readiness suppressed and shutdown drain continues");
+                    }
                 }
 
                 markHostStarted();
                 await host.WaitForShutdownAsync().ConfigureAwait(false);
             }
 
-            serviceLifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Stopped, "Host shutdown completed");
+            if (serviceLifecycle.CurrentState == ServiceLifecycle.LifecycleState.Draining)
+            {
+                serviceLifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Stopped, "Host shutdown completed");
+            }
+            else if (serviceLifecycle.CurrentState == ServiceLifecycle.LifecycleState.Initializing)
+            {
+                serviceLifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Host shutdown completed before startup readiness transition");
+            }
         }
 
         private static bool IsRunningUnderSystemd()

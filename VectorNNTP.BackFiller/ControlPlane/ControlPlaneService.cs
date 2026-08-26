@@ -162,6 +162,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
 
             await ReconcileSnapshotAsync(_snapshotProvider.CurrentSnapshot, cancellationToken).ConfigureAwait(false);
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 DateTimeOffset currentTime = _timeProvider.GetUtcNow();
@@ -289,12 +291,17 @@ namespace VectorNNTP.Backfiller.ControlPlane
                         result.KeepAliveUpdated,
                         result.ConnectionSettingsReplaced);
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     LogAccountReconcileFailed(_logger, desiredAccount.EntryId, desiredAccount.Hostname, desiredAccount.Port, desiredAccount.UseSsl, ex);
                 }
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             LogAccountReconciliationCompleted(_logger, snapshot.ServerId, desiredAccounts.Count);
         }
 
@@ -310,6 +317,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 _loggerFactory.CreateLogger<NntpArticleExecutionSessionManager>(),
                 options: null,
                 _timeProvider,
+                _loggerFactory,
                 _serverCertificateValidationCallback);
 
             try
@@ -323,6 +331,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 }
 
                 LogAccountAdded(_logger, account.EntryId, account.Hostname, account.Port, account.UseSsl, account.MaxConnections, manager.ActiveSessionCount);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                await manager.DisposeAsync().ConfigureAwait(false);
+                throw;
             }
             catch (Exception ex)
             {

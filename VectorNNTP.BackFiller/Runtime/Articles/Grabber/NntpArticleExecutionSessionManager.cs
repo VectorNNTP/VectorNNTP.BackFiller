@@ -80,6 +80,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private readonly TimeProvider _timeProvider;
 
         /// <summary>
+        /// Logger factory used to create acquisition-session category loggers for protocol-level diagnostics.
+        /// </summary>
+        private readonly ILoggerFactory _loggerFactory;
+
+        /// <summary>
         /// Optional per-session TLS server-certificate validation callback used for acquisition session connects.
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
@@ -140,16 +145,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="logger">Logger used for lifecycle diagnostics.</param>
         /// <param name="options">Optional acquisition guardrails; defaults when null.</param>
         /// <param name="timeProvider">Optional time provider for UTC idle tracking and keepalive scheduling.</param>
+        /// <param name="loggerFactory">Optional logger factory used for acquisition-session protocol logger creation.</param>
         /// <param name="serverCertificateValidationCallback">Optional per-session TLS server-certificate validation callback. When <see langword="null"/>, acquisition sessions use platform default certificate validation semantics.</param>
         internal NntpArticleExecutionSessionManager(
             ILogger<NntpArticleExecutionSessionManager> logger,
             NntpArticleAcquisitionOptions? options = null,
             TimeProvider? timeProvider = null,
+            ILoggerFactory? loggerFactory = null,
             RemoteCertificateValidationCallback? serverCertificateValidationCallback = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _options = options ?? NntpArticleAcquisitionOptions.Default;
             _timeProvider = timeProvider ?? TimeProvider.System;
+            _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _serverCertificateValidationCallback = serverCertificateValidationCallback;
             _availableSlots = Channel.CreateUnbounded<int>(new UnboundedChannelOptions
             {
@@ -194,14 +202,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 ObjectDisposedException.ThrowIf(_disposeRequested, this);
             }
 
+            List<Task> allConnectionTasks = [];
             foreach (NntpAccountSnapshot account in accounts)
             {
                 int desiredConnections = Math.Max(0, (int)account.MaxConnections);
                 for (int connectionIndex = 0; connectionIndex < desiredConnections; connectionIndex++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    _ = await CreateAndRegisterSlotAsync(account, connectionIndex, cancellationToken).ConfigureAwait(false);
+                    allConnectionTasks.Add(CreateAndRegisterSlotAsync(account, connectionIndex, cancellationToken));
                 }
+            }
+
+            if (allConnectionTasks.Count > 0)
+            {
+                await Task.WhenAll(allConnectionTasks).ConfigureAwait(false);
             }
 
             lock (_gate)
@@ -329,15 +343,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 
             int targetWithPendingReconnect = activeAfterRetire + pendingReconnectRetire;
             int addCount = Math.Max(0, desiredSessionCount - targetWithPendingReconnect);
-            int addedSessions = 0;
+
+            List<Task<bool>> addConnectionTasks = [];
             for (int connectionIndex = 0; connectionIndex < addCount; connectionIndex++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                bool added = await CreateAndRegisterSlotAsync(desiredAccount, TotalSessionCount + connectionIndex, cancellationToken).ConfigureAwait(false);
-                if (added)
-                {
-                    addedSessions++;
-                }
+                addConnectionTasks.Add(CreateAndRegisterSlotAsync(desiredAccount, TotalSessionCount + connectionIndex, cancellationToken));
+            }
+
+            int addedSessions = 0;
+            if (addConnectionTasks.Count > 0)
+            {
+                bool[] results = await Task.WhenAll(addConnectionTasks).ConfigureAwait(false);
+                addedSessions = results.Count(static r => r);
             }
 
             int activeAfter;
@@ -599,7 +617,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         {
             NntpArticleAcquisitionEndpoint endpoint = BuildEndpoint(account);
 
-            ILogger<NntpArticleAcquisitionSession> sessionLogger = NullLogger<NntpArticleAcquisitionSession>.Instance;
+            ILogger<NntpArticleAcquisitionSession> sessionLogger = _loggerFactory.CreateLogger<NntpArticleAcquisitionSession>();
 
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult result) = await NntpArticleAcquisitionSession.ConnectAsync(
                 endpoint,
@@ -612,6 +630,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             {
                 if (session is null)
                 {
+                    if (result.FailureCode == NntpArticleAcquisitionFailureCode.Cancelled && cancellationToken.IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException(cancellationToken);
+                    }
+
                     string detail = result.ResponseCode.HasValue
                         ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ResponseCode={result.ResponseCode.Value}, Detail={result.ResponseText}")
                         : result.ResponseText;

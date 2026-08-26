@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Authentication;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -60,6 +61,62 @@ namespace VectorNNTP.Backfiller.Tests
             OperationCanceledException canceledException = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.StartAsync(cancellationTokenSource.Token));
             Assert.NotNull(canceledException);
             Assert.False(service.IsStartupInitializationComplete);
+        }
+
+        /// <summary>
+        /// Verifies shutdown cancellation during startup does not emit account-add failure warnings.
+        /// </summary>
+        [Fact]
+        public async Task StartAsync_WhenShutdownCancellationOccurs_DoesNotLogAccountAddFailedWarningAsync()
+        {
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 20).ConfigureAwait(true);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port, username: "user", password: "pass"),
+        ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            CapturingLoggerProvider loggerProvider = new();
+            ControlPlaneService service = new(
+                loggerProvider.CreateLogger<ControlPlaneService>(),
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                loggerProvider);
+
+            using CancellationTokenSource startupCancellation = new();
+            Task startTask = service.StartAsync(startupCancellation.Token);
+
+            await WaitForConditionAsync(() => server.AcceptedConnectionCount > 0).ConfigureAwait(false);
+            startupCancellation.Cancel();
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await startTask.ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.False(service.IsStartupInitializationComplete);
+
+            Assert.DoesNotContain(
+                loggerProvider.Entries,
+                static entry => entry.Level == LogLevel.Warning &&
+                                entry.Message.Contains("Account add failed", StringComparison.Ordinal));
+
+            Assert.DoesNotContain(
+                loggerProvider.Entries,
+                static entry => entry.Level == LogLevel.Information &&
+                                entry.Message.Contains("Account reconciliation completed", StringComparison.Ordinal));
+
+            Assert.DoesNotContain(
+                loggerProvider.Entries,
+                static entry => entry.Level == LogLevel.Information &&
+                                entry.Message.Contains("Control plane startup initialization completed", StringComparison.Ordinal));
+
+            await service.StopAsync(CancellationToken.None);
         }
 
         /// <summary>
@@ -647,6 +704,176 @@ namespace VectorNNTP.Backfiller.Tests
         /// <remarks>
         /// Keeps accepted sockets open for the test lifetime so control-plane managed persistent sessions remain connected.
         /// </remarks>
+        /// <summary>
+        /// Captured control-plane log entry used for cancellation-path log assertions.
+        /// </summary>
+        /// <param name="Level">Log severity level.</param>
+        /// <param name="Message">Rendered log message.</param>
+        private sealed record CapturedLogEntry(LogLevel Level, string Message);
+
+        /// <summary>
+        /// In-memory logger provider for deterministic control-plane log assertions.
+        /// </summary>
+        private sealed class CapturingLoggerProvider : ILoggerFactory, ILoggerProvider
+        {
+            /// <summary>
+            /// Synchronization gate for captured log entry writes.
+            /// </summary>
+            private readonly object _gate = new();
+
+            /// <summary>
+            /// Captured log entries.
+            /// </summary>
+            internal List<CapturedLogEntry> Entries { get; } = [];
+
+            /// <summary>
+            /// Creates a logger for the specified category.
+            /// </summary>
+            /// <param name="categoryName">Logger category.</param>
+            /// <returns>Capturing logger instance.</returns>
+            public ILogger CreateLogger(string categoryName)
+            {
+                return new CapturingLogger(Entries, _gate);
+            }
+
+            /// <summary>
+            /// Adds a provider.
+            /// </summary>
+            /// <param name="provider">Provider instance.</param>
+            public void AddProvider(ILoggerProvider provider)
+            {
+            }
+
+            /// <summary>
+            /// Disposes provider resources.
+            /// </summary>
+            public void Dispose()
+            {
+            }
+
+            /// <summary>
+            /// Creates a typed logger.
+            /// </summary>
+            /// <typeparam name="T">Logger category type.</typeparam>
+            /// <returns>Typed capturing logger.</returns>
+            internal ILogger<T> CreateLogger<T>()
+            {
+                return new CapturingLogger<T>(Entries, _gate);
+            }
+
+            /// <summary>
+            /// Non-generic capturing logger implementation.
+            /// </summary>
+            private sealed class CapturingLogger(List<CapturedLogEntry> entries, object gate) : ILogger
+            {
+                private readonly List<CapturedLogEntry> _entries = entries;
+                private readonly object _gate = gate;
+
+                /// <summary>
+                /// Begins a logging scope.
+                /// </summary>
+                /// <typeparam name="TState">Scope state type.</typeparam>
+                /// <param name="state">Scope state payload.</param>
+                /// <returns>Scope disposable.</returns>
+                public IDisposable BeginScope<TState>(TState state)
+                    where TState : notnull
+                {
+                    return NullScope.Instance;
+                }
+
+                /// <summary>
+                /// Gets a value indicating whether the log level is enabled.
+                /// </summary>
+                /// <param name="logLevel">Log level.</param>
+                /// <returns>Always true for tests.</returns>
+                public bool IsEnabled(LogLevel logLevel)
+                {
+                    return true;
+                }
+
+                /// <summary>
+                /// Captures one log record.
+                /// </summary>
+                /// <typeparam name="TState">Structured state type.</typeparam>
+                /// <param name="logLevel">Log level.</param>
+                /// <param name="eventId">Event identifier.</param>
+                /// <param name="state">State payload.</param>
+                /// <param name="exception">Associated exception.</param>
+                /// <param name="formatter">Message formatter.</param>
+                public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                {
+                    string message = formatter(state, exception);
+                    lock (_gate)
+                    {
+                        _entries.Add(new CapturedLogEntry(logLevel, message));
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Generic capturing logger implementation.
+            /// </summary>
+            /// <typeparam name="T">Category type.</typeparam>
+            private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries, object gate) : ILogger<T>
+            {
+                private readonly CapturingLogger _inner = new(entries, gate);
+
+                /// <summary>
+                /// Begins a logging scope.
+                /// </summary>
+                /// <typeparam name="TState">Scope state type.</typeparam>
+                /// <param name="state">Scope state payload.</param>
+                /// <returns>Scope disposable.</returns>
+                public IDisposable BeginScope<TState>(TState state)
+                    where TState : notnull
+                {
+                    return _inner.BeginScope(state);
+                }
+
+                /// <summary>
+                /// Gets a value indicating whether the level is enabled.
+                /// </summary>
+                /// <param name="logLevel">Log level.</param>
+                /// <returns>Always true for tests.</returns>
+                public bool IsEnabled(LogLevel logLevel)
+                {
+                    return _inner.IsEnabled(logLevel);
+                }
+
+                /// <summary>
+                /// Captures one log record.
+                /// </summary>
+                /// <typeparam name="TState">Structured state type.</typeparam>
+                /// <param name="logLevel">Log level.</param>
+                /// <param name="eventId">Event identifier.</param>
+                /// <param name="state">State payload.</param>
+                /// <param name="exception">Associated exception.</param>
+                /// <param name="formatter">Message formatter.</param>
+                public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                {
+                    _inner.Log(logLevel, eventId, state, exception, formatter);
+                }
+            }
+
+            /// <summary>
+            /// Null logging scope.
+            /// </summary>
+            private sealed class NullScope : IDisposable
+            {
+                /// <summary>
+                /// Singleton instance.
+                /// </summary>
+                internal static readonly NullScope Instance = new();
+
+                /// <summary>
+                /// Disposes the scope.
+                /// </summary>
+                public void Dispose()
+                {
+                }
+            }
+        }
+
         private sealed class FakeNntpServer : IAsyncDisposable
         {
             /// <summary>

@@ -231,7 +231,7 @@ public class ServiceLifecycleTests
     #region Invalid Transition Tests
 
     /// <summary>
-    /// Verifies that startup progression is monotonic (no reversals).
+    /// Verifies that startup progression is monotonic (no reversals), excluding the shutdown-authoritative Initializing -> Draining branch.
     /// </summary>
     [Theory]
     [InlineData(ServiceLifecycle.LifecycleState.Validating, ServiceLifecycle.LifecycleState.Starting)]

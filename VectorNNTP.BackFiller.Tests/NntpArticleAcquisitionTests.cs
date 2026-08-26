@@ -10,6 +10,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
@@ -638,10 +639,10 @@ public sealed class NntpArticleAcquisitionTests
     }
 
     /// <summary>
-    /// Confirms protocol command/response logging redacts credentials and correlates Message-ID.
+    /// Confirms protocol command/response logging redacts credentials and correlates Message-ID only for ARTICLE workflow operations.
     /// </summary>
     [Fact]
-    public async Task Logging_WhenAuthAndArticleFlow_RedactsCredentialsAndIncludesMessageId()
+    public async Task Logging_WhenAuthAndArticleFlow_RedactsCredentialsAndIncludesMessageIdOnlyForArticleOperations()
     {
         byte[] article = BuildArticleBytes("<log@test>", "body\r\n");
 
@@ -675,13 +676,173 @@ public sealed class NntpArticleAcquisitionTests
         }
 
         string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
+        Assert.Contains("RX: 200 ready", logs, StringComparison.Ordinal);
         Assert.Contains("TX: AUTHINFO USER ***", logs, StringComparison.Ordinal);
+        Assert.Contains("RX: 381 pass required", logs, StringComparison.Ordinal);
         Assert.Contains("TX: AUTHINFO PASS ***", logs, StringComparison.Ordinal);
+        Assert.Contains("RX: 281 auth accepted", logs, StringComparison.Ordinal);
+
         Assert.Contains("TX: ARTICLE <log@test>", logs, StringComparison.Ordinal);
         Assert.Contains("RX: 220 0 <log@test> article follows", logs, StringComparison.Ordinal);
         Assert.Contains("MessageId=<log@test>", logs, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("AUTHINFO USER *** MessageId=", logs, StringComparison.Ordinal);
+        Assert.DoesNotContain("AUTHINFO PASS *** MessageId=", logs, StringComparison.Ordinal);
+        Assert.DoesNotContain("RX: 200 ready MessageId=", logs, StringComparison.Ordinal);
+        Assert.DoesNotContain("RX: 381 pass required MessageId=", logs, StringComparison.Ordinal);
+        Assert.DoesNotContain("RX: 281 auth accepted MessageId=", logs, StringComparison.Ordinal);
+
         Assert.DoesNotContain("secret", logs, StringComparison.Ordinal);
         Assert.DoesNotContain("body", logs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Confirms DATE keepalive protocol command/response logging omits MessageId correlation because no article scope exists.
+    /// </summary>
+    [Fact]
+    public async Task Logging_WhenDateKeepAliveFlow_OmitsMessageIdCorrelation()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "381 pass required");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO PASS pass");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "281 auth accepted");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101");
+        }).ConfigureAwait(false);
+
+        CapturingLoggerProvider loggerProvider = new();
+        NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "pass");
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
+            Assert.Equal(111, result.ResponseCode);
+            Assert.Equal("20260826010101", result.ResponseText);
+        }
+
+        string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
+        Assert.Contains("TX: DATE", logs, StringComparison.Ordinal);
+        Assert.Contains("RX: 111 20260826010101", logs, StringComparison.Ordinal);
+        Assert.DoesNotContain("TX: DATE MessageId=", logs, StringComparison.Ordinal);
+        Assert.DoesNotContain("RX: 111 20260826010101 MessageId=", logs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Confirms graceful disposal of a connected session sends QUIT and consumes the server 205 response before transport teardown.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAsync_WhenSessionEstablished_SendsQuitAndReceives205()
+    {
+        CapturingLoggerProvider loggerProvider = new();
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "QUIT").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+
+        await session.DisposeAsync().ConfigureAwait(false);
+
+        string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
+        Assert.Contains("TX: QUIT", logs, StringComparison.Ordinal);
+        Assert.Contains("RX: 205 closing connection", logs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Confirms disposal skips QUIT when transport is no longer usable after connection failure.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAsync_WhenConnectionAlreadyFailed_DoesNotAttemptQuit()
+    {
+        CapturingLoggerProvider loggerProvider = new();
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <connection-failure@test>").ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+
+        using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<connection-failure@test>", CancellationToken.None).ConfigureAwait(false);
+        Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, result.FailureCode);
+
+        await session.DisposeAsync().ConfigureAwait(false);
+
+        string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
+        Assert.DoesNotContain("TX: QUIT", logs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Confirms startup cancellation during AUTHINFO does not emit QUIT because protocol-ready state was never reached.
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WhenCancelledDuringAuthentication_DoesNotAttemptQuit()
+    {
+        CapturingLoggerProvider loggerProvider = new();
+        TaskCompletionSource authUserObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource allowAuthFlow = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user").ConfigureAwait(false);
+            authUserObserved.TrySetResult();
+            await allowAuthFlow.Task.ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "381 pass required").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO PASS pass").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "281 auth accepted").ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "pass");
+        using CancellationTokenSource connectCancellation = new();
+
+        Task<(NntpArticleAcquisitionSession? Session, NntpArticleAcquisitionResult Result)> connectTask = NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
+            connectCancellation.Token).AsTask();
+
+        using CancellationTokenSource waitTimeout = new(TimeSpan.FromSeconds(10));
+        await authUserObserved.Task.WaitAsync(waitTimeout.Token).ConfigureAwait(false);
+
+        connectCancellation.Cancel();
+        allowAuthFlow.TrySetResult();
+
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await connectTask.ConfigureAwait(false);
+        using (connectResult)
+        {
+            Assert.Null(session);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.Cancelled, connectResult.FailureCode);
+        }
+
+        string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
+        Assert.DoesNotContain("TX: QUIT", logs, StringComparison.Ordinal);
     }
 
     /// <summary>

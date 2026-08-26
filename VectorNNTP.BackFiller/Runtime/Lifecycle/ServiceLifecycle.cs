@@ -438,7 +438,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
                     to is LifecycleState.Initializing or LifecycleState.Faulted,
 
                 LifecycleState.Initializing =>
-                    to is LifecycleState.Ready or LifecycleState.Faulted,
+                    to is LifecycleState.Ready
+                       or LifecycleState.Draining
+                       or LifecycleState.Faulted,
 
                 LifecycleState.Ready =>
                     to is LifecycleState.Draining,
@@ -464,7 +466,7 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             {
                 LifecycleState.Starting => "Validating, Faulted",
                 LifecycleState.Validating => "Initializing, Faulted",
-                LifecycleState.Initializing => "Ready, Faulted",
+                LifecycleState.Initializing => "Ready, Draining, Faulted",
                 LifecycleState.Ready => "Draining",
                 LifecycleState.Draining => "Ready, Stopped, Faulted",
                 LifecycleState.Stopped => "none (terminal)",

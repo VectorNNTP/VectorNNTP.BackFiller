@@ -60,6 +60,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private bool _disposed;
 
         /// <summary>
+        /// Tracks whether the authenticated session reached protocol-ready state where lifecycle commands (for example QUIT) are valid.
+        /// </summary>
+        private bool _protocolReadyForCommands;
+
+        /// <summary>
+        /// Tracks whether transport/protocol failures make further command writes unsafe for graceful lifecycle shutdown.
+        /// </summary>
+        private bool _transportFailed;
+
+        /// <summary>
+        /// Serializes command writes during shutdown so QUIT cannot race with in-flight ARTICLE/DATE command emissions.
+        /// </summary>
+        private readonly SemaphoreSlim _commandWriteGate = new(1, 1);
+
+        /// <summary>
         /// Initializes a new acquisition session.
         /// </summary>
         /// <param name="endpoint">Endpoint settings.</param>
@@ -182,6 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     return (null, authFailure);
                 }
 
+                session._protocolReadyForCommands = true;
                 LogSessionConnected(logger, endpoint.Host, endpoint.Port, endpoint.UseSsl);
                 return (session, NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.None, greetingCode, greetingText));
             }
@@ -313,6 +329,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             _disposed = true;
 
+            await TrySendQuitBeforeTransportDisposeAsync().ConfigureAwait(false);
+
             try
             {
                 await _reader.CompleteAsync().ConfigureAwait(false);
@@ -397,32 +415,46 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             CancellationToken cancellationToken,
             NntpArticleAcquisitionTraceContext context)
         {
-            (string? line, _, bool completedWithoutLine) = await ExecuteWithTimeoutAsync(
-                timeout,
-                cancellationToken,
-                token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token)).ConfigureAwait(false);
-
-            if (completedWithoutLine)
+            try
             {
-                throw new EndOfStreamException("NNTP connection closed while awaiting line response.");
-            }
+                (string? line, _, bool completedWithoutLine) = await ExecuteWithTimeoutAsync(
+                    timeout,
+                    cancellationToken,
+                    token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token)).ConfigureAwait(false);
 
-            string statusLine = line!;
-            int bytes = Encoding.ASCII.GetByteCount(statusLine);
-            if (bytes > _options.MaxStatusLineBytes)
+                if (completedWithoutLine)
+                {
+                    throw new EndOfStreamException("NNTP connection closed while awaiting line response.");
+                }
+
+                string statusLine = line!;
+                int bytes = Encoding.ASCII.GetByteCount(statusLine);
+                if (bytes > _options.MaxStatusLineBytes)
+                {
+                    throw new NntpArticleAcquisitionException(
+                        NntpArticleAcquisitionFailureCode.MalformedResponse,
+                        context with { MaximumValue = _options.MaxStatusLineBytes, ActualValue = bytes },
+                        string.Create(CultureInfo.InvariantCulture, $"NNTP status line exceeded configured maximum length ({bytes}>{_options.MaxStatusLineBytes})."));
+                }
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    if (string.IsNullOrWhiteSpace(context.MessageId))
+                    {
+                        _logger.LogDebug("RX: {StatusLine}", statusLine);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", statusLine, context.MessageId);
+                    }
+                }
+
+                return statusLine;
+            }
+            catch (Exception ex) when (MarkTransportFailureForException(ex, cancellationToken))
             {
-                throw new NntpArticleAcquisitionException(
-                    NntpArticleAcquisitionFailureCode.MalformedResponse,
-                    context with { MaximumValue = _options.MaxStatusLineBytes, ActualValue = bytes },
-                    string.Create(CultureInfo.InvariantCulture, $"NNTP status line exceeded configured maximum length ({bytes}>{_options.MaxStatusLineBytes})."));
+                throw;
             }
-
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", statusLine, context.MessageId ?? string.Empty);
-            }
-
-            return statusLine;
         }
 
         /// <summary>
@@ -441,34 +473,53 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionTraceContext context,
             bool redactCredentials)
         {
-            if (_logger.IsEnabled(LogLevel.Debug))
+            await _commandWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                string safeCommand = command;
-                if (redactCredentials)
+                if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    if (command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
+                    string safeCommand = command;
+                    if (redactCredentials)
                     {
-                        safeCommand = "AUTHINFO USER ***";
+                        if (command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            safeCommand = "AUTHINFO USER ***";
+                        }
+                        else if (command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            safeCommand = "AUTHINFO PASS ***";
+                        }
                     }
-                    else if (command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
+
+                    if (string.IsNullOrWhiteSpace(context.MessageId))
                     {
-                        safeCommand = "AUTHINFO PASS ***";
+                        _logger.LogDebug("TX: {Command}", safeCommand);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("TX: {Command} MessageId={MessageId}", safeCommand, context.MessageId);
                     }
                 }
 
-                _logger.LogDebug("TX: {Command} MessageId={MessageId}", safeCommand, context.MessageId ?? string.Empty);
+                byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
+                await ExecuteWithTimeoutAsync(
+                    timeout,
+                    cancellationToken,
+                    async token =>
+                    {
+                        await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
+                        await _stream.FlushAsync(token).ConfigureAwait(false);
+                        return true;
+                    }).ConfigureAwait(false);
             }
-
-            byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
-            await ExecuteWithTimeoutAsync(
-                timeout,
-                cancellationToken,
-                async token =>
-                {
-                    await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
-                    await _stream.FlushAsync(token).ConfigureAwait(false);
-                    return true;
-                }).ConfigureAwait(false);
+            catch (Exception ex) when (MarkTransportFailureForException(ex, cancellationToken))
+            {
+                throw;
+            }
+            finally
+            {
+                _commandWriteGate.Release();
+            }
         }
 
         /// <summary>
@@ -737,6 +788,75 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             {
                 throw new TimeoutException("NNTP operation timed out.");
             }
+        }
+
+        /// <summary>
+        /// Attempts protocol-level QUIT during disposal when the session reached command-ready state and the transport remains usable.
+        /// </summary>
+        /// <returns>A task that completes after the bounded QUIT attempt path finishes.</returns>
+        private async Task TrySendQuitBeforeTransportDisposeAsync()
+        {
+            if (!_protocolReadyForCommands || _transportFailed || !CanAttemptQuitTransportWrite())
+            {
+                return;
+            }
+
+            using CancellationTokenSource quitTimeout = new(_options.CommandTimeout);
+            NntpArticleAcquisitionTraceContext quitWriteContext = new(NntpArticleAcquisitionOperation.CommandWrite, MessageId: null, MaximumValue: null, ActualValue: null);
+            NntpArticleAcquisitionTraceContext quitReadContext = new(NntpArticleAcquisitionOperation.StatusRead, MessageId: null, MaximumValue: null, ActualValue: null);
+
+            try
+            {
+                await WriteCommandAsync("QUIT", _options.CommandTimeout, quitTimeout.Token, quitWriteContext, redactCredentials: false).ConfigureAwait(false);
+                _ = await ReadProtocolLineAsync(_options.CommandTimeout, quitTimeout.Token, quitReadContext).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (quitTimeout.IsCancellationRequested)
+            {
+            }
+            catch (Exception ex)
+            {
+                _ = MarkTransportFailureForException(ex, quitTimeout.Token);
+            }
+        }
+
+        /// <summary>
+        /// Determines whether the current transport appears usable for a bounded QUIT emission attempt.
+        /// </summary>
+        /// <returns><see langword="true"/> when QUIT write can be attempted; otherwise <see langword="false"/>.</returns>
+        private bool CanAttemptQuitTransportWrite()
+        {
+            if (_tcpClient.Client is not Socket socket)
+            {
+                return false;
+            }
+
+            return socket.Connected;
+        }
+
+        /// <summary>
+        /// Marks the session transport as failed when exceptions indicate the connection is no longer safely command-writable.
+        /// </summary>
+        /// <param name="exception">Exception observed by protocol read/write flow.</param>
+        /// <param name="callerCancellation">Caller cancellation token used to distinguish cooperative cancellation from transport failure.</param>
+        /// <returns>Always <see langword="false"/> so the filter preserves original exception flow.</returns>
+        private bool MarkTransportFailureForException(Exception exception, CancellationToken callerCancellation)
+        {
+            if (exception is TimeoutException
+                or SocketException
+                or IOException
+                or AuthenticationException
+                or EndOfStreamException)
+            {
+                _transportFailed = true;
+                return false;
+            }
+
+            if (exception is OperationCanceledException && !callerCancellation.IsCancellationRequested)
+            {
+                _transportFailed = true;
+            }
+
+            return false;
         }
 
         /// <summary>

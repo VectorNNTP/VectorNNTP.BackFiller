@@ -298,6 +298,97 @@ public sealed class ProgramHostingSemanticsTests
         Assert.True(shouldPublish);
     }
 
+    /// <summary>
+    /// Verifies shutdown during host startup keeps lifecycle on shutdown path without entering Ready.
+    /// </summary>
+    /// <remarks>
+    /// The hosted startup probe triggers <see cref="IHostApplicationLifetime.StopApplication"/> during StartAsync,
+    /// simulating Ctrl+C while startup initialization is still running.
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_WhenShutdownRequestedDuringStartup_DoesNotTransitionToReady_AndStopsViaDrainingAsync()
+    {
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        builder.Services.AddSingleton(CreateRuntimeOptionsForTesting());
+        builder.Services.AddSingleton<ShutdownCoordinator>();
+        builder.Services.AddHostedService<ShutdownDuringStartupProbeHostedService>();
+
+        using IHost host = builder.Build();
+
+        ServiceLifecycle lifecycle = new(TimeProvider.System);
+        lifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Validating, "test: begin validation");
+        lifecycle.TransitionTo(ServiceLifecycle.LifecycleState.Initializing, "test: begin initialization");
+
+        await HostLifetimeCoordinator.RunAsync(host, lifecycle, static () => { }).ConfigureAwait(false);
+
+        Assert.Equal(ServiceLifecycle.LifecycleState.Stopped, lifecycle.CurrentState);
+        Assert.DoesNotContain(
+            lifecycle.TransitionHistory,
+            static transition => transition.ToState == ServiceLifecycle.LifecycleState.Ready);
+
+        Assert.Contains(
+            lifecycle.TransitionHistory,
+            static transition => transition.FromState == ServiceLifecycle.LifecycleState.Initializing &&
+                                 transition.ToState == ServiceLifecycle.LifecycleState.Draining);
+
+        Assert.Contains(
+            lifecycle.TransitionHistory,
+            static transition => transition.FromState == ServiceLifecycle.LifecycleState.Draining &&
+                                 transition.ToState == ServiceLifecycle.LifecycleState.Stopped);
+    }
+
+    /// <summary>
+    /// Creates a minimal immutable runtime snapshot for host-lifetime coordinator tests.
+    /// </summary>
+    /// <returns>Runtime options used by <see cref="HostLifetimeCoordinator"/>.</returns>
+    private static BackFillerRuntimeOptions CreateRuntimeOptionsForTesting()
+    {
+        return new BackFillerRuntimeOptions(
+            CanonicalBackFillerFqdn: "bf-12.example.com",
+            BackFillerId: 12,
+            CanonicalDnsSuffix: "example.com",
+            ValidatedLogDirectory: Path.GetTempPath(),
+            ValidatedCertificateDirectory: Path.GetTempPath(),
+            RabbitMqHosts: ["localhost"],
+            RabbitMqPort: 5672,
+            RabbitMqEnableSsl: false,
+            TransitServerHost: "localhost",
+            TransitServerPort: 119,
+            TransitServerUseSsl: false,
+            ShutdownGracePeriodSeconds: 30,
+            ShutdownDrainQueuedWork: true,
+            ShutdownFinishActiveArticles: true,
+            RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
+            WriteBatchCoalesceMicroseconds: 250);
+    }
+
+    /// <summary>
+    /// Hosted startup probe that requests host shutdown during startup initialization.
+    /// </summary>
+    private sealed class ShutdownDuringStartupProbeHostedService(IHostApplicationLifetime hostApplicationLifetime) : IHostedService
+    {
+        /// <summary>
+        /// Requests shutdown immediately during startup to simulate Ctrl+C before readiness.
+        /// </summary>
+        /// <param name="cancellationToken">Startup cancellation token.</param>
+        /// <returns>A completed task.</returns>
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            hostApplicationLifetime.StopApplication();
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Completes stop without additional work.
+        /// </summary>
+        /// <param name="cancellationToken">Stop cancellation token.</param>
+        /// <returns>A completed task.</returns>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime
     {
         private readonly CancellationTokenSource _applicationStarted = new();
