@@ -2957,6 +2957,21 @@ namespace VectorNNTP.Backfiller.Configuration
                 string addressString = bindAddresses[i];
                 string addressSetting = $"{settingPrefix}:BindAddress[{i}]";
 
+                if (string.IsNullOrWhiteSpace(addressString))
+                {
+                    diagnostics.Add(new BindAddressValidationResult(
+                        addressSetting,
+                        "BindAddress entries cannot be empty",
+                        ValidationSeverity.Error));
+                    continue;
+                }
+
+                // Wildcard tokens are semantic markers and must not be parsed as literal IP addresses.
+                if (BindAddressDnsAddressDeriver.IsWildcardBindAddressToken(addressString))
+                {
+                    continue;
+                }
+
                 // Validation 1: Syntax - must be a valid IP address
                 if (!IPAddress.TryParse(addressString, out IPAddress? address))
                 {

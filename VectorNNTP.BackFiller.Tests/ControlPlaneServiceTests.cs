@@ -69,7 +69,7 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task StartAsync_WhenShutdownCancellationOccurs_DoesNotLogAccountAddFailedWarningAsync()
         {
-            await using FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 20).ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 20).ConfigureAwait(true);
             await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
 
             Guid accountId = Guid.NewGuid();

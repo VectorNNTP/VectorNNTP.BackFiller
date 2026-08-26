@@ -893,8 +893,8 @@ public sealed class NntpArticleAcquisitionTests
             async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
-                await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE").ConfigureAwait(false);
-                await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101").ConfigureAwait(false);
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "QUIT").ConfigureAwait(false);
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
             },
             FakeArticleServer.ConnectionTransport.ImplicitTls,
             tlsFixture.ServerCertificate).ConfigureAwait(false);

@@ -1,3 +1,5 @@
+using System.Net;
+
 namespace VectorNNTP.Backfiller.Configuration
 {
     /// <summary>
@@ -26,6 +28,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="TransitShutdownDrainGracePeriod">Initial transit shutdown drain grace period.</param>
     /// <param name="TransitShutdownDrainInactivityWatchdog">Transit shutdown inactivity watchdog duration.</param>
     /// <param name="TransitShutdownAbsoluteMaximum">Absolute transit shutdown duration ceiling.</param>
+    /// <param name="CanonicalBindAddresses">Canonical, deduplicated bind-address set validated at startup.</param>
     internal sealed record BackFillerRuntimeOptions(
         string CanonicalBackFillerFqdn,
         int BackFillerId,
@@ -49,14 +52,32 @@ namespace VectorNNTP.Backfiller.Configuration
         TimeSpan? TransitReconnectInitializationTimeout = null,
         TimeSpan? TransitShutdownDrainGracePeriod = null,
         TimeSpan? TransitShutdownDrainInactivityWatchdog = null,
-        TimeSpan? TransitShutdownAbsoluteMaximum = null)
+        TimeSpan? TransitShutdownAbsoluteMaximum = null,
+        IReadOnlyList<IPAddress>? CanonicalBindAddresses = null)
     {
+        /// <summary>
+        /// Gets the effective reconnect initialization timeout.
+        /// </summary>
         internal TimeSpan EffectiveTransitReconnectInitializationTimeout => TransitReconnectInitializationTimeout ?? TimeSpan.FromSeconds(2);
 
+        /// <summary>
+        /// Gets the effective transit shutdown drain grace period.
+        /// </summary>
         internal TimeSpan EffectiveTransitShutdownDrainGracePeriod => TransitShutdownDrainGracePeriod ?? TimeSpan.FromMinutes(5);
 
+        /// <summary>
+        /// Gets the effective transit shutdown inactivity watchdog duration.
+        /// </summary>
         internal TimeSpan EffectiveTransitShutdownDrainInactivityWatchdog => TransitShutdownDrainInactivityWatchdog ?? TimeSpan.FromSeconds(30);
 
+        /// <summary>
+        /// Gets the effective absolute transit shutdown maximum duration.
+        /// </summary>
         internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
+
+        /// <summary>
+        /// Gets the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
+        /// </summary>
+        internal IReadOnlyList<IPAddress> EffectiveCanonicalBindAddresses => CanonicalBindAddresses ?? [];
     }
 }

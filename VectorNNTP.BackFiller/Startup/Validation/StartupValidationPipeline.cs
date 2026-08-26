@@ -76,8 +76,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
 
             ConfigurationValidationResult configResult = new(configErrors, configWarnings);
 
-            DependencyValidationResult dependencyResult = configResult.IsValid
-                ? await DependencyProbeRunner.ValidateDependenciesAsync(configuration, backFiller, dependencyTimeout, cancellationToken).ConfigureAwait(false)
+            DependencyValidationResult dependencyResult = configResult.IsValid && runtimeOptions != null
+                ? await DependencyProbeRunner.ValidateDependenciesAsync(configuration, backFiller, runtimeOptions, dependencyTimeout, cancellationToken).ConfigureAwait(false)
                 : DependencyValidationResult.Success();
 
             return (configResult, dependencyResult, runtimeOptions);

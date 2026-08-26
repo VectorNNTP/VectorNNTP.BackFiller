@@ -1,3 +1,4 @@
+using System.Net;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Configuration
@@ -43,6 +44,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 string transitServerHost = backFiller.TransitServer?.Host?.Trim()
                     ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is required to build runtime options.");
 
+                IReadOnlyList<IPAddress> canonicalBindAddresses = BindAddressDnsAddressDeriver.DeriveCanonicalDnsAddresses(backFiller.BindAddress);
+
                 return new BackFillerRuntimeOptions(
                     CanonicalBackFillerFqdn: canonicalBackFillerFqdn,
                     BackFillerId: backFillerId,
@@ -65,7 +68,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitRetryMaxAttempts: 3,
                     TransitShutdownDrainGracePeriod: TimeSpan.FromMinutes(5),
                     TransitShutdownDrainInactivityWatchdog: TimeSpan.FromSeconds(30),
-                    TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30));
+                    TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30),
+                    CanonicalBindAddresses: canonicalBindAddresses);
             }
             catch (Exception ex)
             {
