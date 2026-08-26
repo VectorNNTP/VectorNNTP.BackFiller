@@ -189,6 +189,232 @@ public sealed class NntpArticleAcquisitionTests
     }
 
     /// <summary>
+    /// Confirms ARTICLE command-unavailable responses are classified as remote rejection with raw status preserved.
+    /// </summary>
+    [Fact]
+    public async Task DownloadArticleAsync_WhenArticleCommandUnavailable_ReturnsRemoteRejectedWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <unavailable@test>");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "500 command not understood");
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<unavailable@test>", CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.RemoteRejected, result.FailureCode);
+            Assert.Equal(500, result.ResponseCode);
+            Assert.Equal("command not understood", result.ResponseText);
+        }
+    }
+
+    /// <summary>
+    /// Confirms unexpected but syntactically valid ARTICLE responses are treated as protocol failures.
+    /// </summary>
+    [Fact]
+    public async Task DownloadArticleAsync_WhenArticleUnexpectedStatus_ReturnsProtocolFailureWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <unexpected@test>");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101");
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<unexpected@test>", CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.ProtocolFailure, result.FailureCode);
+            Assert.Equal(111, result.ResponseCode);
+            Assert.Equal("20260826010101", result.ResponseText);
+        }
+    }
+
+    /// <summary>
+    /// Confirms AUTHINFO PASS authentication rejection retains raw NNTP status and deterministic authentication failure classification.
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WhenAuthInfoPassRejected_ReturnsAuthenticationFailureWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "381 pass required");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO PASS bad");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "481 authentication rejected");
+        }).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "bad");
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Null(session);
+        Assert.Equal(NntpArticleAcquisitionFailureCode.AuthenticationFailure, connectResult.FailureCode);
+        Assert.Equal(481, connectResult.ResponseCode);
+        Assert.Equal("authentication rejected", connectResult.ResponseText);
+    }
+
+    /// <summary>
+    /// Confirms AUTHINFO USER protocol-level unexpected responses are not treated as authentication failures.
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WhenAuthInfoUserUnexpectedStatus_ReturnsProtocolFailureWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "211 list follows");
+        }).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "pass");
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Null(session);
+        Assert.Equal(NntpArticleAcquisitionFailureCode.ProtocolFailure, connectResult.FailureCode);
+        Assert.Equal(211, connectResult.ResponseCode);
+        Assert.Equal("list follows", connectResult.ResponseText);
+    }
+
+    /// <summary>
+    /// Confirms DATE keepalive accepts only the command-specific 111 status as success.
+    /// </summary>
+    [Fact]
+    public async Task KeepAliveWithDateAsync_WhenStatus111_ReturnsSuccessWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101");
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
+            Assert.Equal(111, result.ResponseCode);
+            Assert.Equal("20260826010101", result.ResponseText);
+        }
+    }
+
+    /// <summary>
+    /// Confirms DATE keepalive classifies unsupported command responses as remote rejection and preserves raw status.
+    /// </summary>
+    [Fact]
+    public async Task KeepAliveWithDateAsync_WhenStatus500_ReturnsRemoteRejectedWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "500 command not understood");
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.RemoteRejected, result.FailureCode);
+            Assert.Equal(500, result.ResponseCode);
+            Assert.Equal("command not understood", result.ResponseText);
+        }
+    }
+
+    /// <summary>
+    /// Confirms DATE keepalive treats syntactically valid but command-unexpected statuses as protocol failures.
+    /// </summary>
+    [Fact]
+    public async Task KeepAliveWithDateAsync_WhenUnexpectedStatus_ReturnsProtocolFailureWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "220 article follows");
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.ProtocolFailure, result.FailureCode);
+            Assert.Equal(220, result.ResponseCode);
+            Assert.Equal("article follows", result.ResponseText);
+        }
+    }
+
+    /// <summary>
+    /// Confirms malformed DATE status lines are classified as malformed responses.
+    /// </summary>
+    [Fact]
+    public async Task KeepAliveWithDateAsync_WhenStatusMalformed_ReturnsMalformedResponse()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "x11 malformed");
+        }).ConfigureAwait(false);
+
+        (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+            server.CreateEndpoint(),
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotNull(session);
+        await using (session.ConfigureAwait(false))
+        {
+            using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.MalformedResponse, result.FailureCode);
+        }
+    }
+
+    /// <summary>
     /// Confirms dot-stuffed payload lines are unstuffed and payload bytes are preserved.
     /// </summary>
     [Fact]

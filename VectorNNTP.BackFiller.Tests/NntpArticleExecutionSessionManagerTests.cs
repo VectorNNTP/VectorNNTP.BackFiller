@@ -184,6 +184,169 @@ public sealed class NntpArticleExecutionSessionManagerTests
     }
 
     /// <summary>
+    /// Confirms idle sessions below the configured keepalive threshold do not send DATE.
+    /// </summary>
+    [Fact]
+    public async Task KeepAlive_WhenIdleBelowThreshold_DoesNotSendDate()
+    {
+        byte[] article = BuildArticleBytes("<below-threshold@test>", "body\r\n");
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <below-threshold@test>").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <below-threshold@test> article follows").ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 30);
+        await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+        await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+
+        await Task.Delay(1500).ConfigureAwait(false);
+
+        await using NntpArticleSessionLease lease = await manager.AcquireAsync("<below-threshold@test>", CancellationToken.None).ConfigureAwait(false);
+        using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<below-threshold@test>", CancellationToken.None).ConfigureAwait(false);
+        lease.ReportAcquisitionOutcome(result.FailureCode);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>
+    /// Confirms idle sessions crossing the keepalive threshold send DATE before the next ARTICLE operation.
+    /// </summary>
+    [Fact]
+    public async Task KeepAlive_WhenIdleThresholdReached_SendsDate()
+    {
+        byte[] article = BuildArticleBytes("<threshold@test>", "body\r\n");
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <threshold@test>").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <threshold@test> article follows").ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 2);
+        await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+        await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+
+        await Task.Delay(1300).ConfigureAwait(false);
+
+        await using NntpArticleSessionLease lease = await manager.AcquireAsync("<threshold@test>", CancellationToken.None).ConfigureAwait(false);
+        using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<threshold@test>", CancellationToken.None).ConfigureAwait(false);
+        lease.ReportAcquisitionOutcome(result.FailureCode);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>
+    /// Confirms keepalive DATE is not issued while an ARTICLE command/response is in progress on a leased slot.
+    /// </summary>
+    [Fact]
+    public async Task KeepAlive_WhenArticleActive_DoesNotSendDate()
+    {
+        byte[] article = BuildArticleBytes("<active@test>", "body\r\n");
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <active@test>").ConfigureAwait(false);
+            await Task.Delay(2200).ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <active@test> article follows").ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 2);
+        await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+        await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+
+        await using NntpArticleSessionLease lease = await manager.AcquireAsync("<active@test>", CancellationToken.None).ConfigureAwait(false);
+        using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<active@test>", CancellationToken.None).ConfigureAwait(false);
+        lease.ReportAcquisitionOutcome(result.FailureCode);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>
+    /// Confirms DATE keepalive failure retires the affected session and reconnects before subsequent ARTICLE work.
+    /// </summary>
+    [Fact]
+    public async Task KeepAlive_WhenDateFails_ReconnectsSession()
+    {
+        byte[] article = BuildArticleBytes("<reconnect@test>", "body\r\n");
+        int connectionCounter = 0;
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            int connectionId = Interlocked.Increment(ref connectionCounter);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+
+            if (connectionId == 1)
+            {
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE").ConfigureAwait(false);
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "malformed-status-line").ConfigureAwait(false);
+                return;
+            }
+
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <reconnect@test>").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <reconnect@test> article follows").ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+        }, acceptConnectionCount: 2).ConfigureAwait(false);
+
+        NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 2);
+        await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+        await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+
+        await Task.Delay(1500).ConfigureAwait(false);
+        await Task.Delay(500).ConfigureAwait(false);
+
+        await using NntpArticleSessionLease lease = await manager.AcquireAsync("<reconnect@test>", CancellationToken.None).ConfigureAwait(false);
+        using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<reconnect@test>", CancellationToken.None).ConfigureAwait(false);
+        lease.ReportAcquisitionOutcome(result.FailureCode);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, Volatile.Read(ref connectionCounter));
+    }
+
+    /// <summary>
+    /// Confirms a zero keepalive timeout disables DATE probing and leaves ARTICLE traffic unchanged.
+    /// </summary>
+    [Fact]
+    public async Task KeepAlive_WhenConfiguredZero_DoesNotSendDate()
+    {
+        byte[] article = BuildArticleBytes("<disabled@test>", "body\r\n");
+
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <disabled@test>").ConfigureAwait(false);
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <disabled@test> article follows").ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
+            await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+        }).ConfigureAwait(false);
+
+        NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 0);
+        await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+        await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+
+        await Task.Delay(2100).ConfigureAwait(false);
+
+        await using NntpArticleSessionLease lease = await manager.AcquireAsync("<disabled@test>", CancellationToken.None).ConfigureAwait(false);
+        using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<disabled@test>", CancellationToken.None).ConfigureAwait(false);
+        lease.ReportAcquisitionOutcome(result.FailureCode);
+
+        Assert.True(result.IsSuccess);
+    }
+
+    /// <summary>
     /// Confirms manager disposal waits for active lease completion and then prevents new acquisitions.
     /// </summary>
     [Fact]
@@ -225,14 +388,15 @@ public sealed class NntpArticleExecutionSessionManagerTests
     /// <param name="username">Optional username for AUTHINFO.</param>
     /// <param name="password">Optional password for AUTHINFO.</param>
     /// <param name="entryId">Optional stable account identifier override.</param>
+    /// <param name="keepAliveSeconds">Configured idle keepalive timeout in seconds.</param>
     /// <returns>Immutable account snapshot.</returns>
-    private static NntpAccountSnapshot CreateAccount(int port, byte maxConnections, string? username, string? password, Guid? entryId = null)
+    private static NntpAccountSnapshot CreateAccount(int port, byte maxConnections, string? username, string? password, Guid? entryId = null, byte keepAliveSeconds = 30)
     {
         return new NntpAccountSnapshot(
             EntryId: entryId ?? Guid.NewGuid(),
             Backbone: "TestBackbone",
             Hostname: "127.0.0.1",
-            KeepAliveSeconds: 30,
+            KeepAliveSeconds: keepAliveSeconds,
             MaxConnections: maxConnections,
             Password: password ?? string.Empty,
             Port: (ushort)port,

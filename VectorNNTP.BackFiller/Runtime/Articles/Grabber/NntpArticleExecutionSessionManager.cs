@@ -70,6 +70,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private readonly Channel<int> _availableSlots;
 
         /// <summary>
+        /// Time provider used for deterministic UTC idle tracking and keepalive scheduling.
+        /// </summary>
+        private readonly TimeProvider _timeProvider;
+
+        /// <summary>
+        /// Cancellation source used to stop keepalive maintenance during disposal.
+        /// </summary>
+        private readonly CancellationTokenSource _maintenanceCancellationSource = new();
+
+        /// <summary>
+        /// Background maintenance task that services idle authenticated sessions.
+        /// </summary>
+        private Task? _keepAliveMaintenanceTask;
+
+        /// <summary>
         /// Mutable session slots keyed by slot index.
         /// </summary>
         private readonly List<SessionSlot> _slots = [];
@@ -100,16 +115,29 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private int _activeLeases;
 
         /// <summary>
+        /// Number of acquisition callers currently blocked waiting for an available slot.
+        /// </summary>
+        private int _pendingAcquireWaiters;
+
+        /// <summary>
+        /// Fixed maintenance cadence used while scanning for idle keepalive work.
+        /// </summary>
+        private static readonly TimeSpan KeepAliveMaintenanceInterval = TimeSpan.FromSeconds(1);
+
+        /// <summary>
         /// Initializes a new execution session manager.
         /// </summary>
         /// <param name="logger">Logger used for lifecycle diagnostics.</param>
         /// <param name="options">Optional acquisition guardrails; defaults when null.</param>
+        /// <param name="timeProvider">Optional time provider for UTC idle tracking and keepalive scheduling.</param>
         internal NntpArticleExecutionSessionManager(
             ILogger<NntpArticleExecutionSessionManager> logger,
-            NntpArticleAcquisitionOptions? options = null)
+            NntpArticleAcquisitionOptions? options = null,
+            TimeProvider? timeProvider = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _options = options ?? NntpArticleAcquisitionOptions.Default;
+            _timeProvider = timeProvider ?? TimeProvider.System;
             _availableSlots = Channel.CreateUnbounded<int>(new UnboundedChannelOptions
             {
                 SingleReader = false,
@@ -172,6 +200,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             {
                 throw new InvalidOperationException("No acquisition sessions could be initialized from the current account snapshot.");
             }
+
+            _keepAliveMaintenanceTask = RunKeepAliveMaintenanceAsync(_maintenanceCancellationSource.Token);
         }
 
         /// <summary>
@@ -196,7 +226,27 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 
             while (true)
             {
-                int slotIndex = await _availableSlots.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                lock (_gate)
+                {
+                    _pendingAcquireWaiters++;
+                }
+
+                int slotIndex;
+                try
+                {
+                    slotIndex = await _availableSlots.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        if (_pendingAcquireWaiters > 0)
+                        {
+                            _pendingAcquireWaiters--;
+                        }
+                    }
+                }
+
                 SessionSlot slot;
 
                 lock (_gate)
@@ -204,6 +254,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     ObjectDisposedException.ThrowIf(_disposeRequested, this);
 
                     slot = _slots[slotIndex];
+                    slot.Enqueued = false;
                     if (slot.Session is null || slot.Busy)
                     {
                         continue;
@@ -244,6 +295,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 }
 
                 slot.Busy = false;
+                slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
+                slot.LastKeepAliveProbeUtc = null;
                 if (shouldRecycle)
                 {
                     retiredSession = slot.Session;
@@ -269,6 +322,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                         lock (_gate)
                         {
                             slot.Session = replacement;
+                            slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
+                            slot.LastKeepAliveProbeUtc = null;
                         }
 
                         LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
@@ -283,7 +338,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             bool requeueSlot;
             lock (_gate)
             {
-                requeueSlot = !_disposeRequested && slot.Session is not null;
+                requeueSlot = !_disposeRequested && slot.Session is not null && !slot.Enqueued;
+                if (requeueSlot)
+                {
+                    slot.Enqueued = true;
+                }
             }
 
             if (requeueSlot)
@@ -317,6 +376,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             Task waitForLeases;
             List<NntpArticleAcquisitionSession> sessionsToDispose;
 
+            Task? maintenanceTask;
+
             lock (_gate)
             {
                 if (_disposeRequested)
@@ -326,7 +387,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 
                 _disposeRequested = true;
                 _ = _availableSlots.Writer.TryComplete();
+                _maintenanceCancellationSource.Cancel();
+                maintenanceTask = _keepAliveMaintenanceTask;
                 waitForLeases = _activeLeases == 0 ? Task.CompletedTask : _allLeasesReturned.Task;
+            }
+
+            if (maintenanceTask is not null)
+            {
+                try
+                {
+                    await maintenanceTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
             }
 
             await waitForLeases.ConfigureAwait(false);
@@ -389,11 +463,259 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             lock (_gate)
             {
                 slotIndex = _slots.Count;
-                _slots.Add(new SessionSlot(slotIndex, account, endpoint, connectedSession, sessionLogger));
+                _slots.Add(new SessionSlot(slotIndex, account, endpoint, connectedSession, sessionLogger, _timeProvider.GetUtcNow()));
+            }
+
+            lock (_gate)
+            {
+                _slots[slotIndex].Enqueued = true;
             }
 
             _ = _availableSlots.Writer.TryWrite(slotIndex);
             LogSessionSlotReady(_logger, slotIndex, account.EntryId, endpoint.Host, endpoint.Port);
+        }
+
+        /// <summary>
+        /// Runs background keepalive maintenance for idle authenticated sessions.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token controlling maintenance shutdown.</param>
+        /// <returns>A task that completes when maintenance stops.</returns>
+        private async Task RunKeepAliveMaintenanceAsync(CancellationToken cancellationToken)
+        {
+            using PeriodicTimer timer = new(KeepAliveMaintenanceInterval, _timeProvider);
+
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                await ServiceIdleKeepAlivesAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Probes idle slots with DATE keepalive while preserving one-session/one-active-ARTICLE semantics.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token controlling shutdown.</param>
+        /// <returns>A task that completes after one maintenance pass.</returns>
+        private async Task ServiceIdleKeepAlivesAsync(CancellationToken cancellationToken)
+        {
+            DateTimeOffset nowUtc = _timeProvider.GetUtcNow();
+            List<(int SlotIndex, SessionSlot Slot)> candidates = [];
+
+            lock (_gate)
+            {
+                if (_disposeRequested)
+                {
+                    return;
+                }
+
+                if (_pendingAcquireWaiters > 0)
+                {
+                    return;
+                }
+
+                for (int slotIndex = 0; slotIndex < _slots.Count; slotIndex++)
+                {
+                    SessionSlot slot = _slots[slotIndex];
+                    if (slot.Session is null || slot.Busy)
+                    {
+                        continue;
+                    }
+
+                    TimeSpan idleThreshold = CalculateKeepAliveThreshold(slot.Account.KeepAliveSeconds);
+                    if (idleThreshold <= TimeSpan.Zero)
+                    {
+                        continue;
+                    }
+
+                    if (nowUtc - slot.LastArticleActivityUtc <= idleThreshold)
+                    {
+                        continue;
+                    }
+
+                    if (slot.LastKeepAliveProbeUtc is not null && nowUtc - slot.LastKeepAliveProbeUtc <= idleThreshold)
+                    {
+                        continue;
+                    }
+
+                    slot.Busy = true;
+                    slot.Enqueued = false;
+                    candidates.Add((slotIndex, slot));
+                }
+            }
+
+            foreach ((int slotIndex, SessionSlot slot) in candidates)
+            {
+                await ProbeSlotKeepAliveAsync(slotIndex, slot, nowUtc, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Sends DATE to one idle slot and applies deterministic reuse/reconnect handling.
+        /// </summary>
+        /// <param name="slotIndex">Slot index being probed.</param>
+        /// <param name="slot">Slot state snapshot captured under lock.</param>
+        /// <param name="probeUtc">UTC timestamp when probe pass began.</param>
+        /// <param name="cancellationToken">Cancellation token controlling shutdown.</param>
+        /// <returns>A task that completes after keepalive handling for the slot.</returns>
+        private async Task ProbeSlotKeepAliveAsync(int slotIndex, SessionSlot slot, DateTimeOffset probeUtc, CancellationToken cancellationToken)
+        {
+            NntpArticleAcquisitionSession? session = slot.Session;
+            if (session is null)
+            {
+                bool shouldRequeue;
+                lock (_gate)
+                {
+                    slot.Busy = false;
+                    shouldRequeue = !_disposeRequested && !slot.Enqueued;
+                    shouldRequeue = !_disposeRequested && !slot.Enqueued;
+                    if (shouldRequeue)
+                    {
+                        slot.Enqueued = true;
+                    }
+                }
+
+                if (shouldRequeue)
+                {
+                    _ = _availableSlots.Writer.TryWrite(slotIndex);
+                }
+
+                return;
+            }
+
+            NntpArticleAcquisitionResult keepAliveResult = await session.KeepAliveWithDateAsync(cancellationToken).ConfigureAwait(false);
+            using (keepAliveResult)
+            {
+                if (keepAliveResult.FailureCode == NntpArticleAcquisitionFailureCode.None)
+                {
+                    bool shouldRequeue;
+                    lock (_gate)
+                    {
+                        slot.Busy = false;
+                        slot.LastKeepAliveProbeUtc = probeUtc;
+                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
+                        if (shouldRequeue)
+                        {
+                            slot.Enqueued = true;
+                        }
+                    }
+
+                    LogSessionKeepAliveSucceeded(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                    if (shouldRequeue)
+                    {
+                        _ = _availableSlots.Writer.TryWrite(slotIndex);
+                    }
+
+                    return;
+                }
+
+                if (keepAliveResult.FailureCode == NntpArticleAcquisitionFailureCode.Cancelled && cancellationToken.IsCancellationRequested)
+                {
+                    bool shouldRequeue;
+                    lock (_gate)
+                    {
+                        slot.Busy = false;
+                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
+                        if (shouldRequeue)
+                        {
+                            slot.Enqueued = true;
+                        }
+                    }
+
+                    if (shouldRequeue)
+                    {
+                        _ = _availableSlots.Writer.TryWrite(slotIndex);
+                    }
+
+                    return;
+                }
+
+                LogSessionKeepAliveFailed(_logger, slot.SlotId, slot.Account.EntryId, keepAliveResult.FailureCode, keepAliveResult.ResponseText);
+                await ReleaseKeepAliveFailureAsync(slotIndex, slot, keepAliveResult.FailureCode, keepAliveResult.ResponseText).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Applies deterministic recycle/reconnect behavior after a keepalive failure.
+        /// </summary>
+        /// <param name="slotIndex">Slot index that failed keepalive.</param>
+        /// <param name="slot">Slot state to recycle.</param>
+        /// <param name="failureCode">Typed keepalive failure code.</param>
+        /// <param name="detail">Failure detail text for diagnostics.</param>
+        /// <returns>A task that completes after recycle/reconnect handling.</returns>
+        private async Task ReleaseKeepAliveFailureAsync(int slotIndex, SessionSlot slot, NntpArticleAcquisitionFailureCode failureCode, string detail)
+        {
+            NntpArticleAcquisitionSession? retiredSession;
+
+            lock (_gate)
+            {
+                retiredSession = slot.Session;
+                slot.Session = null;
+                slot.Busy = false;
+                slot.Enqueued = false;
+            }
+
+            if (retiredSession is not null)
+            {
+                await retiredSession.DisposeAsync().ConfigureAwait(false);
+            }
+
+            LogSessionRetired(_logger, slot.SlotId, slot.Account.EntryId, failureCode);
+
+            (NntpArticleAcquisitionSession? replacement, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+                slot.Endpoint,
+                _options,
+                slot.Logger,
+                CancellationToken.None).ConfigureAwait(false);
+
+            using (connectResult)
+            {
+                if (replacement is not null)
+                {
+                    bool shouldRequeue;
+                    lock (_gate)
+                    {
+                        slot.Session = replacement;
+                        slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
+                        slot.LastKeepAliveProbeUtc = null;
+                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
+                        if (shouldRequeue)
+                        {
+                            slot.Enqueued = true;
+                        }
+                    }
+
+                    LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                    if (shouldRequeue)
+                    {
+                        _ = _availableSlots.Writer.TryWrite(slotIndex);
+                    }
+                }
+                else
+                {
+                    LogSessionReconnectFailed(_logger, slot.SlotId, slot.Account.EntryId, connectResult.FailureCode, string.IsNullOrEmpty(connectResult.ResponseText) ? detail : connectResult.ResponseText);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Calculates the proactive keepalive threshold from configured remote idle timeout seconds.
+        /// </summary>
+        /// <param name="keepAliveSeconds">Configured account keepalive timeout in seconds.</param>
+        /// <returns>Threshold used to trigger DATE before expected remote idle close.</returns>
+        private static TimeSpan CalculateKeepAliveThreshold(byte keepAliveSeconds)
+        {
+            if (keepAliveSeconds == 0)
+            {
+                return TimeSpan.Zero;
+            }
+
+            TimeSpan configuredIdleTimeout = TimeSpan.FromSeconds(keepAliveSeconds);
+            TimeSpan safetyMargin = TimeSpan.FromSeconds(Math.Max(1, keepAliveSeconds / 10));
+            if (configuredIdleTimeout <= safetyMargin)
+            {
+                return TimeSpan.FromSeconds(1);
+            }
+
+            return configuredIdleTimeout - safetyMargin;
         }
 
         /// <summary>
@@ -420,18 +742,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             /// <param name="endpoint">Endpoint associated with this slot.</param>
             /// <param name="session">Current connected session when healthy.</param>
             /// <param name="logger">Per-slot acquisition session logger.</param>
+            /// <param name="articleActivityUtc">UTC timestamp of the most recent completed ARTICLE operation.</param>
             internal SessionSlot(
                 int slotId,
                 NntpAccountSnapshot account,
                 NntpArticleAcquisitionEndpoint endpoint,
                 NntpArticleAcquisitionSession? session,
-                ILogger<NntpArticleAcquisitionSession> logger)
+                ILogger<NntpArticleAcquisitionSession> logger,
+                DateTimeOffset articleActivityUtc)
             {
                 SlotId = slotId;
                 Account = account;
                 Endpoint = endpoint;
                 Session = session;
                 Logger = logger;
+                LastArticleActivityUtc = articleActivityUtc;
             }
 
             /// <summary>
@@ -463,6 +788,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             /// Gets or sets a value indicating whether the slot is currently leased.
             /// </summary>
             internal bool Busy { get; set; }
+
+            /// <summary>
+            /// Gets or sets the UTC time of the most recently completed ARTICLE operation for this slot.
+            /// </summary>
+            internal DateTimeOffset LastArticleActivityUtc { get; set; }
+
+            /// <summary>
+            /// Gets or sets the UTC time of the last successful DATE keepalive probe for this slot.
+            /// </summary>
+            internal DateTimeOffset? LastKeepAliveProbeUtc { get; set; }
+
+            /// <summary>
+            /// Gets or sets a value indicating whether a ready-slot token is currently present in the lease queue.
+            /// </summary>
+            internal bool Enqueued { get; set; }
         }
 
         /// <summary>
@@ -518,6 +858,24 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 LogLevel.Warning,
                 new EventId(3105, nameof(LogSessionReconnectFailed)),
                 "Grabber session reconnect failed: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}, Detail={Detail}");
+
+        /// <summary>
+        /// Precompiled delegate for successful DATE keepalive probes.
+        /// </summary>
+        private static readonly Action<ILogger, int, Guid, string, int, Exception?> LogSessionKeepAliveSucceededMessage =
+            LoggerMessage.Define<int, Guid, string, int>(
+                LogLevel.Debug,
+                new EventId(3106, nameof(LogSessionKeepAliveSucceeded)),
+                "Grabber session keepalive succeeded: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}");
+
+        /// <summary>
+        /// Precompiled delegate for failed DATE keepalive probes.
+        /// </summary>
+        private static readonly Action<ILogger, int, Guid, NntpArticleAcquisitionFailureCode, string, Exception?> LogSessionKeepAliveFailedMessage =
+            LoggerMessage.Define<int, Guid, NntpArticleAcquisitionFailureCode, string>(
+                LogLevel.Warning,
+                new EventId(3107, nameof(LogSessionKeepAliveFailed)),
+                "Grabber session keepalive failed: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}, Detail={Detail}");
 
         /// <summary>
         /// Logs successful slot readiness.
@@ -597,6 +955,32 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private static void LogSessionReconnectFailed(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode, string detail)
         {
             LogSessionReconnectFailedMessage(logger, slotId, accountEntryId, failureCode, detail, null);
+        }
+
+        /// <summary>
+        /// Logs a successful DATE keepalive probe for one slot.
+        /// </summary>
+        /// <param name="logger">Logger.</param>
+        /// <param name="slotId">Slot identifier.</param>
+        /// <param name="accountEntryId">Owning account identifier.</param>
+        /// <param name="host">Endpoint host.</param>
+        /// <param name="port">Endpoint port.</param>
+        private static void LogSessionKeepAliveSucceeded(ILogger logger, int slotId, Guid accountEntryId, string host, int port)
+        {
+            LogSessionKeepAliveSucceededMessage(logger, slotId, accountEntryId, host, port, null);
+        }
+
+        /// <summary>
+        /// Logs a failed DATE keepalive probe for one slot.
+        /// </summary>
+        /// <param name="logger">Logger.</param>
+        /// <param name="slotId">Slot identifier.</param>
+        /// <param name="accountEntryId">Owning account identifier.</param>
+        /// <param name="failureCode">Deterministic keepalive failure code.</param>
+        /// <param name="detail">Failure detail text.</param>
+        private static void LogSessionKeepAliveFailed(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode, string detail)
+        {
+            LogSessionKeepAliveFailedMessage(logger, slotId, accountEntryId, failureCode, detail, null);
         }
     }
 

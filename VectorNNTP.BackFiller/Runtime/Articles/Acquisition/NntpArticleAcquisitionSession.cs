@@ -224,7 +224,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                         "Malformed NNTP ARTICLE status line.");
                 }
 
-                if (statusCode == 220)
+                NntpArticleAcquisitionResult statusResult = ClassifyArticleStatus(statusCode, statusText);
+                if (statusResult.FailureCode == NntpArticleAcquisitionFailureCode.None)
                 {
                     DownloadedArticleBuffer buffer = await ReadArticlePayloadAsync(cancellationToken, payloadContext).ConfigureAwait(false);
                     NntpArticleAcquisitionResult success = NntpArticleAcquisitionResult.Success(statusCode, statusText, buffer);
@@ -232,24 +233,59 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     return success;
                 }
 
-                if (statusCode == 430)
+                if (statusResult.FailureCode == NntpArticleAcquisitionFailureCode.ArticleNotFound)
                 {
                     LogArticleOutcome(_logger, messageId, "not found", stopwatch.Elapsed, articleSizeBytes: null, NntpArticleAcquisitionFailureCode.ArticleNotFound);
-                    return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ArticleNotFound, statusCode, statusText);
                 }
-
-                if (statusCode is >= 400 and <= 599)
+                else if (statusResult.FailureCode == NntpArticleAcquisitionFailureCode.RemoteRejected)
                 {
                     LogArticleOutcome(_logger, messageId, "remote rejection", stopwatch.Elapsed, articleSizeBytes: null, NntpArticleAcquisitionFailureCode.RemoteRejected);
-                    return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText);
+                }
+                else
+                {
+                    LogArticleFailure(_logger, messageId, statusResult.FailureCode, stopwatch.Elapsed, articleSizeBytes: null);
                 }
 
-                LogArticleFailure(_logger, messageId, NntpArticleAcquisitionFailureCode.ProtocolFailure, stopwatch.Elapsed, articleSizeBytes: null);
-                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText);
+                return statusResult;
             }
             catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
             {
                 LogArticleFailure(_logger, messageId, failure.FailureCode, stopwatch.Elapsed, articleSizeBytes: null);
+                return failure;
+            }
+        }
+
+        /// <summary>
+        /// Sends a DATE keepalive command on the authenticated session without performing ARTICLE workflow.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Deterministic result describing DATE keepalive health with command-specific status semantics.</returns>
+        internal async ValueTask<NntpArticleAcquisitionResult> KeepAliveWithDateAsync(CancellationToken cancellationToken)
+        {
+            if (_disposed)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
+            }
+
+            NntpArticleAcquisitionTraceContext writeContext = new(NntpArticleAcquisitionOperation.CommandWrite, MessageId: null, MaximumValue: null, ActualValue: null);
+            NntpArticleAcquisitionTraceContext statusContext = new(NntpArticleAcquisitionOperation.StatusRead, MessageId: null, MaximumValue: null, ActualValue: null);
+
+            try
+            {
+                await WriteCommandAsync("DATE", _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
+                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
+                if (!TryParseStatusLine(statusLine, out int statusCode, out string statusText))
+                {
+                    throw new NntpArticleAcquisitionException(
+                        NntpArticleAcquisitionFailureCode.MalformedResponse,
+                        statusContext,
+                        "Malformed NNTP DATE status line.");
+                }
+
+                return ClassifyDateStatus(statusCode, statusText);
+            }
+            catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
+            {
                 return failure;
             }
         }
@@ -319,10 +355,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             if (userCode != 381)
             {
-                NntpArticleAcquisitionFailureCode userFailure = userCode is >= 400 and <= 599
-                    ? NntpArticleAcquisitionFailureCode.AuthenticationFailure
-                    : NntpArticleAcquisitionFailureCode.ProtocolFailure;
-                return NntpArticleAcquisitionResult.Failure(userFailure, userCode, userText);
+                return ClassifyAuthInfoUserFailureStatus(userCode, userText);
             }
 
             NntpArticleAcquisitionTraceContext passWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
@@ -339,10 +372,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 return null;
             }
 
-            NntpArticleAcquisitionFailureCode passFailure = passCode is >= 400 and <= 599
-                ? NntpArticleAcquisitionFailureCode.AuthenticationFailure
-                : NntpArticleAcquisitionFailureCode.ProtocolFailure;
-            return NntpArticleAcquisitionResult.Failure(passFailure, passCode, passText);
+            return ClassifyAuthInfoPassFailureStatus(passCode, passText);
         }
 
         /// <summary>
@@ -546,6 +576,92 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 text = string.Empty;
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Classifies ARTICLE command response status according to command-specific NNTP semantics.
+        /// </summary>
+        /// <remarks>
+        /// Authoritative reference: RFC 3977 ARTICLE command definition and its documented response set
+        /// (<c>220</c>, <c>430</c>, <c>412</c>, <c>420</c>, <c>423</c>) plus standard command/session
+        /// rejection responses (<c>500</c>, <c>501</c>, <c>502</c>, <c>503</c>).
+        /// </remarks>
+        /// <param name="statusCode">Parsed NNTP status code.</param>
+        /// <param name="statusText">Parsed NNTP status text.</param>
+        /// <returns>Typed acquisition result preserving raw status code/text.</returns>
+        private static NntpArticleAcquisitionResult ClassifyArticleStatus(int statusCode, string statusText)
+        {
+            return statusCode switch
+            {
+                220 => NntpArticleAcquisitionResult.Success(statusCode, statusText, articleBuffer: null),
+                430 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ArticleNotFound, statusCode, statusText),
+                480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
+                500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
+                412 or 420 or 423 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
+                _ => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
+            };
+        }
+
+        /// <summary>
+        /// Classifies DATE command response status according to command-specific NNTP semantics.
+        /// </summary>
+        /// <remarks>
+        /// Authoritative reference: RFC 3977 DATE command semantics where <c>111</c> is the expected
+        /// successful DATE response; other command responses are interpreted explicitly and unexpected
+        /// statuses remain protocol-level failures.
+        /// </remarks>
+        /// <param name="statusCode">Parsed NNTP status code.</param>
+        /// <param name="statusText">Parsed NNTP status text.</param>
+        /// <returns>Typed keepalive result preserving raw status code/text.</returns>
+        private static NntpArticleAcquisitionResult ClassifyDateStatus(int statusCode, string statusText)
+        {
+            return statusCode switch
+            {
+                111 => NntpArticleAcquisitionResult.Success(statusCode, statusText, articleBuffer: null),
+                480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
+                500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
+                _ => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
+            };
+        }
+
+        /// <summary>
+        /// Classifies AUTHINFO USER failure statuses according to command-specific NNTP semantics.
+        /// </summary>
+        /// <remarks>
+        /// Authoritative reference: RFC 4643 AUTHINFO USER/PASS authentication extension semantics,
+        /// combined with RFC 3977 base command-rejection responses.
+        /// </remarks>
+        /// <param name="statusCode">Parsed NNTP status code.</param>
+        /// <param name="statusText">Parsed NNTP status text.</param>
+        /// <returns>Failure classification preserving raw status details.</returns>
+        private static NntpArticleAcquisitionResult ClassifyAuthInfoUserFailureStatus(int statusCode, string statusText)
+        {
+            return statusCode switch
+            {
+                480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
+                500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
+                _ => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
+            };
+        }
+
+        /// <summary>
+        /// Classifies AUTHINFO PASS failure statuses according to command-specific NNTP semantics.
+        /// </summary>
+        /// <remarks>
+        /// Authoritative reference: RFC 4643 AUTHINFO USER/PASS authentication extension semantics,
+        /// combined with RFC 3977 base command-rejection responses.
+        /// </remarks>
+        /// <param name="statusCode">Parsed NNTP status code.</param>
+        /// <param name="statusText">Parsed NNTP status text.</param>
+        /// <returns>Failure classification preserving raw status details.</returns>
+        private static NntpArticleAcquisitionResult ClassifyAuthInfoPassFailureStatus(int statusCode, string statusText)
+        {
+            return statusCode switch
+            {
+                480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
+                500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
+                _ => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
+            };
         }
 
         /// <summary>
