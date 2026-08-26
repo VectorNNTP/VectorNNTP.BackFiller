@@ -3,23 +3,23 @@ using System.Net.Security;
 using System.Reflection;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
+using VectorNNTP.Backfiller.Tests.TestInfrastructure;
 
 namespace VectorNNTP.Backfiller.Tests;
 
 /// <summary>
 /// Tests transit connection protocol negotiation behavior.
 /// </summary>
-public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitConnectionNegotiationTests.TlsCertificateFixture>
+public sealed class TransitConnectionNegotiationTests : IClassFixture<TestTlsCertificateFixture>
 {
-    private readonly TlsCertificateFixture _tlsFixture;
+    private readonly TestTlsCertificateFixture _tlsFixture;
 
-    public TransitConnectionNegotiationTests(TlsCertificateFixture tlsFixture)
+    public TransitConnectionNegotiationTests(TestTlsCertificateFixture tlsFixture)
     {
         ArgumentNullException.ThrowIfNull(tlsFixture);
         _tlsFixture = tlsFixture;
@@ -932,61 +932,6 @@ public sealed class TransitConnectionNegotiationTests : IClassFixture<TransitCon
         await FakeNntpServer.WriteLineAsync(stream, "205 connection closing");
     }
 
-    public sealed class TlsCertificateFixture : IDisposable
-    {
-        private readonly X509Certificate2 _serverCertificate;
-        private readonly string _serverCertificateThumbprint;
-
-        public TlsCertificateFixture()
-        {
-            string pfxPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
-
-            using RSA rsa = RSA.Create(2048);
-            CertificateRequest request = new("CN=127.0.0.1", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: false));
-            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new("1.3.6.1.5.5.7.3.1") }, critical: false));
-            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
-
-            SubjectAlternativeNameBuilder san = new();
-            san.AddDnsName("localhost");
-            san.AddIpAddress(IPAddress.Loopback);
-            request.CertificateExtensions.Add(san.Build());
-
-            DateTimeOffset now = DateTimeOffset.UtcNow;
-            using X509Certificate2 ephemeralCertificate = request.CreateSelfSigned(now.AddDays(-1), now.AddDays(7));
-            byte[] pfx = ephemeralCertificate.Export(X509ContentType.Pkcs12, pfxPassword);
-
-            _serverCertificate = new X509Certificate2(
-                pfx,
-                pfxPassword,
-                X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
-
-            _serverCertificateThumbprint = _serverCertificate.Thumbprint;
-        }
-
-        internal X509Certificate2 ServerCertificate => _serverCertificate;
-
-        internal RemoteCertificateValidationCallback ServerCertificateValidationCallback => ValidateServerCertificate;
-
-        private bool ValidateServerCertificate(object? sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
-        {
-            if (certificate is null)
-            {
-                return false;
-            }
-
-            string? thumbprint = certificate.GetCertHashString(HashAlgorithmName.SHA256);
-            string? expectedThumbprint = _serverCertificate.GetCertHashString(HashAlgorithmName.SHA256);
-
-            return string.Equals(thumbprint, expectedThumbprint, StringComparison.OrdinalIgnoreCase);
-        }
-
-        public void Dispose()
-        {
-            _serverCertificate.Dispose();
-        }
-    }
 
     private sealed class FakeNntpServer : IAsyncDisposable
     {

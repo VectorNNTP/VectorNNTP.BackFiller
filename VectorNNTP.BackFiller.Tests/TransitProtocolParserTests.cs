@@ -154,6 +154,19 @@ public sealed class TransitProtocolParserTests
     }
 
     [Fact]
+    public async Task ReadNntpLineWithByteCountAndCompletionAsync_WhenCompletedWithoutLine_ReturnsCompletionMarker()
+    {
+        Pipe pipe = new();
+        await pipe.Writer.CompleteAsync();
+
+        (string? line, int bytesRead, bool completedWithoutLine) = await TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Null(line);
+        Assert.Equal(0, bytesRead);
+        Assert.True(completedWithoutLine);
+    }
+
+    [Fact]
     public async Task ReadNntpLineAsync_WhenCompletedWithoutLine_Throws()
     {
         Pipe pipe = new();

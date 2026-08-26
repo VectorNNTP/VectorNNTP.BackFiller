@@ -15,11 +15,35 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
-            (string line, _) = await ReadNntpLineWithByteCountAsync(reader, cancellationToken).ConfigureAwait(false);
-            return line;
+            (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
+            if (completedWithoutLine)
+            {
+                throw new InvalidOperationException("NNTP connection closed while awaiting line response.");
+            }
+
+            return line!;
         }
 
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
+        {
+            (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
+            if (completedWithoutLine)
+            {
+                throw new InvalidOperationException("NNTP connection closed while awaiting line response.");
+            }
+
+            return (line!, bytesRead);
+        }
+
+        /// <summary>
+        /// Reads one NNTP protocol line and reports whether the underlying stream completed before a full line was available.
+        /// </summary>
+        /// <param name="reader">Pipe reader providing NNTP protocol bytes.</param>
+        /// <param name="cancellationToken">Cancellation token for cooperative shutdown.</param>
+        /// <returns>
+        /// A tuple containing the decoded line when available, byte count consumed, and a completion marker indicating EOF before newline.
+        /// </returns>
+        internal static async ValueTask<(string? Line, int BytesRead, bool CompletedWithoutLine)> ReadNntpLineWithByteCountAndCompletionAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(reader);
 
@@ -36,13 +60,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     SequencePosition afterNewLine = buffer.GetPosition(1, newLinePosition.Value);
                     int bytesRead = checked((int)buffer.Slice(buffer.Start, afterNewLine).Length);
                     reader.AdvanceTo(afterNewLine);
-                    return (decodedLine, bytesRead);
+                    return (decodedLine, bytesRead, CompletedWithoutLine: false);
                 }
 
                 if (result.IsCompleted)
                 {
+                    int bytesRead = checked((int)buffer.Length);
                     reader.AdvanceTo(buffer.End);
-                    throw new InvalidOperationException("NNTP connection closed while awaiting line response.");
+                    return (null, bytesRead, CompletedWithoutLine: true);
                 }
 
                 if (buffer.Length > MaximumNntpLineLengthBytes)

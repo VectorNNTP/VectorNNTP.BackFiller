@@ -8,14 +8,18 @@
 
 using System.Globalization;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
+using VectorNNTP.Backfiller.Tests.TestInfrastructure;
 using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests;
@@ -258,6 +262,32 @@ public sealed class NntpArticleAcquisitionTests
             await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
             await FakeArticleServer.WriteAsciiLineAsync(stream, "381 pass required");
             await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO PASS bad");
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "481 authentication rejected");
+        }).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "bad");
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Null(session);
+        Assert.Equal(NntpArticleAcquisitionFailureCode.AuthenticationFailure, connectResult.FailureCode);
+        Assert.Equal(481, connectResult.ResponseCode);
+        Assert.Equal("authentication rejected", connectResult.ResponseText);
+    }
+
+    /// <summary>
+    /// Confirms AUTHINFO USER authentication rejection retains raw NNTP status and deterministic authentication failure classification.
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WhenAuthInfoUserRejected_ReturnsAuthenticationFailureWithRawStatus()
+    {
+        await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+        {
+            await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+            await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
             await FakeArticleServer.WriteAsciiLineAsync(stream, "481 authentication rejected");
         }).ConfigureAwait(false);
 
@@ -691,6 +721,108 @@ public sealed class NntpArticleAcquisitionTests
     }
 
     /// <summary>
+    /// Confirms acquisition TLS succeeds when a per-session strict certificate callback is supplied.
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WhenUseSslTrueAndCallbackSupplied_Succeeds()
+    {
+        using TestTlsCertificateFixture tlsFixture = new();
+
+        await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
+            async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE").ConfigureAwait(false);
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101").ConfigureAwait(false);
+            },
+            FakeArticleServer.ConnectionTransport.ImplicitTls,
+            tlsFixture.ServerCertificate).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = server.CreateEndpoint(useSsl: true, host: "localhost");
+
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None,
+            tlsFixture.ServerCertificateValidationCallback).ConfigureAwait(false);
+
+        using (connectResult)
+        {
+            Assert.NotNull(session);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.None, connectResult.FailureCode);
+        }
+
+        await using (session!.ConfigureAwait(false))
+        {
+        }
+    }
+
+    /// <summary>
+    /// Confirms acquisition TLS without a callback keeps platform-default certificate validation semantics.
+    /// </summary>
+    [Fact]
+    public async Task ConnectAsync_WhenUseSslTrueWithoutCallback_UsesDefaultValidationAndFailsForSelfSignedServer()
+    {
+        using TestTlsCertificateFixture tlsFixture = new();
+
+        await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
+            static async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            },
+            FakeArticleServer.ConnectionTransport.ImplicitTls,
+            tlsFixture.ServerCertificate).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = server.CreateEndpoint(useSsl: true, host: "localhost");
+
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None).ConfigureAwait(false);
+
+        using (connectResult)
+        {
+            Assert.Null(session);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, connectResult.FailureCode);
+        }
+    }
+
+    /// <summary>
+    /// Confirms the strict fixture callback rejects non-matching certificates.
+    /// </summary>
+    [Fact]
+    public async Task FixtureCallback_WhenServerCertificateDoesNotMatch_RejectsConnection()
+    {
+        using TestTlsCertificateFixture trustedFixture = new();
+        using TestTlsCertificateFixture serverFixture = new();
+
+        await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
+            static async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+            },
+            FakeArticleServer.ConnectionTransport.ImplicitTls,
+            serverFixture.ServerCertificate).ConfigureAwait(false);
+
+        NntpArticleAcquisitionEndpoint endpoint = server.CreateEndpoint(useSsl: true, host: "localhost");
+
+        (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+            endpoint,
+            NntpArticleAcquisitionOptions.Default,
+            NullLogger<NntpArticleAcquisitionSession>.Instance,
+            CancellationToken.None,
+            trustedFixture.ServerCertificateValidationCallback).ConfigureAwait(false);
+
+        using (connectResult)
+        {
+            Assert.Null(session);
+            Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, connectResult.FailureCode);
+        }
+    }
+
+    /// <summary>
     /// Builds parser-compatible article bytes for test cases.
     /// </summary>
     /// <param name="messageId">Message-ID value.</param>
@@ -728,6 +860,22 @@ public sealed class NntpArticleAcquisitionTests
     private sealed class FakeArticleServer : IAsyncDisposable
     {
         /// <summary>
+        /// Server transport mode.
+        /// </summary>
+        internal enum ConnectionTransport
+        {
+            /// <summary>
+            /// Plain TCP transport.
+            /// </summary>
+            Plaintext,
+
+            /// <summary>
+            /// Implicit TLS transport.
+            /// </summary>
+            ImplicitTls,
+        }
+
+        /// <summary>
         /// Listener.
         /// </summary>
         private readonly TcpListener _listener;
@@ -735,7 +883,17 @@ public sealed class NntpArticleAcquisitionTests
         /// <summary>
         /// Session callback.
         /// </summary>
-        private readonly Func<NetworkStream, Task> _session;
+        private readonly Func<Stream, Task> _session;
+
+        /// <summary>
+        /// Transport mode.
+        /// </summary>
+        private readonly ConnectionTransport _transport;
+
+        /// <summary>
+        /// TLS server certificate for implicit TLS transport.
+        /// </summary>
+        private readonly X509Certificate2? _serverCertificate;
 
         /// <summary>
         /// Cancellation source.
@@ -752,10 +910,14 @@ public sealed class NntpArticleAcquisitionTests
         /// </summary>
         /// <param name="listener">Listener.</param>
         /// <param name="session">Session callback.</param>
-        private FakeArticleServer(TcpListener listener, Func<NetworkStream, Task> session)
+        /// <param name="transport">Transport mode.</param>
+        /// <param name="serverCertificate">TLS server certificate for implicit TLS mode.</param>
+        private FakeArticleServer(TcpListener listener, Func<Stream, Task> session, ConnectionTransport transport, X509Certificate2? serverCertificate)
         {
             _listener = listener;
             _session = session;
+            _transport = transport;
+            _serverCertificate = serverCertificate;
             _acceptLoop = Task.Run(AcceptLoopAsync);
         }
 
@@ -771,9 +933,33 @@ public sealed class NntpArticleAcquisitionTests
         /// <returns>Started server.</returns>
         internal static async Task<FakeArticleServer> StartAsync(Func<NetworkStream, Task> session)
         {
+            ArgumentNullException.ThrowIfNull(session);
+
+            return await StartWithTransportAsync(
+                stream => session((NetworkStream)stream),
+                ConnectionTransport.Plaintext,
+                serverCertificate: null).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Starts fake server with explicit transport mode.
+        /// </summary>
+        /// <param name="session">Session callback.</param>
+        /// <param name="transport">Transport mode.</param>
+        /// <param name="serverCertificate">TLS server certificate required for implicit TLS mode.</param>
+        /// <returns>Started server.</returns>
+        internal static async Task<FakeArticleServer> StartWithTransportAsync(Func<Stream, Task> session, ConnectionTransport transport, X509Certificate2? serverCertificate)
+        {
+            ArgumentNullException.ThrowIfNull(session);
+
+            if (transport == ConnectionTransport.ImplicitTls && serverCertificate is null)
+            {
+                throw new ArgumentNullException(nameof(serverCertificate), "TLS transport requires a server certificate.");
+            }
+
             TcpListener listener = new(IPAddress.Loopback, 0);
             listener.Start();
-            FakeArticleServer server = new(listener, session);
+            FakeArticleServer server = new(listener, session, transport, serverCertificate);
             await Task.Delay(20).ConfigureAwait(false);
             return server;
         }
@@ -782,9 +968,9 @@ public sealed class NntpArticleAcquisitionTests
         /// Creates acquisition endpoint for this server.
         /// </summary>
         /// <returns>Endpoint descriptor.</returns>
-        internal NntpArticleAcquisitionEndpoint CreateEndpoint()
+        internal NntpArticleAcquisitionEndpoint CreateEndpoint(bool useSsl = false, string host = "127.0.0.1")
         {
-            return new NntpArticleAcquisitionEndpoint("127.0.0.1", Port, UseSsl: false, Username: null, Password: null);
+            return new NntpArticleAcquisitionEndpoint(host, Port, UseSsl: useSsl, Username: null, Password: null);
         }
 
         /// <summary>
@@ -888,13 +1074,37 @@ public sealed class NntpArticleAcquisitionTests
             try
             {
                 using TcpClient client = await _listener.AcceptTcpClientAsync(_shutdown.Token).ConfigureAwait(false);
-                using NetworkStream stream = client.GetStream();
-                await _session(stream).ConfigureAwait(false);
+                using NetworkStream networkStream = client.GetStream();
+                Stream protocolStream = networkStream;
+
+                if (_transport == ConnectionTransport.ImplicitTls)
+                {
+                    X509Certificate2 serverCertificate = _serverCertificate ?? throw new InvalidOperationException("TLS transport requires a server certificate.");
+                    SslStream sslStream = new(networkStream, leaveInnerStreamOpen: false);
+                    await sslStream.AuthenticateAsServerAsync(
+                        new SslServerAuthenticationOptions
+                        {
+                            ServerCertificate = serverCertificate,
+                            ClientCertificateRequired = false,
+                            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                        },
+                        _shutdown.Token).ConfigureAwait(false);
+
+                    protocolStream = sslStream;
+                }
+
+                await _session(protocolStream).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
             }
             catch (ObjectDisposedException)
+            {
+            }
+            catch (IOException)
+            {
+            }
+            catch (AuthenticationException)
             {
             }
         }

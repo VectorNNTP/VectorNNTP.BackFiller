@@ -89,12 +89,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="options">Acquisition options.</param>
         /// <param name="logger">Logger.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="serverCertificateValidationCallback">Optional per-session TLS server-certificate validation callback. When <see langword="null"/>, platform default certificate validation semantics remain in effect.</param>
         /// <returns>Connected session or deterministic failure result.</returns>
         internal static async ValueTask<(NntpArticleAcquisitionSession? Session, NntpArticleAcquisitionResult Result)> ConnectAsync(
             NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionOptions options,
             ILogger<NntpArticleAcquisitionSession> logger,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            RemoteCertificateValidationCallback? serverCertificateValidationCallback = null)
         {
             ArgumentNullException.ThrowIfNull(logger);
 
@@ -127,19 +129,27 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 stream = tcpClient.GetStream();
                 if (endpoint.UseSsl)
                 {
-                    SslStream sslStream = new(stream, leaveInnerStreamOpen: false);
+                    SslStream sslStream = serverCertificateValidationCallback is null
+                        ? new SslStream(stream, leaveInnerStreamOpen: false)
+                        : new SslStream(stream, leaveInnerStreamOpen: false, serverCertificateValidationCallback);
+
+                    SslClientAuthenticationOptions sslOptions = new()
+                    {
+                        TargetHost = endpoint.Host,
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    };
+
+                    if (serverCertificateValidationCallback is not null)
+                    {
+                        sslOptions.RemoteCertificateValidationCallback = serverCertificateValidationCallback;
+                    }
+
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
                         cancellationToken,
                         async token =>
                         {
-                            await sslStream.AuthenticateAsClientAsync(
-                                new SslClientAuthenticationOptions
-                                {
-                                    TargetHost = endpoint.Host,
-                                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                                },
-                                token).ConfigureAwait(false);
+                            await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
 
                             return true;
                         }).ConfigureAwait(false);
@@ -387,12 +397,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             CancellationToken cancellationToken,
             NntpArticleAcquisitionTraceContext context)
         {
-            string line = await ExecuteWithTimeoutAsync(
+            (string? line, _, bool completedWithoutLine) = await ExecuteWithTimeoutAsync(
                 timeout,
                 cancellationToken,
-                token => TransitProtocolParser.ReadNntpLineAsync(_reader, token)).ConfigureAwait(false);
+                token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token)).ConfigureAwait(false);
 
-            int bytes = Encoding.ASCII.GetByteCount(line);
+            if (completedWithoutLine)
+            {
+                throw new EndOfStreamException("NNTP connection closed while awaiting line response.");
+            }
+
+            string statusLine = line!;
+            int bytes = Encoding.ASCII.GetByteCount(statusLine);
             if (bytes > _options.MaxStatusLineBytes)
             {
                 throw new NntpArticleAcquisitionException(
@@ -403,10 +419,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", line, context.MessageId ?? string.Empty);
+                _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", statusLine, context.MessageId ?? string.Empty);
             }
 
-            return line;
+            return statusLine;
         }
 
         /// <summary>
@@ -756,15 +772,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 return true;
             }
 
-            if (exception is SocketException or IOException or AuthenticationException)
+            if (exception is SocketException or IOException or AuthenticationException or EndOfStreamException)
             {
                 failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, exception.Message);
                 return true;
             }
 
-            if (exception is InvalidOperationException)
+            if (exception is InvalidOperationException invalidOperationException)
             {
-                failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, exception.Message);
+                failure = NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, invalidOperationException.Message);
                 return true;
             }
 
