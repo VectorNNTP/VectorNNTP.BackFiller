@@ -471,20 +471,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <summary>
         /// Precompiled delegate for account-reconciled capacity diagnostics.
         /// </summary>
-        private static readonly Action<ILogger, Guid, int, int, int, int, Exception?> LogAccountReconciledCapacityMessage =
-            LoggerMessage.Define<Guid, int, int, int, int>(
+        private static readonly Action<ILogger, Guid, int, int, int, int, int, Exception?> LogAccountReconciledCapacityMessage =
+            LoggerMessage.Define<Guid, int, int, int, int, int>(
                 LogLevel.Information,
                 new EventId(1016, nameof(LogAccountReconciled)),
-                "Account reconciled capacity: AccountId={AccountId}, DesiredConnections={DesiredConnections}, ActiveBefore={ActiveBefore}, ActiveAfter={ActiveAfter}, AddedSessions={AddedSessions}");
-
-        /// <summary>
-        /// Precompiled delegate for account-reconciled retirement diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, int, Exception?> LogAccountReconciledRetiredMessage =
-            LoggerMessage.Define<Guid, int>(
-                LogLevel.Information,
-                new EventId(1019, nameof(LogAccountReconciledRetiredMessage)),
-                "Account reconciled retired sessions: AccountId={AccountId}, RetiredSessions={RetiredSessions}");
+                "Account reconciled capacity: AccountId={AccountId}, DesiredConnections={DesiredConnections}, ActiveBefore={ActiveBefore}, ActiveAfter={ActiveAfter}, AddedSessions={AddedSessions}, RetiredSessions={RetiredSessions}");
 
         /// <summary>
         /// Precompiled delegate for account-reconciled configuration diagnostics.
@@ -596,8 +587,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="connectionSettingsReplaced">Whether connection settings required session replacement.</param>
         private static void LogAccountReconciled(ILogger logger, Guid accountId, string host, int port, bool useSsl, int desiredConnections, int activeBefore, int activeAfter, int addedSessions, int retiredSessions, bool keepAliveUpdated, bool connectionSettingsReplaced)
         {
-            LogAccountReconciledCapacityMessage(logger, accountId, desiredConnections, activeBefore, activeAfter, addedSessions, null);
-            LogAccountReconciledRetiredMessage(logger, accountId, retiredSessions, null);
+            LogAccountReconciledCapacityMessage(logger, accountId, desiredConnections, activeBefore, activeAfter, addedSessions, retiredSessions, null);
             LogAccountReconciledConfigurationMessage(logger, accountId, host, port, useSsl, keepAliveUpdated, connectionSettingsReplaced, null);
         }
 

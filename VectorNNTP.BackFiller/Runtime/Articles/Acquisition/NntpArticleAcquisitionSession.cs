@@ -14,6 +14,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
+using Serilog.Context;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
@@ -48,6 +49,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// Active transport stream.
         /// </summary>
         private readonly Stream _stream;
+
+        /// <summary>
+        /// Connection-scoped logging context.
+        /// </summary>
+        private readonly IDisposable? _connectionLoggingScope;
+
+        /// <summary>
+        /// Connection-scoped logging metadata.
+        /// </summary>
+        private readonly NntpConnectionLogContext? _connectionLoggingContext;
 
         /// <summary>
         /// Reader over transport stream.
@@ -87,13 +98,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionOptions options,
             ILogger<NntpArticleAcquisitionSession> logger,
             TcpClient tcpClient,
-            Stream stream)
+            Stream stream,
+            IDisposable? connectionLoggingScope,
+            NntpConnectionLogContext? connectionLoggingContext)
         {
             _endpoint = endpoint;
             _options = options;
             _logger = logger;
             _tcpClient = tcpClient;
             _stream = stream;
+            _connectionLoggingScope = connectionLoggingScope;
+            _connectionLoggingContext = connectionLoggingContext;
             _reader = PipeReader.Create(stream, new StreamPipeReaderOptions(leaveOpen: true));
         }
 
@@ -111,7 +126,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionOptions options,
             ILogger<NntpArticleAcquisitionSession> logger,
             CancellationToken cancellationToken,
-            RemoteCertificateValidationCallback? serverCertificateValidationCallback = null)
+            RemoteCertificateValidationCallback? serverCertificateValidationCallback = null,
+            NntpConnectionLogContext? connectionLoggingContext = null)
         {
             ArgumentNullException.ThrowIfNull(logger);
 
@@ -127,6 +143,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 SendBufferSize = options.ReceiveBufferBytes
             };
             Stream? stream = null;
+            IDisposable? connectionLoggingScope = connectionLoggingContext?.Push();
 
             try
             {
@@ -172,7 +189,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     stream = sslStream;
                 }
 
-                NntpArticleAcquisitionSession session = new(endpoint, options, logger, tcpClient, stream);
+                NntpArticleAcquisitionSession session = new(endpoint, options, logger, tcpClient, stream, connectionLoggingScope, connectionLoggingContext);
 
                 NntpArticleAcquisitionTraceContext greetingContext = new(NntpArticleAcquisitionOperation.Connect, MessageId: null, MaximumValue: null, ActualValue: null);
                 string greetingLine = await session.ReadProtocolLineAsync(options.CommandTimeout, cancellationToken, greetingContext).ConfigureAwait(false);
@@ -203,6 +220,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
             catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
             {
+                if (connectionLoggingScope is not null)
+                {
+                    connectionLoggingScope.Dispose();
+                }
+
                 if (stream is not null)
                 {
                     await stream.DisposeAsync().ConfigureAwait(false);
@@ -293,6 +315,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
             }
 
+            using IDisposable? connectionLoggingScope = _connectionLoggingContext?.Push();
+
             NntpArticleAcquisitionTraceContext writeContext = new(NntpArticleAcquisitionOperation.CommandWrite, MessageId: null, MaximumValue: null, ActualValue: null);
             NntpArticleAcquisitionTraceContext statusContext = new(NntpArticleAcquisitionOperation.StatusRead, MessageId: null, MaximumValue: null, ActualValue: null);
 
@@ -327,6 +351,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 return;
             }
 
+            using IDisposable? connectionLoggingScope = _connectionLoggingContext?.Push();
+
             _disposed = true;
 
             await TrySendQuitBeforeTransportDisposeAsync().ConfigureAwait(false);
@@ -348,6 +374,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             _tcpClient.Dispose();
+            _connectionLoggingScope?.Dispose();
         }
 
         /// <summary>

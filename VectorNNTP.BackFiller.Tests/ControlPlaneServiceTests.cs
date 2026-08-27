@@ -69,7 +69,13 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task StartAsync_WhenShutdownCancellationOccurs_DoesNotLogAccountAddFailedWarningAsync()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 20).ConfigureAwait(true);
+            TaskCompletionSource connectionAccepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            FakeNntpServer server = await FakeNntpServer.StartAsync(async (_, cancellationToken) =>
+            {
+                connectionAccepted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            }).ConfigureAwait(false);
             await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
 
             Guid accountId = Guid.NewGuid();
@@ -95,7 +101,7 @@ namespace VectorNNTP.Backfiller.Tests
             using CancellationTokenSource startupCancellation = new();
             Task startTask = service.StartAsync(startupCancellation.Token);
 
-            await Task.Yield();
+            await connectionAccepted.Task.ConfigureAwait(false);
             startupCancellation.Cancel();
 
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await startTask.ConfigureAwait(false)).ConfigureAwait(false);
@@ -354,10 +360,12 @@ namespace VectorNNTP.Backfiller.Tests
 
             await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
 
+            CapturingLoggerProvider loggerProvider = new();
             ControlPlaneService service = new(
-                NullLogger<ControlPlaneService>.Instance,
+                loggerProvider.CreateLogger<ControlPlaneService>(),
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                loggerProvider);
 
             await service.StartAsync(CancellationToken.None);
 
@@ -369,6 +377,18 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(2, service.GetManagedAccountActiveSessionCount(accountId));
             await WaitForConditionAsync(() => server.ActiveConnectionCount == 2);
+
+            Assert.Contains(
+                loggerProvider.Entries,
+                entry => entry.Level == LogLevel.Information &&
+                         entry.Message.Contains("Account reconciled capacity:", StringComparison.Ordinal) &&
+                         entry.Message.Contains($"AccountId={accountId}", StringComparison.Ordinal) &&
+                         entry.Message.Contains("RetiredSessions=3", StringComparison.Ordinal));
+
+            Assert.DoesNotContain(
+                loggerProvider.Entries,
+                entry => entry.Level == LogLevel.Information &&
+                         entry.Message.Contains("Account reconciled retired sessions:", StringComparison.Ordinal));
 
             await service.StopAsync(CancellationToken.None);
         }

@@ -53,13 +53,13 @@ namespace VectorNNTP.Backfiller.Startup.Logging
                     .Enrich.WithProperty("Application", serviceName)
                     .Enrich.WithProperty("ProcessId", Environment.ProcessId)
                     .WriteTo.Async(
-                        configure: sink => sink.Console(outputTemplate: "[{UtcTimestamp:HH:mm:ss} UTC {Level:u3}] {Message:lj}{NewLine}{Exception}"),
+                        configure: sink => sink.Console(outputTemplate: "[{UtcTimestamp:HH:mm:ss} UTC {Level:u3}] {ConnectionPrefix}{Message:lj}{NewLine}{Exception}"),
                         blockWhenFull: true)
                     .WriteTo.Async(
                         configure: sink => sink.File(
                             path: logFilePath,
                             rollingInterval: RollingInterval.Day,
-                            outputTemplate: "{UtcTimestamp:yyyy-MM-ddTHH:mm:ss.fff'Z'} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                            outputTemplate: "{UtcTimestamp:yyyy-MM-ddTHH:mm:ss.fff'Z'} [{Level:u3}] {ConnectionPrefix}{Message:lj}{NewLine}{Exception}",
                             retainedFileCountLimit: 30,
                             fileSizeLimitBytes: 1073741824,
                             rollOnFileSizeLimit: true),

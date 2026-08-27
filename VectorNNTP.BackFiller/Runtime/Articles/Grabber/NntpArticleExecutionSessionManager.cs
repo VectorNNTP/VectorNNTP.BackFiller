@@ -484,6 +484,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             if (retiredSession is not null)
             {
                 await retiredSession.DisposeAsync().ConfigureAwait(false);
+                NntpConnectionLogContext? connectionLoggingContext = CreateConnectionLogContext(slot.Account, slot.Endpoint, slot.SlotId + 1);
                 LogSessionRetired(_logger, slot.SlotId, slot.Account.EntryId, failureCode);
 
                 if (reconnectAfterRetire)
@@ -493,7 +494,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                         _options,
                         slot.Logger,
                         CancellationToken.None,
-                        _serverCertificateValidationCallback).ConfigureAwait(false);
+                        _serverCertificateValidationCallback,
+                        connectionLoggingContext).ConfigureAwait(false);
 
                     using (connectResult)
                     {
@@ -616,6 +618,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private async Task<bool> CreateAndRegisterSlotAsync(NntpAccountSnapshot account, int connectionIndex, CancellationToken cancellationToken)
         {
             NntpArticleAcquisitionEndpoint endpoint = BuildEndpoint(account);
+            NntpConnectionLogContext? connectionLoggingContext = CreateConnectionLogContext(account, endpoint, connectionIndex + 1);
 
             ILogger<NntpArticleAcquisitionSession> sessionLogger = _loggerFactory.CreateLogger<NntpArticleAcquisitionSession>();
 
@@ -624,7 +627,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 _options,
                 sessionLogger,
                 cancellationToken,
-                _serverCertificateValidationCallback).ConfigureAwait(false);
+                _serverCertificateValidationCallback,
+                connectionLoggingContext).ConfigureAwait(false);
 
             using (result)
             {
@@ -657,7 +661,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             }
 
             _ = _availableSlots.Writer.TryWrite(slotIndex);
-            LogSessionSlotReady(_logger, slotIndex, account.EntryId, endpoint.Host, endpoint.Port);
+            if (connectionLoggingContext is not null)
+            {
+                using IDisposable connectionScope = connectionLoggingContext.Push();
+                LogSessionSlotReady(_logger, slotIndex, account.EntryId, endpoint.Host, endpoint.Port);
+            }
+            else
+            {
+                LogSessionSlotReady(_logger, slotIndex, account.EntryId, endpoint.Host, endpoint.Port);
+            }
+
             return true;
         }
 
@@ -766,6 +779,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 return;
             }
 
+            NntpConnectionLogContext? connectionLoggingContext = CreateConnectionLogContext(slot.Account, slot.Endpoint, slot.SlotId + 1);
+            using IDisposable? connectionScope = connectionLoggingContext?.Push();
+
             NntpArticleAcquisitionResult keepAliveResult = await session.KeepAliveWithDateAsync(cancellationToken).ConfigureAwait(false);
             using (keepAliveResult)
             {
@@ -814,6 +830,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 }
 
                 LogSessionKeepAliveFailed(_logger, slot.SlotId, slot.Account.EntryId, keepAliveResult.FailureCode, keepAliveResult.ResponseCode, keepAliveResult.ResponseText);
+
                 await ReleaseKeepAliveFailureAsync(slotIndex, slot, keepAliveResult.FailureCode, keepAliveResult.ResponseText).ConfigureAwait(false);
             }
         }
@@ -843,6 +860,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 await retiredSession.DisposeAsync().ConfigureAwait(false);
             }
 
+            NntpConnectionLogContext? connectionLoggingContext = CreateConnectionLogContext(slot.Account, slot.Endpoint, slot.SlotId + 1);
             LogSessionRetired(_logger, slot.SlotId, slot.Account.EntryId, failureCode);
 
             (NntpArticleAcquisitionSession? replacement, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
@@ -850,7 +868,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 _options,
                 slot.Logger,
                 CancellationToken.None,
-                _serverCertificateValidationCallback).ConfigureAwait(false);
+                _serverCertificateValidationCallback,
+                connectionLoggingContext).ConfigureAwait(false);
 
             using (connectResult)
             {
@@ -869,7 +888,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                         }
                     }
 
-                    LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                    if (connectionLoggingContext is not null)
+                    {
+                        using IDisposable connectionScope = connectionLoggingContext.Push();
+                        LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                    }
+                    else
+                    {
+                        LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                    }
                     if (shouldRequeue)
                     {
                         _ = _availableSlots.Writer.TryWrite(slotIndex);
@@ -962,6 +989,32 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 UseSsl: account.UseSsl,
                 Username: account.Username,
                 Password: account.Password);
+        }
+
+        /// <summary>
+        /// Creates a connection-scoped logging context for one account slot when human-readable identity is available.
+        /// </summary>
+        /// <param name="account">Owning account snapshot.</param>
+        /// <param name="endpoint">Endpoint associated with the slot.</param>
+        /// <param name="connectionNumber">One-based connection number within the account.</param>
+        /// <returns>A connection-scoped log context, or <see langword="null"/> when the account has no usable human-readable identity.</returns>
+        private static NntpConnectionLogContext? CreateConnectionLogContext(NntpAccountSnapshot account, NntpArticleAcquisitionEndpoint endpoint, int connectionNumber)
+        {
+            if (string.IsNullOrWhiteSpace(account.Backbone) || string.IsNullOrWhiteSpace(account.Username))
+            {
+                return null;
+            }
+
+            return new NntpConnectionLogContext(
+                backbone: account.Backbone,
+                accountUsername: account.Username,
+                accountId: account.EntryId,
+                serverId: account.ServerId,
+                host: endpoint.Host,
+                port: endpoint.Port,
+                useSsl: endpoint.UseSsl,
+                connectionNumber: connectionNumber,
+                connectionLimit: account.MaxConnections);
         }
 
         /// <summary>
