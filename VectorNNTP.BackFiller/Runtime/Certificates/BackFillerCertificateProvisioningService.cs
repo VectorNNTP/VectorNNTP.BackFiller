@@ -24,8 +24,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private readonly BackFillerCertificateState _certificateState;
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
         private readonly TimeProvider _timeProvider;
-        private readonly SemaphoreSlim _provisionGate = new(1, 1);
-        private bool _disposed;
+        private static readonly SemaphoreSlim s_provisionGate = new(1, 1);
 
         /// <summary>
         /// Initializes one certificate provisioning coordinator.
@@ -74,14 +73,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return;
             }
 
-            await _provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await s_provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await EnsureCertificateAvailabilityCoreAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
-                _ = _provisionGate.Release();
+                _ = s_provisionGate.Release();
             }
         }
 
@@ -101,7 +100,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return false;
             }
 
-            await _provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await s_provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 CertificateEvaluationResult evaluation = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(letsEncryptOptions, _timeProvider, cancellationToken).ConfigureAwait(false);
@@ -144,7 +143,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             finally
             {
-                _ = _provisionGate.Release();
+                _ = s_provisionGate.Release();
             }
         }
 
@@ -191,16 +190,43 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            AcmeOrderIssueResult issued = await _acmeIssuer
-                .IssueCertificateAsync(letsEncryptOptions, cancellationToken)
-                .ConfigureAwait(false);
+            AcmeOrderIssueResult issued;
+            try
+            {
+                issued = await _acmeIssuer
+                    .IssueCertificateAsync(letsEncryptOptions, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}", letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath);
+                throw;
+            }
 
             cancellationToken.ThrowIfCancellationRequested();
-            await BackFillerCertificateStore.PersistIssuedCertificateAsync(letsEncryptOptions, issued, cancellationToken).ConfigureAwait(false);
 
-            BackFillerCertificateBundle activated = await BackFillerCertificateStore
-                .LoadCertificateBundleAsync(letsEncryptOptions, _timeProvider, cancellationToken)
-                .ConfigureAwait(false);
+            try
+            {
+                await BackFillerCertificateStore.PersistIssuedCertificateAsync(letsEncryptOptions, issued, cancellationToken, _logger).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}", letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath);
+                throw;
+            }
+
+            BackFillerCertificateBundle activated;
+            try
+            {
+                activated = await BackFillerCertificateStore
+                    .LoadCertificateBundleAsync(letsEncryptOptions, _timeProvider, cancellationToken, _logger)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}", letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath);
+                throw;
+            }
 
             _certificateState.Publish(activated);
             LogListenerCertificateActivatedSuccessfully(
@@ -218,13 +244,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </remarks>
         public void Dispose()
         {
-            if (_disposed)
-            {
-                return;
-            }
-
-            _disposed = true;
-            _provisionGate.Dispose();
             GC.SuppressFinalize(this);
         }
 
@@ -338,6 +357,39 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private static void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc)
         {
             LogListenerCertificateActivatedSuccessfullyMessage(logger, subject, notAfterUtc, null);
+        }
+
+        private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
+            LoggerMessage.Define<string, string, string>(
+                LogLevel.Error,
+                new EventId(2708, nameof(LogCertificateIssuanceFailed)),
+                "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
+
+        private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
+            LoggerMessage.Define<string, string, string>(
+                LogLevel.Error,
+                new EventId(2709, nameof(LogCertificatePersistenceFailed)),
+                "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
+
+        private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
+            LoggerMessage.Define<string, string, string>(
+                LogLevel.Error,
+                new EventId(2710, nameof(LogCertificateReloadFailed)),
+                "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
+
+        private static void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
+        {
+            LogCertificateIssuanceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
+        }
+
+        private static void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
+        {
+            LogCertificatePersistenceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
+        }
+
+        private static void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
+        {
+            LogCertificateReloadFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
         }
     }
 }

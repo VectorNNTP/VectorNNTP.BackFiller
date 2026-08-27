@@ -17,6 +17,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal interface ICloudflareTxtRecordClient : IAsyncDisposable
     {
         /// <summary>
+        /// Lists TXT records for one DNS name within one zone.
+        /// </summary>
+        /// <param name="zoneId">Cloudflare zone identifier.</param>
+        /// <param name="recordName">TXT record host name.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The current TXT records for the queried name.</returns>
+        public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Creates one TXT record and returns the created record identifier.
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>

@@ -18,9 +18,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// <param name="RecordId">Created Cloudflare DNS record identifier.</param>
     /// <param name="RecordName">TXT host name.</param>
     /// <param name="RecordValue">TXT content value.</param>
+    /// <param name="IsOwnedByCurrentAttempt">Whether this issuance created the record and therefore owns cleanup.</param>
     internal sealed record DnsChallengeRecordLease(
         string ZoneId,
         string RecordId,
         string RecordName,
-        string RecordValue);
+        string RecordValue,
+        bool IsOwnedByCurrentAttempt);
 }

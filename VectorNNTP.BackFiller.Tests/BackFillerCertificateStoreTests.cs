@@ -15,9 +15,7 @@ public sealed class BackFillerCertificateStoreTests
         try
         {
             BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
-            BackFillerCertificateStore store = new();
-
-            CertificateEvaluationResult result = await store.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+            CertificateEvaluationResult result = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
 
             Assert.False(result.HasCertificate);
             Assert.False(result.IsUsable);
@@ -39,8 +37,7 @@ public sealed class BackFillerCertificateStoreTests
             BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn, renewBeforeExpiryDays: 7);
             CreateAndWritePfx(options.CertificatePfxPath, options.PfxExportPassword, fqdn, notBeforeUtc: DateTimeOffset.UtcNow.AddDays(-2), notAfterUtc: DateTimeOffset.UtcNow.AddDays(30));
 
-            BackFillerCertificateStore store = new();
-            CertificateEvaluationResult result = await store.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+            CertificateEvaluationResult result = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
 
             Assert.True(result.HasCertificate);
             Assert.True(result.IsUsable);
@@ -63,8 +60,7 @@ public sealed class BackFillerCertificateStoreTests
             BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn, renewBeforeExpiryDays: 10);
             CreateAndWritePfx(options.CertificatePfxPath, options.PfxExportPassword, fqdn, notBeforeUtc: DateTimeOffset.UtcNow.AddDays(-2), notAfterUtc: DateTimeOffset.UtcNow.AddDays(5));
 
-            BackFillerCertificateStore store = new();
-            CertificateEvaluationResult result = await store.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+            CertificateEvaluationResult result = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
 
             Assert.True(result.HasCertificate);
             Assert.True(result.IsUsable);
@@ -86,8 +82,7 @@ public sealed class BackFillerCertificateStoreTests
             BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
             CreateAndWritePfx(options.CertificatePfxPath, options.PfxExportPassword, "bf-99.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(20));
 
-            BackFillerCertificateStore store = new();
-            CertificateEvaluationResult result = await store.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+            CertificateEvaluationResult result = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
 
             Assert.True(result.HasCertificate);
             Assert.False(result.IsUsable);
@@ -123,13 +118,12 @@ public sealed class BackFillerCertificateStoreTests
                 ChainDer: [],
                 CertificatePrivateKeyPem: rsa.ExportPkcs8PrivateKeyPem());
 
-            BackFillerCertificateStore store = new();
-            await store.PersistIssuedCertificateAsync(options, issueResult, CancellationToken.None);
+            await BackFillerCertificateStore.PersistIssuedCertificateAsync(options, issueResult, CancellationToken.None);
 
             Assert.True(File.Exists(options.CertificatePfxPath));
             Assert.True(File.Exists(options.CertificatePrivateKeyPemPath));
 
-            BackFillerCertificateBundle bundle = await store.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
+            BackFillerCertificateBundle bundle = await BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
             Assert.True(bundle.Certificate.HasPrivateKey);
             bundle.Certificate.Dispose();
         }
@@ -162,10 +156,9 @@ public sealed class BackFillerCertificateStoreTests
                 ChainDer: [],
                 CertificatePrivateKeyPem: ecdsa.ExportPkcs8PrivateKeyPem());
 
-            BackFillerCertificateStore store = new();
-            await store.PersistIssuedCertificateAsync(options, issueResult, CancellationToken.None);
+            await BackFillerCertificateStore.PersistIssuedCertificateAsync(options, issueResult, CancellationToken.None);
 
-            BackFillerCertificateBundle bundle = await store.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
+            BackFillerCertificateBundle bundle = await BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
             Assert.True(bundle.Certificate.HasPrivateKey);
             Assert.Equal("1.2.840.10045.2.1", bundle.Certificate.PublicKey.Oid?.Value);
             bundle.Certificate.Dispose();

@@ -52,7 +52,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <summary>
         /// Factory that creates one Cloudflare TXT-record client per issuance attempt.
         /// </summary>
-        private readonly Func<string, ICloudflareTxtRecordClient> _txtRecordClientFactory;
+        private readonly Func<string, ICloudflareTxtRecordApi> _txtRecordClientFactory;
 
         /// <summary>
         /// Initializes one ACME certificate issuer.
@@ -65,7 +65,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             TimeProvider timeProvider,
             ILogger<AcmeCertificateIssuer> logger,
             IAuthoritativeDnsTxtPropagationVerifier dnsPropagationVerifier,
-            Func<string, ICloudflareTxtRecordClient>? txtRecordClientFactory = null)
+            Func<string, ICloudflareTxtRecordApi>? txtRecordClientFactory = null)
         {
             ArgumentNullException.ThrowIfNull(timeProvider);
             ArgumentNullException.ThrowIfNull(logger);
@@ -74,7 +74,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             _timeProvider = timeProvider;
             _logger = logger;
             _dnsPropagationVerifier = dnsPropagationVerifier;
-            _txtRecordClientFactory = txtRecordClientFactory ?? (apiToken => new CloudflareTxtRecordClient(apiToken));
+            _txtRecordClientFactory = txtRecordClientFactory ?? (apiToken => new CloudflareTxtRecordApi(apiToken));
         }
 
         /// <summary>
@@ -123,7 +123,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 .ConfigureAwait(false);
             LogAcmeOrderCreated(_logger, letsEncryptOptions.CanonicalCertificateSubjectName);
 
-            ICloudflareTxtRecordClient txtRecordClient = _txtRecordClientFactory(letsEncryptOptions.CloudFlareApiToken);
+            ICloudflareTxtRecordApi txtRecordClient = _txtRecordClientFactory(letsEncryptOptions.CloudFlareApiToken);
             await using (txtRecordClient.ConfigureAwait(false))
             {
                 IReadOnlyList<IAuthorizationContext> authorizations = [.. await orderContext.Authorizations().ConfigureAwait(false)];
@@ -210,7 +210,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private async Task CompleteAuthorizationAsync(
             AcmeContext acmeContext,
             IAuthorizationContext authorizationContext,
-            ICloudflareTxtRecordClient txtRecordClient,
+            ICloudflareTxtRecordApi txtRecordClient,
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
         {
@@ -242,17 +242,42 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                string recordId = await txtRecordClient
-                    .CreateTxtRecordAsync(letsEncryptOptions.CloudFlareZoneId, txtHostName, txtValue, cancellationToken)
+                IReadOnlyList<CloudflareTxtRecordInfo> existingTxtRecords = await txtRecordClient
+                    .GetTxtRecordsAsync(letsEncryptOptions.CloudFlareZoneId, txtHostName, cancellationToken)
                     .ConfigureAwait(false);
+
+                string? existingOwnedRecordId = await ReconcileExistingChallengeRecordsAsync(
+                    txtRecordClient,
+                    letsEncryptOptions.CloudFlareZoneId,
+                    txtHostName,
+                    txtValue,
+                    existingTxtRecords,
+                    cancellationToken).ConfigureAwait(false);
+
+                CloudflareTxtRecordInfo createdOrReusedRecord;
+                bool recordAlreadyOwned = existingOwnedRecordId is not null;
+                if (recordAlreadyOwned)
+                {
+                    createdOrReusedRecord = existingTxtRecords.First(record => string.Equals(record.Id, existingOwnedRecordId, StringComparison.Ordinal));
+                }
+                else
+                {
+                    createdOrReusedRecord = await txtRecordClient
+                        .AddTxtRecordAsync(letsEncryptOptions.CloudFlareZoneId, txtHostName, txtValue, cancellationToken)
+                        .ConfigureAwait(false);
+                }
 
                 lease = new DnsChallengeRecordLease(
                     ZoneId: letsEncryptOptions.CloudFlareZoneId,
-                    RecordId: recordId,
+                    RecordId: createdOrReusedRecord.Id,
                     RecordName: txtHostName,
-                    RecordValue: txtValue);
+                    RecordValue: txtValue,
+                    IsOwnedByCurrentAttempt: !recordAlreadyOwned);
 
-                LogDnsTxtRecordCreated(_logger, txtHostName, recordId);
+                if (!recordAlreadyOwned)
+                {
+                    LogDnsTxtRecordCreated(_logger, txtHostName, createdOrReusedRecord.Id);
+                }
 
                 await _dnsPropagationVerifier
                     .WaitForPropagationAsync(txtHostName, txtValue, letsEncryptOptions, cancellationToken)
@@ -269,12 +294,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             finally
             {
-                if (lease is not null)
+                if (lease is not null && lease.IsOwnedByCurrentAttempt)
                 {
                     try
                     {
                         await txtRecordClient
-                            .DeleteRecordAsync(lease.ZoneId, lease.RecordId, CancellationToken.None)
+                            .DeleteTxtRecordAsync(lease.ZoneId, lease.RecordId, CancellationToken.None)
                             .ConfigureAwait(false);
 
                         LogDnsTxtRecordRemoved(_logger, lease.RecordName, lease.RecordId);

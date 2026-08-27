@@ -75,7 +75,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             }
             catch (Exception ex)
             {
-                failures.Add((DependencyName, $"TLS certificate provisioning failed: {ex.Message}"));
+                failures.Add((DependencyName, $"TLS certificate provisioning failed: {ex}"));
             }
 
             return new DependencyValidationResult(failures, warnings, errors);

@@ -8,6 +8,7 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates
@@ -155,20 +156,43 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         public static async Task<BackFillerCertificateBundle> LoadCertificateBundleAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             TimeProvider timeProvider,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            ILogger? logger = null)
         {
             ArgumentNullException.ThrowIfNull(letsEncryptOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            byte[] pfx = await File.ReadAllBytesAsync(letsEncryptOptions.CertificatePfxPath, cancellationToken).ConfigureAwait(false);
-            X509Certificate2 certificate = new(
-                pfx,
-                letsEncryptOptions.PfxExportPassword,
-                X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+            logger?.LogInformation(
+                "Loading listener certificate bundle for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}",
+                letsEncryptOptions.CanonicalCertificateSubjectName,
+                letsEncryptOptions.CertificatePfxPath);
 
-            return new BackFillerCertificateBundle(certificate, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
+            try
+            {
+                byte[] pfx = await File.ReadAllBytesAsync(letsEncryptOptions.CertificatePfxPath, cancellationToken).ConfigureAwait(false);
+                X509Certificate2 certificate = new(
+                    pfx,
+                    letsEncryptOptions.PfxExportPassword,
+                    X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+
+                logger?.LogInformation(
+                    "Loaded listener certificate bundle for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}",
+                    letsEncryptOptions.CanonicalCertificateSubjectName,
+                    letsEncryptOptions.CertificatePfxPath);
+
+                return new BackFillerCertificateBundle(certificate, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(
+                    ex,
+                    "Listener certificate bundle load failed for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}",
+                    letsEncryptOptions.CanonicalCertificateSubjectName,
+                    letsEncryptOptions.CertificatePfxPath);
+                throw;
+            }
         }
 
         /// <summary>
@@ -181,7 +205,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         public static async Task PersistIssuedCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             AcmeOrderIssueResult issueResult,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            ILogger? logger = null)
         {
             ArgumentNullException.ThrowIfNull(letsEncryptOptions);
             ArgumentNullException.ThrowIfNull(issueResult);
@@ -192,15 +217,29 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             string pfxTempPath = CertificateFileConventions.BuildAtomicTempPath(letsEncryptOptions.CertificatePfxPath);
             string keyTempPath = CertificateFileConventions.BuildAtomicTempPath(letsEncryptOptions.CertificatePrivateKeyPemPath);
 
+            logger?.LogInformation(
+                "Persisting listener certificate bundle for {Fqdn}; Operation=persist; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}; PfxTempPath={PfxTempPath}; KeyTempPath={KeyTempPath}",
+                letsEncryptOptions.CanonicalCertificateSubjectName,
+                letsEncryptOptions.CertificatePfxPath,
+                letsEncryptOptions.CertificatePrivateKeyPemPath,
+                pfxTempPath,
+                keyTempPath);
+
             try
             {
-                await WriteFileAtomicallyAsync(keyTempPath, letsEncryptOptions.CertificatePrivateKeyPemPath, issueResult.CertificatePrivateKeyPem, cancellationToken).ConfigureAwait(false);
-                await WriteFileAtomicallyAsync(pfxTempPath, letsEncryptOptions.CertificatePfxPath, pfx, cancellationToken).ConfigureAwait(false);
+                await WriteFileAtomicallyAsync(keyTempPath, letsEncryptOptions.CertificatePrivateKeyPemPath, issueResult.CertificatePrivateKeyPem, cancellationToken, logger).ConfigureAwait(false);
+                await WriteFileAtomicallyAsync(pfxTempPath, letsEncryptOptions.CertificatePfxPath, pfx, cancellationToken, logger).ConfigureAwait(false);
+
+                logger?.LogInformation(
+                    "Listener certificate bundle persisted for {Fqdn}; Operation=persist; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}",
+                    letsEncryptOptions.CanonicalCertificateSubjectName,
+                    letsEncryptOptions.CertificatePfxPath,
+                    letsEncryptOptions.CertificatePrivateKeyPemPath);
             }
             finally
             {
-                TryDeleteTempFile(keyTempPath);
-                TryDeleteTempFile(pfxTempPath);
+                TryDeleteTempFile(keyTempPath, logger);
+                TryDeleteTempFile(pfxTempPath, logger);
             }
         }
 
@@ -367,17 +406,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             throw new InvalidOperationException("Certificate private key PEM is not a supported RSA/ECDSA key.");
         }
 
-        private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken)
+        private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
             ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
             ArgumentNullException.ThrowIfNull(content);
 
             byte[] payload = System.Text.Encoding.UTF8.GetBytes(content);
-            await WriteFileAtomicallyAsync(tempPath, targetPath, payload, cancellationToken).ConfigureAwait(false);
+            await WriteFileAtomicallyAsync(tempPath, targetPath, payload, cancellationToken, logger).ConfigureAwait(false);
         }
 
-        private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken)
+        private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
             ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
@@ -385,20 +424,52 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            using FileStream stream = new(
+            logger?.LogInformation(
+                "Writing certificate artifact to temporary file; Operation=write; TempPath={TempPath}; TargetPath={TargetPath}",
                 tempPath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 81920,
-                useAsync: true);
-            await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                targetPath);
 
-            File.Move(tempPath, targetPath, overwrite: true);
+            try
+            {
+                {
+                    using FileStream stream = new(
+                        tempPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 81920,
+                        useAsync: true);
+                    await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+                    await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                FileInfo tempInfo = new(tempPath);
+                FileInfo? targetInfo = File.Exists(targetPath) ? new FileInfo(targetPath) : null;
+                logger?.LogInformation(
+                    "Certificate artifact ready for atomic replace; Operation=move; ProcessId={ProcessId}; SourcePath={SourcePath}; DestinationPath={DestinationPath}; SourceExists={SourceExists}; DestinationExists={DestinationExists}; SourceLength={SourceLength}; DestinationLength={DestinationLength}",
+                    Environment.ProcessId,
+                    tempInfo.FullName,
+                    Path.GetFullPath(targetPath),
+                    tempInfo.Exists,
+                    targetInfo is not null,
+                    tempInfo.Exists ? tempInfo.Length : -1L,
+                    targetInfo?.Length ?? -1L);
+
+                File.Move(tempPath, targetPath, overwrite: true);
+
+                logger?.LogInformation(
+                    "Certificate artifact moved atomically; Operation=move; TempPath={TempPath}; TargetPath={TargetPath}",
+                    tempPath,
+                    targetPath);
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Certificate artifact atomic write failed; Operation=write-or-move; TempPath={TempPath}; TargetPath={TargetPath}", tempPath, targetPath);
+                throw;
+            }
         }
 
-        private static void TryDeleteTempFile(string tempPath)
+        private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {
             if (string.IsNullOrWhiteSpace(tempPath))
             {
@@ -410,13 +481,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 if (File.Exists(tempPath))
                 {
                     File.Delete(tempPath);
+                    logger?.LogInformation("Deleted temporary certificate artifact; Operation=delete; TempPath={TempPath}", tempPath);
                 }
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-            }
-            catch (UnauthorizedAccessException)
-            {
+                logger?.LogWarning(ex, "Temporary certificate artifact cleanup failed; Operation=delete; TempPath={TempPath}", tempPath);
             }
         }
     }

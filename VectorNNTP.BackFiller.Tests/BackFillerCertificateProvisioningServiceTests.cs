@@ -71,6 +71,39 @@ public sealed class BackFillerCertificateProvisioningServiceTests
         }
     }
 
+    [Fact]
+    public async Task EnsureCertificateAvailabilityAsync_WhenCalledConcurrently_OnlyProvisionsOnce()
+    {
+        string tempDir = CreateUniqueTempDirectory();
+        try
+        {
+            BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+
+            BackFillerCertificateState state = new();
+            BackFillerCertificateStore store = new();
+            FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
+            BackFillerCertificateProvisioningService service = new(
+                store,
+                issuer,
+                state,
+                NullLogger<BackFillerCertificateProvisioningService>.Instance,
+                TimeProvider.System);
+
+            Task first = service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
+            Task second = service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
+
+            await Task.WhenAll(first, second);
+
+            Assert.Equal(1, issuer.IssueCallCount);
+            Assert.True(state.HasCertificate);
+        }
+        finally
+        {
+            DeleteDirectoryIfExists(tempDir);
+        }
+    }
+
     private static BackFillerRuntimeOptions CreateRuntimeOptions(BackFillerLetsEncryptRuntimeOptions letsEncrypt)
     {
         return new BackFillerRuntimeOptions(

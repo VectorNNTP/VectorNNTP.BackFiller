@@ -1,9 +1,9 @@
-// <copyright file="CloudflareTxtRecordClient.cs" company="Usenet Ninja">
+// <copyright file="CloudflareTxtRecordApi.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
 // VectorNNTP.Backfiller.Runtime.Certificates
-// Legacy adapter retained for compatibility; use CloudflareTxtRecordApi for ownership-aware DNS-01 lifecycles.
+// Cloudflare TXT record adapter used by ACME DNS-01 issuance.
 
 using System.Text;
 using CloudFlare.Client;
@@ -16,21 +16,17 @@ using CloudFlare.Client.Enumerators;
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Creates and removes Cloudflare TXT records for ACME DNS-01 challenge validation.
+    /// Cloudflare TXT record adapter used by ACME DNS-01 issuance and cleanup.
     /// </summary>
-    /// <remarks>
-    /// The client only manages TXT challenge records, keeps proxied disabled, and uses a short TTL so challenge
-    /// records are not confused with the application's A/AAAA reconciliation flow.
-    /// </remarks>
-    internal sealed class CloudflareTxtRecordClient : ICloudflareTxtRecordClient, IAsyncDisposable
+    internal sealed class CloudflareTxtRecordApi : ICloudflareTxtRecordApi, IAsyncDisposable
     {
         private readonly CloudFlareClient _client;
 
         /// <summary>
-        /// Initializes one TXT record client using the configured Cloudflare API token.
+        /// Initializes one adapter using the configured Cloudflare API token.
         /// </summary>
         /// <param name="apiToken">Cloudflare API token.</param>
-        public CloudflareTxtRecordClient(string apiToken)
+        public CloudflareTxtRecordApi(string apiToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(apiToken);
             _client = new CloudFlareClient(apiToken.Trim(), new ConnectionInfo());
@@ -54,24 +50,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 PerPage = 5000,
             };
 
-            CloudFlareResult<IReadOnlyList<DnsRecord>> queryResult;
-            try
-            {
-                queryResult = await _client.Zones.DnsRecords
-                    .GetAsync(zoneId, recordFilter, displayOptions, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException(
-                    BuildQueryFailureMessage(zoneId, recordName, null, null, null, null),
-                    ex);
-            }
+            CloudFlareResult<IReadOnlyList<DnsRecord>> queryResult = await _client.Zones.DnsRecords
+                .GetAsync(zoneId, recordFilter, displayOptions, cancellationToken)
+                .ConfigureAwait(false);
 
             if (!queryResult.Success || queryResult.Result is null)
             {
-                throw new InvalidOperationException(
-                    BuildQueryFailureMessage(zoneId, recordName, queryResult.Success, queryResult.Messages, queryResult.Errors, queryResult.Timing));
+                throw new InvalidOperationException(BuildQueryFailureMessage(zoneId, recordName, queryResult.Success, queryResult.Messages, queryResult.Errors, queryResult.Timing));
             }
 
             return [.. queryResult.Result.Select(static record => new CloudflareTxtRecordInfo(
@@ -87,28 +72,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 ModifiedDateUtc: record.ModifiedDate))];
         }
 
-        public async Task<string> CreateTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
+        /// <inheritdoc/>
+        public async Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
             ArgumentException.ThrowIfNullOrWhiteSpace(recordName);
             ArgumentException.ThrowIfNullOrWhiteSpace(recordValue);
-
-            IReadOnlyList<CloudflareTxtRecordInfo> existingRecords = await GetTxtRecordsAsync(zoneId, recordName, cancellationToken).ConfigureAwait(false);
-            CloudflareTxtRecordInfo? ownedRecord = null;
-            for (int i = 0; i < existingRecords.Count; i++)
-            {
-                CloudflareTxtRecordInfo record = existingRecords[i];
-                if (string.Equals(record.Content, recordValue, StringComparison.Ordinal))
-                {
-                    ownedRecord = record;
-                    break;
-                }
-            }
-
-            if (ownedRecord is not null)
-            {
-                return ownedRecord.Id;
-            }
 
             NewDnsRecord newDnsRecord = new()
             {
@@ -128,22 +97,29 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(
-                    BuildCreateFailureMessage(recordName, DnsRecordType.Txt, null, null, null, null),
-                    ex);
+                throw new InvalidOperationException(BuildCreateFailureMessage(recordName, DnsRecordType.Txt, null, null, null, null), ex);
             }
 
-            if (addResult.Success && addResult.Result is not null && !string.IsNullOrWhiteSpace(addResult.Result.Id))
+            if (!addResult.Success || addResult.Result is null || string.IsNullOrWhiteSpace(addResult.Result.Id))
             {
-                return addResult.Result.Id;
+                throw new InvalidOperationException(BuildCreateFailureMessage(recordName, DnsRecordType.Txt, addResult.Success, addResult.Messages, addResult.Errors, addResult.Timing));
             }
 
-            throw new InvalidOperationException(
-                BuildCreateFailureMessage(recordName, DnsRecordType.Txt, addResult.Success, addResult.Messages, addResult.Errors, addResult.Timing));
+            return new CloudflareTxtRecordInfo(
+                Id: addResult.Result.Id,
+                Name: addResult.Result.Name ?? recordName,
+                Content: addResult.Result.Content ?? string.Empty,
+                Type: addResult.Result.Type,
+                Proxied: addResult.Result.Proxied,
+                Ttl: addResult.Result.Ttl,
+                Comment: addResult.Result.Comment,
+                Tags: addResult.Result.Tags is null ? [] : [.. addResult.Result.Tags],
+                CreatedDateUtc: addResult.Result.CreatedDate,
+                ModifiedDateUtc: addResult.Result.ModifiedDate);
         }
 
         /// <inheritdoc/>
-        public async Task DeleteRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
+        public async Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
             ArgumentException.ThrowIfNullOrWhiteSpace(recordId);
@@ -157,15 +133,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(
-                    BuildDeleteFailureMessage(recordId, null, null, null, null),
-                    ex);
+                throw new InvalidOperationException(BuildDeleteFailureMessage(recordId, null, null, null, null), ex);
             }
 
             if (!deleteResult.Success)
             {
-                throw new InvalidOperationException(
-                    BuildDeleteFailureMessage(recordId, deleteResult.Messages, deleteResult.Errors, deleteResult.Result?.Id, deleteResult.Timing));
+                throw new InvalidOperationException(BuildDeleteFailureMessage(recordId, deleteResult.Messages, deleteResult.Errors, deleteResult.Result?.Id, deleteResult.Timing));
             }
         }
 
