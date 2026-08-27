@@ -1,0 +1,26 @@
+// <copyright file="DnsChallengeRecordLease.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller.Runtime.Certificates
+// Tracks the lifecycle of one ACME DNS-01 TXT record for cleanup.
+
+namespace VectorNNTP.Backfiller.Runtime.Certificates
+{
+    /// <summary>
+    /// Tracks one created DNS-01 TXT record so ACME challenge cleanup can reliably remove it.
+    /// </summary>
+    /// <remarks>
+    /// This lease is scoped only to ACME challenge TXT records and is unrelated to the A/AAAA records that keep the
+    /// generated BackFiller FQDN synchronized with BindAddress values.
+    /// </remarks>
+    /// <param name="ZoneId">Cloudflare zone identifier.</param>
+    /// <param name="RecordId">Created Cloudflare DNS record identifier.</param>
+    /// <param name="RecordName">TXT host name.</param>
+    /// <param name="RecordValue">TXT content value.</param>
+    internal sealed record DnsChallengeRecordLease(
+        string ZoneId,
+        string RecordId,
+        string RecordName,
+        string RecordValue);
+}

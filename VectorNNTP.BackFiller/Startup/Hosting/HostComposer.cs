@@ -1,8 +1,16 @@
-using System.ComponentModel.DataAnnotations;
+// <copyright file="HostComposer.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller.Startup.Hosting
+// Composes the worker host and registers the runtime services used during startup and shutdown.
+
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
+using VectorNNTP.Backfiller.Runtime.Listener;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
@@ -11,6 +19,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
     /// <summary>
     /// Owns production logging configuration, service registration, and host construction.
     /// </summary>
+    /// <remarks>
+    /// This type wires the startup-time lifecycle together, including account startup, certificate provisioning,
+    /// the inbound TLS listener, control-plane services, shutdown coordination, and host timeout policy.
+    /// </remarks>
     internal static class HostComposer
     {
         /// <summary>
@@ -122,6 +134,23 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
+        /// Registers certificate runtime services and periodic renewal hosted service.
+        /// </summary>
+        /// <param name="services">Service collection to register certificate services into.</param>
+        internal static void RegisterCertificateServices(IServiceCollection services)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            _ = services.AddSingleton<BackFillerCertificateState>();
+            _ = services.AddSingleton<BackFillerCertificateStore>();
+            _ = services.AddSingleton<IAuthoritativeDnsTxtPropagationVerifier, AuthoritativeDnsTxtPropagationVerifier>();
+            _ = services.AddSingleton<IAcmeCertificateIssuer, AcmeCertificateIssuer>();
+            _ = services.AddSingleton<BackFillerCertificateProvisioningService>();
+            _ = services.AddHostedService<BackFillerCertificateStartupInitializer>();
+            _ = services.AddHostedService<BackFillerListenerSocketService>();
+            _ = services.AddHostedService<LetsEncryptCertificateRenewalService>();
+        }
+
+        /// <summary>
         /// Registers the control-plane hosted service.
         /// </summary>
         /// <param name="services">Service collection to register the control-plane hosted service into.</param>
@@ -184,6 +213,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             // Register transit publisher startup initialization before control-plane runtime loops start.
             RegisterTransitPublisherServices(services);
 
+            // Register ACME/TLS certificate lifecycle services and periodic renewal loop.
+            RegisterCertificateServices(services);
+
             // Phase 6: Register the control-plane hosted service.
             // Runtime readiness dependencies must be established through explicit service dependencies
             // and startup orchestration, not IServiceCollection registration order.
@@ -206,7 +238,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(serviceLifecycle);
 
-            global::VectorNNTP.Backfiller.Startup.Logging.SerilogConfigurator.ConfigureSerilogLogging(
+            Logging.SerilogConfigurator.ConfigureSerilogLogging(
                 builder.Services,
                 builder.Configuration,
                 "VectorNNTP.Backfiller",
@@ -214,7 +246,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
             _ = builder.Services.AddSingleton(runtimeOptions);
 
-            global::VectorNNTP.Backfiller.Startup.BuildInfoService.LogConfigurationFingerprint(builder.Configuration);
+            BuildInfoService.LogConfigurationFingerprint(builder.Configuration);
             ConfigureHostServices(builder, runtimeOptions, serviceLifecycle);
 
             return builder.Build();

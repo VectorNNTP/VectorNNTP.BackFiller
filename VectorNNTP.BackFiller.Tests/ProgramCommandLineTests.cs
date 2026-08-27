@@ -124,17 +124,18 @@ public sealed class ProgramCommandLineTests
             })
             .Build();
 
-        StringWriter writer = new();
+        StringWriter captured = new();
+        TextWriter synchronizedOut = TextWriter.Synchronized(captured);
         TextWriter originalOut = Console.Out;
 
         try
         {
-            Console.SetOut(writer);
+            Console.SetOut(synchronizedOut);
 
             int? exitCode = ParseAndMaybeExecute(["--dump-config"], configuration);
 
             Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
-            Assert.Contains("BackFiller:LetsEncrypt:UseStagingDirectory: true", writer.ToString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("BackFiller:LetsEncrypt:UseStagingDirectory: true", captured.ToString(), StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

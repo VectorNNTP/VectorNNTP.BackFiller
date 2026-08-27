@@ -1,11 +1,24 @@
+// <copyright file="RuntimeSnapshotFactory.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller.Startup.Configuration
+// Builds the validated runtime snapshot consumed by the BackFiller host and certificate pipeline.
+
 using System.Net;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Configuration
 {
     /// <summary>
-    /// Owns canonicalization of validated configuration into the immutable BackFiller runtime and startup snapshot.
+    /// Canonicalizes validated configuration into the immutable BackFiller runtime snapshot.
     /// </summary>
+    /// <remarks>
+    /// This factory turns validated settings into the startup-time source of truth for listener binding, shutdown
+    /// policy, transit parameters, and the nested ACME configuration used by the certificate pipeline.
+    /// The generated FQDN, certificate directory, and ACME policy values are all resolved here before hosted
+    /// services start.
+    /// </remarks>
     internal class RuntimeSnapshotFactory
     {
         /// <summary>
@@ -45,6 +58,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is required to build runtime options.");
 
                 IReadOnlyList<IPAddress> canonicalBindAddresses = BindAddressDnsAddressDeriver.DeriveCanonicalDnsAddresses(backFiller.BindAddress);
+                BackFillerLetsEncryptRuntimeOptions letsEncryptRuntimeOptions = BuildLetsEncryptRuntimeOptions(backFiller, validatedCertificateDirectory, canonicalBackFillerFqdn);
 
                 return new BackFillerRuntimeOptions(
                     CanonicalBackFillerFqdn: canonicalBackFillerFqdn,
@@ -58,6 +72,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitServerHost: transitServerHost,
                     TransitServerPort: backFiller.TransitServer?.Port ?? 0,
                     TransitServerUseSsl: backFiller.TransitServer?.UseSsl ?? false,
+                    BindPort: backFiller.BindPort ?? 0,
+                    ConfiguredBindAddressTokens: [.. (backFiller.BindAddress ?? [])],
                     ShutdownGracePeriodSeconds: backFiller.Shutdown?.GracePeriodSeconds ?? 30,
                     ShutdownDrainQueuedWork: backFiller.Shutdown?.DrainQueuedWork ?? true,
                     ShutdownFinishActiveArticles: backFiller.Shutdown?.FinishActiveArticles ?? true,
@@ -69,13 +85,79 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitShutdownDrainGracePeriod: TimeSpan.FromMinutes(5),
                     TransitShutdownDrainInactivityWatchdog: TimeSpan.FromSeconds(30),
                     TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30),
-                    CanonicalBindAddresses: canonicalBindAddresses);
+                    CanonicalBindAddresses: canonicalBindAddresses,
+                    LetsEncrypt: letsEncryptRuntimeOptions);
             }
             catch (Exception ex)
             {
                 configErrors.Add(("BackFiller", $"Failed to build runtime options snapshot: {ex.Message}"));
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Builds immutable Let's Encrypt runtime settings from validated BackFiller configuration.
+        /// </summary>
+        /// <param name="backFiller">Validated BackFiller options.</param>
+        /// <param name="validatedCertificateDirectory">Canonical validated certificate directory path.</param>
+        /// <param name="canonicalBackFillerFqdn">Authoritative generated BackFiller FQDN.</param>
+        /// <returns>Immutable ACME runtime options.</returns>
+        private static BackFillerLetsEncryptRuntimeOptions BuildLetsEncryptRuntimeOptions(
+            BackFillerOptions backFiller,
+            string validatedCertificateDirectory,
+            string canonicalBackFillerFqdn)
+        {
+            ArgumentNullException.ThrowIfNull(backFiller);
+            ArgumentException.ThrowIfNullOrWhiteSpace(validatedCertificateDirectory);
+            ArgumentException.ThrowIfNullOrWhiteSpace(canonicalBackFillerFqdn);
+
+            LetsEncryptOptions letsEncrypt = backFiller.LetsEncrypt
+                ?? throw new InvalidOperationException("BackFiller:LetsEncrypt is required to build runtime options.");
+
+            string acmeAccountEmail = !string.IsNullOrWhiteSpace(letsEncrypt.AcmeAccountEmail)
+                ? letsEncrypt.AcmeAccountEmail.Trim()
+                : throw new InvalidOperationException("BackFiller:LetsEncrypt:AcmeAccountEmail is required to build runtime options.");
+
+            string acmeAccountKeyPem = !string.IsNullOrWhiteSpace(letsEncrypt.AcmeAccountKeyPem)
+                ? letsEncrypt.AcmeAccountKeyPem.Trim()
+                : throw new InvalidOperationException("BackFiller:LetsEncrypt:AcmeAccountKeyPem is required to build runtime options.");
+
+            string pfxExportPassword = !string.IsNullOrWhiteSpace(letsEncrypt.PfxExportPassword)
+                ? letsEncrypt.PfxExportPassword
+                : throw new InvalidOperationException("BackFiller:LetsEncrypt:PfxExportPassword is required to build runtime options.");
+
+            string cloudFlareApiToken = !string.IsNullOrWhiteSpace(letsEncrypt.CloudFlareApiToken)
+                ? letsEncrypt.CloudFlareApiToken.Trim()
+                : throw new InvalidOperationException("BackFiller:LetsEncrypt:CloudFlareApiToken is required to build runtime options.");
+
+            string cloudFlareZoneId = !string.IsNullOrWhiteSpace(letsEncrypt.CloudFlareZoneId)
+                ? letsEncrypt.CloudFlareZoneId.Trim()
+                : throw new InvalidOperationException("BackFiller:LetsEncrypt:CloudFlareZoneId is required to build runtime options.");
+
+            string accountKeyPath = Path.Combine(validatedCertificateDirectory, acmeAccountKeyPem);
+            string certificatePrivateKeyPemPath = Path.Combine(validatedCertificateDirectory, Runtime.Certificates.CertificateFileConventions.CertificatePrivateKeyPemFileName);
+            string certificatePfxPath = Path.Combine(validatedCertificateDirectory, Runtime.Certificates.CertificateFileConventions.ListenerPfxFileName);
+
+            return new BackFillerLetsEncryptRuntimeOptions(
+                Enabled: letsEncrypt.Enabled,
+                CanonicalCertificateSubjectName: canonicalBackFillerFqdn,
+                AcmeAccountEmail: acmeAccountEmail,
+                AcmeAccountKeyPemPath: accountKeyPath,
+                CertificatePfxPath: certificatePfxPath,
+                CertificatePrivateKeyPemPath: certificatePrivateKeyPemPath,
+                PfxExportPassword: pfxExportPassword,
+                RenewBeforeExpiryDays: letsEncrypt.RenewBeforeExpiryDays ?? 7,
+                RenewalCheckIntervalHours: letsEncrypt.RenewalCheckIntervalHours ?? 6,
+                RenewalJitterRatio: letsEncrypt.RenewalJitterRatio ?? 0.1,
+                UseStagingDirectory: letsEncrypt.UseStagingDirectory,
+                AcmeTransientRetryMaxAttempts: letsEncrypt.AcmeTransientRetryMaxAttempts ?? 5,
+                DnsPropagationDelaySeconds: letsEncrypt.DnsPropagationDelaySeconds ?? 15,
+                DnsTxtPollIntervalSeconds: letsEncrypt.DnsTxtPollIntervalSeconds ?? 3,
+                DnsTxtPollTimeoutSeconds: letsEncrypt.DnsTxtPollTimeoutSeconds ?? 600,
+                DnsAuthoritativeNsCacheMinutes: letsEncrypt.DnsAuthoritativeNsCacheMinutes ?? 5,
+                DnsAuthoritativeQuorumRatio: letsEncrypt.DnsAuthoritativeQuorumRatio ?? 0.7,
+                CloudFlareApiToken: cloudFlareApiToken,
+                CloudFlareZoneId: cloudFlareZoneId);
         }
 
         /// <summary>

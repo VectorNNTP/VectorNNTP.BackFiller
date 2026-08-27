@@ -1,3 +1,10 @@
+// <copyright file="BackFillerRuntimeOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller.Configuration
+// Immutable runtime configuration snapshot used by startup validation and hosted services.
+
 using System.Net;
 
 namespace VectorNNTP.Backfiller.Configuration
@@ -16,6 +23,8 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="TransitServerHost">Canonical TransitServer host used by runtime services.</param>
     /// <param name="TransitServerPort">Validated TransitServer port used by runtime services.</param>
     /// <param name="TransitServerUseSsl">Validated TransitServer TLS mode used by runtime services.</param>
+    /// <param name="BindPort">Validated inbound listener TCP port.</param>
+    /// <param name="ConfiguredBindAddressTokens">Configured inbound bind-address tokens preserved from BackFiller configuration.</param>
     /// <param name="ShutdownGracePeriodSeconds">Validated graceful-shutdown grace period in seconds used by runtime services.</param>
     /// <param name="ShutdownDrainQueuedWork">Validated graceful-shutdown queued-work drain flag used by runtime services.</param>
     /// <param name="ShutdownFinishActiveArticles">Validated graceful-shutdown active-work completion flag used by runtime services.</param>
@@ -29,6 +38,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="TransitShutdownDrainInactivityWatchdog">Transit shutdown inactivity watchdog duration.</param>
     /// <param name="TransitShutdownAbsoluteMaximum">Absolute transit shutdown duration ceiling.</param>
     /// <param name="CanonicalBindAddresses">Canonical, deduplicated bind-address set validated at startup.</param>
+    /// <param name="LetsEncrypt">Validated immutable Let's Encrypt/ACME runtime options.</param>
     internal sealed record BackFillerRuntimeOptions(
         string CanonicalBackFillerFqdn,
         int BackFillerId,
@@ -41,6 +51,8 @@ namespace VectorNNTP.Backfiller.Configuration
         string TransitServerHost,
         int TransitServerPort,
         bool TransitServerUseSsl,
+        int BindPort,
+        IReadOnlyList<string>? ConfiguredBindAddressTokens,
         int ShutdownGracePeriodSeconds,
         bool ShutdownDrainQueuedWork,
         bool ShutdownFinishActiveArticles,
@@ -53,7 +65,8 @@ namespace VectorNNTP.Backfiller.Configuration
         TimeSpan? TransitShutdownDrainGracePeriod = null,
         TimeSpan? TransitShutdownDrainInactivityWatchdog = null,
         TimeSpan? TransitShutdownAbsoluteMaximum = null,
-        IReadOnlyList<IPAddress>? CanonicalBindAddresses = null)
+        IReadOnlyList<IPAddress>? CanonicalBindAddresses = null,
+        BackFillerLetsEncryptRuntimeOptions? LetsEncrypt = null)
     {
         /// <summary>
         /// Gets the effective reconnect initialization timeout.
@@ -79,5 +92,17 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Gets the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
         /// </summary>
         internal IReadOnlyList<IPAddress> EffectiveCanonicalBindAddresses => CanonicalBindAddresses ?? [];
+
+        /// <summary>
+        /// Gets configured bind-address tokens, or an empty set when omitted.
+        /// </summary>
+        internal IReadOnlyList<string> EffectiveConfiguredBindAddressTokens => ConfiguredBindAddressTokens ?? [];
+
+        /// <summary>
+        /// Gets validated ACME runtime options when Let's Encrypt is enabled.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when ACME runtime options are not available.</exception>
+        internal BackFillerLetsEncryptRuntimeOptions EffectiveLetsEncrypt => LetsEncrypt
+            ?? throw new InvalidOperationException("BackFiller runtime options do not include Let's Encrypt settings.");
     }
 }

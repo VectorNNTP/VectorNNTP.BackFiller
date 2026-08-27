@@ -586,6 +586,8 @@ internal static class Transit32WorkerExperimentRunner
             TransitServerHost: runtime.Host,
             TransitServerPort: runtime.Port,
             TransitServerUseSsl: runtime.UseSsl,
+            BindPort: 119,
+            ConfiguredBindAddressTokens: ["127.0.0.1"],
             ShutdownGracePeriodSeconds: 120,
             ShutdownDrainQueuedWork: true,
             ShutdownFinishActiveArticles: true,

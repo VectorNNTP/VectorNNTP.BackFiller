@@ -305,6 +305,8 @@ public sealed class CloudflareDnsSynchronizationProbeTests
             TransitServerHost: "127.0.0.1",
             TransitServerPort: 119,
             TransitServerUseSsl: false,
+            BindPort: 119,
+            ConfiguredBindAddressTokens: ["127.0.0.1"],
             ShutdownGracePeriodSeconds: 30,
             ShutdownDrainQueuedWork: true,
             ShutdownFinishActiveArticles: true,

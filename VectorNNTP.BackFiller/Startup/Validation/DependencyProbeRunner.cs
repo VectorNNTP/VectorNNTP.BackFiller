@@ -1,10 +1,21 @@
+// <copyright file="DependencyProbeRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller.Startup.Validation
+// Runs startup dependency probes, DNS reconciliation, and certificate availability checks.
+
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Owns live external dependency probes and startup DNS reconciliation.
+    /// Owns live external dependency probes, startup DNS reconciliation, and certificate availability checks.
     /// </summary>
+    /// <remarks>
+    /// The runner first validates structural dependencies, then synchronizes the generated BackFiller A/AAAA records,
+    /// and finally ensures a usable listener certificate is available before runtime services are allowed to continue.
+    /// </remarks>
     internal class DependencyProbeRunner
     {
         /// <summary>
@@ -70,13 +81,31 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 .SynchronizeGeneratedBackFillerDnsAsync(backFiller, runtimeOptions, dependencyTimeout, cancellationToken)
                 .ConfigureAwait(false);
 
+            if (!dnsSynchronizationResult.IsValid)
+            {
+                return new DependencyValidationResult(
+                    baselineResult.FailedDependencies
+                        .Concat(dnsSynchronizationResult.FailedDependencies),
+                    baselineResult.Warnings
+                        .Concat(dnsSynchronizationResult.Warnings),
+                    baselineResult.Errors
+                        .Concat(dnsSynchronizationResult.Errors));
+            }
+
+            DependencyValidationResult certificateResult = await LetsEncryptCertificateDependencyProbe
+                .EnsureCertificateAvailabilityAsync(runtimeOptions, cancellationToken)
+                .ConfigureAwait(false);
+
             return new DependencyValidationResult(
                 baselineResult.FailedDependencies
-                    .Concat(dnsSynchronizationResult.FailedDependencies),
+                    .Concat(dnsSynchronizationResult.FailedDependencies)
+                    .Concat(certificateResult.FailedDependencies),
                 baselineResult.Warnings
-                    .Concat(dnsSynchronizationResult.Warnings),
+                    .Concat(dnsSynchronizationResult.Warnings)
+                    .Concat(certificateResult.Warnings),
                 baselineResult.Errors
-                    .Concat(dnsSynchronizationResult.Errors));
+                    .Concat(dnsSynchronizationResult.Errors)
+                    .Concat(certificateResult.Errors));
         }
     }
 }

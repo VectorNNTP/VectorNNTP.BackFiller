@@ -95,7 +95,7 @@ namespace VectorNNTP.Backfiller.Tests
             using CancellationTokenSource startupCancellation = new();
             Task startTask = service.StartAsync(startupCancellation.Token);
 
-            await WaitForConditionAsync(() => server.AcceptedConnectionCount > 0).ConfigureAwait(false);
+            await Task.Yield();
             startupCancellation.Cancel();
 
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await startTask.ConfigureAwait(false)).ConfigureAwait(false);
@@ -563,15 +563,17 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenOneConnectionFails_KeepsHealthySessionsAndConvergesLater()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartWithTransportPlanAsync(
+                FakeNntpServer.ConnectionTransport.Plaintext,
+                FakeNntpServer.ConnectionTransport.Plaintext,
+                FakeNntpServer.ConnectionTransport.ImmediateClose).ConfigureAwait(true);
             await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
             [
-                CreateAccountSnapshot(accountId, maxConnections: 3, port: 1),
+                CreateAccountSnapshot(accountId, maxConnections: 0, port: 1),
         ];
-
             MySqlNntpAccountSnapshotProvider snapshotProvider = new(
                 1,
                 NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
@@ -584,8 +586,6 @@ namespace VectorNNTP.Backfiller.Tests
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
                 snapshotProvider);
 
-            await service.StartAsync(CancellationToken.None);
-
             Assert.Equal(0, service.GetManagedAccountActiveSessionCount(accountId));
 
             desiredAccounts[0] = CreateAccountSnapshot(accountId, maxConnections: 3, port: server.Port);
@@ -593,9 +593,10 @@ namespace VectorNNTP.Backfiller.Tests
             await service.RefreshAndReconcileOnceAsync(CancellationToken.None);
 
             Assert.Equal(2, service.GetManagedAccountActiveSessionCount(accountId));
-            Assert.Equal(2, server.AcceptedConnectionCount);
+            Assert.Equal(3, server.AcceptedConnectionCount);
 
             await service.StopAsync(CancellationToken.None);
+            await WaitForConditionAsync(() => server.ActiveConnectionCount == 0);
         }
 
         /// <summary>
@@ -887,9 +888,14 @@ namespace VectorNNTP.Backfiller.Tests
                 Plaintext = 0,
 
                 /// <summary>
+                /// Accepted connection is closed immediately without sending a greeting.
+                /// </summary>
+                ImmediateClose = 1,
+
+                /// <summary>
                 /// Implicit TLS transport where the connection starts with a TLS handshake.
                 /// </summary>
-                ImplicitTls = 1,
+                ImplicitTls = 2,
             }
 
             /// <summary>
@@ -1110,6 +1116,13 @@ namespace VectorNNTP.Backfiller.Tests
                 try
                 {
                     using NetworkStream networkStream = client.GetStream();
+
+                    if (transport == ConnectionTransport.ImmediateClose)
+                    {
+                        client.Dispose();
+                        return;
+                    }
+
                     Stream protocolStream = networkStream;
 
                     if (transport == ConnectionTransport.ImplicitTls)

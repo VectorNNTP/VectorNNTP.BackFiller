@@ -190,6 +190,8 @@ internal static class TransitBenchmarkOrchestrator
             TransitServerHost: config.EndpointHost,
             TransitServerPort: config.EndpointPort,
             TransitServerUseSsl: config.EndpointUseSsl,
+            BindPort: 119,
+            ConfiguredBindAddressTokens: ["127.0.0.1"],
             ShutdownGracePeriodSeconds: 120,
             ShutdownDrainQueuedWork: true,
             ShutdownFinishActiveArticles: true,
