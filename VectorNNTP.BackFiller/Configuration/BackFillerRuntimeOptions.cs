@@ -39,6 +39,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="TransitShutdownAbsoluteMaximum">Absolute transit shutdown duration ceiling.</param>
     /// <param name="CanonicalBindAddresses">Canonical, deduplicated bind-address set validated at startup.</param>
     /// <param name="LetsEncrypt">Validated immutable Let's Encrypt/ACME runtime options.</param>
+    /// <param name="RabbitMq">Validated immutable RabbitMQ runtime options projected from BackFiller:RabbitMQ.</param>
     internal sealed record BackFillerRuntimeOptions(
         string CanonicalBackFillerFqdn,
         int BackFillerId,
@@ -51,13 +52,13 @@ namespace VectorNNTP.Backfiller.Configuration
         string TransitServerHost,
         int TransitServerPort,
         bool TransitServerUseSsl,
-        int BindPort,
-        IReadOnlyList<string>? ConfiguredBindAddressTokens,
-        int ShutdownGracePeriodSeconds,
-        bool ShutdownDrainQueuedWork,
-        bool ShutdownFinishActiveArticles,
-        int RabbitMqMaximumShutdownDrainTimeoutSeconds,
-        int WriteBatchCoalesceMicroseconds,
+        int BindPort = 119,
+        IReadOnlyList<string>? ConfiguredBindAddressTokens = null,
+        int ShutdownGracePeriodSeconds = 30,
+        bool ShutdownDrainQueuedWork = true,
+        bool ShutdownFinishActiveArticles = true,
+        int RabbitMqMaximumShutdownDrainTimeoutSeconds = 30,
+        int WriteBatchCoalesceMicroseconds = 250,
         int TransitQueueMaxItemCount = 2048,
         long TransitQueueMaxPayloadBytes = 536870912,
         int TransitRetryMaxAttempts = 3,
@@ -66,7 +67,8 @@ namespace VectorNNTP.Backfiller.Configuration
         TimeSpan? TransitShutdownDrainInactivityWatchdog = null,
         TimeSpan? TransitShutdownAbsoluteMaximum = null,
         IReadOnlyList<IPAddress>? CanonicalBindAddresses = null,
-        BackFillerLetsEncryptRuntimeOptions? LetsEncrypt = null)
+        BackFillerLetsEncryptRuntimeOptions? LetsEncrypt = null,
+        RabbitMqRuntimeOptions? RabbitMq = null)
     {
         /// <summary>
         /// Gets the effective reconnect initialization timeout.

@@ -59,6 +59,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
 
                 IReadOnlyList<IPAddress> canonicalBindAddresses = BindAddressDnsAddressDeriver.DeriveCanonicalDnsAddresses(backFiller.BindAddress);
                 BackFillerLetsEncryptRuntimeOptions letsEncryptRuntimeOptions = BuildLetsEncryptRuntimeOptions(backFiller, validatedCertificateDirectory, canonicalBackFillerFqdn);
+                RabbitMqRuntimeOptions rabbitMqRuntimeOptions = BuildRabbitMqRuntimeOptions(backFiller, canonicalBackFillerFqdn);
 
                 return new BackFillerRuntimeOptions(
                     CanonicalBackFillerFqdn: canonicalBackFillerFqdn,
@@ -86,13 +87,76 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitShutdownDrainInactivityWatchdog: TimeSpan.FromSeconds(30),
                     TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30),
                     CanonicalBindAddresses: canonicalBindAddresses,
-                    LetsEncrypt: letsEncryptRuntimeOptions);
+                    LetsEncrypt: letsEncryptRuntimeOptions,
+                    RabbitMq: rabbitMqRuntimeOptions);
             }
             catch (Exception ex)
             {
                 configErrors.Add(("BackFiller", $"Failed to build runtime options snapshot: {ex.Message}"));
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Builds immutable RabbitMQ runtime settings from validated BackFiller configuration.
+        /// </summary>
+        /// <param name="backFiller">Validated BackFiller options.</param>
+        /// <param name="canonicalBackFillerFqdn">Authoritative generated BackFiller FQDN.</param>
+        /// <returns>Immutable RabbitMQ runtime options.</returns>
+        private static RabbitMqRuntimeOptions BuildRabbitMqRuntimeOptions(
+            BackFillerOptions backFiller,
+            string canonicalBackFillerFqdn)
+        {
+            ArgumentNullException.ThrowIfNull(backFiller);
+            ArgumentException.ThrowIfNullOrWhiteSpace(canonicalBackFillerFqdn);
+
+            RabbitMqOptions rabbitMq = backFiller.RabbitMQ
+                ?? throw new InvalidOperationException("BackFiller:RabbitMQ is required to build runtime options.");
+
+            string[] hosts = [.. (rabbitMq.Hosts ?? [])
+                .Where(static x => !string.IsNullOrWhiteSpace(x))
+                .Select(static x => x.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+            string? username = !string.IsNullOrWhiteSpace(rabbitMq.Username)
+                ? rabbitMq.Username.Trim()
+                : null;
+
+            string? password = rabbitMq.Password;
+
+            string virtualHost = !string.IsNullOrWhiteSpace(rabbitMq.VirtualHost)
+                ? rabbitMq.VirtualHost.Trim()
+                : "/";
+
+            return new RabbitMqRuntimeOptions(
+                Hosts: hosts,
+                Port: rabbitMq.Port ?? 0,
+                Username: username,
+                Password: password,
+                VirtualHost: virtualHost,
+                EnableSsl: rabbitMq.EnableSsl ?? false,
+                ChannelLeaseTimeoutSeconds: rabbitMq.ChannelLeaseTimeoutSeconds ?? 0,
+                RpcTimeoutSeconds: rabbitMq.RpcTimeoutSeconds ?? 0,
+                ConnectionBlockedTimeoutSeconds: rabbitMq.ConnectionBlockedTimeoutSeconds ?? 0,
+                ChannelPoolSize: rabbitMq.ChannelPoolSize ?? 0,
+                MinConnections: rabbitMq.MinConnections ?? 0,
+                MaxConnections: rabbitMq.MaxConnections ?? 0,
+                MaxConsecutiveRecoveryFailures: rabbitMq.MaxConsecutiveRecoveryFailures ?? 0,
+                MaxPendingLeaseWaiters: rabbitMq.MaxPendingLeaseWaiters ?? 0,
+                ConnectionScaleDownIdleSeconds: rabbitMq.ConnectionScaleDownIdleSeconds ?? 0,
+                ScaleDownCooldownSeconds: rabbitMq.ScaleDownCooldownSeconds ?? 0,
+                NetworkRecoveryIntervalSeconds: rabbitMq.NetworkRecoveryIntervalSeconds ?? 0,
+                PoolReconnectBaseDelayMs: rabbitMq.PoolReconnectBaseDelayMs ?? 0,
+                PoolReconnectMaxDelayMs: rabbitMq.PoolReconnectMaxDelayMs ?? 0,
+                MinimumConnectionLifetimeSeconds: rabbitMq.MinimumConnectionLifetimeSeconds ?? 0,
+                PublishConfirmTimeoutSeconds: rabbitMq.PublishConfirmTimeoutSeconds ?? 0,
+                MaximumShutdownDrainTimeoutSeconds: rabbitMq.MaximumShutdownDrainTimeoutSeconds ?? 0,
+                DegradedThreshold: rabbitMq.DegradedThreshold ?? 0,
+                UnhealthyThreshold: rabbitMq.UnhealthyThreshold ?? 0,
+                RequestedHeartbeatSeconds: rabbitMq.RequestedHeartbeatSeconds ?? 0,
+                SocketTimeoutSeconds: rabbitMq.SocketTimeoutSeconds ?? 0,
+                RequestedChannelMax: rabbitMq.RequestedChannelMax ?? 0,
+                ConsumerPrefetchCount: rabbitMq.ConsumerPrefetchCount);
         }
 
         /// <summary>

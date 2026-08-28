@@ -1,0 +1,1339 @@
+VSTest version 18.7.0 (x64)
+
+The following Tests are available:
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenScanningMixedTerminators_ReturnsExpectedIndex(text: "abc\r\ndef", startOffset: 0, expected: 3)
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenScanningMixedTerminators_ReturnsExpectedIndex(text: "abc\ndef", startOffset: 0, expected: 3)
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenScanningMixedTerminators_ReturnsExpectedIndex(text: "abc\rdef\nxyz", startOffset: 0, expected: 7)
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenScanningMixedTerminators_ReturnsExpectedIndex(text: "\nxyz", startOffset: 0, expected: 0)
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenScanningMixedTerminators_ReturnsExpectedIndex(text: "\r\nxyz", startOffset: 0, expected: 0)
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenScanningMixedTerminators_ReturnsExpectedIndex(text: "abcdef", startOffset: 0, expected: -1)
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenCrossingVectorBoundaries_MatchesExpectedResult
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.AdvancePastLineTerminator_WhenCalledWithDifferentTerminators_ReturnsExpectedOffset
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.FindLineStartingWith_WhenSearchingForAnchoredPrefix_OnlyMatchesLineStart
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenComparedToScalarReference_ProducesIdenticalResults
+    VectorNNTP.Backfiller.Tests.ArticleLineScannerTests.IndexOfCrLf_WhenRandomizedAcrossThousandsOfInputs_MatchesScalarReference
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateProvisioningServiceTests.EnsureCertificateAvailabilityAsync_WhenCertificateMissing_ProvisionsAndPublishes
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateProvisioningServiceTests.TryRenewIfDueAsync_WhenCertificateNotDue_DoesNotIssue
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateStoreTests.EvaluateExistingCertificateAsync_WhenCertificateMissing_ReturnsUnusableAndRequiresRenewal
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateStoreTests.EvaluateExistingCertificateAsync_WhenValidCertificateOutsideRenewalWindow_ReturnsUsableWithoutRenewal
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateStoreTests.EvaluateExistingCertificateAsync_WhenCertificateInsideRenewalWindow_ReturnsRequiresRenewal
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateStoreTests.EvaluateExistingCertificateAsync_WhenCertificateFqdnMismatch_ReturnsUnusable
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateStoreTests.PersistIssuedCertificateAsync_WritesLoadablePfxAndKey
+    VectorNNTP.Backfiller.Tests.BackFillerCertificateStoreTests.PersistIssuedCertificateAsync_WhenLeafIsEcdsa_WritesLoadablePfxAndKey
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenInputsAreValid_ReturnsCanonicalFqdn
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenInputsContainWhitespace_TrimsAndNormalizes
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenIdIsValid_ReturnsTwoDigitId(id: 0, expected: "backfiller00.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenIdIsValid_ReturnsTwoDigitId(id: 1, expected: "backfiller01.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenIdIsValid_ReturnsTwoDigitId(id: 9, expected: "backfiller09.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenIdIsValid_ReturnsTwoDigitId(id: 99, expected: "backfiller99.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenNameMissing_ThrowsArgumentException(name: null)
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenNameMissing_ThrowsArgumentException(name: "")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenNameMissing_ThrowsArgumentException(name: "   ")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenDnsSuffixMissing_ThrowsArgumentException(dnsSuffix: null)
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenDnsSuffixMissing_ThrowsArgumentException(dnsSuffix: "")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenDnsSuffixMissing_ThrowsArgumentException(dnsSuffix: "   ")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenIdOutOfRange_ThrowsArgumentOutOfRangeException(id: -1)
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenIdOutOfRange_ThrowsArgumentOutOfRangeException(id: 100)
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenNameUsesAllowedCasingOrHyphen_PreservesCanonicalizationContract(name: "Back-Filler", expected: "back-filler01.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenNameUsesAllowedCasingOrHyphen_PreservesCanonicalizationContract(name: "BACKFILLER", expected: "backfiller01.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerFqdnGenerationTests.BuildBackFillerFqdn_WhenNameUsesAllowedCasingOrHyphen_PreservesCanonicalizationContract(name: "backfiller", expected: "backfiller01.usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenInputsAreValid_ReturnsNoErrors
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenDnsSuffixIsValidMultiLabel_ReturnsNoDnsSuffixError
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenDnsSuffixContainsInvalidComponents_ReturnsDnsSuffixError(dnsSuffix: "https://usenet.ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenDnsSuffixContainsInvalidComponents_ReturnsDnsSuffixError(dnsSuffix: "usenet.ninja:443")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenDnsSuffixContainsInvalidComponents_ReturnsDnsSuffixError(dnsSuffix: "usenet.ninja/path")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenDnsSuffixContainsInvalidComponents_ReturnsDnsSuffixError(dnsSuffix: "usenet ninja")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenDnsSuffixMissing_ReturnsDnsSuffixError
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsMissing_ReturnsNameError(name: null)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsMissing_ReturnsNameError(name: "")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsMissing_ReturnsNameError(name: "   ")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsValidDnsLabel_ReturnsNoNameError(name: "a")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsValidDnsLabel_ReturnsNoNameError(name: "backfiller")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsValidDnsLabel_ReturnsNoNameError(name: "back-filler")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsValidDnsLabel_ReturnsNoNameError(name: "BACKFILLER")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameIsValidDnsLabel_ReturnsNoNameError(name: "a1")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameContainsInvalidDnsLabelCharacters_ReturnsNameError(name: "back filler")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameContainsInvalidDnsLabelCharacters_ReturnsNameError(name: "back/filler")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameContainsInvalidDnsLabelCharacters_ReturnsNameError(name: "back.filler")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameContainsInvalidDnsLabelCharacters_ReturnsNameError(name: "back_filler")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameContainsInvalidDnsLabelCharacters_ReturnsNameError(name: "back@filler")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameHasInvalidHyphenPlacement_ReturnsNameError(name: "-backfiller")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNameHasInvalidHyphenPlacement_ReturnsNameError(name: "backfiller-")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenNamePlusIdProducesHostLabelOverMaximumLength_ReturnsNameError
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenIdIsInAllowedRange_ReturnsNoIdError(id: 0)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenIdIsInAllowedRange_ReturnsNoIdError(id: 1)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenIdIsInAllowedRange_ReturnsNoIdError(id: 99)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenIdIsOutsideAllowedRange_ReturnsIdError(id: -1)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.Validate_WhenIdIsOutsideAllowedRange_ReturnsIdError(id: 100)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.FormatBackFillerId_WhenIdIsInRange_ReturnsTwoDigitZeroPaddedValue(id: 0, expected: "00")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.FormatBackFillerId_WhenIdIsInRange_ReturnsTwoDigitZeroPaddedValue(id: 1, expected: "01")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.FormatBackFillerId_WhenIdIsInRange_ReturnsTwoDigitZeroPaddedValue(id: 99, expected: "99")
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.FormatBackFillerId_WhenIdIsOutOfRange_ThrowsArgumentOutOfRangeException(id: -1)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.FormatBackFillerId_WhenIdIsOutOfRange_ThrowsArgumentOutOfRangeException(id: 100)
+    VectorNNTP.Backfiller.Tests.BackFillerIdentityValidatorTests.BackFillerOptions_DefaultsDnsSuffixToUsenetNinja
+    VectorNNTP.Backfiller.Tests.BenchmarkArtifactContractTests.BenchmarkResultArtifact_From_MapsCoreBenchmarkAndConfigValuesWithoutReinterpretation
+    VectorNNTP.Backfiller.Tests.BenchmarkArtifactContractTests.JsonArtifactWriter_Serialize_ContainsExpectedContractShapeAndPropertyNames
+    VectorNNTP.Backfiller.Tests.BenchmarkArtifactContractTests.BenchmarkResultArtifact_ToCsv_PreservesHeaderOrderEscapingAndNewlineContract
+    VectorNNTP.Backfiller.Tests.BenchmarkConsoleReporterContractTests.PrintFinalReport_ContainsExpectedSectionsInStableOrder
+    VectorNNTP.Backfiller.Tests.BenchmarkConsoleReporterContractTests.PrintFinalReport_WhenQueueDepthHasNoSamples_PrintsExplicitNoSampleMarkers
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenStartedWithDefaults_BindsToPort1190
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenTakethisSubmitted_ConsumesPayloadAndReturnsCorrelated239
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenMultipleSubmissionsAreSent_ConsumesAllPayloadsAndReturnsAccepted
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenTwoTakethisCommandsArePipelinedInSingleWrite_ConsumesBothAndReturnsTwoAccepted
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenTerminatorIsImmediatelyFollowedByNextTakethis_KeepsNextCommandReadable
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenTerminatorAndNextCommandArriveInPartialChunks_ParsesWithoutOverflowOrDisconnect
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenCommandsArePipelinedWithMixedCaseAndCheck_ParsesAndRespondsByCommandKind
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenCommandIsFragmentedAcrossManyWrites_ParsesTakethisAndPayload
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenQuitSentAfterTakethisCompletion_ReturnsClosingResponse
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.FakeServer_WhenQuitArrivesWithPendingTakethis_RespondsWithClosingAndStopsWithoutDrain
+    VectorNNTP.Backfiller.Tests.BenchmarkDevNullTransitServerTests.TransitBenchmarkConfigLoad_WhenFakeServerOverridesProvided_AppliesEndpointIdentityAndOverrides
+    VectorNNTP.Backfiller.Tests.CreateBenchmarkResultContractTests.CreateBenchmarkResult_MapsDeterministicInputsToExpectedContractValues
+    VectorNNTP.Backfiller.Tests.CreateBenchmarkResultContractTests.CreateBenchmarkResult_UsesExpectedThroughputAndBackpressureFormulas
+    VectorNNTP.Backfiller.Tests.CreateBenchmarkResultContractTests.CreateBenchmarkResult_HandlesZeroObservationInputsAsDefined
+    VectorNNTP.Backfiller.Tests.CreateBenchmarkResultContractTests.CreateBenchmarkResult_UsesProcessAndGcFallbacksWhenRuntimeSnapshotMemoryValuesUnavailable
+    VectorNNTP.Backfiller.Tests.CreateBenchmarkResultContractTests.CreateBenchmarkResult_UsesCurrentGcCollectionCountsAtResultCreationTime
+    VectorNNTP.Backfiller.Tests.FixedArticleLimiterTests.TryReserveNext_WhenTargetIsOne_AllowsExactlyOneReservation
+    VectorNNTP.Backfiller.Tests.FixedArticleLimiterTests.TryReserveNext_WhenTargetIsTwoHundred_AllowsExactlyTwoHundredReservations
+    VectorNNTP.Backfiller.Tests.FixedArticleLimiterTests.TryReserveNext_WhenInvokedConcurrently_IsGloballyBoundedToTargetAsync
+    VectorNNTP.Backfiller.Tests.FixedArticleLimiterTests.Constructor_WhenTargetIsNotPositive_ThrowsArgumentOutOfRangeException(target: 0)
+    VectorNNTP.Backfiller.Tests.FixedArticleLimiterTests.Constructor_WhenTargetIsNotPositive_ThrowsArgumentOutOfRangeException(target: -1)
+    VectorNNTP.Backfiller.Tests.MeasurementExecutionEngineDrainLifecycleTests.DrainAndShutdownAsync_WhenFirstPublishLaneStalls_PreemptsPublisherAndCompletesDispatcherDrain
+    VectorNNTP.Backfiller.Tests.MeasurementMetricsClassificationContractTests.OnPublishResult_ClassifiesStatusesIntoAcceptedRejectedAndAmbiguousContracts
+    VectorNNTP.Backfiller.Tests.MeasurementMetricsQueueTelemetryTests.Snapshot_WhenNoQueueSamples_ReportsExplicitNoSampleState
+    VectorNNTP.Backfiller.Tests.MeasurementMetricsQueueTelemetryTests.Snapshot_WhenSingleQueueSample_ReportsExactMinAveragePeak
+    VectorNNTP.Backfiller.Tests.MeasurementMetricsQueueTelemetryTests.Snapshot_WhenMultipleQueueSamplesIncludeZero_ComputesExpectedAggregates
+    VectorNNTP.Backfiller.Tests.MeasurementMetricsQueueTelemetryTests.Snapshot_WhenQueueDepthChangesRapidly_NeverReportsNegativeMetrics
+    VectorNNTP.Backfiller.Tests.MeasurementRunCoordinatorFixedCountContractTests.RunAsync_Source_UsesProducerCompletionPathWhenMeasurementArticleCountIsConfigured
+    VectorNNTP.Backfiller.Tests.MeasurementRunCoordinatorFixedCountContractTests.RunCoreAsync_Source_SkipsWarmupWhenMeasurementArticleCountIsConfigured
+    VectorNNTP.Backfiller.Tests.MeasurementRunCoordinatorFixedCountContractTests.DrainAndShutdownAsync_Source_CompletesQueueAfterProducerCompletion
+    VectorNNTP.Backfiller.Tests.RuntimeExecutionIdentityCaptureTests.Capture_RuntimeAssemblyPath_UsesBenchmarkAssemblyIdentity
+    VectorNNTP.Backfiller.Tests.RuntimeExecutionIdentityCaptureTests.Capture_RuntimeAssemblyPath_IsNotProductionDependencyAssemblyPath
+    VectorNNTP.Backfiller.Tests.RuntimeExecutionIdentityCaptureTests.Capture_ProductionDependencyIdentity_MatchesTransitPublisherAssembly
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenBenchmarkAndProductionDependencyMatch_DoesNotThrow
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenBenchmarkAssemblyPathDiffers_ThrowsWithBenchmarkAssemblyLabel
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenProductionDependencyIsCopiedButBinaryIdentical_DoesNotThrow
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenProductionBinaryDiffersButVersionsMatch_ThrowsWithBinaryIdentityDetails
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenProductionAssemblyVersionDiffers_Throws
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenProductionFileVersionDiffers_Throws
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenTargetFrameworkDiffers_Throws
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenArchitectureDiffers_Throws
+    VectorNNTP.Backfiller.Tests.RuntimeIdentityGuardTests.EnsureMatches_WhenExpectedProductionArtifactMissing_ThrowsClearly
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCliOptionsTests.Parse_WhenArticleCountProvided_ParsesExpectedValue
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCliOptionsTests.Parse_WhenArticleCountIsInvalid_ThrowsArgumentException(raw: "0")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCliOptionsTests.Parse_WhenArticleCountIsInvalid_ThrowsArgumentException(raw: "-1")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCliOptionsTests.Parse_WhenProductionDependencyIdentityOptionsProvided_ParsesExpectedValues
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkConfigArticleCountValidationTests.Load_WhenArticleCountAndDurationSecondsAreBothSpecified_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.TransitSingleTraceRunnerTests.ResolveRequestedArticleCount_WhenNull_DefaultsToOne
+    VectorNNTP.Backfiller.Tests.TransitSingleTraceRunnerTests.ResolveRequestedArticleCount_WhenSpecified_ReturnsSpecifiedValue
+    VectorNNTP.Backfiller.Tests.TransitSingleTraceRunnerTests.PublishSequentiallyAsync_WhenArticleCountOne_PublishesExactlyOnce
+    VectorNNTP.Backfiller.Tests.TransitSingleTraceRunnerTests.PublishSequentiallyAsync_WhenArticleCountTen_PublishesTenSequentially
+    VectorNNTP.Backfiller.Tests.TransitSingleTraceRunnerTests.PublishWithPipelineDepthAsync_WhenDepthTwo_CanHaveTwoOutstandingConcurrently
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenExplicitIpv4AndIpv6Configured_ReturnsExplicitAddressSet
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardAsteriskConfigured_UsesEligibleInterfaceAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardAnyConfigured_UsesEligibleInterfaceAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenIpv4WildcardConfigured_UsesEligibleIpv4InterfaceAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenIpv6WildcardConfigured_UsesEligibleIpv6InterfaceAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenMixedWildcardAndExplicitConfigured_ReturnsUnionWithoutWildcardLiterals
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenExplicitAddressIsNonAdvertisable_ExcludesAddress
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardLiteralsConfigured_DoesNotReturnWildcardAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenMultipleWildcardValuesConfigured_DerivesUnionOfEligibleAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenAnyAndIpv4WildcardConfigured_DerivesBothAddressFamilies
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenWildcardIpLiteralProvided_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenIpv4WildcardAndExplicitIpv6Configured_ReturnsExpectedUnion
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenIpv6WildcardAndExplicitIpv4Configured_ReturnsExpectedUnion
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardConfigured_ExcludesNonAdvertisableInterfaceAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardAndExplicitOverlap_DeduplicatesOutput
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenExplicitRfc1918AndWildcardConfigured_IncludesExpectedAddresses
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardConfiguredAndNoEligibleInterfaces_ReturnsEmptySet
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.DeriveCanonicalDnsAddresses_WhenWildcardConfigured_UsesProvidedInterfaceSourceOnly
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenWildcardTokenProvided_ReturnsTrue(value: "*")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenWildcardTokenProvided_ReturnsTrue(value: "Any")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenWildcardTokenProvided_ReturnsTrue(value: "any")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenWildcardTokenProvided_ReturnsTrue(value: " Any ")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenNonWildcardValueProvided_ReturnsFalse(value: null)
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenNonWildcardValueProvided_ReturnsFalse(value: "")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenNonWildcardValueProvided_ReturnsFalse(value: " ")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenNonWildcardValueProvided_ReturnsFalse(value: "127.0.0.1")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenNonWildcardValueProvided_ReturnsFalse(value: "0.0.0.0")
+    VectorNNTP.Backfiller.Tests.BindAddressDnsAddressDeriverTests.IsWildcardBindAddressToken_WhenNonWildcardValueProvided_ReturnsFalse(value: "::")
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenIpv4RecordsDiffer_ReconcilesExactARecordSet
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenIpv6RecordsDiffer_ReconcilesExactAaaaRecordSet
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenMixedAddressFamiliesConfigured_ReconcilesAAndAaaa
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenDesiredSetDiffers_ComputesExactFinalState
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenDuplicateRecordsExist_RemovesDuplicates
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenRunTwiceWithSameState_IsIdempotent
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenUnrelatedRecordTypesExist_LeavesThemUntouched
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenIpv6RepresentationsDifferTextually_TreatsAsEquivalent
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenCancelled_PropagatesOperationCanceledException
+    VectorNNTP.Backfiller.Tests.CloudflareDnsSynchronizationProbeTests.SynchronizeGeneratedBackFillerDnsAsync_WhenCloudflareFacadeThrows_ReturnsDependencyFailure
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.WhenConnectionStringsSection_ThenValueBearingEntryIsDetectedAndSanitized
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "ConnectionStrings:Main", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "Database:ConnectionString", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "MyDbConnectionString", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "Database:Connection_String", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "MyDbConnection_String", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "ConnectionString", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "Connection_String", expectedResult: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "DatabaseHost", expectedResult: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsConnectionString_DetectsVariousPatterns(key: "Database:Password", expectedResult: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesCredentialsUsingAllowlist
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_HandlesQuotedValuesWithSemicolons
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_WhenMalformed_ReturnsNull
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;Password=secret", credentialProperty: "Password")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;Pwd=secret", credentialProperty: "Pwd")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;User Password=secret", credentialProperty: "User Password")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;AccessToken=abc123", credentialProperty: "AccessToken")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;ClientSecret=xyz789", credentialProperty: "ClientSecret")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;AccountKey=key123", credentialProperty: "AccountKey")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;SharedAccessSignature=sas123", credentialProperty: "SharedAccessSignature")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;ApiKey=apikey123", credentialProperty: "ApiKey")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;Secret=mysecret", credentialProperty: "Secret")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;Token=mytoken", credentialProperty: "Token")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;EncryptionSecret=encsecret", credentialProperty: "EncryptionSecret")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;AccessTokenValue=tokenval", credentialProperty: "AccessTokenValue")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_RemovesAllCredentialProperties(connectionString: "Server=db01;CustomApiKey=customkey", credentialProperty: "CustomApiKey")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_PreservesOperationalProperties
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_HandlesQuotedCredentialsWithSpecialCharacters(connectionString: "Server=db01;Password=\"abc;123\";Database=NNTP", secretValue: "abc;123")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_HandlesQuotedCredentialsWithSpecialCharacters(connectionString: "Server=db01;Password=\"value=with=equals\";Databas"···, secretValue: "value=with=equals")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_HandlesQuotedCredentialsWithSpecialCharacters(connectionString: "Server=db01;Password=\"value;with;multiple;semicol"···, secretValue: "value;with;multiple;semicolons")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_HandlesQuotedCredentialsWithSpecialCharacters(connectionString: "Server=db01;Pwd=\"quoted=value;123\";Port=5432", secretValue: "quoted=value;123")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesPropertyOrdering
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Server=db01", aliasForm: "Data Source=db01")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "TrustServerCertificate=false", aliasForm: "Trust Server Certificate=false")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Min Pool Size=5", aliasForm: "Minimum Pool Size=5")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Min Pool Size=5", aliasForm: "MinPoolSize=5")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Max Pool Size=50", aliasForm: "Maximum Pool Size=50")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Max Pool Size=50", aliasForm: "MaxPoolSize=50")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Connection Timeout=30", aliasForm: "Timeout=30")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Connection Timeout=30", aliasForm: "ConnectTimeout=30")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Application Name=MyApp", aliasForm: "ApplicationName=MyApp")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Port=5432", aliasForm: "Server Port=5432")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Username=user1", aliasForm: "UID=user1")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Username=user1", aliasForm: "UserID=user1")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Username=user1", aliasForm: "User ID=user1")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Database=MyDB", aliasForm: "InitialCatalog=MyDB")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Database=MyDB", aliasForm: "Initial Catalog=MyDB")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Server=db01", aliasForm: "Address=db01")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Server=db01", aliasForm: "Host=db01")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Server=db01", aliasForm: "DataSource=db01")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "Integrated Security=true", aliasForm: "IntegratedSecurity=true")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_NormalizesAliasesToCanonicalForm(canonical: "MultipleActiveResultSets=true", aliasForm: "Multiple Active Result Sets=true")
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.SanitizeConnectionString_CombinesAliasNormalizationAndOrdering
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:Password", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:Username", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:Name", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:Port", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:Host", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "TokenBucket", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "SecretConfiguration", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "PasswordPolicy", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "KeyPerformanceMetrics", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "TurkeyMode", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "MonkeyCount", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Encryption:EncryptionKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Auth:PrivateKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "AWS:SecretKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Azure:AccessKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Application:Name", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "OAuth:ClientSecret", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:AdminPwd", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Auth:BearerToken", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:CustomSecret", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "JwtSigningKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "CustomApiKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "DatabasePassword", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "MyPassword", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "SMTP:Passwd", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Database:Pwd", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Auth:Token", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "MySecret", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Credentials", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Jwt:SigningKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Auth:ApiKey", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "LDAP:BindPasswd", expectedSensitive: True)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.IsSensitiveConfigurationKey_UsesSegmentBasedMatching(key: "Logging:Level", expectedSensitive: False)
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_IsDeterministic
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_IncludesVersionPrefix
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_DifferentConfigProducesDifferentFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_SecretChangesDoNotAffectFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_ConnectionStringCredentialChangesIgnored_OperationalChangesDetected
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_ApiKeyChangesDoNotAffectFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_DatabaseServerChangesProduceDifferentFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_DatabaseNameChangesProduceDifferentFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_UsernameChangesProduceDifferentFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_OrderingDoesNotAffectFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_MalformedConnectionStrings_AreExcluded
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_MalformedVsValid_ProduceDifferentFingerprints
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_ConnectionStringPropertyOrderingDoesNotMatter
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_ConnectionStringAliasesAreEquivalent
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_ConnectionStringPortChangesProduceDifferentFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_DnsSuffixCanonicalizationParity_ProducesSameFingerprint
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.CalculateConfigurationFingerprint_ComplexRealWorldScenario
+    VectorNNTP.Backfiller.Tests.ConfigurationFingerprintTests.FingerprintCode_NeverCallsTryGetPassword
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_NullSettingName_Throws
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_EmptySettingName_Throws
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WhitespaceSettingName_Throws
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_NullConnectionString_ReturnsRequiredError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_EmptyConnectionString_ReturnsRequiredError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WhitespaceConnectionString_ReturnsRequiredError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MalformedConnectionString_ReturnsSyntaxError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_InvalidKeyValuePairs_ReturnsSyntaxError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MissingServer_ReturnsServerRequiredError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_EmptyServer_ReturnsServerError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "Host=localhost;Database=GrabberDB;User ID=admin;Pa"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "Data Source=localhost;Database=GrabberDB;User ID=a"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "DataSource=localhost;Database=GrabberDB;User ID=ad"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "Address=localhost;Database=GrabberDB;User ID=admin"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "Addr=localhost;Database=GrabberDB;User ID=admin;Pa"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidServerKeyVariations_AcceptsServerValue(connectionString: "Network Address=localhost;Database=GrabberDB;User "···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MissingDatabase_ReturnsDatabaseRequiredError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_EmptyDatabase_ReturnsDatabaseError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidDatabaseKeyVariations_AcceptsDatabaseValue(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ValidDatabaseKeyVariations_AcceptsDatabaseValue(connectionString: "Server=localhost;Initial Catalog=GrabberDB;User ID"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MissingAuthentication_ReturnsAuthenticationRequiredError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernamePasswordVariations_AcceptsAuthentication(connectionString: "Server=localhost;Database=GrabberDB;User ID=sa;Pas"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernamePasswordVariations_AcceptsAuthentication(connectionString: "Server=localhost;Database=GrabberDB;UserID=sa;Pass"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernamePasswordVariations_AcceptsAuthentication(connectionString: "Server=localhost;Database=GrabberDB;Username=admin"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernamePasswordVariations_AcceptsAuthentication(connectionString: "Server=localhost;Database=GrabberDB;Uid=admin;Pass"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernamePasswordVariations_AcceptsAuthentication(connectionString: "Server=localhost;Database=GrabberDB;User name=admi"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernamePasswordVariations_AcceptsAuthentication(connectionString: "Server=localhost;Database=GrabberDB;User=admin;Pas"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_UsernameWithoutPassword_AcceptsAuthentication
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ExcessiveMinPoolSize_ReturnsPoolingWarning
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ExcessiveMaxPoolSize_ReturnsPoolingWarning
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AppropriatePoolSize_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AppropriatePoolSize_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AppropriatePoolSize_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AppropriatePoolSize_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_NoPoolingConfiguration_AcceptsConnectionString
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_InvalidMinPoolSizeSingleAlias_ReturnsInvalidValueError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_InvalidMaxPoolSizeSingleAlias_ReturnsInvalidValueError
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ExcessiveMinPoolSize_AlternativeAliases_ReturnsPoolingWarning(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ExcessiveMinPoolSize_AlternativeAliases_ReturnsPoolingWarning(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ExcessiveMaxPoolSize_AlternativeAliases_ReturnsPoolingWarning(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_ExcessiveMaxPoolSize_AlternativeAliases_ReturnsPoolingWarning(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlAcceptsSyntacticallyValidCustomPort(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlAcceptsSyntacticallyValidCustomPort(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlAcceptsSyntacticallyValidCustomPort(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithSslMode_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithSslMode_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithSslMode_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithCharSet_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithCharSet_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithTimeouts_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithTimeouts_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithTimeouts_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithAllowUserVariables_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithAllowUserVariables_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithMultipleOptions_AcceptsComprehensiveConfiguration
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WellFormedMySqlConnectionStrings_ReturnsNoErrors(connectionString: "Server=localhost;Database=GrabberDB;User ID=grabbe"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WellFormedMySqlConnectionStrings_ReturnsNoErrors(connectionString: "Host=localhost;Port=3306;Database=GrabberDB;Userna"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WellFormedMySqlConnectionStrings_ReturnsNoErrors(connectionString: "Data Source=localhost;Initial Catalog=GrabberDB;UI"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WellFormedMySqlConnectionStrings_ReturnsNoErrors(connectionString: "Server=localhost;Port=3306;Database=GrabberDB;User"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WellFormedMySqlConnectionStrings_ReturnsNoErrors(connectionString: "Address=localhost;Database=GrabberDB;User ID=grabb"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_WellFormedMySqlConnectionStrings_ReturnsNoErrors(connectionString: "Network Address=localhost;Initial Catalog=GrabberD"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithoutPassword_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=grabbe"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithoutPassword_AcceptsConfiguration(connectionString: "Host=localhost;Port=3306;Database=GrabberDB;Userna"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlWithoutPassword_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=grabbe"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlUnsupportedWindowsAuthentication_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;Integrated Sec"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlUnsupportedWindowsAuthentication_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;IntegratedSecu"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlUnsupportedWindowsAuthentication_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;Trusted_Connec"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MySqlUnsupportedWindowsAuthentication_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;Integrated Sec"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AmbiguousConflictingAliases_ReturnsError(connectionString: "Server=db01;Host=db02;Database=GrabberDB;User ID=a"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AmbiguousConflictingAliases_ReturnsError(connectionString: "Server=localhost;Database=dbA;Initial Catalog=dbB;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AmbiguousConflictingAliases_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;User ID=alice;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AmbiguousConflictingAliases_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AmbiguousConflictingAliases_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AmbiguousConflictingAliases_ReturnsError(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_RedundantButIdenticalAliases_AcceptsConfiguration(connectionString: "Server=db01;Host=db01;Database=GrabberDB;User ID=a"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_RedundantButIdenticalAliases_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;Initial Catalo"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_RedundantButIdenticalAliases_AcceptsConfiguration(connectionString: "Server=localhost;Database=GrabberDB;User ID=admin;"···)
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_MultipleIssues_ReturnsAllErrors
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_AllPoolingIssues_ReportsAllWarnings
+    VectorNNTP.Backfiller.Tests.ConnectionStringValidationTests.Validate_CustomSettingName_UsesProvidedName
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.StartAsync_CompletesStartupInitialization
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.StartAsync_WhenCanceled_DoesNotCompleteStartupInitialization
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.StartAsync_WhenShutdownCancellationOccurs_DoesNotLogAccountAddFailedWarningAsync
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.StartAsync_WhenSnapshotContainsAccount_ConvergesToConfiguredPersistentCapacity
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenAccountRemoved_DisposesManagedRuntime
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenConfigurationUnchanged_RemainsIdempotent
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenMaxConnectionsIncreases_AddsRequiredSessionsOnly
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenNewAccountAppears_CreatesIndependentRuntime
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenMaxConnectionsDecreases_RetiresExcessSessionsOnly
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenKeepAliveChanges_DoesNotReconnectOrReauthenticate
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenCredentialsChange_RecreatesAndReauthenticates
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenHostnameChanges_ReplacesSessions
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenUseSslChanges_ReplacesAffectedSessions
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenOneConnectionFails_KeepsHealthySessionsAndConvergesLater
+    VectorNNTP.Backfiller.Tests.ControlPlaneServiceTests.RefreshAndReconcileOnceAsync_WhenAccountDisabled_RemovesRuntimeAndDisposesSessions
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputIsStrictHex_ReturnsExpectedValue(input: "1", expected: 1)
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputIsStrictHex_ReturnsExpectedValue(input: "ABCDEF12", expected: 2882400018)
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputIsStrictHex_ReturnsExpectedValue(input: "abcdef12", expected: 2882400018)
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputIsStrictHex_ReturnsExpectedValue(input: "00000000", expected: 0)
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "123456789")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "ABCDEF12G")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "12345678XYZ")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "-1")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "+")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "G")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: " ")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "12 34")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "12_34")
+    VectorNNTP.Backfiller.Tests.HexUInt32ParserTests.TryParseHexUInt32_WhenInputContainsGarbageOrIsOutOfBounds_ReturnsFalse(input: "１２")
+    VectorNNTP.Backfiller.Tests.LetsEncryptCertificateDependencyProbeTests.EnsureCertificateAvailabilityAsync_WhenAcmeAccountKeyMissing_ReturnsCertificateDependencyFailure
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindAddressIsOmitted_DoesNotReturnBindAddressErrors
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindAddressIsWildcard_DoesNotReturnLocalAssignmentError(bindAddress: "0.0.0.0")
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindAddressIsWildcard_DoesNotReturnLocalAssignmentError(bindAddress: "::")
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindAddressContainsDuplicate_ReturnsDuplicateBindAddressError
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindPortIsOutOfRange_ReturnsBindPortRangeError(bindPort: "0")
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindPortIsOutOfRange_ReturnsBindPortRangeError(bindPort: "65536")
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenBindPortIsOutOfRange_ReturnsBindPortRangeError(bindPort: "-1")
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenLetsEncryptDisabled_DoesNotRequireAcmeSettings
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenLetsEncryptDisabled_IgnoresInvalidAcmeAndRenewalSettings
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenLetsEncryptDisabled_RequiresCloudflareSettings
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenLetsEncryptDisabledAndCloudflareConfigured_IsValidWithInvalidAcmeSettings
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenLetsEncryptEnabled_RequiresAcmeAndCloudflareSettings
+    VectorNNTP.Backfiller.Tests.LetsEncryptEnabledValidationFlowTests.ValidateBackFillerOptions_WhenLetsEncryptEnabledAndConfiguredDomainNamesInvalid_DoesNotUseConfiguredDomainNames
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenValidEmail_ReturnsNoErrors
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenMissing_ReturnsRequiredError(acmeAccountEmail: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenMissing_ReturnsRequiredError(acmeAccountEmail: "")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenMissing_ReturnsRequiredError(acmeAccountEmail: "   ")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenContainsWhitespaceOrControlCharacters_ReturnsError(acmeAccountEmail: "security @usenet.ninja")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenContainsWhitespaceOrControlCharacters_ReturnsError(acmeAccountEmail: "security@usenet.ninja ")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenContainsWhitespaceOrControlCharacters_ReturnsError(acmeAccountEmail: "security@usenet.ninja\t")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenContainsWhitespaceOrControlCharacters_ReturnsError(acmeAccountEmail: "security@usenet.ninja\r\n")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenEmailSyntaxInvalid_ReturnsError(acmeAccountEmail: "not-an-email")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenEmailSyntaxInvalid_ReturnsError(acmeAccountEmail: "security@")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountEmail_WhenEmailSyntaxInvalid_ReturnsError(acmeAccountEmail: "@usenet.ninja")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountKeyPem_WhenValidRelativePemFile_ReturnsNoErrors
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountKeyPem_WhenAbsolutePathProvided_ReturnsError
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountKeyPem_WhenFileMissing_ReturnsError
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeAccountKeyPem_WhenPemContentInvalid_ReturnsError
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsAcmeAccountEmailToSecurityAtUsenetNinja
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenWithinRange_ReturnsNoErrors(maxAttempts: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenWithinRange_ReturnsNoErrors(maxAttempts: 5)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenWithinRange_ReturnsNoErrors(maxAttempts: 10)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenOutOfRangeOrMissing_ReturnsError(maxAttempts: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenOutOfRangeOrMissing_ReturnsError(maxAttempts: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenOutOfRangeOrMissing_ReturnsError(maxAttempts: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateAcmeTransientRetryMaxAttempts_WhenOutOfRangeOrMissing_ReturnsError(maxAttempts: 11)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsAcmeAccountKeyPemToAccountKey
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsAcmeTransientRetryMaxAttemptsToFive
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenWithinRange_ReturnsNoErrors(ttlMinutes: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenWithinRange_ReturnsNoErrors(ttlMinutes: 5)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenWithinRange_ReturnsNoErrors(ttlMinutes: 60)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenOutOfRangeOrMissing_ReturnsError(ttlMinutes: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenOutOfRangeOrMissing_ReturnsError(ttlMinutes: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenOutOfRangeOrMissing_ReturnsError(ttlMinutes: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewCheckTtlMinutes_WhenOutOfRangeOrMissing_ReturnsError(ttlMinutes: 61)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsClockSkewCheckTtlMinutesToFive
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenWithinRange_ReturnsNoErrors(maxMinutes: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenWithinRange_ReturnsNoErrors(maxMinutes: 10)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenWithinRange_ReturnsNoErrors(maxMinutes: 60)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenOutOfRangeOrMissing_ReturnsError(maxMinutes: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenOutOfRangeOrMissing_ReturnsError(maxMinutes: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenOutOfRangeOrMissing_ReturnsError(maxMinutes: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateClockSkewMaxMinutes_WhenOutOfRangeOrMissing_ReturnsError(maxMinutes: 61)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsClockSkewMaxMinutesToTen
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenValid_ReturnsNoErrors
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenMissingOrInvalid_ReturnsError(token: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenMissingOrInvalid_ReturnsError(token: "")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenMissingOrInvalid_ReturnsError(token: "   ")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenMissingOrInvalid_ReturnsError(token: "token with space")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenMissingOrInvalid_ReturnsError(token: "token\twith-tab")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareApiToken_WhenTemplatePlaceholderUsed_ReturnsError
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenValid_ReturnsNoErrors(zoneId: "5811a29d39a0732afb5f160c9b137c3d")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenValid_ReturnsNoErrors(zoneId: "00000000000000000000000000000000")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: "")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: "   ")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: "5811A29D39A0732AFB5F160C9B137C3D")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: "5811a29d-39a0-732a-fb5f-160c9b137c3d")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: "5811a29d39a0732afb5f160c9b137c3")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateCloudFlareZoneId_WhenMissingOrInvalid_ReturnsError(zoneId: "5811a29d39a0732afb5f160c9b137c3dg")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsCloudFlareApiTokenToPlaceholder
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsCloudFlareZoneIdToUsenetNinjaZone
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenWithinRange_ReturnsNoErrors(cacheMinutes: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenWithinRange_ReturnsNoErrors(cacheMinutes: 5)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenWithinRange_ReturnsNoErrors(cacheMinutes: 60)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenOutOfRangeOrMissing_ReturnsError(cacheMinutes: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenOutOfRangeOrMissing_ReturnsError(cacheMinutes: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenOutOfRangeOrMissing_ReturnsError(cacheMinutes: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeNsCacheMinutes_WhenOutOfRangeOrMissing_ReturnsError(cacheMinutes: 61)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsDnsAuthoritativeNsCacheMinutesToFive
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenWithinRange_ReturnsNoErrors(quorumRatio: 0.10000000000000001)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenWithinRange_ReturnsNoErrors(quorumRatio: 0.69999999999999996)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenWithinRange_ReturnsNoErrors(quorumRatio: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: -0.10000000000000001)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: 1.1000000000000001)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: NaN)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: ∞)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsAuthoritativeQuorumRatio_WhenOutOfRangeOrMissing_ReturnsError(quorumRatio: -∞)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsDnsAuthoritativeQuorumRatioToPointSeven
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsPropagationDelaySeconds_WhenWithinRange_ReturnsNoErrors(delaySeconds: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsPropagationDelaySeconds_WhenWithinRange_ReturnsNoErrors(delaySeconds: 15)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsPropagationDelaySeconds_WhenWithinRange_ReturnsNoErrors(delaySeconds: 600)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsPropagationDelaySeconds_WhenOutOfRangeOrMissing_ReturnsError(delaySeconds: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsPropagationDelaySeconds_WhenOutOfRangeOrMissing_ReturnsError(delaySeconds: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsPropagationDelaySeconds_WhenOutOfRangeOrMissing_ReturnsError(delaySeconds: 601)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsDnsPropagationDelaySecondsToFifteen
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenWithinRange_ReturnsNoErrors(intervalSeconds: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenWithinRange_ReturnsNoErrors(intervalSeconds: 3)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenWithinRange_ReturnsNoErrors(intervalSeconds: 60)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenOutOfRangeOrMissing_ReturnsError(intervalSeconds: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenOutOfRangeOrMissing_ReturnsError(intervalSeconds: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenOutOfRangeOrMissing_ReturnsError(intervalSeconds: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollIntervalSeconds_WhenOutOfRangeOrMissing_ReturnsError(intervalSeconds: 61)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsDnsTxtPollIntervalSecondsToThree
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenWithinRange_ReturnsNoErrors(timeoutSeconds: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenWithinRange_ReturnsNoErrors(timeoutSeconds: 600)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenWithinRange_ReturnsNoErrors(timeoutSeconds: 3600)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenOutOfRangeOrMissing_ReturnsError(timeoutSeconds: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenOutOfRangeOrMissing_ReturnsError(timeoutSeconds: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenOutOfRangeOrMissing_ReturnsError(timeoutSeconds: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollTimeoutSeconds_WhenOutOfRangeOrMissing_ReturnsError(timeoutSeconds: 3601)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsDnsTxtPollTimeoutSecondsToSixHundred
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollingCoherence_WhenTimeoutGreaterThanInterval_ReturnsNoErrors(intervalSeconds: 1, timeoutSeconds: 2)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollingCoherence_WhenTimeoutGreaterThanInterval_ReturnsNoErrors(intervalSeconds: 3, timeoutSeconds: 600)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollingCoherence_WhenTimeoutGreaterThanInterval_ReturnsNoErrors(intervalSeconds: 59, timeoutSeconds: 60)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollingCoherence_WhenTimeoutNotGreaterThanInterval_ReturnsError(intervalSeconds: 3, timeoutSeconds: 3)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDnsTxtPollingCoherence_WhenTimeoutNotGreaterThanInterval_ReturnsError(intervalSeconds: 60, timeoutSeconds: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenNull_ReturnsNoErrors
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEmptyArray_ReturnsError
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntriesAreValid_ReturnsNoErrors(domainName: "nntp.example.com")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntriesAreValid_ReturnsNoErrors(domainName: "nntp.example.net")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntriesAreValid_ReturnsNoErrors(domainName: "*.example.com")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntryIsInvalid_ReturnsError(domainName: "")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntryIsInvalid_ReturnsError(domainName: "   ")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntryIsInvalid_ReturnsError(domainName: "bad host")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntryIsInvalid_ReturnsError(domainName: "https://example.com")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntryIsInvalid_ReturnsError(domainName: "*example.com")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateDomainNamesSyntax_WhenEntryIsInvalid_ReturnsError(domainName: "*.com")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsDomainNamesToNull
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsEnabledToTrue
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenValid_ReturnsNoErrors
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenMissingWeakOrWhitespace_ReturnsError(password: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenMissingWeakOrWhitespace_ReturnsError(password: "")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenMissingWeakOrWhitespace_ReturnsError(password: "   ")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenMissingWeakOrWhitespace_ReturnsError(password: "shortpass")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenMissingWeakOrWhitespace_ReturnsError(password: "space pass12")
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidatePfxExportPassword_WhenTemplatePlaceholderUsed_ReturnsError
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsPfxExportPasswordToPlaceholder
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenWithinRange_ReturnsNoErrors(intervalHours: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenWithinRange_ReturnsNoErrors(intervalHours: 6)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenWithinRange_ReturnsNoErrors(intervalHours: 168)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenOutOfRangeOrMissing_ReturnsError(intervalHours: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenOutOfRangeOrMissing_ReturnsError(intervalHours: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenOutOfRangeOrMissing_ReturnsError(intervalHours: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalCheckIntervalHours_WhenOutOfRangeOrMissing_ReturnsError(intervalHours: 169)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsRenewalCheckIntervalHoursToSix
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenWithinRange_ReturnsNoErrors(ratio: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenWithinRange_ReturnsNoErrors(ratio: 0.10000000000000001)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenWithinRange_ReturnsNoErrors(ratio: 0.90000000000000002)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: -0.10000000000000001)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: 1.1000000000000001)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: NaN)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: ∞)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewalJitterRatio_WhenOutOfRangeOrInvalid_ReturnsError(ratio: -∞)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsRenewalJitterRatioToPointOne
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenWithinRange_ReturnsNoErrors(days: 1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenWithinRange_ReturnsNoErrors(days: 7)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenWithinRange_ReturnsNoErrors(days: 60)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenOutOfRangeOrMissing_ReturnsError(days: null)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenOutOfRangeOrMissing_ReturnsError(days: 0)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenOutOfRangeOrMissing_ReturnsError(days: -1)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.ValidateRenewBeforeExpiryDays_WhenOutOfRangeOrMissing_ReturnsError(days: 61)
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsRenewBeforeExpiryDaysToSeven
+    VectorNNTP.Backfiller.Tests.LetsEncryptValidatorTests.LetsEncryptOptions_DefaultsUseStagingDirectoryToFalse
+    VectorNNTP.Backfiller.Tests.LoggingAsyncSinkCorrectnessTests.AsyncSink_BlockWhenFull_EmitsAllSubmittedEvents
+    VectorNNTP.Backfiller.Tests.LoggingAsyncSinkCorrectnessTests.AsyncSink_CloseAndFlushAsync_DrainsQueuedEvents
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin", expectedServer: "localhost")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "Host=myhost;Database=test;User ID=admin", expectedServer: "myhost")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "Data Source=ds01;Database=test;User ID=admin", expectedServer: "ds01")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "DataSource=ds02;Database=test;User ID=admin", expectedServer: "ds02")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "Address=addr01;Database=test;User ID=admin", expectedServer: "addr01")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "Addr=addr02;Database=test;User ID=admin", expectedServer: "addr02")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_AcceptsAllMySqlConnectorAliases(connectionString: "Network Address=netaddr;Database=test;User ID=admi"···, expectedServer: "netaddr")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=mydb;User ID=admin", expectedDatabase: "mydb")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Initial Catalog=catalog01;User ID"···, expectedDatabase: "catalog01")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;InitialCatalog=catalog02;User ID="···, expectedDatabase: "catalog02")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=user1", expectedUsername: "user1")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;UserID=user2", expectedUsername: "user2")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;Username=user3", expectedUsername: "user3")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;Uid=user4", expectedUsername: "user4")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User name=user5", expectedUsername: "user5")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User=user6", expectedUsername: "user6")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Passw"···, expectedPassword: "secret")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Pwd=p"···, expectedPassword: "pass123")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Min P"···, expectedMinPoolSize: 5)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;MinPo"···, expectedMinPoolSize: 10)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Minim"···, expectedMinPoolSize: 2)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Minim"···, expectedMinPoolSize: 7)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Max P"···, expectedMaxPoolSize: 100)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;MaxPo"···, expectedMaxPoolSize: 50)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Maxim"···, expectedMaxPoolSize: 200)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(connectionString: "Server=localhost;Database=test;User ID=admin;Maxim"···, expectedMaxPoolSize: 75)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenMissing_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_WhenMissing_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenMissing_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenMissing_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenNegative_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_WhenNegative_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenExceedsIntMaxValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_WhenExceedsIntMaxValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenExactlyIntMaxValue_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_WhenExactlyIntMaxValue_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenOneAboveIntMaxValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_WhenOneAboveIntMaxValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenMalformedConnectionString_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenUnterminatedQuotedValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenUnterminatedQuotedValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenUnterminatedSingleQuotedValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenUnterminatedSingleQuotedValue_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenGarbageAfterClosingQuote_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenGarbageAfterClosingQuote_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenSingleQuotedWithGarbageAfterClosingQuote_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenWhitespaceAfterClosingQuote_Succeeds
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenQuotedValueAtEnd_Succeeds
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_IsCaseInsensitive
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_IsCaseInsensitive
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_IsCaseInsensitive
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_IsCaseInsensitive
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_IsCaseInsensitive
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_IsCaseInsensitive
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenUnquotedWithLeadingWhitespace_TrimsWhitespace
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_WhenUnquotedWithTrailingWhitespace_TrimsWhitespace
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenValueContainsSemicolon_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenValueContainsEquals_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenSingleQuotedWithSemicolon_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenSingleQuotedWithEscaping_HandlesDoubledQuotes
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenDoubleQuotedWithEscaping_HandlesDoubledQuotes
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenSingleQuoted_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_WhenSingleQuoted_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenQuotedWithLeadingWhitespace_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenSingleQuotedWithLeadingWhitespace_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenQuotedWithWhitespaceAroundEquals_HandlesQuoting
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenEmpty_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_WhenEmpty_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_WhenEmpty_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenEmpty_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenEmptyString_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_WhenEmptyString_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenConflictingServerAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenRedundantButIdenticalServerAliases_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_WhenConflictingDatabaseAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_WhenRedundantButIdenticalDatabaseAliases_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_WhenConflictingUsernameAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_WhenRedundantButIdenticalUsernameAliases_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenConflictingPasswordAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenRedundantButIdenticalPasswordAliases_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMinPoolSize_WhenConflictingMinPoolSizeAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetMaxPoolSize_WhenConflictingMaxPoolSizeAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenThreeConflictingAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_WhenThreeConflictingAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetServer_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetPassword_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetUsername_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryGetDatabase_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenNoConflicts_ReturnsFalse(connectionString: "Server=db01;Database=GrabberDB;User ID=admin;Passw"···)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenNoConflicts_ReturnsFalse(connectionString: "Server=db01;Database=GrabberDB;User ID=admin")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenNoConflicts_ReturnsFalse(connectionString: "Server=db01;Database=GrabberDB;User ID=admin;Passw"···)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenServerConflicts_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenDatabaseConflicts_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenUsernameConflicts_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenPasswordConflicts_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenMinPoolSizeConflicts_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenMaxPoolSizeConflicts_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenMultipleConflictingGroups_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentServerValues_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentPasswordValues_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentUsernameValues_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenSameKeyRepeatedWithIdenticalValues_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenRedundantButIdentical_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenNullOrEmpty_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenMalformedSyntax_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.HasAmbiguousAliases_WhenFullyPopulatedAndValid_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.ParseResult_DistinguishesMissingFromInvalidFromAmbiguous_ForMaxPoolSize
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.ParseResult_DistinguishesMissingFromInvalidFromAmbiguous_ForServer
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.AmbiguityDetection_IsIndependentOfPropertyExtraction
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParseEffective_WhenValidConnectionString_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParseEffective_WhenAmbiguousServerAliases_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParseEffective_WhenDuplicateSameKey_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParseEffective_WhenMalformedConnectionString_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParseEffective_WhenNullOrEmpty_MatchesProviderBehavior
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParseEffective_WhenRedundantIdenticalAliases_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.TryParse_AcceptsAmbiguousConfigurationWithoutValidation
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=db01", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Basic unquoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: ";Server=db01", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Leading semicolon")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=''", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Empty single-quoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=\"\"", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Empty double-quoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Empty value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "   ", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Whitespace-only connection string")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Empty connection string")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=db01;Host=db02", providerShouldAcceptSyntax: True, isSemanticAmbiguity: True, scenario: "Conflicting aliases (syntax valid; semantically am"···)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=db01;Server=db02", providerShouldAcceptSyntax: True, isSemanticAmbiguity: True, scenario: "Duplicate keys (syntax valid; semantically ambiguo"···)
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=db01;", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Trailing semicolon")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server = 'abc'", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Whitespace before single-quoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server='abc'x", providerShouldAcceptSyntax: False, isSemanticAmbiguity: False, scenario: "Garbage after closing single-quote")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=\"abc\"x", providerShouldAcceptSyntax: False, isSemanticAmbiguity: False, scenario: "Garbage after closing double-quote")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server='abc", providerShouldAcceptSyntax: False, isSemanticAmbiguity: False, scenario: "Unterminated single-quoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=\"abc", providerShouldAcceptSyntax: False, isSemanticAmbiguity: False, scenario: "Unterminated double-quoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server='abc''def'", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Single-quoted value with escaped single-quote")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=\"abc\"\"def\"", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Double-quoted value with escaped double-quote")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server='db;01'", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Single-quoted value with semicolon")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=\"db;01\"", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Double-quoted value with semicolon")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server = \"abc\"", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Whitespace before double-quoted value")
+    VectorNNTP.Backfiller.Tests.MySqlConnectionStringUtilitiesTests.RawParser_RejectsExactlySameSyntaxAsProvider(connectionString: "Server=db01;;Host=db02", providerShouldAcceptSyntax: True, isSemanticAmbiguity: False, scenario: "Consecutive semicolons")
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderCancellationPublicationTests.RefreshSnapshotAsync_WhenCanceledAfterQueryCompletes_DoesNotPublishAndThrowsCancellation
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderCancellationTests.LoadInitialSnapshotAsync_DoesNotApplyProviderOwnedTimeoutAndPreservesSnapshotUntilCallerCancels
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseUseSsl_WhenY_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseUseSsl_WhenN_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseKeepAliveValue_WhenNullDatabaseValue_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseKeepAliveValue_WhenOutOfRange_ThrowsOverflowException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseUseSsl_WhenUnexpected_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseEntryId_WhenGuid_ReturnsGuid
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseEntryId_WhenInvalid_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseEntryIdValue_WhenGuidObject_ReturnsGuid
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseEntryIdValue_WhenGuidStringObject_ReturnsGuid
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseEntryIdValue_WhenInvalidGuidString_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderMappingTests.ParseEntryIdValue_WhenUnsupportedType_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderProvisioningTests.EnsureStartupDependenciesAsync_UsesConfiguredDatabaseAndTableAndAuthoritativeSchema
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderProvisioningTests.EnsureStartupDependenciesAsync_WhenRepeated_RemainsIdempotentAtProviderBoundary
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderProvisioningTests.EnsureStartupDependenciesAsync_WhenProvisioningFails_PropagatesFailure
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderProvisioningTests.AccountsTableCreateSql_UsesNewBackfillerTableNameAndNotLegacyName
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderRefreshTests.RefreshSnapshotAsync_WhenSuccessful_ReplacesSnapshotAtomically
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderRefreshTests.RefreshSnapshotAsync_WhenRefreshFails_PreservesPreviousSnapshot
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderRefreshTests.RefreshSnapshotAsync_WhenConcurrentCallOccurs_SkipsOverlap
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderRefreshTests.RefreshSnapshotAsync_WhenCanceled_ThrowsOperationCanceledException
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderRefreshTests.RefreshSnapshotAsync_LogsDoNotContainCredentials
+    VectorNNTP.Backfiller.Tests.MySqlNntpAccountSnapshotProviderRefreshTests.RefreshSnapshotAsync_WhenSuccessful_ReturnsSnapshotUsingConfiguredServerId
+    VectorNNTP.Backfiller.Tests.NntpAccountSnapshotStartupInitializerTests.StartAsync_WhenEntryIdProvidedAsStringEncodedGuid_PublishesSnapshot
+    VectorNNTP.Backfiller.Tests.NntpAccountSnapshotStartupInitializerTests.StartAsync_ProvisionsBeforeInitialSnapshotLoad
+    VectorNNTP.Backfiller.Tests.NntpAccountSnapshotStartupInitializerTests.StartAsync_WhenProvisioningFails_ThrowsAndDoesNotLoadSnapshot
+    VectorNNTP.Backfiller.Tests.NntpAccountSnapshotStateTests.Empty_ReturnsServerIdAndNoAccounts
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionCorpusGenerationTests.GenerateLocalCorpus_WhenEnabled_DownloadsAndCorruptsConfiguredSamples
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.MessageIdValidation_WhenRepresentativeValidForms_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.MessageIdValidation_WhenRepresentativeInvalidForms_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.SessionReuse_WhenMultipleArticlesRequested_AuthenticatesOnceAndReusesConnection
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.SessionReuse_When430ThenSuccess_SubsequentArticleSucceedsWithoutReconnect
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenMessageIdInvalid_ReturnsInvalidMessageIdWithoutSendingCommand
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenStatusMalformed_ReturnsMalformedResponse
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenArticleCommandUnavailable_ReturnsRemoteRejectedWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenArticleUnexpectedStatus_ReturnsProtocolFailureWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ConnectAsync_WhenAuthInfoPassRejected_ReturnsAuthenticationFailureWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ConnectAsync_WhenAuthInfoUserRejected_ReturnsAuthenticationFailureWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ConnectAsync_WhenAuthInfoUserUnexpectedStatus_ReturnsProtocolFailureWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.KeepAliveWithDateAsync_WhenStatus111_ReturnsSuccessWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.KeepAliveWithDateAsync_WhenStatus500_ReturnsRemoteRejectedWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.KeepAliveWithDateAsync_WhenUnexpectedStatus_ReturnsProtocolFailureWithRawStatus
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.KeepAliveWithDateAsync_WhenStatusMalformed_ReturnsMalformedResponse
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenDotStuffed_UnstuffsAndPreservesPayload
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenPayloadFragmentedAcrossWrites_ReconstructsArticle
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenArticleTooLarge_ReturnsArticleTooLarge
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenCancelledDuringReceive_ReturnsCancelled
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DownloadArticleAsync_WhenReceiveTimeout_ReturnsTimeout
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ParserBridge_WhenAcquisitionFails_ThrowsInsteadOfFabricatingParserFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.Logging_WhenAuthAndArticleFlow_RedactsCredentialsAndIncludesMessageIdOnlyForArticleOperations
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.Logging_WhenDateKeepAliveFlow_OmitsMessageIdCorrelation
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DisposeAsync_WhenSessionEstablished_SendsQuitAndReceives205
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.DisposeAsync_WhenConnectionAlreadyFailed_DoesNotAttemptQuit
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ConnectAsync_WhenCancelledDuringAuthentication_DoesNotAttemptQuit
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.Logging_WhenArticleMissing_ContainsLifecycleOutcomeWithInvariantElapsed
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ConnectAsync_WhenUseSslTrueAndCallbackSupplied_Succeeds
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.ConnectAsync_WhenUseSslTrueWithoutCallback_UsesDefaultValidationAndFailsForSelfSignedServer
+    VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionTests.FixtureCallback_WhenServerCertificateDoesNotMatch_RejectsConnection
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WhenSingleAccountWithOneConnection_CreatesOneReadySession
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.AcquireAsync_WhenSingleConnectionConfigured_SecondAcquireWaitsUntilFirstRelease
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.SessionHealth_WhenArticleNotFound_LeaseReuseSucceedsWithoutReconnect
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.SessionHealthClassifier_WhenConnectionFailure_ReturnsNotReusable
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.SessionHealthClassifier_WhenArticleNotFound_ReturnsReusable
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.SessionHealthClassifier_WhenFailureCodeUnknown_ReturnsNotReusable
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WhenAuthenticationRejected_ThrowsNoReadySessionFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WhenAuthInfoUserRejected_EmitsWarningWithAuthenticationFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.ReleaseAsync_WhenReconnectAuthRejected_EmitsWarningAndLeavesSlotUnavailable
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WhenShutdownCancellationOccurs_DoesNotLogSlotInitializationFailedWarningAsync
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.KeepAlive_WhenIdleBelowThreshold_DoesNotSendDate
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.KeepAlive_WhenIdleThresholdReached_SendsDate
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.KeepAlive_WhenArticleActive_DoesNotSendDate
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.KeepAlive_WhenDateFails_ReconnectsSession
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.ReleaseAsync_WhenConnectionFailureReported_RetiresAndReconnectsMaintainingCapacity
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.KeepAlive_WhenConfiguredZero_DoesNotSendDate
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.DisposeAsync_WhenLeaseActive_WaitsThenRejectsFurtherAcquire
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.DisposeAsync_WhenEstablishedSessionOwned_SendsQuitAndReceives205
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.DisposeAsync_WhenLeaseActive_DoesNotSendQuitConcurrentlyWithArticle
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.ReconcileAccountAsync_WhenKeepAliveChanges_UpdatesInPlaceWithoutReconnect
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.ReconcileAccountAsync_WhenPortChanges_RecreatesSession
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.ReconcileAccountAsync_WhenScaleDownWithActiveLease_RetiresAfterLeaseRelease
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WithMultipleConnections_EstablishesConnectionsConcurrently
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WhenSomeConnectionsFail_SuccessfulSessionsRemainReady
+    VectorNNTP.Backfiller.Tests.NntpArticleExecutionSessionManagerTests.InitializeAsync_WhenCancelledDuringConnections_CancelsCleanly
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenAcquisitionAndParseSucceed_ReturnsSuccessfulWorkflowResult
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenParserRejectsMalformedArticle_ReturnsMalformedArticleFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenYEncValidationFails_ReturnsYEncValidationFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenArticleNotFound_ReturnsArticleNotFoundFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenAuthenticationFails_ReturnsAuthenticationFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenCancelledDuringReceive_ReturnsCancelledFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenConnectionBreaksMidArticle_ReturnsConnectionFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenStatusLineMalformed_ReturnsProtocolFailure
+    VectorNNTP.Backfiller.Tests.NntpArticleGrabberWorkflowTests.ProcessAsync_WhenSessionReusedAcrossMultipleWorkItems_PreservesMixedOutcomes
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenValidTextArticle_ReturnsAcceptedTextResult
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenMultipartContentTypePresent_ClassifiesMimeMultipart
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenBase64EncodingPresent_ClassifiesBinaryEncoded
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenDateInvalid_RejectsWithDateFailureReason
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenMessageIdDuplicated_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenPathPresentAndMissingLocalHost_PrependsLocalHost
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenPathAlreadyContainsLocalHost_DoesNotDuplicate
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenPathContainsControlByte_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderBodySeparatorMissing_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderContinuationPresent_Accepts
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenContinuationWithoutPrecedingHeader_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenNoYEncMarkers_DoesNotRejectAsYEnc
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenYEncFixtureValid_AcceptsAndClassifiesYEnc
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenYEncFixtureInvalid_RejectsAsYEncDecodingFailed
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderContainsNul_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenArticleUsesCrOnlySeparators_AcceptsAndSeparatesBodyCorrectly
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenYEncMarkerIsBeyondDetectionScanWindow_DoesNotClassifyAsYEnc
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenPathContainsRepeatedSeparators_NormalizesAndPrependsLocalHostOnce
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenPathDuplicated_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenBodyContainsDotLines_PreservesBodyBytesExactly
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderOnlyArticleHasSeparator_AcceptsWithEmptyBody
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenNewsgroupsContainsEmptyToken_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenDateMissingAndInjectionDatePresent_UsesFallbackDateHeader
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenDateIsMalformedButInjectionDateValid_UsesFallbackAndAccepts
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenAllCandidateDateHeadersAreMalformed_RejectsWithInvalidDate
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenBodyContainsBinaryBytesIncludingNul_AcceptsAndPreservesBody
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderSectionExceedsConfiguredLimit_RejectsWithHeaderSectionTooLarge
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenNewsgroupsMissing_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenMessageIdMissing_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenMessageIdMalformed_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenNewsgroupsDuplicated_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenFirstLineHasNoColon_TreatsWholeArticleAsBodyAndRejectsByMissingRequiredHeaders
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenArticleUsesLfOnlySeparators_AcceptsAndSeparatesBodyCorrectly
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenMimeMultipartAndNoYEncMarkers_ClassifiesAsMimeMultipart
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenBinaryTransferEncodingAndNoYEncMarkers_ClassifiesAsBinaryEncoded
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenArticleIsEmpty_RejectsAsEmptyArticle
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenCrOnlyArticleStartsWithContinuation_RejectsMalformedHeaderContinuation
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenYEncPayloadHasInvalidEscape_RejectsAsYEncDecodingFailed
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenPathContainsOnlySeparatorsAndWhitespace_UsesLocalFqdnCanonicalPath
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenUnknownHeadersPresent_AcceptsAndPreservesHeaderEntries
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderCountIsLargeButWithinLimit_Accepts
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenHeaderCountExceedsLimit_Rejects
+    VectorNNTP.Backfiller.Tests.NntpArticleParserTests.Parse_WhenFuzzedInputProvided_DoesNotThrowAndIsDeterministic
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfiguredPathIsExistingFile_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenDirectorySupportsRequiredFileOperations_Succeeds
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfiguredPathHasSurroundingWhitespace_TrimsBeforeResolving
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfigurationIsMissing_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfigurationIsNull_ThrowsArgumentNullException
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateCertificateDirectory_WhenConfigurationIsNull_ThrowsArgumentNullException
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateCertificateDirectory_WhenConfigurationIsMissing_ReportsCorrectSetting
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfiguredPathIsWhitespace_ThrowsInvalidOperationException(configuredPath: "")
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfiguredPathIsWhitespace_ThrowsInvalidOperationException(configuredPath: " ")
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfiguredPathIsWhitespace_ThrowsInvalidOperationException(configuredPath: "   ")
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenConfiguredPathIsAbsolute_ReturnsCanonicalAbsolutePath
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateLogDirectory_WhenDirectoryAlreadyExists_Succeeds
+    VectorNNTP.Backfiller.Tests.OperationalDirectoryValidatorTests.ResolveAndValidateCertificateDirectory_WhenConfiguredPathIsValid_ReturnsCanonicalAbsolutePath
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenNoArguments_ReturnsNull
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryParseCommandLine_WhenArgsIsNull_ThrowsArgumentNullException
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenSimpleInformationalCommand_ReturnsSuccess(command: "--help")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenSimpleInformationalCommand_ReturnsSuccess(command: "--version")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenSimpleInformationalCommand_ReturnsSuccess(command: "--diagnostics")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenSimpleInformationalCommand_ReturnsSuccess(command: "--VERSION")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenOptionIsNotExactCommand_ReturnsConfigurationFailure(argument: "--version=x")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenOptionIsNotExactCommand_ReturnsConfigurationFailure(argument: "--versions")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenOptionIsNotExactCommand_ReturnsConfigurationFailure(argument: "--validate-config=x")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenArgumentUnknown_ReturnsConfigurationFailure(argument: "--bogus")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenArgumentUnknown_ReturnsConfigurationFailure(argument: "foo")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenUnknownOptionPresentAlongsideValidCommand_ReturnsConfigurationFailure(first: "--bogus", second: "--version")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenUnknownOptionPresentAlongsideValidCommand_ReturnsConfigurationFailure(first: "--version", second: "--bogus")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenMultipleCommandsSpecified_ReturnsConfigurationFailure(first: "--version", second: "--help")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenMultipleCommandsSpecified_ReturnsConfigurationFailure(first: "--help", second: "--diagnostics")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenMultipleCommandsSpecified_ReturnsConfigurationFailure(first: "--validate-config", second: "--dump-config")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenConfigurationCommandAndConfigurationUnavailable_ReturnsUnexpectedFailure(command: "--dump-config")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenConfigurationCommandAndConfigurationUnavailable_ReturnsUnexpectedFailure(command: "--validate-config")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenConfigurationCommandAndConfigurationUnavailable_ReturnsUnexpectedFailure(command: "--validate-startup")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenConfigurationCommandAndConfigurationUnavailable_ReturnsUnexpectedFailure(command: "--Validate-Config")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenDumpConfigHasConfiguration_ReturnsSuccess
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenDumpConfigIncludesUseStagingDirectory_PrintsCleartextValue
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenMultipleCommandsAndUnknownOptionArePresent_ReturnsConfigurationFailure
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenArgumentIsEmptyOrWhitespace_ReturnsConfigurationFailure(argument: "")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenArgumentIsEmptyOrWhitespace_ReturnsConfigurationFailure(argument: " ")
+    VectorNNTP.Backfiller.Tests.ProgramCommandLineTests.TryHandleCommand_WhenArgumentIsEmptyOrWhitespace_ReturnsConfigurationFailure(argument: "\t")
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.RegisterReadinessHook_WhenApplicationStopping_TransitionsToDraining_AndSignalsGracefulShutdown
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.ConcurrentReentrantShutdownRace_DoesNotThrowAndLifecycleIsDraining
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.ConfigureHostServices_WhenLifecycleProvided_RegistersSameInstance_AndRequiredHostedServices
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.ConfigureHostServices_DoesNotRegisterShutdownOptionsForRuntimeResolution
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.ConfigureHostServices_UsesRuntimeSnapshotGracePeriod_ForHostShutdownTimeout
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.ShouldPublishReadiness_WhenApplicationStoppingAlreadySignaled_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.ShouldPublishReadiness_WhenApplicationStoppingNotSignaled_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.ProgramHostingSemanticsTests.RunAsync_WhenShutdownRequestedDuringStartup_DoesNotTransitionToReady_AndStopsViaDrainingAsync
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ConfigurationValidationResult_WhenOnlyWarnings_IsValidTrue
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ConfigurationValidationResult_WhenErrorsPresent_IsValidFalse
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BuildValidateConfigCommandResult_WhenDirLogsMissingFromRuntimeSnapshotValidation_ReturnsConfigurationError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenCanonicalIdentityAvailable_DoesNotUseConfiguredDomainNames
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenIdentityInvalid_DoesNotFallbackToConfiguredDomainNames
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenConfigurationFails_SkipsDependencyValidation
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenLetsEncryptDisabledAndCloudflareTokenMissing_ReturnsCloudflareConfigurationError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenLetsEncryptDisabledAndCloudflareConfigured_StillRunsCloudflareDependencyValidation
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTlsDisabledAndCloudflareConfigured_PreservesWarningsWithoutInvalidatingConfiguration
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenRabbitMqEndpointUnreachable_DoesNotReturnRabbitMqDependencyFailure
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTransitServerEndpointUnreachable_ReturnsTransitServerDependencyFailure
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_CanonicalizeDnsSuffix_NormalizesEquivalentInputs(input: "example.com")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_CanonicalizeDnsSuffix_NormalizesEquivalentInputs(input: "EXAMPLE.COM")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_CanonicalizeDnsSuffix_NormalizesEquivalentInputs(input: "example.com.")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_CanonicalizeDnsSuffix_NormalizesEquivalentInputs(input: " EXAMPLE.COM. ")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_BuildBackFillerFqdn_UsesCanonicalDnsSuffix(dnsSuffix: "example.com")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_BuildBackFillerFqdn_UsesCanonicalDnsSuffix(dnsSuffix: "EXAMPLE.COM")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_BuildBackFillerFqdn_UsesCanonicalDnsSuffix(dnsSuffix: "example.com.")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.BackFillerIdentityValidator_BuildBackFillerFqdn_UsesCanonicalDnsSuffix(dnsSuffix: " EXAMPLE.COM. ")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenAlreadyCanceled_PropagatesOperationCanceledException
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTimeoutIsInvalid_ThrowsArgumentOutOfRangeException(invalidTimeout: 00:00:00)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTimeoutIsInvalid_ThrowsArgumentOutOfRangeException(invalidTimeout: -00:00:00.0010000)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 1045, expectedMessage: "MySQL connection failed: Access denied")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 1049, expectedMessage: "MySQL connection failed: Unknown database")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 1130, expectedMessage: "MySQL connection failed: Host is not allowed to co"···)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 2002, expectedMessage: "MySQL connection failed: Unable to reach MySQL ser"···)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 2003, expectedMessage: "MySQL connection failed: Unable to reach MySQL ser"···)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 2013, expectedMessage: "MySQL connection failed: Lost connection during qu"···)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 2026, expectedMessage: "MySQL connection failed: TLS/SSL handshake failed")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 2061, expectedMessage: "MySQL connection failed: Authentication plugin err"···)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(mySqlErrorNumber: 9999, expectedMessage: "MySQL connection failed")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateDatabaseConnectivityAsync_WhenUnexpectedExceptionOccurs_ReturnsSanitizedFailureReason
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelLeaseTimeoutMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRpcTimeoutSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRpcTimeoutSecondsOutOfRange_ReturnsError(rpcTimeoutSeconds: "0")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRpcTimeoutSecondsOutOfRange_ReturnsError(rpcTimeoutSeconds: "3601")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelLeaseTimeoutLessThanRpcTimeout_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelLeaseTimeoutValidAndCoherent_DoesNotReturnRabbitMqErrors
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqConnectionBlockedTimeoutMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqConnectionBlockedTimeoutLessThanMinimum_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqConnectionBlockedTimeoutLessThanRpcTimeout_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqEnableSslMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPortMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPortOutOfRange_ReturnsError(port: "0")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPortOutOfRange_ReturnsError(port: "65536")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqUsernameConfiguredAndPasswordMissing_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPasswordConfiguredAndUsernameMissing_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqUsernameWhitespace_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqVirtualHostMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqVirtualHostWhitespace_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPasswordEmpty_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPasswordWhitespace_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqUsernameAndPasswordAreValid_DoesNotReturnCredentialErrors
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqEnableSslBooleanValue_DoesNotReturnError(enableSsl: "true")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqEnableSslBooleanValue_DoesNotReturnError(enableSsl: "false")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqHostsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqHostEntryContainsScheme_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqHostsContainDuplicates_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqHostsAreValid_DoesNotReturnHostErrors
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqConnectionScaleDownIdleSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqScaleDownCooldownSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqScaleDownCooldownSecondsOutOfRange_ReturnsError(scaleDownCooldownSeconds: "-1")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqScaleDownCooldownSecondsOutOfRange_ReturnsError(scaleDownCooldownSeconds: "3601")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMinConnectionsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMinConnectionsLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxConnectionsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMinConnectionsGreaterThanMaxConnections_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxConsecutiveRecoveryFailuresMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxConsecutiveRecoveryFailuresLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxConsecutiveRecoveryFailuresTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPublishConfirmTimeoutSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPublishConfirmTimeoutSecondsLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPublishConfirmTimeoutSecondsTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaximumShutdownDrainTimeoutSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaximumShutdownDrainTimeoutSecondsLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaximumShutdownDrainTimeoutSecondsTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ConfigureHostShutdownTimeout_SetsConfiguredTimeout
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ConfigureHostShutdownTimeout_WhenGracePeriodInvalid_Throws
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ShutdownConfiguration_RejectsRabbitMqDrainLongerThanGracePeriod(gracePeriodSeconds: 20, rabbitMqMaximumShutdownDrainTimeoutSeconds: 60)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ShutdownConfiguration_RejectsRabbitMqDrainLongerThanGracePeriod(gracePeriodSeconds: 30, rabbitMqMaximumShutdownDrainTimeoutSeconds: 31)
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenShutdownSectionIsNull_ReturnsValidationErrorWithoutThrowing
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMinimumConnectionLifetimeSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMinimumConnectionLifetimeSecondsTooSmall_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqNetworkRecoveryIntervalSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqNetworkRecoveryIntervalSecondsLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqNetworkRecoveryIntervalSecondsTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectBaseDelayMsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsOutOfRange_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsLessThanBaseDelay_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectBaseDelayMsLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqPoolReconnectBaseDelayMsOutOfRange_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxPendingLeaseWaitersMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxPendingLeaseWaitersLessThanZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqMaxPendingLeaseWaitersTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdOutOfRange_ReturnsError(degradedThreshold: "0")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdOutOfRange_ReturnsError(degradedThreshold: "-0.01")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdOutOfRange_ReturnsError(degradedThreshold: "1.01")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdValid_DoesNotReturnError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqUnhealthyThresholdMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqUnhealthyThresholdOutOfRange_ReturnsError(unhealthyThreshold: "0")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqUnhealthyThresholdOutOfRange_ReturnsError(unhealthyThreshold: "121")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRequestedHeartbeatSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRequestedHeartbeatSecondsOutOfRange_ReturnsError(requestedHeartbeatSeconds: "-1")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRequestedHeartbeatSecondsOutOfRange_ReturnsError(requestedHeartbeatSeconds: "3601")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqSocketTimeoutSecondsMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqSocketTimeoutSecondsOutOfRange_ReturnsError(socketTimeoutSeconds: "0")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqSocketTimeoutSecondsOutOfRange_ReturnsError(socketTimeoutSeconds: "601")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRequestedChannelMaxMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRequestedChannelMaxLessThanOrEqualToZero_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqRequestedChannelMaxTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeExceedsEffectiveChannelLimit_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeWithinEffectiveChannelLimit_DoesNotReturnChannelPoolErrors
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostWhitespace_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostContainsScheme_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostContainsCredentials_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostContainsPort_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostInvalid_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerHostValid_DoesNotReturnError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerPortMissing_UsesDefaultWithoutError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerPortLessThanOrEqualToZero_ReturnsError(port: "0")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerPortLessThanOrEqualToZero_ReturnsError(port: "-1")
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateBackFillerOptions_WhenTransitServerPortTooLarge_ReturnsError
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslMissing_UsesDefaultFalseWithoutUseSslErrors
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslTrueWithPort119_ReturnsWarning
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslFalseWithPort563_ReturnsWarning
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslTrueWithPort563_DoesNotReturnPortWarnings
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenRabbitMqNetworkRecoveryIntervalExceedsConnectionBlockedTimeout_ReturnsWarning
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenRabbitMqPublishConfirmTimeoutExceedsRpcTimeout_ReturnsWarning
+    VectorNNTP.Backfiller.Tests.ProgramValidationSemanticsTests.ValidateConfigurationAndDependenciesAsync_WhenRabbitMqMinimumConnectionLifetimeExceedsScaleDownIdle_ReturnsWarning
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "Verbose", expected: Trace)
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "verbose", expected: Trace)
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "Fatal", expected: Critical)
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "fatal", expected: Critical)
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "Warning", expected: Warning)
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "Information", expected: Information)
+    VectorNNTP.Backfiller.Tests.SerilogConfiguratorTests.ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel(configured: "invalid", expected: Information)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Stopped_RejectsAllTransitions(targetState: Starting)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Stopped_RejectsAllTransitions(targetState: Validating)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Stopped_RejectsAllTransitions(targetState: Initializing)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Stopped_RejectsAllTransitions(targetState: Ready)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Stopped_RejectsAllTransitions(targetState: Draining)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Stopped_RejectsAllTransitions(targetState: Faulted)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Faulted_RejectsAllTransitions(targetState: Starting)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Faulted_RejectsAllTransitions(targetState: Validating)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Faulted_RejectsAllTransitions(targetState: Initializing)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Faulted_RejectsAllTransitions(targetState: Ready)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Faulted_RejectsAllTransitions(targetState: Draining)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Faulted_RejectsAllTransitions(targetState: Stopped)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TerminalStates_CorrectlyReportProperties
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.NormalStartup_ProgressesCorrectly
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.GracefulShutdown_ProgressesCorrectly
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.DrainCancellation_AllowsReadyToDrainingToReady
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.DrainTimeout_TransitionsToFaulted
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.StartupProgression_RejectsReversals(fromState: Validating, invalidTargetState: Starting)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.StartupProgression_RejectsReversals(fromState: Initializing, invalidTargetState: Starting)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.StartupProgression_RejectsReversals(fromState: Initializing, invalidTargetState: Validating)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Ready_RejectsInvalidTransitions(invalidTargetState: Starting)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Ready_RejectsInvalidTransitions(invalidTargetState: Validating)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Ready_RejectsInvalidTransitions(invalidTargetState: Initializing)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Ready_RejectsInvalidTransitions(invalidTargetState: Stopped)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Ready_RejectsInvalidTransitions(invalidTargetState: Faulted)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TransitionTo_RejectsNullReason
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TransitionTo_RejectsEmptyOrWhitespaceReason(invalidReason: "")
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TransitionTo_RejectsEmptyOrWhitespaceReason(invalidReason: "   ")
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TransitionTo_RejectsEmptyOrWhitespaceReason(invalidReason: "\t")
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsInvalidThreshold(milliseconds: 0)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsInvalidThreshold(milliseconds: -1)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsInvalidThreshold(milliseconds: -1000)
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsNullPhaseName
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsEmptyOrWhitespacePhaseName(invalidPhaseName: "")
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsEmptyOrWhitespacePhaseName(invalidPhaseName: "   ")
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.LogSlowPhaseWarning_RejectsEmptyOrWhitespacePhaseName(invalidPhaseName: "\t")
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.ConcurrentReaders_WithSingleWriter_NoCorruption
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TransitionHistory_ReturnsSnapshot_NotLiveCollection
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.SubscriberExceptions_AreIsolated_TransitionCompletes
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.MultipleSubscriberFailures_TransitionStillCompletes
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.Subscribers_ReceiveCorrectTransitionData_EvenWithFailures
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.NoSubscribers_TransitionsWorkNormally
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.ReentrantTransition_FromSubscriber_ThrowsInvalidOperationException
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TransitionHistory_PreservesReasons
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.TimeInCurrentState_AdvancesMonotonically
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.GetSummary_ReturnsValidDiagnostics
+    VectorNNTP.Backfiller.Tests.ServiceLifecycleTests.ConcurrentWriters_OneSucceeds_OtherRejected_StateRemainsCoheren
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorDisposeSemanticsTests.Dispose_DuringGracefulShutdown_CompletesWithoutForcedEscalationSignal
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorDisposeSemanticsTests.Dispose_DuringGracefulShutdown_ForcedShutdownTokenBecomesUnusable
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorDisposeSemanticsTests.Dispose_DuringGracefulShutdown_PreventsLaterTimerDrivenForcedEscalation
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorDisposeSemanticsTests.SignalGracefulShutdown_AfterDispose_IsIgnored
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorDisposeSemanticsTests.SignalForcedShutdown_AfterDispose_IsIgnored
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorResourceOwnershipTests.SignalForcedShutdown_FromGraceful_DisposesGracePeriodEscalationSource
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalGracefulShutdown_FromRunning_TransitionsToGraceful
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalForcedShutdown_FromRunning_TransitionsToForced
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalForcedShutdown_FromGraceful_TransitionsToForced
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.Dispose_FromForced_TransitionsToCompleted
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalGracefulShutdown_Idempotent_WhenCalledTwice
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalForcedShutdown_Idempotent_WhenCalledTwice
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.GraceEscalation_AfterDeadline_TransitionsToForcedAndCancelsForcedToken
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalForcedShutdown_Immediately_CancelsGracefulAndForcedTokens
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.ShutdownReasons_AutomaticEscalation_PreservesGracefulAndForcedReasons
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.ShutdownReasons_ImmediateForced_LeavesGracefulUnknownAndSetsForcedReason
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalGracefulShutdown_DoesNotCancelForcedTokenInitially
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalGracefulShutdown_CallbackReentrancy_DoesNotDeadlock
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.SignalGracefulShutdown_CallbackFailure_DoesNotPreventOtherCallbacks
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.ForcedRace_ImmediateForcedWins_PreservesOperatorReason
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.ForcedRace_TimerWins_PreservesGracePeriodExpiredReason
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.ForcedRace_ImmediateAndTimer_ConcurrentFirstWriterWins_NoUnhandledExceptions
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.DisposalRace_TimerEscalationAndDispose_NoUnhandledExceptions
+    VectorNNTP.Backfiller.Tests.ShutdownCoordinatorTests.DisposalRace_ForcedAndDispose_NoUnhandledExceptions
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ProducerTiming_FromRaw_ProducesReconcilableActiveAndBlockedBuckets
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.BoundedArticleQueue_EnforcesByteBudget
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ByteBudget_AcquireCanceled_ThrowsOperationCanceled
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ByteBudget_Dispose_CancelsPendingAcquire
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.BuildMessageId_ProducesUniqueValidMessageIdAcrossWorkerAndSequence
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ArticlePayload_Create_ProducesExpectedHeadersAndCrLfTerminatedPayload
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateIntRange_WhenWithinRange_ReturnsValue(value: 1, min: 1, max: 64, option: "connections")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateIntRange_WhenWithinRange_ReturnsValue(value: 64, min: 1, max: 64, option: "connections")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateIntRange_WhenWithinRange_ReturnsValue(value: 8, min: 1, max: 64, option: "pipeline-depth")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateIntRange_WhenOutOfRange_Throws(value: 0, min: 1, max: 64, option: "connections")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateIntRange_WhenOutOfRange_Throws(value: 65, min: 1, max: 64, option: "connections")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateLongRange_WhenWithinRange_ReturnsValue(value: 67108864, min: 67108864, max: 2147483648, option: "queue-mib")
+    VectorNNTP.Backfiller.Tests.TransitBenchmarkCoreTests.ValidateLongRange_WhenWithinRange_ReturnsValue(value: 268435456, min: 67108864, max: 2147483648, option: "queue-mib")
+    VectorNNTP.Backfiller.Tests.TransitConnectionDisposalDiagnosticsTests.DisposeAsync_WhenTransportArtifactDisposeThrows_PropagatesExceptionWithoutLeakingSensitiveHost(artifactName: "read-stream", exceptionKind: "object-disposed")
+    VectorNNTP.Backfiller.Tests.TransitConnectionDisposalDiagnosticsTests.DisposeAsync_WhenTransportArtifactDisposeThrows_PropagatesExceptionWithoutLeakingSensitiveHost(artifactName: "write-stream", exceptionKind: "io")
+    VectorNNTP.Backfiller.Tests.TransitConnectionDisposalDiagnosticsTests.DisposeAsync_WhenTransportArtifactDisposeThrows_PropagatesExceptionWithoutLeakingSensitiveHost(artifactName: "transport-stream", exceptionKind: "socket")
+    VectorNNTP.Backfiller.Tests.TransitConnectionDisposalDiagnosticsTests.DisposeAsync_WhenTransportArtifactsDisposeNormally_ClearsFieldsWithoutDiagnosticFailures
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenPlainStreamingCapabilities_ReachesReady
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenPlainStreamCapabilityAlias_ReachesReady
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.DisposeAsync_WhenDisposedImmediatelyAfterReady_DoesNotThrowFromWriteLoopStartupRace
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenInitializationTokenCanceledAfterReady_ResponseLoopContinuesProcessing
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenStartTlsAdvertised_UpgradesToTlsAndRenegotiatesCapabilities
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenStreamingNotAdvertised_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenCapabilitiesResponseCodeUnexpected_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenModeStreamRejected_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenCompressDeflateAdvertised_DoesNotNegotiateCompression
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenGreetingUnexpected_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenServerClosesDuringGreeting_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenServerClosesDuringCapabilities_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenUseSslTrue_NegotiationRunsOverTls
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenUseSslTrueAndCompressionAdvertised_UsesTlsWithoutCompression
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenUseSslTrueAndStreamingNotAdvertised_Throws
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenStartTlsAdvertisedWithCompression_UpgradesToTlsWithoutCompression
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenServerClosesDuringTlsHandshake_ThrowsAuthenticationOrIoException
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenUseSslTrueAndServerClosesDuringTlsHandshake_ThrowsAuthenticationOrIoException
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenCompressionAdvertised_PublishesOverUncompressedTransport
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenCapabilitiesFailureThenRetryOnSameInstance_SucceedsWithFreshTransport
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenModeStreamRejectedThenRetryOnSameInstance_SucceedsWithFreshTransport
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenOnlyCompressAdvertisedWithNoStreaming_ThrowsStreamingRequired
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenStartTlsHandshakeFailsThenRetryOnSameInstance_SucceedsWithFreshTransport
+    VectorNNTP.Backfiller.Tests.TransitConnectionNegotiationTests.InitializeAsync_WhenCanceledDuringGreetingThenRetryOnSameInstance_SucceedsWithFreshTransport
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "empty", payload: [])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "one-byte", payload: [65])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "single-lf", payload: [10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "single-cr", payload: [13])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "crlf", payload: [13, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "lf-only-lines", payload: [65, 10, 66, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "line-begins-dot", payload: [46, 97, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "multiple-dot-lines", payload: [46, 97, 10, 46, 98, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "consecutive-dot-lines", payload: [46, 10, 46, 10, 46, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "empty-lines", payload: [10, 10, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "contains-null", payload: [0, 1, 2, 10, 46, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "not-ending-lf", payload: [65, 13, 66])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "all-256-values", payload: [0, 1, 2, 3, 4, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "mixed-realistic", payload: [46, 205, 166, 48, 224, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "large-random-binary", payload: [3, 152, 255, 41, 204, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_AllAlgorithms_MatchReference(_: "payload-2mib", payload: [46, 83, 88, 190, 76, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "empty", payload: [])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "one-byte", payload: [65])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "single-lf", payload: [10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "single-cr", payload: [13])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "crlf", payload: [13, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "lf-only-lines", payload: [65, 10, 66, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "line-begins-dot", payload: [46, 97, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "multiple-dot-lines", payload: [46, 97, 10, 46, 98, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "consecutive-dot-lines", payload: [46, 10, 46, 10, 46, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "empty-lines", payload: [10, 10, 10])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "contains-null", payload: [0, 1, 2, 10, 46, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "not-ending-lf", payload: [65, 13, 66])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "all-256-values", payload: [0, 1, 2, 3, 4, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "mixed-realistic", payload: [46, 205, 166, 48, 224, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "large-random-binary", payload: [3, 152, 255, 41, 204, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(_: "payload-2mib", payload: [46, 83, 88, 190, 76, ···])
+    VectorNNTP.Backfiller.Tests.TransitDotStuffingTests.TryDotStuff_WhenDestinationTooSmall_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.TransitWorkItem_TryComplete_AllowsExactlyOneTerminalCompletion
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.TransitWorkItem_RetryAttemptBudget_IsBoundedToThreeTransmissions
+    VectorNNTP.Backfiller.Tests.TransitGlobalWorkQueueTests.MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ReadNntpLineAsync_WhenCrLfLine_ReturnsLineWithoutCrLf
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ValidateGreeting_When200Or201_DoesNotThrow
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ValidateGreeting_WhenUnexpected_Throws
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_IgnoresCompressionAndDetectsSupportedFeatures
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseCapabilitiesResponse_WhenMalformed_Throws
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseStatusLine_WhenValid_ParsesCodeTextAndTokens
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseStatusLine_WhenMissingSeparatorAfterCode_Throws
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseCapabilitiesResponse_WhenMixedCaseAndParameters_DetectsSupportedFeatures
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseCapabilitiesResponse_WhenStreamTokenPresent_DetectsStreamingSupport
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ParseCapabilitiesResponse_WhenStatusCodeNot101_Throws
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ReadNntpLineWithByteCountAsync_WhenCrLfLine_ReturnsLineAndByteCount
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ReadNntpLineWithByteCountAndCompletionAsync_WhenCompletedWithoutLine_ReturnsCompletionMarker
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ReadNntpLineAsync_WhenCompletedWithoutLine_Throws
+    VectorNNTP.Backfiller.Tests.TransitProtocolParserTests.ReadNntpLineAsync_WhenLineExceedsMaximumWithoutNewline_Throws
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenInitialized_DispatchesQueuedSubmissionAndReturnsAccepted
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenNotInitialized_ReturnsUnavailable
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.InitializeAsync_WhenNoQueuedWork_DefersConnectionUntilPublishAndReturnsToIdleAfterQuit
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.FakePublisherServer_DisposeAsync_CancelsSessionBlockedInHandshakeRead
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenCanceledBeforeChannelAdmission_DoesNotLeakQueuedSubmissionCount
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.DisposeAsync_WhenInFlightTakethisResponseNeverArrives_CompletesAndFinalizesPublishTask
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenTwoConcurrentSubmissions_UsesTwoConnectionPool
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenCallerCancelsAfterAdmission_StillLogsFinalOutcome
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenSingleConnectionPipelineDepthGreaterThanOne_SendsMultipleTakethisBeforeFirstResponse
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenSingleConnectionResponsesOutOfOrder_CorrelatesByMessageId
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenPipelineDepthTwo_DoesNotDeadlockWhenThirdIntentCannotYetMaterialize
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenPayloadContainsBinaryAndLeadingDots_PreservesByteIntegrity
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenMultipleOutstandingAndConnectionDrops_CompletesAllAsAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenPartialResponseThenDisconnect_LeavesUnansweredSubmissionsAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenOutOfOrderPartialResponsesThenDisconnect_CompletesOnlyUnansweredSubmissionAsAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenDisposedWithMultipleOutstanding_CompletesPendingSubmissions
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenConnectionReplaced_DoesNotRetryAmbiguousSubmissions
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenConnectionCountFourAndPipelineDepthOne_UtilizesAllConnectionsConcurrently
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenConnectionWatchdogTimesOut_RequeuesOutstandingAndSubsequentConnectionCompletesWithoutAffinity
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.DisposeAsync_WhenNoOutstandingWork_WatchdogDoesNotTriggerReconnectLoop
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_AfterConnectionDrop_ReconnectsAndPublishesSubsequentSubmission
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.InitializeAsync_WhenDisposeBeginsDuringConnectionSetup_DoesNotResurrectConnection
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.ReconnectAsync_WhenConcurrentRequestsTargetSameSlot_DoesNotReplaceFreshHealthyConnectionTwice
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenPrimarySlotFaultedButSecondarySlotHealthy_StillAdmitsAndPublishes
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenReconnectDisposesConnectionWhileSubmitWaitsWriteGate_DoesNotFaultPump
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenShutdownBeginsDuringReconnectInitialization_DoesNotInstallReplacementConnection
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenReconnectInitializationFails_CompletesSubmissionAmbiguousAndIncrementsAmbiguousMetric
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenAdmissionCanceledBeforeEnqueue_DoesNotIncrementTotalSubmittedMetric
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PreemptSubmissionProcessingAsync_WhenFirstPipelineLaneStalls_CompletesAllAdmittedPublishTasksAndClearsQueuedCount
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PreemptSubmissionProcessingAsync_WhenConnectionPendingIsZeroAndPublisherOutstandingIsPositive_TerminalizesPublisherBacklog
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PreemptSubmissionProcessingAsync_WhenQueuedBacklogExceedsPipelineDepth_TerminalizesAllAdmittedSubmissionsAndClearsTracking
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PreemptSubmissionProcessingAsync_WhenSubmissionIsInFlight_TerminalizesExactlyOnceAndClearsTracking
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PreemptSubmissionProcessingAsync_WhenRacedWithOwnershipTransitionAcrossRepeatedRuns_DoesNotStrandSubmission
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PreemptSubmissionProcessingAsync_WhenCompletionRacesWithPreemption_CompletesAllAdmittedSubmissionsWithSingleTerminalOutcomePerSubmission
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenPipelineDepthTwoReceivesTwoTakethisBeforeAnyResponse_CompletesBothAndClearsInFlightCorrelation
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenPipelineDepthTwoClaimsDuplicateMessageId_CompletesWithoutStrandingClaimedWork
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.PublishAsync_WhenCancellationOutcomeLoggingThrows_LogsContinuationFailureWithoutFaultingCaller
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.IsConnectionLifecycleSubmitFailure_WhenLifecycleExceptionWriterNotInitialized_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.IsConnectionLifecycleSubmitFailure_WhenLifecycleExceptionWriterCompleted_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.IsConnectionLifecycleSubmitFailure_WhenArbitraryInvalidOperationAndConnectionFaulted_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.IsConnectionLifecycleSubmitFailure_WhenInvalidOperationAndConnectionReady_ReturnsFalse
+    VectorNNTP.Backfiller.Tests.TransitPublisherTests.IsConnectionLifecycleSubmitFailure_WhenKnownLifecycleExceptionType_ReturnsTrue
+    VectorNNTP.Backfiller.Tests.TransitServerDependencyProbeTests.ValidateTransitServerConnectivityAsync_WhenStartTlsAdvertisedButRejected_FailsValidation
+    VectorNNTP.Backfiller.Tests.TransitServerValidatorIsolationTests.TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline
+    VectorNNTP.Backfiller.Tests.TransitServerValidatorIsolationTests.TransitServer_UseSslTrue_Port119
+    VectorNNTP.Backfiller.Tests.TransitServerValidatorIsolationTests.TransitServer_UseSslFalse_Port563
+    VectorNNTP.Backfiller.Tests.TransitServerValidatorIsolationTests.TransitServer_UseSslTrue_Port563
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenAccepted_PreservesPayloadBytesAndReturnsAccepted
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenServerRejects_ReturnsRejected
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenServerReturns400_MarksAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenLargeBinaryPayload_PreservesBytesAndReturnsAccepted
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenResponsesOutOfOrder_CorrelatesByMessageId
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenSixteenConcurrentSubmissionsOutOfOrder_CorrelatesAllByMessageId
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenDuplicateMessageIdInFlight_ReturnsFailedForSecondSubmission
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenSecondCallerCanceledWhileWaitingForWriteGate_DoesNotCancelFirstInFlightSubmission
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenPayloadDoesNotEndWithLf_Throws
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenMessageIdContainsCrOrLf_Throws
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenConnectionDrops_MarksOutstandingAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenTakethisResponseMessageIdIsNotBracketed_FailsConnectionAndCompletesOutstandingAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenServerReturnsKnownTokenless239WithSingleOutstanding_MapsAccepted
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenServerReturnsTokenless239WithMultipleOutstanding_FailsConnectionAndMarksOutstandingAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenServerReturns431ForSubmittedMessage_MapsToRejectedInsteadOfHanging
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenMultipleOutstandingTakethisResponsesAreWithheld_TerminalizesAsAmbiguousAndCompletes
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenTakethisResponseIsCorrelatedBeforeShutdown_LeavesDefinitiveResult
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenShutdownWinsPendingTakethisAndLateResponseArrives_TerminalizesOnceAsAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenNoOutstandingTakethis_SendsQuitBeforeTransportClose
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenOutstandingTakethisAndShutdownBegins_TerminalizesAndThenSendsQuit
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenTransportAlreadyFaulted_DoesNotAttemptQuit
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenQuitServerClosesImmediatelyAfterQuit_DoesNotFault
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.DisposeAsync_WhenQuitServerReturnsUnexpectedCode_StillDisposesSafely
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenMixedAcceptedAndRejectedOutOfOrder_CorrelatesEachByMessageId
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenResponseMessageIdIsUnknown_CompletesOutstandingAsAmbiguousOnConnectionFailure
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenDuplicateServerResponseArrives_LaterSubmissionStillCompletesCorrectly
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenConnectionClosesWithMultiplePending_CompletesAllAsAmbiguous
+    VectorNNTP.Backfiller.Tests.TransitTakethisPipelineTests.SubmitTakethisAsync_WhenSixteenConcurrentTokenBearingResponses_CapturesMaxOutstandingAtLeastSixteen
+    VectorNNTP.Backfiller.Tests.UtcTimestampEnricherTests.Enrich_WhenInvoked_AddsUtcTimestampPropertyUsingUtcValue
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(fixtureName: "test_regular.yenc", expectedStatusName: "ValidMultiPart")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(fixtureName: "test_regular_2.yenc", expectedStatusName: "ValidMultiPart")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(fixtureName: "test_special_chars.yenc", expectedStatusName: "ValidMultiPart")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(fixtureName: "test_special_utf8_chars.yenc", expectedStatusName: "ValidMultiPart")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(fixtureName: "test_partial.yenc", expectedStatusName: "DecodedSizeMismatch")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(fixtureName: "test_bad_crc.yenc", expectedStatusName: "ValidMultiPart")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_bad_crc_end.yenc", expectedStatusName: "CrcMismatch")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_invalid_crc_chars.yenc", expectedStatusName: "InvalidMetadata")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_invalid_escape.yenc", expectedStatusName: "InvalidEscapeSequence")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_missing_yend.yenc", expectedStatusName: "Truncated")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_malformed_ybegin.yenc", expectedStatusName: "InvalidMetadata")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_ypart_without_ybegin.yenc", expectedStatusName: "ValidNonYEnc")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(fixtureName: "test_empty_file.yenc", expectedStatusName: "ValidNonYEnc")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenSinglePartArticleIsValid_ReturnsValidSinglePart
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenEncodedByteIsChanged_ReturnsCrcMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenEscapedByteIsChanged_ReturnsCrcMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenCrcMetadataIsAltered_ReturnsCrcMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDeclaredSizeIsAltered_ReturnsDecodedSizeMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadIsTruncated_ReturnsTruncated
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndLineIsTruncated_ReturnsTruncated
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenEscapeSequenceIsMalformed_ReturnsInvalidEscapeSequence
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginIsMalformed_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYPartIsMalformed_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndMissingCrc_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPayloadHasLeadingDot_ValidatesSuccessfully
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadContainsYEndLikeBytesInData_DoesNotFalseTerminate
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithEscapedYEndText_DoesNotFalseTerminate
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenLargeSinglePartPayloadIsValid_DoesNotAllocateOnHotPath
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenLargeSinglePartPayloadCorrupted_ReturnsCrcMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenThroughputMeasuredForLargePayload_CompletesAtReasonableRate
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeOverflowsLong_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndCrcHasMoreThanEightHexDigits_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndSizeOverflowsLong_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeContainsGarbageSuffix_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYPartBeginContainsGarbageSuffix_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYPartEndContainsGarbageSuffix_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndCrcContainsGarbageSuffix_ReturnsInvalidMetadata(crcField: " crc32=ABCDEF12G")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndCrcContainsGarbageSuffix_ReturnsInvalidMetadata(crcField: " crc32=12345678XYZ")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsDuplicateSizeFields_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsDuplicateCrcFields_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenMultipartYEndContainsDuplicatePartCrcFields_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenSinglePartYEndContainsOnlyPartCrc_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenSinglePartYEndContainsConflictingCrcAndPartCrc_UsesCrc32Field(fieldTemplate: " pcrc32=00000000 crc32={0:x8}")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenSinglePartYEndContainsConflictingCrcAndPartCrc_UsesCrc32Field(fieldTemplate: " crc32={0:x8} pcrc32=00000000")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenMultipartYEndContainsConflictingCrcAndPartCrc_UsesPartCrcField(fieldTemplate: " pcrc32={0:x8} crc32=00000000")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenMultipartYEndContainsConflictingCrcAndPartCrc_UsesPartCrcField(fieldTemplate: " crc32=00000000 pcrc32={0:x8}")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsUnknownMetadataKey_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsEmptyMetadataValue_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginStemDelimiterIsMissing_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadControlLineDelimiterIsMissing_DoesNotBecomeBoundary(malformedControlLine: "=ypartfoo")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadControlLineDelimiterIsMissing_DoesNotBecomeBoundary(malformedControlLine: "=yendfoo")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadContainsYEndLikeNoiseLine_RejectsWithDecodedSizeMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenMultipartSectionsOverlap_ReportsSectionValidationContract
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(payloadLine: "=ybegin")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(payloadLine: "=ypart")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(payloadLine: "=yend")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(payloadLine: "=ybeginfoo")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(payloadLine: "=ypartfoo")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenPayloadLineStartsWithControlStem_DoesNotFailWithInvalidMetadata(payloadLine: "=yendfoo")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsTabSeparatorWithMetadataHint_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsRepeatedSpaces_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsMalformedKeyValue_ReturnsInvalidMetadata(yendLine: "=yend size==3 crc32=352441c2")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsMalformedKeyValue_ReturnsInvalidMetadata(yendLine: "=yend =3 crc32=352441c2")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsMalformedKeyValue_ReturnsInvalidMetadata(yendLine: "=yend size=3 =352441c2")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYEndContainsMalformedKeyValue_ReturnsInvalidMetadata(yendLine: "=yend size=3 key==value crc32=352441c2")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeHasMalformedDecimal_ReturnsInvalidMetadata(sizeValue: "+3")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeHasMalformedDecimal_ReturnsInvalidMetadata(sizeValue: "-3")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeHasMalformedDecimal_ReturnsInvalidMetadata(sizeValue: "3x")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeHasMalformedDecimal_ReturnsInvalidMetadata(sizeValue: " 3")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeHasMalformedDecimal_ReturnsInvalidMetadata(sizeValue: "")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeIsInt64Max_ParsesAndFailsBySizeMismatch
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenYBeginSizeContainsNonAsciiDigit_ReturnsInvalidMetadata
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenAllByteValuesAreRoundTripped_ValidatesEachValue
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: ".")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: "..")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: "...")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: "....")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: "..=...")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: "...=...")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(payloadLine: "..=y")
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenMultipleSectionsAreProvided_StopsOnFirstFailureAndCountsValidSections
+    VectorNNTP.Backfiller.Tests.YEncArticleValidatorTests.Validate_WhenArticleBoundaryVariantsAreProvided_ReturnsExpectedStatuses

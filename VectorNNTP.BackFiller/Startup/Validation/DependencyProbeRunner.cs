@@ -6,6 +6,7 @@
 // Runs startup dependency probes, DNS reconciliation, and certificate availability checks.
 
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
@@ -52,25 +53,35 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 dependencyTimeout,
                 cancellationToken);
 
+            Task<DependencyValidationResult> rabbitMqDependencyTask = RabbitMqDependencyProbe.ValidateRabbitMqConnectivityAsync(
+                runtimeOptions,
+                dependencyTimeout,
+                cancellationToken);
+
             DependencyValidationResult[] dependencyResults = await Task.WhenAll(
                 databaseDependencyTask,
                 cloudflareDependencyTask,
-                transitServerDependencyTask).ConfigureAwait(false);
+                transitServerDependencyTask,
+                rabbitMqDependencyTask).ConfigureAwait(false);
 
             DependencyValidationResult databaseDependencyResult = dependencyResults[0];
             DependencyValidationResult cloudflareDependencyResult = dependencyResults[1];
             DependencyValidationResult transitServerDependencyResult = dependencyResults[2];
+            DependencyValidationResult rabbitMqDependencyResult = dependencyResults[3];
 
             DependencyValidationResult baselineResult = new(
                 databaseDependencyResult.FailedDependencies
                     .Concat(cloudflareDependencyResult.FailedDependencies)
-                    .Concat(transitServerDependencyResult.FailedDependencies),
+                    .Concat(transitServerDependencyResult.FailedDependencies)
+                    .Concat(rabbitMqDependencyResult.FailedDependencies),
                 databaseDependencyResult.Warnings
                     .Concat(cloudflareDependencyResult.Warnings)
-                    .Concat(transitServerDependencyResult.Warnings),
+                    .Concat(transitServerDependencyResult.Warnings)
+                    .Concat(rabbitMqDependencyResult.Warnings),
                 databaseDependencyResult.Errors
                     .Concat(cloudflareDependencyResult.Errors)
-                    .Concat(transitServerDependencyResult.Errors));
+                    .Concat(transitServerDependencyResult.Errors)
+                    .Concat(rabbitMqDependencyResult.Errors));
 
             if (!baselineResult.IsValid)
             {

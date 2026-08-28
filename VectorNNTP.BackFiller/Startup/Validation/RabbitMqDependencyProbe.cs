@@ -4,58 +4,37 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using Serilog;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     internal static class RabbitMqDependencyProbe
     {
         /// <summary>
-        /// Validates RabbitMQ dependency health by opening AMQP connections/channels for each configured host.
+        /// Validates RabbitMQ dependency health by opening AMQP connections/channels for configured runtime hosts.
         /// </summary>
         internal static async Task<DependencyValidationResult> ValidateRabbitMqConnectivityAsync(
-            BackFillerOptions? backFiller,
+            BackFillerRuntimeOptions runtimeOptions,
             TimeSpan timeout,
             CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+
             List<(string Dependency, string Reason)> failures = [];
             List<(string Category, string Message)> warnings = [];
             List<(string Category, string Message)> errors = [];
 
-            RabbitMqOptions? rabbitMq = backFiller?.RabbitMQ;
-            string[] hosts = [.. (rabbitMq?.Hosts ?? [])
-                .Where(static x => !string.IsNullOrWhiteSpace(x))
-                .Select(static x => x.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)];
-            int? port = rabbitMq?.Port;
+            RabbitMqRuntimeOptions rabbitMq = runtimeOptions.RabbitMq
+                ?? throw new InvalidOperationException("Validated runtime RabbitMQ settings are required for dependency probing.");
 
-            if (hosts.Length == 0 || port is null or <= 0)
+            IReadOnlyList<string> hosts = RabbitMqConnectionFactoryBuilder.BuildHostList(rabbitMq);
+            if (hosts.Count == 0 || rabbitMq.Port <= 0)
             {
-                // Configuration validation should catch this, but guard defensively.
                 return new DependencyValidationResult(failures, warnings, errors);
             }
 
-            ConnectionFactory connectionFactory = new()
-            {
-                Port = port.Value,
-                AutomaticRecoveryEnabled = false,
-            };
-
-            if (!string.IsNullOrWhiteSpace(rabbitMq?.Username))
-            {
-                connectionFactory.UserName = rabbitMq.Username;
-            }
-
-            if (rabbitMq?.Password != null)
-            {
-                connectionFactory.Password = rabbitMq.Password;
-            }
-
-            if (!string.IsNullOrWhiteSpace(rabbitMq?.VirtualHost))
-            {
-                connectionFactory.VirtualHost = rabbitMq.VirtualHost;
-            }
-
-            connectionFactory.Ssl.Enabled = rabbitMq?.EnableSsl ?? false;
+            string connectionName = rabbitMq.GetDefaultConnectionName(runtimeOptions.CanonicalBackFillerFqdn);
+            ConnectionFactory connectionFactory = RabbitMqConnectionFactoryBuilder.BuildConnectionFactory(rabbitMq, connectionName);
 
             foreach (string host in hosts)
             {
@@ -73,9 +52,12 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                         .ConfigureAwait(false);
 
                     Log.Information(
-                        "RabbitMQ connectivity validated successfully (Host: {Host}, Port: {Port})",
+                        "RabbitMQ connectivity validated successfully (Host: {Host}, Port: {Port}, VirtualHost: {VirtualHost}, ConnectionName: {ConnectionName}, EnableSsl: {EnableSsl})",
                         host,
-                        port.Value);
+                        rabbitMq.Port,
+                        rabbitMq.VirtualHost,
+                        connectionName,
+                        rabbitMq.EnableSsl);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -83,28 +65,28 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 }
                 catch (OperationCanceledException)
                 {
-                    failures.Add(("RabbitMQ", $"{host}:{port.Value} connection timed out after {timeout.TotalSeconds:F1}s"));
+                    failures.Add(("RabbitMQ", $"{host}:{rabbitMq.Port} connection timed out after {timeout.TotalSeconds:F1}s"));
                 }
                 catch (AuthenticationFailureException)
                 {
-                    failures.Add(("RabbitMQ", $"{host}:{port.Value} authentication failed"));
+                    failures.Add(("RabbitMQ", $"{host}:{rabbitMq.Port} authentication failed"));
                 }
                 catch (PossibleAuthenticationFailureException)
                 {
-                    failures.Add(("RabbitMQ", $"{host}:{port.Value} authentication failed"));
+                    failures.Add(("RabbitMQ", $"{host}:{rabbitMq.Port} authentication failed"));
                 }
                 catch (BrokerUnreachableException ex) when (ex.InnerException is SocketException socketEx)
                 {
-                    failures.Add(("RabbitMQ", $"{host}:{port.Value} {GetSanitizedSocketFailureReason(socketEx.SocketErrorCode)}"));
+                    failures.Add(("RabbitMQ", $"{host}:{rabbitMq.Port} {GetSanitizedSocketFailureReason(socketEx.SocketErrorCode)}"));
                 }
                 catch (BrokerUnreachableException)
                 {
-                    failures.Add(("RabbitMQ", $"{host}:{port.Value} unable to establish AMQP connection"));
+                    failures.Add(("RabbitMQ", $"{host}:{rabbitMq.Port} unable to establish AMQP connection"));
                 }
                 catch (Exception ex)
                 {
                     Log.Debug(ex, "RabbitMQ connectivity validation threw an exception during startup dependency validation.");
-                    failures.Add(("RabbitMQ", $"{host}:{port.Value} unexpected connectivity failure"));
+                    failures.Add(("RabbitMQ", $"{host}:{rabbitMq.Port} unexpected connectivity failure"));
                 }
             }
 

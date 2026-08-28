@@ -949,6 +949,11 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly TestTlsCertificateFixture? _tlsCertificate;
 
             /// <summary>
+            /// Optional per-connection callback used by cancellation-focused startup tests.
+            /// </summary>
+            private Func<TcpClient, CancellationToken, Task>? _connectionHandler;
+
+            /// <summary>
             /// Running accepted connection count.
             /// </summary>
             private int _acceptedConnectionCount;
@@ -1003,6 +1008,26 @@ namespace VectorNNTP.Backfiller.Tests
             internal static async Task<FakeNntpServer> StartAsync(int acceptConnectionCount)
             {
                 return await StartWithTransportPlanAsync([.. Enumerable.Repeat(ConnectionTransport.Plaintext, acceptConnectionCount)]).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Starts a fake NNTP server for control-plane tests using plaintext transport and invokes a connection callback for each accepted client.
+            /// </summary>
+            /// <param name="connectionHandler">Callback invoked for each accepted plaintext client connection.</param>
+            /// <returns>Started fake server.</returns>
+            internal static async Task<FakeNntpServer> StartAsync(Func<TcpClient, CancellationToken, Task> connectionHandler)
+            {
+                ArgumentNullException.ThrowIfNull(connectionHandler);
+
+                TcpListener listener = new(IPAddress.Loopback, 0);
+                listener.Start();
+                FakeNntpServer server = new(listener, acceptConnectionCount: 1, _ => ConnectionTransport.Plaintext)
+                {
+                    _connectionHandler = connectionHandler,
+                };
+
+                await Task.Delay(20).ConfigureAwait(false);
+                return server;
             }
 
             /// <summary>
@@ -1135,6 +1160,12 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 try
                 {
+                    if (_connectionHandler is not null)
+                    {
+                        await _connectionHandler(client, _shutdown.Token).ConfigureAwait(false);
+                        return;
+                    }
+
                     using NetworkStream networkStream = client.GetStream();
 
                     if (transport == ConnectionTransport.ImmediateClose)

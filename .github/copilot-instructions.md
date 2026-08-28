@@ -30,6 +30,7 @@
 - For regression-validation phases, require fully autonomous execution with one isolated test/method per process, stale test process cleanup, 45-second no-progress watchdog monitoring of testhost, automatic forensic capture/analysis on hangs, no manual user intervention, and no speculative code changes. Do not rely on Visual Studio/DevHub test runner; use watchdog + CLI infrastructure for potentially blocking/concurrency/lifecycle tests and capture forensics before termination.
 - Phase 2 workflow for this repo is benchmark-first: no production code changes before readiness assessment approval, use CLI + watchdog (not Visual Studio runner), and evaluate one optimization at a time with before/after evidence artifacts.
 - For transit transport performance work, require staged workflow: static investigation first, then minimal event-driven completion signaling change preserving ownership/recovery semantics, focused bounded tests only, depth-1 benchmark only (3 runs), no depth-2/full-suite, and explicit artifact documentation.
+- User prefers a static audit-only pass (no code changes, builds, or tests) before any further implementation when validating major architecture work.
 
 ## Engineering Quality and Documentation Standards (Repository-Wide)
 - Scope and permanence: these standards apply to all future repository coding tasks unless a future task explicitly overrides a specific rule.

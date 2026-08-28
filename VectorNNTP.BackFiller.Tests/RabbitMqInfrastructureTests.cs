@@ -1,0 +1,420 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
+using VectorNNTP.Backfiller.Runtime.Shutdown;
+using Xunit;
+
+namespace VectorNNTP.Backfiller.Tests;
+
+/// <summary>
+/// Unit tests for RabbitMQ Phase 1 infrastructure behaviors.
+/// </summary>
+public sealed class RabbitMqInfrastructureTests
+{
+    [Fact]
+    public void BuildConnectionFactory_MapsConfiguredRuntimeSettings()
+    {
+        RabbitMqRuntimeOptions options = CreateRabbitMqRuntimeOptions(enableSsl: true);
+
+        ConnectionFactory factory = RabbitMqConnectionFactoryBuilder.BuildConnectionFactory(options, "VectorNNTP.BackFiller:test");
+
+        Assert.Equal(options.Port, factory.Port);
+        Assert.Equal(options.VirtualHost, factory.VirtualHost);
+        Assert.Equal(options.RequestedHeartbeatSeconds, (int)factory.RequestedHeartbeat.TotalSeconds);
+        Assert.Equal(options.ConnectionBlockedTimeoutSeconds, (int)factory.RequestedConnectionTimeout.TotalSeconds);
+        Assert.Equal(options.RpcTimeoutSeconds, (int)factory.ContinuationTimeout.TotalSeconds);
+        Assert.Equal(options.SocketTimeoutSeconds, (int)factory.SocketReadTimeout.TotalSeconds);
+        Assert.Equal(options.SocketTimeoutSeconds, (int)factory.SocketWriteTimeout.TotalSeconds);
+        Assert.Equal((ushort)options.RequestedChannelMax, factory.RequestedChannelMax);
+        Assert.Equal(options.Username, factory.UserName);
+        Assert.Equal(options.Password, factory.Password);
+        Assert.True(factory.Ssl.Enabled);
+        Assert.True(factory.AutomaticRecoveryEnabled);
+        Assert.True(factory.TopologyRecoveryEnabled);
+    }
+
+    [Fact]
+    public void BuildSanitizedSnapshot_DoesNotLogPasswordMaterial()
+    {
+        RabbitMqRuntimeOptions options = CreateRabbitMqRuntimeOptions(enableSsl: false);
+
+        RabbitMqConnectionFactorySnapshot snapshot = RabbitMqConnectionFactoryBuilder.BuildSanitizedSnapshot(options, "VectorNNTP.BackFiller:test");
+
+        Assert.True(snapshot.UsesUsernameAuthentication);
+        Assert.True(snapshot.HasPassword);
+        Assert.DoesNotContain(options.Password!, snapshot.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TopologyBuilder_BackboneNamespaces_AreIsolated()
+    {
+        IReadOnlyList<RabbitMqBackboneTopologyDefinition> definitions = RabbitMqTopologyBuilder.BuildDefinitions(
+            serverId: 11,
+            backbones: ["Giganews", "Eweka"]);
+
+        RabbitMqBackboneTopologyDefinition giganews = Assert.Single(definitions.Where(static x => x.Backbone == "Giganews"));
+        RabbitMqBackboneTopologyDefinition eweka = Assert.Single(definitions.Where(static x => x.Backbone == "Eweka"));
+
+        Assert.Equal("grabbers.giganews", giganews.ExchangeName);
+        Assert.Equal("grabbers.giganews", giganews.QueueName);
+        Assert.Equal("grabbers.giganews", giganews.RoutingKey);
+
+        Assert.Equal("grabbers.eweka", eweka.ExchangeName);
+        Assert.Equal("grabbers.eweka", eweka.QueueName);
+        Assert.Equal("grabbers.eweka", eweka.RoutingKey);
+
+        Assert.NotEqual(giganews.ExchangeName, eweka.ExchangeName);
+        Assert.NotEqual(giganews.QueueName, eweka.QueueName);
+        Assert.NotEqual(giganews.RoutingKey, eweka.RoutingKey);
+    }
+
+    [Fact]
+    public void TopologyBuilder_DeclaresExpectedExchangeAndBindingProperties()
+    {
+        RabbitMqBackboneTopologyDefinition definition = Assert.Single(RabbitMqTopologyBuilder.BuildDefinitions(11, ["Giganews"]));
+
+        Assert.Equal("grabbers.giganews", definition.ExchangeName);
+        Assert.Equal("grabbers.giganews", definition.QueueName);
+        Assert.Equal(definition.ExchangeName, definition.QueueName);
+        Assert.Equal(ExchangeType.Fanout, definition.ExchangeType);
+        Assert.True(definition.ExchangeDurable);
+        Assert.False(definition.ExchangeAutoDelete);
+        Assert.Null(definition.ExchangeArguments);
+
+        Assert.Equal("grabbers.giganews", definition.RoutingKey);
+        Assert.Null(definition.BindingArguments);
+    }
+
+    [Fact]
+    public async Task ConnectionManager_WhenAutomaticRecoveryErrorsReachThreshold_AttemptsConnectionReplacement()
+    {
+        using ShutdownCoordinator shutdownCoordinator = new();
+        FakeRabbitMqBrokerConnector connector = new();
+        BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+        RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+
+        List<RabbitMqConnectionReplacedEventArgs> replacements = [];
+        manager.ConnectionReplaced += (_, args) => replacements.Add(args);
+
+        await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+        Assert.Equal(RabbitMqInfrastructureState.Connected, manager.State);
+        Assert.Equal(1, manager.ConnectionGeneration);
+
+        FakeRabbitMqBrokerConnection firstConnection = connector.LastConnection ?? throw new InvalidOperationException("Expected first connection.");
+
+        for (int i = 0; i < runtimeOptions.RabbitMq!.MaxConsecutiveRecoveryFailures; i++)
+        {
+            firstConnection.RaiseConnectionRecoveryError(new InvalidOperationException("simulated automatic recovery failure"));
+        }
+
+        bool recovered = await WaitForAsync(
+            () => connector.ConnectCallCount >= 2 &&
+                (manager.State == RabbitMqInfrastructureState.Connected || manager.State == RabbitMqInfrastructureState.TopologyReady),
+            TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+        Assert.True(recovered);
+        Assert.True(manager.ConnectionGeneration >= 2);
+        Assert.Contains(replacements, static args => args.ConnectionGeneration == 1 && !args.IsReplacement);
+        Assert.Contains(replacements, static args => args.ConnectionGeneration >= 2 && args.IsReplacement);
+
+        await manager.DisposeAsync().ConfigureAwait(false);
+    }
+
+    [Fact]
+    public async Task ConnectionManager_ShutdownPreventsRecoveryReplacement()
+    {
+        using ShutdownCoordinator shutdownCoordinator = new();
+        FakeRabbitMqBrokerConnector connector = new();
+        BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+        RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+
+        await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+        int initialConnectCount = connector.ConnectCallCount;
+
+        shutdownCoordinator.SignalGracefulShutdown(TimeSpan.FromSeconds(1), ShutdownCoordinator.ShutdownReason.HostStopping);
+
+        FakeRabbitMqBrokerConnection firstConnection = connector.LastConnection ?? throw new InvalidOperationException("Expected first connection.");
+        for (int i = 0; i < runtimeOptions.RabbitMq!.MaxConsecutiveRecoveryFailures; i++)
+        {
+            firstConnection.RaiseConnectionRecoveryError(new InvalidOperationException("simulated automatic recovery failure"));
+        }
+
+        await Task.Delay(250).ConfigureAwait(false);
+        Assert.Equal(initialConnectCount, connector.ConnectCallCount);
+
+        await manager.DisposeAsync().ConfigureAwait(false);
+    }
+
+    [Fact]
+    public async Task ConnectionManager_CreateOwnedChannelAsync_ReturnsIndependentOwnedChannels()
+    {
+        using ShutdownCoordinator shutdownCoordinator = new();
+        FakeRabbitMqBrokerConnector connector = new();
+        BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+        RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+
+        await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+
+        await using RabbitMqOwnedChannel first = await manager.CreateOwnedChannelAsync("test-owner-1", CancellationToken.None).ConfigureAwait(false);
+        await using RabbitMqOwnedChannel second = await manager.CreateOwnedChannelAsync("test-owner-2", CancellationToken.None).ConfigureAwait(false);
+
+        Assert.NotSame(first.Channel, second.Channel);
+        Assert.Equal("test-owner-1", first.Owner);
+        Assert.Equal("test-owner-2", second.Owner);
+        Assert.Equal(manager.ConnectionGeneration, first.ConnectionGeneration);
+        Assert.Equal(manager.ConnectionGeneration, second.ConnectionGeneration);
+
+        await manager.DisposeAsync().ConfigureAwait(false);
+    }
+
+    [Fact]
+    public void TopologyBuilder_SameBackboneDifferentServerIds_ProduceIdenticalTopologyIdentity()
+    {
+        RabbitMqBackboneTopologyDefinition server1 = Assert.Single(RabbitMqTopologyBuilder.BuildDefinitions(1, ["Giganews"]));
+        RabbitMqBackboneTopologyDefinition server2 = Assert.Single(RabbitMqTopologyBuilder.BuildDefinitions(2, ["Giganews"]));
+
+        Assert.Equal("grabbers.giganews", server1.ExchangeName);
+        Assert.Equal("grabbers.giganews", server1.QueueName);
+        Assert.Equal("grabbers.giganews", server1.RoutingKey);
+
+        Assert.Equal(server1.ExchangeName, server2.ExchangeName);
+        Assert.Equal(server1.QueueName, server2.QueueName);
+        Assert.Equal(server1.RoutingKey, server2.RoutingKey);
+    }
+
+    [Fact]
+    public void TopologyBuilder_DeclaresQuorumQueue()
+    {
+        RabbitMqBackboneTopologyDefinition definition = Assert.Single(RabbitMqTopologyBuilder.BuildDefinitions(1, ["Giganews"]));
+
+        Assert.NotNull(definition.QueueArguments);
+        Assert.True(definition.QueueArguments!.TryGetValue("x-queue-type", out object? queueType));
+        Assert.Equal("quorum", queueType as string);
+
+        Assert.True(definition.QueueArguments.TryGetValue("x-message-ttl", out object? messageTtl));
+        Assert.Equal(1000, Assert.IsType<int>(messageTtl));
+
+        Assert.True(definition.QueueArguments.TryGetValue("x-expires", out object? expires));
+        Assert.Equal(120000, Assert.IsType<int>(expires));
+
+        Assert.True(definition.QueueDurable);
+        Assert.False(definition.QueueExclusive);
+        Assert.False(definition.QueueAutoDelete);
+        Assert.True(definition.ExchangeDurable);
+        Assert.False(definition.ExchangeAutoDelete);
+        Assert.Equal(ExchangeType.Fanout, definition.ExchangeType);
+    }
+
+    [Fact]
+    public async Task TopologyInitializer_CanBeCalledRepeatedly_IdempotentFromInfrastructurePerspective()
+    {
+        using ShutdownCoordinator shutdownCoordinator = new();
+        FakeRabbitMqBrokerConnector connector = new();
+        BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+        RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+        RabbitMqTopologyInitializer initializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+
+        await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+
+        await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None).ConfigureAwait(false);
+        await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None).ConfigureAwait(false);
+
+        Assert.Equal(RabbitMqInfrastructureState.TopologyReady, manager.State);
+        await manager.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        DateTime deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return true;
+            }
+
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+
+        return condition();
+    }
+
+    private static BackFillerRuntimeOptions CreateRuntimeOptions()
+    {
+        return new BackFillerRuntimeOptions(
+            CanonicalBackFillerFqdn: "backfiller-1.usenet.ninja",
+            BackFillerId: 1,
+            CanonicalDnsSuffix: "usenet.ninja",
+            ValidatedLogDirectory: Path.GetTempPath(),
+            ValidatedCertificateDirectory: Path.GetTempPath(),
+            RabbitMqHosts: ["localhost"],
+            RabbitMqPort: 5672,
+            RabbitMqEnableSsl: false,
+            TransitServerHost: "localhost",
+            TransitServerPort: 119,
+            TransitServerUseSsl: false,
+            BindPort: 1190,
+            ConfiguredBindAddressTokens: ["127.0.0.1"],
+            ShutdownGracePeriodSeconds: 120,
+            ShutdownDrainQueuedWork: true,
+            ShutdownFinishActiveArticles: true,
+            RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
+            WriteBatchCoalesceMicroseconds: 250,
+            RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
+    }
+
+    private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
+    {
+        return new RabbitMqRuntimeOptions(
+            Hosts: ["localhost"],
+            Port: 5672,
+            Username: "nntparticles",
+            Password: "super-secret",
+            VirtualHost: "/",
+            EnableSsl: enableSsl,
+            ChannelLeaseTimeoutSeconds: 60,
+            RpcTimeoutSeconds: 30,
+            ConnectionBlockedTimeoutSeconds: 30,
+            ChannelPoolSize: 512,
+            MinConnections: 4,
+            MaxConnections: 16,
+            MaxConsecutiveRecoveryFailures: 5,
+            MaxPendingLeaseWaiters: 1024,
+            ConnectionScaleDownIdleSeconds: 300,
+            ScaleDownCooldownSeconds: 30,
+            NetworkRecoveryIntervalSeconds: 5,
+            PoolReconnectBaseDelayMs: 50,
+            PoolReconnectMaxDelayMs: 250,
+            MinimumConnectionLifetimeSeconds: 300,
+            PublishConfirmTimeoutSeconds: 10,
+            MaximumShutdownDrainTimeoutSeconds: 30,
+            DegradedThreshold: 0.75,
+            UnhealthyThreshold: 5,
+            RequestedHeartbeatSeconds: 60,
+            SocketTimeoutSeconds: 30,
+            RequestedChannelMax: 2047,
+            ConsumerPrefetchCount: null);
+    }
+
+    private sealed class FakeRabbitMqBrokerConnector : IRabbitMqBrokerConnector
+    {
+        private int _connectCallCount;
+
+        internal int ConnectCallCount => Volatile.Read(ref _connectCallCount);
+
+        internal FakeRabbitMqBrokerConnection? LastConnection { get; private set; }
+
+        public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
+        {
+            _ = Interlocked.Increment(ref _connectCallCount);
+
+            FakeRabbitMqBrokerConnection connection = new(runtimeOptions.Hosts[0], runtimeOptions.Port, runtimeOptions.VirtualHost, clientProvidedConnectionName);
+            LastConnection = connection;
+            return Task.FromResult<IRabbitMqBrokerConnection>(connection);
+        }
+    }
+
+    private sealed class FakeRabbitMqBrokerConnection(string host, int port, string virtualHost, string connectionName) : IRabbitMqBrokerConnection
+    {
+        private int _channelCounter;
+
+        public bool IsOpen { get; private set; } = true;
+
+        public string EndpointHostName { get; } = host;
+
+        public int EndpointPort { get; } = port;
+
+        public string VirtualHost { get; } = virtualHost;
+
+        public string ClientProvidedName { get; } = connectionName;
+
+        public IConnection UnderlyingConnection => throw new NotSupportedException();
+
+        public event EventHandler<ShutdownEventArgs>? ConnectionShutdown;
+
+        public event EventHandler<CallbackExceptionEventArgs>? CallbackException;
+
+        public event EventHandler<ConnectionBlockedEventArgs>? ConnectionBlocked;
+
+        public event EventHandler<AsyncEventArgs>? ConnectionUnblocked;
+
+        public event EventHandler<ConnectionRecoveryErrorEventArgs>? ConnectionRecoveryError;
+
+        public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
+
+        public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            int next = Interlocked.Increment(ref _channelCounter);
+            IRabbitMqChannel channel = new FakeRabbitMqChannel(next);
+            return Task.FromResult(channel);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            IsOpen = false;
+            return ValueTask.CompletedTask;
+        }
+
+        internal void RaiseConnectionShutdown()
+        {
+            ConnectionShutdown?.Invoke(this, new ShutdownEventArgs(ShutdownInitiator.Peer, 320, "Closed by broker"));
+        }
+
+        internal void RaiseCallbackException(Exception exception)
+        {
+            CallbackException?.Invoke(this, new CallbackExceptionEventArgs(new Dictionary<string, object>(), exception, default));
+        }
+
+        internal void RaiseConnectionBlocked(string reason)
+        {
+            ConnectionBlocked?.Invoke(this, new ConnectionBlockedEventArgs(reason));
+        }
+
+        internal void RaiseConnectionUnblocked()
+        {
+            ConnectionUnblocked?.Invoke(this, new AsyncEventArgs());
+        }
+
+        internal void RaiseConnectionRecoveryError(Exception exception)
+        {
+            ConnectionRecoveryError?.Invoke(this, new ConnectionRecoveryErrorEventArgs(exception, default));
+        }
+
+        internal void RaiseRecoverySucceeded()
+        {
+            RecoverySucceeded?.Invoke(this, new AsyncEventArgs());
+        }
+    }
+
+    private sealed class FakeRabbitMqChannel(int id) : IRabbitMqChannel
+    {
+        public IChannel UnderlyingChannel => throw new NotSupportedException();
+
+        public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _ = id;
+            return ValueTask.CompletedTask;
+        }
+    }
+}

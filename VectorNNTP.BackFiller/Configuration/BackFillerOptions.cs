@@ -464,6 +464,12 @@ namespace VectorNNTP.Backfiller.Configuration
         [Required(ErrorMessage = "BackFiller:RabbitMQ:RequestedChannelMax is required")]
         [Range(1, 65535, ErrorMessage = "BackFiller:RabbitMQ:RequestedChannelMax must be between 1 and 65535")]
         public int? RequestedChannelMax { get; set; } = 2047;
+
+        /// <summary>
+        /// Gets or sets the optional RabbitMQ consumer prefetch count used for Basic.Qos prefetch control.
+        /// </summary>
+        [Range(1, 65535, ErrorMessage = "BackFiller:RabbitMQ:ConsumerPrefetchCount must be between 1 and 65535")]
+        public ushort? ConsumerPrefetchCount { get; set; }
     }
 
     /// <summary>

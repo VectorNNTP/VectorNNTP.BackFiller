@@ -11,6 +11,7 @@ using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
 using VectorNNTP.Backfiller.Runtime.Listener;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
@@ -123,6 +124,18 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
+        /// Registers RabbitMQ infrastructure services and startup initializer.
+        /// </summary>
+        /// <param name="services">Service collection to register RabbitMQ services into.</param>
+        internal static void RegisterRabbitMqInfrastructureServices(IServiceCollection services)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            _ = services.AddSingleton<RabbitMqConnectionManager>();
+            _ = services.AddSingleton<RabbitMqTopologyInitializer>();
+            _ = services.AddHostedService<RabbitMqStartupInitializer>();
+        }
+
+        /// <summary>
         /// Registers transit publishing runtime services and startup initializer.
         /// </summary>
         /// <param name="services">Service collection to register transit publishing services into.</param>
@@ -209,6 +222,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
             // Register startup-time NNTP account snapshot loading before runtime loops start.
             RegisterRuntimeAccountSnapshotServices(services);
+
+            // Register RabbitMQ startup initialization after account load so topology can be scoped per backbone.
+            RegisterRabbitMqInfrastructureServices(services);
 
             // Register transit publisher startup initialization before control-plane runtime loops start.
             RegisterTransitPublisherServices(services);
