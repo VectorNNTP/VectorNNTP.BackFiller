@@ -1,5 +1,12 @@
+// <copyright file="ValidateStartupCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using Serilog;
-using VectorNNTP.Backfiller.Startup.Validation;
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
@@ -18,7 +25,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             if (configuration == null)
             {
                 Console.Error.WriteLine("ERROR: Configuration not available for validation");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                return ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
 
             try
@@ -48,7 +55,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                         Console.Error.WriteLine($"  [ERROR] {setting}: {error}");
                     }
 
-                    return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                    return ExitCodePolicy.ExitCodeConfigurationFailure;
                 }
 
                 if (dependencyResult.Warnings.Count > 0)
@@ -75,17 +82,17 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                         Console.Error.WriteLine($"  [ERROR] {category}: {message}");
                     }
 
-                    return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeDependencyFailure;
+                    return ExitCodePolicy.ExitCodeDependencyFailure;
                 }
 
                 Console.WriteLine("Startup validation PASSED");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown;
+                return ExitCodePolicy.ExitCodeNormalShutdown;
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"ERROR: {ex.Message}");
                 Log.Fatal(ex, "Startup validation command failed");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                return ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
         }
     }

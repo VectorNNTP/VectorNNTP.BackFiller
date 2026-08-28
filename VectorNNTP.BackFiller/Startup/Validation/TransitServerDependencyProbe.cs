@@ -1,3 +1,11 @@
+// <copyright file="TransitServerDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;

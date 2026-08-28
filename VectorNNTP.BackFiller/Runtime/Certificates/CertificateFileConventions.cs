@@ -13,7 +13,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal static class CertificateFileConventions
     {
         internal const string ListenerPfxFileName = "backfiller-listener.pfx";
-        internal const string CertificatePrivateKeyPemFileName = "certificate.key";
+        internal const string CertificatePrivateKeyPemFileName = "backfiller-listener.key";
 
         /// <summary>
         /// Builds a deterministic temporary path used for atomic file replacement.

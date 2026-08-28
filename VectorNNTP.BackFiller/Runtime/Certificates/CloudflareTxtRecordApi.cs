@@ -54,12 +54,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 .GetAsync(zoneId, recordFilter, displayOptions, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!queryResult.Success || queryResult.Result is null)
-            {
-                throw new InvalidOperationException(BuildQueryFailureMessage(zoneId, recordName, queryResult.Success, queryResult.Messages, queryResult.Errors, queryResult.Timing));
-            }
-
-            return [.. queryResult.Result.Select(static record => new CloudflareTxtRecordInfo(
+            return !queryResult.Success || queryResult.Result is null
+                ? throw new InvalidOperationException(BuildQueryFailureMessage(zoneId, recordName, queryResult.Success, queryResult.Messages, queryResult.Errors, queryResult.Timing))
+                : [.. queryResult.Result.Select(static record => new CloudflareTxtRecordInfo(
                 Id: record.Id ?? string.Empty,
                 Name: record.Name ?? string.Empty,
                 Content: record.Content ?? string.Empty,
@@ -100,12 +97,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 throw new InvalidOperationException(BuildCreateFailureMessage(recordName, DnsRecordType.Txt, null, null, null, null), ex);
             }
 
-            if (!addResult.Success || addResult.Result is null || string.IsNullOrWhiteSpace(addResult.Result.Id))
-            {
-                throw new InvalidOperationException(BuildCreateFailureMessage(recordName, DnsRecordType.Txt, addResult.Success, addResult.Messages, addResult.Errors, addResult.Timing));
-            }
-
-            return new CloudflareTxtRecordInfo(
+            return !addResult.Success || addResult.Result is null || string.IsNullOrWhiteSpace(addResult.Result.Id)
+                ? throw new InvalidOperationException(BuildCreateFailureMessage(recordName, DnsRecordType.Txt, addResult.Success, addResult.Messages, addResult.Errors, addResult.Timing))
+                : new CloudflareTxtRecordInfo(
                 Id: addResult.Result.Id,
                 Name: addResult.Result.Name ?? recordName,
                 Content: addResult.Result.Content ?? string.Empty,
@@ -158,7 +152,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             TimingInfo? timing)
         {
             StringBuilder message = new();
-            message.Append("Cloudflare TXT record create failed for ACME challenge.");
+            _ = message.Append("Cloudflare TXT record create failed for ACME challenge.");
             AppendCloudflareDetails(message, recordName, recordType, success, messages, errors, timing);
             return message.ToString();
         }
@@ -172,9 +166,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             TimingInfo? timing)
         {
             StringBuilder message = new();
-            message.Append("Cloudflare TXT record query failed for ACME challenge reconciliation.");
-            message.Append(" ZoneId=");
-            message.Append(zoneId);
+            _ = message.Append("Cloudflare TXT record query failed for ACME challenge reconciliation.");
+            _ = message.Append(" ZoneId=");
+            _ = message.Append(zoneId);
             AppendCloudflareDetails(message, recordName, DnsRecordType.Txt, success, messages, errors, timing);
             return message.ToString();
         }
@@ -187,13 +181,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             TimingInfo? timing)
         {
             StringBuilder message = new();
-            message.Append("Cloudflare TXT record delete failed for ACME challenge cleanup.");
-            message.Append(" RecordId=");
-            message.Append(recordId);
+            _ = message.Append("Cloudflare TXT record delete failed for ACME challenge cleanup.");
+            _ = message.Append(" RecordId=");
+            _ = message.Append(recordId);
             if (!string.IsNullOrWhiteSpace(resultId))
             {
-                message.Append("; ResultId=");
-                message.Append(resultId);
+                _ = message.Append("; ResultId=");
+                _ = message.Append(resultId);
             }
 
             AppendCloudflareCollections(message, messages, errors, timing);
@@ -209,14 +203,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             IReadOnlyList<ApiError>? errors,
             TimingInfo? timing)
         {
-            message.Append(" RecordName=");
-            message.Append(recordName);
-            message.Append("; RecordType=");
-            message.Append(recordType);
+            _ = message.Append(" RecordName=");
+            _ = message.Append(recordName);
+            _ = message.Append("; RecordType=");
+            _ = message.Append(recordType);
             if (success.HasValue)
             {
-                message.Append("; Success=");
-                message.Append(success.Value);
+                _ = message.Append("; Success=");
+                _ = message.Append(success.Value);
             }
 
             AppendCloudflareCollections(message, messages, errors, timing);
@@ -230,68 +224,68 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             if (messages is not null && messages.Count > 0)
             {
-                message.Append("; Messages=[");
+                _ = message.Append("; Messages=[");
                 for (int i = 0; i < messages.Count; i++)
                 {
                     if (i > 0)
                     {
-                        message.Append(" | ");
+                        _ = message.Append(" | ");
                     }
 
                     ErrorDetails detail = messages[i];
-                    message.Append("Code=");
-                    message.Append(detail.Code);
-                    message.Append(", Message=");
-                    message.Append(detail.Message);
+                    _ = message.Append("Code=");
+                    _ = message.Append(detail.Code);
+                    _ = message.Append(", Message=");
+                    _ = message.Append(detail.Message);
                 }
 
-                message.Append(']');
+                _ = message.Append(']');
             }
 
             if (errors is not null && errors.Count > 0)
             {
-                message.Append("; Errors=[");
+                _ = message.Append("; Errors=[");
                 for (int i = 0; i < errors.Count; i++)
                 {
                     if (i > 0)
                     {
-                        message.Append(" | ");
+                        _ = message.Append(" | ");
                     }
 
                     ApiError error = errors[i];
-                    message.Append("Code=");
-                    message.Append(error.Code);
-                    message.Append(", Message=");
-                    message.Append(error.Message);
+                    _ = message.Append("Code=");
+                    _ = message.Append(error.Code);
+                    _ = message.Append(", Message=");
+                    _ = message.Append(error.Message);
 
                     if (error.ErrorChain is not null && error.ErrorChain.Count > 0)
                     {
-                        message.Append(", Chain=[");
+                        _ = message.Append(", Chain=[");
                         for (int j = 0; j < error.ErrorChain.Count; j++)
                         {
                             if (j > 0)
                             {
-                                message.Append(" | ");
+                                _ = message.Append(" | ");
                             }
 
                             ErrorDetails chained = error.ErrorChain[j];
-                            message.Append("Code=");
-                            message.Append(chained.Code);
-                            message.Append(", Message=");
-                            message.Append(chained.Message);
+                            _ = message.Append("Code=");
+                            _ = message.Append(chained.Code);
+                            _ = message.Append(", Message=");
+                            _ = message.Append(chained.Message);
                         }
 
-                        message.Append(']');
+                        _ = message.Append(']');
                     }
                 }
 
-                message.Append(']');
+                _ = message.Append(']');
             }
 
             if (timing is not null)
             {
-                message.Append("; Timing=");
-                message.Append(timing.ProcessTime);
+                _ = message.Append("; Timing=");
+                _ = message.Append(timing.ProcessTime);
             }
         }
     }

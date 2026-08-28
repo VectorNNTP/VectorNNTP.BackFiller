@@ -142,15 +142,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <returns>Workflow failure classification.</returns>
         private static NntpArticleGrabberFailureCode MapParseFailure(NntpArticleParseResult parse)
         {
-            if (parse.FailureCode == NntpArticleParseFailureCode.YEncDecodingFailed)
-            {
-                return NntpArticleGrabberFailureCode.YEncValidationFailure;
-            }
-
-            return parse.FailureCode switch
-            {
-                NntpArticleParseFailureCode.MissingOrInvalidDate => NntpArticleGrabberFailureCode.InvalidDate,
-                NntpArticleParseFailureCode.MissingMessageId
+            return parse.FailureCode == NntpArticleParseFailureCode.YEncDecodingFailed
+                ? NntpArticleGrabberFailureCode.YEncValidationFailure
+                : parse.FailureCode switch
+                {
+                    NntpArticleParseFailureCode.MissingOrInvalidDate => NntpArticleGrabberFailureCode.InvalidDate,
+                    NntpArticleParseFailureCode.MissingMessageId
                     or NntpArticleParseFailureCode.InvalidMessageId
                     or NntpArticleParseFailureCode.DuplicateMessageId
                     or NntpArticleParseFailureCode.MissingNewsgroups
@@ -159,8 +156,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     or NntpArticleParseFailureCode.InvalidPath
                     or NntpArticleParseFailureCode.DuplicateNewsgroups
                     or NntpArticleParseFailureCode.DuplicatePath => NntpArticleGrabberFailureCode.InvalidHeaders,
-                _ => NntpArticleGrabberFailureCode.MalformedArticle,
-            };
+                    _ => NntpArticleGrabberFailureCode.MalformedArticle,
+                };
         }
 
         /// <summary>
@@ -207,7 +204,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             NntpArticleGrabberFailureCode failureCode,
             NntpArticleAcquisitionFailureCode? acquisitionFailureCode,
             NntpArticleParseFailureCode? parseFailureCode,
-            YEnc.YEncArticleValidationStatus? yEncStatus,
+            YEncArticleValidationStatus? yEncStatus,
             string duration)
         {
             logger.LogInformation(

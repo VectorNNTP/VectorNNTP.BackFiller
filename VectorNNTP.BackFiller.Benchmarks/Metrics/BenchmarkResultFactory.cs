@@ -27,8 +27,8 @@ internal static class BenchmarkResultFactory
         RuntimeSnapshot runtimeSnapshot = runtime.Snapshot();
         ForensicSnapshot forensic = metrics.CaptureForensicSnapshot();
         AmbiguityProvenanceSummary ambiguityProvenance = metrics.CaptureAmbiguityProvenanceSummary(measurementStartUtc);
-        TransitPublisher.PumpFaultTelemetrySnapshot? initiatingFaultSnapshot = publisher.CaptureSubmissionPumpFaultTelemetrySnapshot();
-        TransitPublisher.SubmissionPumpFaultCounts faultCounts = publisher.CaptureSubmissionPumpFaultCounts();
+        TransitPublisher.PumpFaultTelemetrySnapshot? initiatingFaultSnapshot = TransitPublisher.CaptureSubmissionPumpFaultTelemetrySnapshot();
+        TransitPublisher.SubmissionPumpFaultCounts faultCounts = TransitPublisher.CaptureSubmissionPumpFaultCounts();
         TransitConnection.P1GreetingProvenanceSnapshot? p1GreetingProvenanceSnapshot = publisher.CaptureFirstP1GreetingProvenanceSnapshot();
         SubmissionPumpInitiatingFaultSummary? initiatingFaultSummary = initiatingFaultSnapshot is null
             ? null
@@ -43,16 +43,16 @@ internal static class BenchmarkResultFactory
                 SanitizedFirstFaultMessageClass: initiatingFaultSnapshot.SanitizedFirstFaultMessageClass.ToString(),
                 SanitizedFirstFaultMessage: initiatingFaultSnapshot.SanitizedFirstFaultMessage,
                 FullFirstFaultStackTrace: initiatingFaultSnapshot.FullFirstFaultStackTrace,
-                TopStackFrameDeclaringType: initiatingFaultSnapshot.TopStackFrameDeclaringType,
-                TopStackFrameMethodName: initiatingFaultSnapshot.TopStackFrameMethodName,
+                TopStackFrameDeclaringType: global::VectorNNTP.Backfiller.Runtime.Transit.TransitPublisher.PumpFaultTelemetrySnapshot.TopStackFrameDeclaringType,
+                TopStackFrameMethodName: global::VectorNNTP.Backfiller.Runtime.Transit.TransitPublisher.PumpFaultTelemetrySnapshot.TopStackFrameMethodName,
                 Origin: initiatingFaultSnapshot.Origin.ToString(),
-                MillisecondsFromMeasurementStart: initiatingFaultSnapshot.MillisecondsFromMeasurementStart,
+                MillisecondsFromMeasurementStart: global::VectorNNTP.Backfiller.Runtime.Transit.TransitPublisher.PumpFaultTelemetrySnapshot.MillisecondsFromMeasurementStart,
                 MeasurementBoundaryObserved: initiatingFaultSnapshot.MeasurementBoundaryObserved,
                 MillisecondsFromMeasurementEnd: initiatingFaultSnapshot.MillisecondsFromMeasurementEnd,
                 MeasurementStateAtFault: initiatingFaultSnapshot.MeasurementStateAtFault.ToString(),
-                QueuedSubmissionCount: initiatingFaultSnapshot.QueuedSubmissionCount,
+                QueuedSubmissionCount: global::VectorNNTP.Backfiller.Runtime.Transit.TransitPublisher.PumpFaultTelemetrySnapshot.QueuedSubmissionCount,
                 InFlightCount: initiatingFaultSnapshot.InFlightCount,
-                ActiveSubmissionCount: initiatingFaultSnapshot.ActiveSubmissionCount,
+                ActiveSubmissionCount: global::VectorNNTP.Backfiller.Runtime.Transit.TransitPublisher.PumpFaultTelemetrySnapshot.ActiveSubmissionCount,
                 ChannelImmediateAvailableCount: initiatingFaultSnapshot.ChannelImmediateAvailableCount,
                 ActiveConnectionCount: initiatingFaultSnapshot.ActiveConnectionCount,
                 ReadyConnectionCount: initiatingFaultSnapshot.ReadyConnectionCount,

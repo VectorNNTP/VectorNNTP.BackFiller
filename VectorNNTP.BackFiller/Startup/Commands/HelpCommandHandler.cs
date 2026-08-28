@@ -1,3 +1,11 @@
+// <copyright file="HelpCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
@@ -67,7 +75,7 @@ EXIT CODES:
   4   Storage failure
   5   Startup failure
 ");
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown;
+            return ExitCodePolicy.ExitCodeNormalShutdown;
         }
     }
 }

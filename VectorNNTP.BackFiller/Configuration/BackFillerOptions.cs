@@ -2811,27 +2811,11 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <returns><see langword="true"/> when a supported private key can be loaded.</returns>
         private static bool CanLoadSupportedPrivateKey(string pemContent)
         {
-            if (string.IsNullOrWhiteSpace(pemContent))
-            {
-                return false;
-            }
-
-            if (pemContent.Contains("-----BEGIN EC PRIVATE KEY-----", StringComparison.Ordinal))
-            {
-                return TryLoadEcPrivateKey(pemContent);
-            }
-
-            if (pemContent.Contains("-----BEGIN RSA PRIVATE KEY-----", StringComparison.Ordinal))
-            {
-                return TryLoadRsaPrivateKey(pemContent);
-            }
-
-            if (pemContent.Contains("-----BEGIN PRIVATE KEY-----", StringComparison.Ordinal))
-            {
-                return TryLoadEcPrivateKey(pemContent) || TryLoadRsaPrivateKey(pemContent);
-            }
-
-            return false;
+            return !string.IsNullOrWhiteSpace(pemContent) && (pemContent.Contains("-----BEGIN EC PRIVATE KEY-----", StringComparison.Ordinal)
+                ? TryLoadEcPrivateKey(pemContent)
+                : pemContent.Contains("-----BEGIN RSA PRIVATE KEY-----", StringComparison.Ordinal)
+                ? TryLoadRsaPrivateKey(pemContent)
+                : pemContent.Contains("-----BEGIN PRIVATE KEY-----", StringComparison.Ordinal) && (TryLoadEcPrivateKey(pemContent) || TryLoadRsaPrivateKey(pemContent)));
         }
 
         /// <summary>

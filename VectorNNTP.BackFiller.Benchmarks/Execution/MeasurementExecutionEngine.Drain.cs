@@ -26,7 +26,7 @@ internal static partial class MeasurementExecutionEngine
         long measurementEndTick = Stopwatch.GetTimestamp();
         Console.WriteLine($"Measurement end UTC:   {measurementEndUtc:O}");
         metrics.MarkMeasurementBoundary(measurementEndUtc, measurementEndTick);
-        publisher.MarkSubmissionPumpFaultMeasurementWindow(measurementStartStopwatchTick: 0, measurementEndStopwatchTick: measurementEndTick, measurementBoundaryObserved: true);
+        TransitPublisher.MarkSubmissionPumpFaultMeasurementWindow(measurementStartStopwatchTick: 0, measurementEndStopwatchTick: measurementEndTick, measurementBoundaryObserved: true);
 
         producerStopCts.Cancel();
 

@@ -23,7 +23,7 @@ internal static class MeasurementRunCoordinator
         DateTimeOffset measurementStartUtc = DateTimeOffset.UtcNow;
         long measurementStartTick = Stopwatch.GetTimestamp();
         metrics.MarkMeasurementStart(measurementStartTick);
-        publisher.MarkSubmissionPumpFaultMeasurementWindow(measurementStartTick, measurementEndStopwatchTick: 0, measurementBoundaryObserved: false);
+        TransitPublisher.MarkSubmissionPumpFaultMeasurementWindow(measurementStartTick, measurementEndStopwatchTick: 0, measurementBoundaryObserved: false);
         publisher.MarkSubmissionPumpFaultProducerCompletion(allProducersCompleted: false);
         publisher.MarkSubmissionPumpFaultDispatchersCompleted(dispatchersCompleted: false);
         Console.WriteLine($"Measurement start UTC: {measurementStartUtc:O}");

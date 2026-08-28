@@ -74,7 +74,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitServerPort: backFiller.TransitServer?.Port ?? 0,
                     TransitServerUseSsl: backFiller.TransitServer?.UseSsl ?? false,
                     BindPort: backFiller.BindPort ?? 0,
-                    ConfiguredBindAddressTokens: [.. (backFiller.BindAddress ?? [])],
+                    ConfiguredBindAddressTokens: [.. backFiller.BindAddress ?? []],
                     ShutdownGracePeriodSeconds: backFiller.Shutdown?.GracePeriodSeconds ?? 30,
                     ShutdownDrainQueuedWork: backFiller.Shutdown?.DrainQueuedWork ?? true,
                     ShutdownFinishActiveArticles: backFiller.Shutdown?.FinishActiveArticles ?? true,

@@ -1,27 +1,38 @@
-namespace VectorNNTP.Backfiller.Runtime.RabbitMq;
+// <copyright file="RabbitMqConsumerInfrastructureOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
 
-/// <summary>
-/// Immutable infrastructure options for RabbitMQ consumer session orchestration.
-/// </summary>
-/// <param name="DeliveryBufferCapacity">Bounded in-memory delivery capacity shared by infrastructure delivery sink.</param>
-/// <param name="PrefetchCount">Optional consumer prefetch count; when null, broker/channel defaults are used.</param>
-internal sealed record RabbitMqConsumerInfrastructureOptions(
-    int DeliveryBufferCapacity,
-    ushort? PrefetchCount)
+using VectorNNTP.Backfiller.Configuration;
+
+namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Builds consumer infrastructure options from validated runtime RabbitMQ settings.
+    /// Immutable infrastructure options for RabbitMQ consumer session orchestration.
     /// </summary>
-    /// <param name="runtimeOptions">Validated immutable runtime options.</param>
-    /// <returns>Consumer infrastructure options aligned with runtime configuration.</returns>
-    internal static RabbitMqConsumerInfrastructureOptions FromRuntimeOptions(BackFillerRuntimeOptions runtimeOptions)
+    /// <param name="DeliveryBufferCapacity">Bounded in-memory delivery capacity shared by infrastructure delivery sink.</param>
+    /// <param name="PrefetchCount">Optional consumer prefetch count; when null, broker/channel defaults are used.</param>
+    internal sealed record RabbitMqConsumerInfrastructureOptions(
+        int DeliveryBufferCapacity,
+        ushort? PrefetchCount)
     {
-        ArgumentNullException.ThrowIfNull(runtimeOptions);
-        RabbitMqRuntimeOptions rabbitMq = runtimeOptions.RabbitMq
-            ?? throw new InvalidOperationException("Validated runtime RabbitMQ settings were not provided.");
+        /// <summary>
+        /// Builds consumer infrastructure options from validated runtime RabbitMQ settings.
+        /// </summary>
+        /// <param name="runtimeOptions">Validated immutable runtime options.</param>
+        /// <returns>Consumer infrastructure options aligned with runtime configuration.</returns>
+        internal static RabbitMqConsumerInfrastructureOptions FromRuntimeOptions(BackFillerRuntimeOptions runtimeOptions)
+        {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+            RabbitMqRuntimeOptions rabbitMq = runtimeOptions.RabbitMq
+                ?? throw new InvalidOperationException("Validated runtime RabbitMQ settings were not provided.");
 
-        return new RabbitMqConsumerInfrastructureOptions(
-            DeliveryBufferCapacity: rabbitMq.ChannelPoolSize,
-            PrefetchCount: rabbitMq.ConsumerPrefetchCount);
+            return new RabbitMqConsumerInfrastructureOptions(
+                DeliveryBufferCapacity: rabbitMq.ChannelPoolSize,
+                PrefetchCount: rabbitMq.ConsumerPrefetchCount);
+        }
     }
 }

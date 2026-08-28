@@ -73,7 +73,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         /// <param name="backFillerFqdn">Canonical BackFiller FQDN.</param>
         /// <returns>RabbitMQ connection client-provided name.</returns>
-        internal string GetDefaultConnectionName(string backFillerFqdn)
+        internal static string GetDefaultConnectionName(string backFillerFqdn)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backFillerFqdn);
             return $"VectorNNTP.BackFiller:{backFillerFqdn}";

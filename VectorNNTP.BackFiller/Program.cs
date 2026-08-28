@@ -44,15 +44,15 @@ namespace VectorNNTP.Backfiller
         /// </remarks>
         public static async Task Main(string[] args)
         {
-            global::VectorNNTP.Backfiller.Startup.ProcessBootstrapper.ConfigureBootstrapLogger();
+            ProcessBootstrapper.ConfigureBootstrapLogger();
             Log.Information("Starting host initialization.");
 
             DateTimeOffset processStartedAt = DateTimeOffset.UtcNow;
-            global::VectorNNTP.Backfiller.Startup.BuildInfoService.InitializeBuildInfo(processStartedAt);
-            global::VectorNNTP.Backfiller.Startup.ProcessBootstrapper.SetProcessCulture();
-            global::VectorNNTP.Backfiller.Startup.BuildInfoService.LogBuildInfo();
-            global::VectorNNTP.Backfiller.Startup.ProcessBootstrapper.LogThreadPoolConfiguration();
-            global::VectorNNTP.Backfiller.Startup.ProcessBootstrapper.RegisterGlobalExceptionHandlers();
+            BuildInfoService.InitializeBuildInfo(processStartedAt);
+            ProcessBootstrapper.SetProcessCulture();
+            BuildInfoService.LogBuildInfo();
+            ProcessBootstrapper.LogThreadPoolConfiguration();
+            ProcessBootstrapper.RegisterGlobalExceptionHandlers();
 
             // Get the service lifecycle early (initialized with Starting state)
             ServiceLifecycle? lifecycle = null;
@@ -72,12 +72,12 @@ namespace VectorNNTP.Backfiller
                 DependencyValidationResult dependencyValidationResult;
                 BackFillerRuntimeOptions? runtimeOptions;
 
-                if (!global::VectorNNTP.Backfiller.Startup.Commands.OperationalCommandDispatcher.TryDispatchPreConfigurationCommand(
+                if (!OperationalCommandDispatcher.TryDispatchPreConfigurationCommand(
                         args,
                         out OperationalCommand? command,
                         out int? commandExitCode))
                 {
-                    Environment.ExitCode = commandExitCode ?? global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                    Environment.ExitCode = commandExitCode ?? ExitCodePolicy.ExitCodeConfigurationFailure;
                     return;
                 }
 
@@ -87,7 +87,7 @@ namespace VectorNNTP.Backfiller
 
                 if (command.HasValue)
                 {
-                    Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.Commands.OperationalCommandDispatcher.DispatchPostConfigurationCommand(
+                    Environment.ExitCode = OperationalCommandDispatcher.DispatchPostConfigurationCommand(
                         command.Value,
                         builder.Configuration);
                     return;
@@ -125,31 +125,31 @@ namespace VectorNNTP.Backfiller
                 }
 
                 // Log configuration diagnostics (warnings and errors) and stop only on errors.
-                global::VectorNNTP.Backfiller.Startup.Validation.ValidationLogging.LogConfigurationValidationErrors(configValidationResult);
+                ValidationLogging.LogConfigurationValidationErrors(configValidationResult);
                 if (!configValidationResult.IsValid)
                 {
                     lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Configuration validation failed");
-                    Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                    Environment.ExitCode = ExitCodePolicy.ExitCodeConfigurationFailure;
                     return;
                 }
 
                 // Log dependency diagnostics and stop on dependency failures/errors.
                 if (!dependencyValidationResult.IsValid || dependencyValidationResult.Warnings.Count > 0)
                 {
-                    global::VectorNNTP.Backfiller.Startup.Validation.ValidationLogging.LogDependencyValidationErrors(dependencyValidationResult);
+                    ValidationLogging.LogDependencyValidationErrors(dependencyValidationResult);
                 }
 
                 if (!dependencyValidationResult.IsValid)
                 {
                     lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Dependency validation failed");
-                    Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeDependencyFailure;
+                    Environment.ExitCode = ExitCodePolicy.ExitCodeDependencyFailure;
                     return;
                 }
 
                 if (runtimeOptions == null)
                 {
                     lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Runtime options snapshot was not produced");
-                    Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                    Environment.ExitCode = ExitCodePolicy.ExitCodeConfigurationFailure;
                     Log.Fatal("Startup validation completed without a runtime options snapshot.");
                     return;
                 }
@@ -167,12 +167,12 @@ namespace VectorNNTP.Backfiller
 
                 // Build() triggers all ValidateOnStart() validations -- configuration errors are caught here as
                 // OptionsValidationException before any hosted service starts.
-                IHost host = global::VectorNNTP.Backfiller.Startup.Hosting.HostComposer.ComposeHost(
+                IHost host = Startup.Hosting.HostComposer.ComposeHost(
                     builder,
                     runtimeOptions,
                     serviceLifecycle);
 
-                await global::VectorNNTP.Backfiller.Startup.Hosting.HostLifetimeCoordinator.RunAsync(
+                await Startup.Hosting.HostLifetimeCoordinator.RunAsync(
                     host,
                     serviceLifecycle,
                     () => hostStarted = true).ConfigureAwait(false);
@@ -185,14 +185,14 @@ namespace VectorNNTP.Backfiller
                 // unexpected runtime cancellation rather than the ordinary stop path.
                 Log.Fatal(ex, "VectorNNTP.BackFiller terminated unexpectedly -- cancellation escaped after host start");
                 lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Unexpected cancellation after host start");
-                Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                Environment.ExitCode = ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
             catch (OperationCanceledException ex) when (!hostStarted)
             {
                 // Cancellation before the host reaches steady state is a startup failure, not an orderly shutdown.
                 Log.Fatal(ex, "VectorNNTP.BackFiller startup failed -- cancellation received before host started");
                 lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Startup cancelled before host initialization");
-                Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeStartupFailure;
+                Environment.ExitCode = ExitCodePolicy.ExitCodeStartupFailure;
             }
             catch (InvalidOperationException ex) when (ex.Message.Contains("validation failed"))
             {
@@ -204,14 +204,14 @@ namespace VectorNNTP.Backfiller
                 // Configuration validation failed during Build().
                 Log.Fatal(ex, "VectorNNTP.BackFiller configuration validation failed");
                 lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, "Build() configuration validation failed");
-                Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                Environment.ExitCode = ExitCodePolicy.ExitCodeConfigurationFailure;
             }
             catch (Exception ex)
             {
                 // Unhandled exception from any phase (startup or runtime).
                 Log.Fatal(ex, "VectorNNTP.BackFiller terminated unexpectedly");
                 lifecycle?.TransitionTo(ServiceLifecycle.LifecycleState.Faulted, $"Unhandled exception: {ex.GetType().Name}");
-                Environment.ExitCode = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                Environment.ExitCode = ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
             finally
             {
@@ -221,9 +221,9 @@ namespace VectorNNTP.Backfiller
                     Log.Information("Application lifecycle summary: {Summary}", lifecycle.GetSummary());
                 }
 
-                string exitDescription = global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.GetExitCodeDescription(Environment.ExitCode);
+                string exitDescription = ExitCodePolicy.GetExitCodeDescription(Environment.ExitCode);
 
-                if (Environment.ExitCode != global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown)
+                if (Environment.ExitCode != ExitCodePolicy.ExitCodeNormalShutdown)
                 {
                     Log.Warning(
                         "VectorNNTP.BackFiller shut down with {ExitDescription} (ExitCode={ExitCode})",

@@ -24,7 +24,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private readonly BackFillerCertificateState _certificateState;
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
         private readonly TimeProvider _timeProvider;
-        private static readonly SemaphoreSlim s_provisionGate = new(1, 1);
+        private static readonly SemaphoreSlim ProvisionGate = new(1, 1);
 
         /// <summary>
         /// Initializes one certificate provisioning coordinator.
@@ -73,14 +73,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return;
             }
 
-            await s_provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await ProvisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await EnsureCertificateAvailabilityCoreAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
-                _ = s_provisionGate.Release();
+                _ = ProvisionGate.Release();
             }
         }
 
@@ -100,7 +100,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return false;
             }
 
-            await s_provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await ProvisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 CertificateEvaluationResult evaluation = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(letsEncryptOptions, _timeProvider, cancellationToken).ConfigureAwait(false);
@@ -143,7 +143,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             finally
             {
-                _ = s_provisionGate.Release();
+                _ = ProvisionGate.Release();
             }
         }
 

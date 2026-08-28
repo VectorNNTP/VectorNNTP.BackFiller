@@ -178,7 +178,7 @@ namespace VectorNNTP.Backfiller.Configuration
             {
                 byte[] ipv4Bytes = address.GetAddressBytes();
                 bool isIpv4LinkLocal = ipv4Bytes[0] == 169 && ipv4Bytes[1] == 254;
-                bool isIpv4Multicast = ipv4Bytes[0] >= 224 && ipv4Bytes[0] <= 239;
+                bool isIpv4Multicast = ipv4Bytes[0] is >= 224 and <= 239;
                 return !isIpv4LinkLocal && !isIpv4Multicast;
             }
 

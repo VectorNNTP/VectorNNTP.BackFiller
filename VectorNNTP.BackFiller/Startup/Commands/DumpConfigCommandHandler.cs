@@ -1,3 +1,11 @@
+// <copyright file="DumpConfigCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
@@ -29,7 +37,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             if (configuration == null)
             {
                 Console.Error.WriteLine("ERROR: Configuration not available");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                return ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
 
             Console.WriteLine("Current Configuration (safe view):\n");
@@ -38,7 +46,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
 
             DumpConfigSection(configuration);
 
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown;
+            return ExitCodePolicy.ExitCodeNormalShutdown;
         }
 
         /// <summary>

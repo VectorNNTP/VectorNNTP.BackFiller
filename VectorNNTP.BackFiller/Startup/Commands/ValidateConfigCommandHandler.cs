@@ -1,5 +1,14 @@
+// <copyright file="ValidateConfigCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using Serilog;
-using VectorNNTP.Backfiller.Startup.Validation;
+using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Startup.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
@@ -18,7 +27,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             if (configuration == null)
             {
                 Console.Error.WriteLine("ERROR: Configuration not available for validation");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                return ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
 
             try
@@ -42,17 +51,17 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                         Console.Error.WriteLine($"  [ERROR] {setting}: {error}");
                     }
 
-                    return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                    return ExitCodePolicy.ExitCodeConfigurationFailure;
                 }
 
                 Console.WriteLine("Configuration validation PASSED");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown;
+                return ExitCodePolicy.ExitCodeNormalShutdown;
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"ERROR: {ex.Message}");
                 Log.Fatal(ex, "Configuration validation command failed");
-                return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeUnexpectedFailure;
+                return ExitCodePolicy.ExitCodeUnexpectedFailure;
             }
         }
 
@@ -62,16 +71,16 @@ namespace VectorNNTP.Backfiller.Startup.Commands
 
             List<(string Setting, string Error)> errors = [];
             List<(string Setting, string Message)> warnings = [];
-            global::VectorNNTP.Backfiller.Configuration.BackFillerOptions? backFiller = configuration
+            BackFillerOptions? backFiller = configuration
                 .GetSection("BackFiller")
-                .Get<global::VectorNNTP.Backfiller.Configuration.BackFillerOptions>();
+                .Get<BackFillerOptions>();
 
-            errors.AddRange(global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateConnectionStrings(configuration, warnings));
-            errors.AddRange(global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(backFiller, warnings));
+            errors.AddRange(ConfigurationValidator.ValidateConnectionStrings(configuration, warnings));
+            errors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(backFiller, warnings));
 
             if (errors.Count == 0)
             {
-                _ = global::VectorNNTP.Backfiller.Startup.Configuration.RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                _ = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
                     configuration,
                     backFiller,
                     errors);

@@ -1,3 +1,11 @@
+// <copyright file="VersionCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
@@ -10,8 +18,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// </summary>
         internal static int Handle()
         {
-            Console.WriteLine(global::VectorNNTP.Backfiller.Startup.BuildInfoService.GetFullVersionString());
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown;
+            Console.WriteLine(BuildInfoService.GetFullVersionString());
+            return ExitCodePolicy.ExitCodeNormalShutdown;
         }
     }
 }

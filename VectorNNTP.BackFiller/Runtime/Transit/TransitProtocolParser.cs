@@ -1,3 +1,11 @@
+// <copyright file="TransitProtocolParser.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.Buffers;
 using System.Globalization;
 using System.IO.Pipelines;
@@ -16,23 +24,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
-            if (completedWithoutLine)
-            {
-                throw new InvalidOperationException("NNTP connection closed while awaiting line response.");
-            }
-
-            return line!;
+            return completedWithoutLine ? throw new InvalidOperationException("NNTP connection closed while awaiting line response.") : line!;
         }
 
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
-            if (completedWithoutLine)
-            {
-                throw new InvalidOperationException("NNTP connection closed while awaiting line response.");
-            }
-
-            return (line!, bytesRead);
+            return completedWithoutLine
+                ? throw new InvalidOperationException("NNTP connection closed while awaiting line response.")
+                : ((string Line, int BytesRead))(line!, bytesRead);
         }
 
         /// <summary>

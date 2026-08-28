@@ -1,3 +1,11 @@
+// <copyright file="BuildInfoService.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using Serilog;
 
 namespace VectorNNTP.Backfiller.Startup
@@ -38,7 +46,7 @@ namespace VectorNNTP.Backfiller.Startup
         {
             try
             {
-                string fingerprint = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationFingerprintService.CalculateConfigurationFingerprint(configuration);
+                string fingerprint = Configuration.ConfigurationFingerprintService.CalculateConfigurationFingerprint(configuration);
                 Log.Information("Non-secret ConfigurationId: {ConfigurationId} (passwords/keys/tokens excluded)",
                     fingerprint);
             }

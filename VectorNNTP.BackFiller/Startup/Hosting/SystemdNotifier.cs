@@ -25,7 +25,6 @@
 // safe concurrent invocation.
 
 using System.Runtime.InteropServices;
-using Microsoft.Extensions.Logging;
 
 namespace VectorNNTP.Backfiller.Startup.Hosting
 {

@@ -256,16 +256,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
                 CloudflareTxtRecordInfo createdOrReusedRecord;
                 bool recordAlreadyOwned = existingOwnedRecordId is not null;
-                if (recordAlreadyOwned)
-                {
-                    createdOrReusedRecord = existingTxtRecords.First(record => string.Equals(record.Id, existingOwnedRecordId, StringComparison.Ordinal));
-                }
-                else
-                {
-                    createdOrReusedRecord = await txtRecordClient
+                createdOrReusedRecord = recordAlreadyOwned
+                    ? existingTxtRecords.First(record => string.Equals(record.Id, existingOwnedRecordId, StringComparison.Ordinal))
+                    : await txtRecordClient
                         .AddTxtRecordAsync(letsEncryptOptions.CloudFlareZoneId, txtHostName, txtValue, cancellationToken)
                         .ConfigureAwait(false);
-                }
 
                 lease = new DnsChallengeRecordLease(
                     ZoneId: letsEncryptOptions.CloudFlareZoneId,

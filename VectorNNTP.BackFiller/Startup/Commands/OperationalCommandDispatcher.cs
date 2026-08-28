@@ -1,3 +1,11 @@
+// <copyright file="OperationalCommandDispatcher.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
@@ -19,7 +27,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         {
             if (!OperationalCommandParser.TryParseCommandLine(args, out command, out int? parseErrorExitCode))
             {
-                exitCode = parseErrorExitCode ?? global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+                exitCode = parseErrorExitCode ?? ExitCodePolicy.ExitCodeConfigurationFailure;
                 return false;
             }
 

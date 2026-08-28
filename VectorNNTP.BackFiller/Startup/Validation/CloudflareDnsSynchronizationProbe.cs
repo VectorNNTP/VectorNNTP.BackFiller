@@ -492,7 +492,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="zoneId">Zone identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Resolved zone details.</returns>
-        Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken);
+        public Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Retrieves DNS records for one synchronized FQDN.
@@ -501,7 +501,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="fqdn">FQDN to query.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Retrieved Cloudflare records.</returns>
-        Task<IReadOnlyList<CloudflareDnsRecordInfo>> GetDnsRecordsAsync(string zoneId, string fqdn, CancellationToken cancellationToken);
+        public Task<IReadOnlyList<CloudflareDnsRecordInfo>> GetDnsRecordsAsync(string zoneId, string fqdn, CancellationToken cancellationToken);
 
         /// <summary>
         /// Creates one DNS address record.
@@ -513,7 +513,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="proxied">Optional proxied mode.</param>
         /// <param name="ttl">Optional DNS TTL.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        Task AddDnsRecordAsync(
+        public Task AddDnsRecordAsync(
             string zoneId,
             string fqdn,
             DnsRecordType recordType,
@@ -528,7 +528,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="zoneId">Zone identifier.</param>
         /// <param name="recordId">Record identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        Task DeleteDnsRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
+        public Task DeleteDnsRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
     }
 
     /// <summary>
@@ -559,12 +559,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
 
             CloudFlareResult<Zone> zoneResult = await _client.Zones.GetDetailsAsync(zoneId, cancellationToken).ConfigureAwait(false);
-            if (!zoneResult.Success || zoneResult.Result == null)
-            {
-                throw new InvalidOperationException($"Cloudflare zone resolution failed: {SanitizeCloudflareApiFailureReason(zoneResult.Errors.Select(static error => error.Message))}");
-            }
-
-            return new CloudflareZoneInfo(zoneResult.Result.Id, zoneResult.Result.Name ?? string.Empty, zoneResult.Result.Status);
+            return !zoneResult.Success || zoneResult.Result == null
+                ? throw new InvalidOperationException($"Cloudflare zone resolution failed: {SanitizeCloudflareApiFailureReason(zoneResult.Errors.Select(static error => error.Message))}")
+                : new CloudflareZoneInfo(zoneResult.Result.Id, zoneResult.Result.Name ?? string.Empty, zoneResult.Result.Status);
         }
 
         /// <summary>
@@ -593,12 +590,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 .GetAsync(zoneId, recordFilter, displayOptions, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!recordsResult.Success || recordsResult.Result == null)
-            {
-                throw new InvalidOperationException($"Cloudflare DNS record query failed: {SanitizeCloudflareApiFailureReason(recordsResult.Errors.Select(static error => error.Message))}");
-            }
-
-            return [.. recordsResult.Result.Select(static record =>
+            return !recordsResult.Success || recordsResult.Result == null
+                ? throw new InvalidOperationException($"Cloudflare DNS record query failed: {SanitizeCloudflareApiFailureReason(recordsResult.Errors.Select(static error => error.Message))}")
+                : [.. recordsResult.Result.Select(static record =>
                 new CloudflareDnsRecordInfo(
                     record.Id ?? string.Empty,
                     record.Name ?? string.Empty,

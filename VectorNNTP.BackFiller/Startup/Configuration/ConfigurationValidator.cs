@@ -1,7 +1,14 @@
+// <copyright file="ConfigurationValidator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.ComponentModel.DataAnnotations;
 using Serilog;
 using VectorNNTP.Backfiller.Configuration;
-using VectorNNTP.Backfiller.Startup.Validation;
 
 namespace VectorNNTP.Backfiller.Startup.Configuration
 {
@@ -128,7 +135,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 return errors;
             }
 
-            errors.AddRange(ConfigurationValidator.ValidateAnnotatedObject(backFiller, "BackFiller"));
+            errors.AddRange(ValidateAnnotatedObject(backFiller, "BackFiller"));
 
             // Detailed bind address validation using custom validator
             List<BindAddressValidationResult> diagnostics = BindAddressValidator.Validate(
@@ -164,7 +171,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             // Validate graceful shutdown policy constraints.
             if (backFiller.Shutdown != null)
             {
-                errors.AddRange(ConfigurationValidator.ValidateAnnotatedObject(backFiller.Shutdown, "BackFiller:Shutdown"));
+                errors.AddRange(ValidateAnnotatedObject(backFiller.Shutdown, "BackFiller:Shutdown"));
             }
 
             int configuredGracePeriodSeconds = backFiller.Shutdown?.GracePeriodSeconds ?? 0;

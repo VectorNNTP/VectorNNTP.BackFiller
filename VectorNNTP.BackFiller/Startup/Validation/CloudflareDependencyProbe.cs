@@ -1,3 +1,11 @@
+// <copyright file="CloudflareDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using CloudFlare.Client;
 using CloudFlare.Client.Api.Result;
 using CloudFlare.Client.Api.Zones;

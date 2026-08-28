@@ -86,7 +86,6 @@
 // blue/green deployment rolled back, or operator intervention). This is distinct from standard
 // systemd SIGTERM shutdown, which is typically one-way and leads to process termination.
 
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace VectorNNTP.Backfiller.Runtime.Lifecycle

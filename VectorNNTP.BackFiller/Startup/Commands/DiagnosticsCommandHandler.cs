@@ -1,4 +1,10 @@
-using VectorNNTP.Backfiller.Configuration;
+// <copyright file="DiagnosticsCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
@@ -15,7 +21,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             Console.WriteLine("=== VectorNNTP.Backfiller Diagnostics ===\n");
 
             Console.WriteLine("Build Information:");
-            Console.WriteLine(global::VectorNNTP.Backfiller.Startup.BuildInfoService.GetFullVersionString());
+            Console.WriteLine(BuildInfoService.GetFullVersionString());
 
             Console.WriteLine("\nSystem Information:");
             Console.WriteLine($"  OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
@@ -34,7 +40,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             Console.WriteLine($"  BUILD_VERSION: {Environment.GetEnvironmentVariable("BUILD_VERSION") ?? "not set"}");
             Console.WriteLine($"  BUILD_COMMIT: {Environment.GetEnvironmentVariable("BUILD_COMMIT") ?? "not set"}");
 
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeNormalShutdown;
+            return ExitCodePolicy.ExitCodeNormalShutdown;
         }
     }
 }

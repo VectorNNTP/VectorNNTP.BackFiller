@@ -1,3 +1,11 @@
+// <copyright file="ValidationResults.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>

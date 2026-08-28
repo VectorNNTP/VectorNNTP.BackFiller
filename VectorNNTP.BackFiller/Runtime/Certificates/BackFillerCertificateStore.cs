@@ -8,7 +8,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates

@@ -1,15 +1,22 @@
+// <copyright file="TransitConnection.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipelines;
-using System.Net;
-using System.Threading.Channels;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Runtime.ExceptionServices;
+using System.Threading.Channels;
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
@@ -236,12 +243,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 && string.Equals(candidate.Message, recordedInvalidOperation.Message, StringComparison.Ordinal);
         }
 
-        internal void NotifyMaterializationReservationChanged()
+        internal static void NotifyMaterializationReservationChanged()
         {
             // Intentionally no-op in global queue architecture.
         }
 
-        internal void RecordReconnectEvent()
+        internal static void RecordReconnectEvent()
         {
             // Intentionally no-op in global queue architecture.
         }
@@ -260,7 +267,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     "TCP connect",
                     cancellationToken).ConfigureAwait(false);
                 Console.WriteLine($"[TRACE-RI-61] {TraceStamp()} Connection.Initialize TCP-CONNECT-COMPLETE connectionId={ConnectionId}");
-                Interlocked.Increment(ref _socketOpenCount);
+                _ = Interlocked.Increment(ref _socketOpenCount);
 
                 _transportStream = _tcpClient.GetStream();
                 _readStream = _transportStream;
@@ -290,7 +297,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitionState(TransitConnectionState.CapabilitiesNegotiation);
                 Console.WriteLine($"[TRACE-RI-64] {TraceStamp()} Connection.Initialize CAPABILITIES-START connectionId={ConnectionId}");
                 _capabilities = await AwaitInitializationStageAsync(
-                    token => ReadCapabilitiesAsync(token),
+                    ReadCapabilitiesAsync,
                     "CAPABILITIES exchange",
                     cancellationToken).ConfigureAwait(false);
                 Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
@@ -300,7 +307,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 {
                     TransitionState(TransitConnectionState.StartingTls);
                     await AwaitInitializationStageAsync(
-                        token => StartTlsAsync(token),
+                        StartTlsAsync,
                         "STARTTLS negotiation",
                         cancellationToken).ConfigureAwait(false);
                     TransitionState(TransitConnectionState.TlsEstablished);
@@ -311,7 +318,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     TransitionState(TransitConnectionState.CapabilitiesNegotiation);
                     Console.WriteLine($"[TRACE-RI-64A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-START connectionId={ConnectionId}");
                     _capabilities = await AwaitInitializationStageAsync(
-                        token => ReadCapabilitiesAsync(token),
+                        ReadCapabilitiesAsync,
                         "CAPABILITIES exchange (post-STARTTLS)",
                         cancellationToken).ConfigureAwait(false);
                     Console.WriteLine($"[TRACE-RI-65A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
@@ -340,7 +347,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _streamingModeNegotiated = true;
                 TransitionState(TransitConnectionState.Ready);
                 Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={_state}");
-                Interlocked.Increment(ref _readyTransitionCount);
+                _ = Interlocked.Increment(ref _readyTransitionCount);
                 LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
 
                 _responseLoopCancellation = new CancellationTokenSource();
@@ -466,7 +473,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
 
                     _pendingBySendOrder.Enqueue(item.MessageId);
-                    Interlocked.Increment(ref _submissionsStarted);
+                    _ = Interlocked.Increment(ref _submissionsStarted);
                     ObserveMaxConcurrentSubmissions(_pendingByMessageId.Count);
                 }
 
@@ -506,7 +513,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.WriterDisposedDuringTakethisSubmission);
                     }
 
-                    Interlocked.Add(ref _bytesTransmitted, batchBytesStaged);
+                    _ = Interlocked.Add(ref _bytesTransmitted, batchBytesStaged);
                     long stageEndTick = Stopwatch.GetTimestamp();
 
                     foreach (TransitWorkItem item in items)
@@ -522,18 +529,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
                 finally
                 {
-                    _writeGate.Release();
+                    _ = _writeGate.Release();
                 }
 
-                Interlocked.Increment(ref _batchCount);
-                Interlocked.Add(ref _batchSizeTotal, items.Count);
+                _ = Interlocked.Increment(ref _batchCount);
+                _ = Interlocked.Add(ref _batchSizeTotal, items.Count);
                 UpdateMaxBatchSize(items.Count);
             }
             finally
             {
                 if (tokenlessModeEnabled)
                 {
-                    _tokenlessCorrelationGate.Release();
+                    _ = _tokenlessCorrelationGate.Release();
                 }
             }
         }
@@ -598,7 +605,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             if (Volatile.Read(ref _shutdownRequested) == 1 || (_state != TransitConnectionState.Ready && _state != TransitConnectionState.Publishing) || !_streamingModeNegotiated)
             {
-                Interlocked.Increment(ref _submissionsUnavailable);
+                _ = Interlocked.Increment(ref _submissionsUnavailable);
                 return new TransitPublishResult(
                     MessageId: messageId,
                     Status: TransitPublishStatus.Unavailable,
@@ -627,7 +634,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
                 catch (InvalidOperationException ex) when (string.Equals(ex.Message, "Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal))
                 {
-                    Interlocked.Increment(ref _submissionsFailed);
+                    _ = Interlocked.Increment(ref _submissionsFailed);
                     return new TransitPublishResult(
                         MessageId: messageId,
                         Status: TransitPublishStatus.Failed,
@@ -683,16 +690,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
             finally
             {
-                _directSubmitCompletions.TryRemove(item.WorkItemId, out _);
+                _ = _directSubmitCompletions.TryRemove(item.WorkItemId, out _);
             }
         }
 
         internal IReadOnlyList<TransitWorkItem> DrainOutstandingOwnedWorkForRetry()
         {
-            IReadOnlyList<TransitWorkItem> drained = DrainOwnedPendingWork(static _ => true)
-                .Select(static pending => pending.WorkItem)
-                .ToArray();
-            Console.WriteLine($"[TRACE-RI-79] {TraceStamp()} DrainOutstandingOwnedWorkForRetry connectionId={ConnectionId} count={drained.Count} items=[{string.Join(",", drained.Select(static x => $"{x.WorkItemId}:{x.State}:{x.AttemptCount}"))}]");
+            IReadOnlyList<TransitWorkItem> drained = [.. DrainOwnedPendingWork(static _ => true).Select(static pending => pending.WorkItem)];
+            // Console.WriteLine($"[TRACE-RI-79] {TraceStamp()} DrainOutstandingOwnedWorkForRetry connectionId={ConnectionId} count={drained.Count} items=[{string.Join(",", drained.Select(static x => $"{x.WorkItemId}:{x.State}:{x.AttemptCount}"))}]");
             return drained;
         }
 
@@ -725,7 +730,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         internal TransitConnectionDiagnosticsSnapshot CaptureDiagnosticsSnapshot()
         {
-            OutstandingPublishOperationSnapshot[] outstanding = _pendingByMessageId.Values
+            OutstandingPublishOperationSnapshot[] outstanding = [.. _pendingByMessageId.Values
                 .Select(static x => new OutstandingPublishOperationSnapshot(
                     MessageId: x.WorkItem.MessageId,
                     T2WriteIntentEnqueuedTick: 0,
@@ -739,8 +744,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     CompletionTaskIsCompleted: false,
                     CompletionTaskStatus: "Waiting",
                     CompletionStatus: null,
-                    LikelyAwaitingPath: "ResponseLoop"))
-                .ToArray();
+                    LikelyAwaitingPath: "ResponseLoop"))];
 
             long numberOfBatches = Interlocked.Read(ref _batchCount);
             double avgBatch = numberOfBatches == 0 ? 0 : (double)Interlocked.Read(ref _batchSizeTotal) / numberOfBatches;
@@ -804,7 +808,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 OutstandingOperations: outstanding);
         }
 
-        internal P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
+        internal static P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
             return null;
         }
@@ -928,7 +932,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TransitionState(TransitConnectionState.Faulted);
             LogTransitResponseLoopFaulted(_logger, ex, ConnectionId);
             SettleUnresolvedDirectSubmitWorkForFault(ex);
-            _completedQueue.Writer.TryComplete(ex);
+            _ = _completedQueue.Writer.TryComplete(ex);
 
             if (!cancelResponseLoop)
             {
@@ -983,7 +987,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return messageId;
             }
 
-            if (code == 239 || code == 431 || code == 439)
+            if (code is 239 or 431 or 439)
             {
                 bool tokenlessCorrelatable = code == 239
                     && string.Equals(responseText, "Article transferred OK", StringComparison.OrdinalIgnoreCase);
@@ -1006,7 +1010,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                     if (_pendingByMessageId.ContainsKey(pendingId))
                     {
-                        Interlocked.Exchange(ref _tokenlessSuccessModeEnabled, 1);
+                        _ = Interlocked.Exchange(ref _tokenlessSuccessModeEnabled, 1);
                         return pendingId;
                     }
                 }
@@ -1049,11 +1053,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 if (string.Equals(queued, messageId, StringComparison.Ordinal))
                 {
-                    _pendingBySendOrder.TryDequeue(out _);
+                    _ = _pendingBySendOrder.TryDequeue(out _);
                     return;
                 }
 
-                _pendingBySendOrder.TryDequeue(out _);
+                _ = _pendingBySendOrder.TryDequeue(out _);
             }
         }
 
@@ -1125,7 +1129,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             PipeReader reader = _reader ?? throw new InvalidOperationException("Transit protocol reader is not initialized.");
             (string line, int bytesRead) = await TransitProtocolParser.ReadNntpLineWithByteCountAsync(reader, cancellationToken).ConfigureAwait(false);
-            Interlocked.Add(ref _bytesReceived, bytesRead);
+            _ = Interlocked.Add(ref _bytesReceived, bytesRead);
             return line;
         }
 
@@ -1217,7 +1221,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             byte[] commandBytes = Encoding.ASCII.GetBytes(command + "\r\n");
             await writeStream.WriteAsync(commandBytes, cancellationToken).ConfigureAwait(false);
             await writeStream.FlushAsync(cancellationToken).ConfigureAwait(false);
-            Interlocked.Add(ref _bytesTransmitted, commandBytes.Length);
+            _ = Interlocked.Add(ref _bytesTransmitted, commandBytes.Length);
         }
 
         private async Task StartTlsAsync(CancellationToken cancellationToken)
@@ -1300,19 +1304,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             switch (status)
             {
                 case TransitPublishStatus.Accepted:
-                    Interlocked.Increment(ref _submissionsAccepted);
+                    _ = Interlocked.Increment(ref _submissionsAccepted);
                     break;
                 case TransitPublishStatus.Rejected:
-                    Interlocked.Increment(ref _submissionsRejected);
+                    _ = Interlocked.Increment(ref _submissionsRejected);
                     break;
                 case TransitPublishStatus.Failed:
-                    Interlocked.Increment(ref _submissionsFailed);
+                    _ = Interlocked.Increment(ref _submissionsFailed);
                     break;
                 case TransitPublishStatus.Ambiguous:
-                    Interlocked.Increment(ref _submissionsAmbiguous);
+                    _ = Interlocked.Increment(ref _submissionsAmbiguous);
                     break;
                 case TransitPublishStatus.Unavailable:
-                    Interlocked.Increment(ref _submissionsUnavailable);
+                    _ = Interlocked.Increment(ref _submissionsUnavailable);
                     break;
             }
         }
@@ -1337,16 +1341,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitionState(TransitConnectionState.Disconnecting);
 
                 CancellationTokenSource? responseLoopCancellation = _responseLoopCancellation;
-                if (responseLoopCancellation is not null)
-                {
-                    responseLoopCancellation.Cancel();
-                }
+                responseLoopCancellation?.Cancel();
 
                 CancellationTokenSource? responseProgressWatchdogCancellation = _responseProgressWatchdogCancellation;
-                if (responseProgressWatchdogCancellation is not null)
-                {
-                    responseProgressWatchdogCancellation.Cancel();
-                }
+                responseProgressWatchdogCancellation?.Cancel();
 
                 Task? responseLoopTask = _responseLoopTask;
                 Task? responseProgressWatchdogTask = _responseProgressWatchdogTask;
@@ -1416,7 +1414,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _transportStream?.Dispose();
                 _tcpClient?.Dispose();
 
-                _completedQueue.Writer.TryComplete();
+                _ = _completedQueue.Writer.TryComplete();
                 _responseLoopCancellation?.Dispose();
                 _responseProgressWatchdogCancellation?.Dispose();
                 _writeGate.Dispose();

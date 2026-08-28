@@ -1000,12 +1000,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <returns>A connection-scoped log context, or <see langword="null"/> when the account has no usable human-readable identity.</returns>
         private static NntpConnectionLogContext? CreateConnectionLogContext(NntpAccountSnapshot account, NntpArticleAcquisitionEndpoint endpoint, int connectionNumber)
         {
-            if (string.IsNullOrWhiteSpace(account.Backbone) || string.IsNullOrWhiteSpace(account.Username))
-            {
-                return null;
-            }
-
-            return new NntpConnectionLogContext(
+            return string.IsNullOrWhiteSpace(account.Backbone) || string.IsNullOrWhiteSpace(account.Username)
+                ? null
+                : new NntpConnectionLogContext(
                 backbone: account.Backbone,
                 accountUsername: account.Username,
                 accountId: account.EntryId,

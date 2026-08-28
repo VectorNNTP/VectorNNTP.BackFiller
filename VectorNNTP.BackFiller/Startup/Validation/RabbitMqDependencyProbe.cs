@@ -1,4 +1,11 @@
-using System.Net.Security;
+// <copyright file="RabbitMqDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.Net.Sockets;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
@@ -33,7 +40,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 return new DependencyValidationResult(failures, warnings, errors);
             }
 
-            string connectionName = rabbitMq.GetDefaultConnectionName(runtimeOptions.CanonicalBackFillerFqdn);
+            string connectionName = RabbitMqRuntimeOptions.GetDefaultConnectionName(runtimeOptions.CanonicalBackFillerFqdn);
             ConnectionFactory connectionFactory = RabbitMqConnectionFactoryBuilder.BuildConnectionFactory(rabbitMq, connectionName);
 
             foreach (string host in hosts)
@@ -43,7 +50,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                     using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(timeout);
 
-                    using RabbitMQ.Client.IConnection connection = await connectionFactory
+                    using IConnection connection = await connectionFactory
                         .CreateConnectionAsync([host], cts.Token)
                         .ConfigureAwait(false);
 

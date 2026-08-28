@@ -1,50 +1,59 @@
-namespace VectorNNTP.Backfiller.Runtime.RabbitMq;
+// <copyright file="RabbitMqOwnedChannel.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
 
-/// <summary>
-/// Represents an independently owned RabbitMQ channel lease.
-/// </summary>
-/// <remarks>
-/// Channel instances are not shared globally. Each caller receives and disposes its own owned channel.
-/// </remarks>
-internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
+namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
-    private readonly IRabbitMqChannel _channel;
-
     /// <summary>
-    /// Initializes a new owned RabbitMQ channel wrapper.
+    /// Represents an independently owned RabbitMQ channel lease.
     /// </summary>
-    /// <param name="channel">Owned RabbitMQ channel.</param>
-    /// <param name="owner">Logical owner identifier for diagnostics.</param>
-    /// <param name="connectionGeneration">Connection generation associated with this channel lease.</param>
-    internal RabbitMqOwnedChannel(IRabbitMqChannel channel, string owner, long connectionGeneration)
+    /// <remarks>
+    /// Channel instances are not shared globally. Each caller receives and disposes its own owned channel.
+    /// </remarks>
+    internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
-        _channel = channel ?? throw new ArgumentNullException(nameof(channel));
-        Owner = !string.IsNullOrWhiteSpace(owner)
-            ? owner
-            : throw new ArgumentException("Owner is required.", nameof(owner));
+        private readonly IRabbitMqChannel _channel;
 
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(connectionGeneration);
-        ConnectionGeneration = connectionGeneration;
-    }
+        /// <summary>
+        /// Initializes a new owned RabbitMQ channel wrapper.
+        /// </summary>
+        /// <param name="channel">Owned RabbitMQ channel.</param>
+        /// <param name="owner">Logical owner identifier for diagnostics.</param>
+        /// <param name="connectionGeneration">Connection generation associated with this channel lease.</param>
+        internal RabbitMqOwnedChannel(IRabbitMqChannel channel, string owner, long connectionGeneration)
+        {
+            _channel = channel ?? throw new ArgumentNullException(nameof(channel));
+            Owner = !string.IsNullOrWhiteSpace(owner)
+                ? owner
+                : throw new ArgumentException("Owner is required.", nameof(owner));
 
-    /// <summary>
-    /// Gets the logical owner identifier for this channel lease.
-    /// </summary>
-    internal string Owner { get; }
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(connectionGeneration);
+            ConnectionGeneration = connectionGeneration;
+        }
 
-    /// <summary>
-    /// Gets the owned RabbitMQ channel adapter.
-    /// </summary>
-    internal IRabbitMqChannel Channel => _channel;
+        /// <summary>
+        /// Gets the logical owner identifier for this channel lease.
+        /// </summary>
+        internal string Owner { get; }
 
-    /// <summary>
-    /// Gets the RabbitMQ connection generation associated with this channel lease.
-    /// </summary>
-    internal long ConnectionGeneration { get; }
+        /// <summary>
+        /// Gets the owned RabbitMQ channel adapter.
+        /// </summary>
+        internal IRabbitMqChannel Channel => _channel;
 
-    /// <inheritdoc/>
-    public ValueTask DisposeAsync()
-    {
-        return _channel.DisposeAsync();
+        /// <summary>
+        /// Gets the RabbitMQ connection generation associated with this channel lease.
+        /// </summary>
+        internal long ConnectionGeneration { get; }
+
+        /// <inheritdoc/>
+        public ValueTask DisposeAsync()
+        {
+            return _channel.DisposeAsync();
+        }
     }
 }

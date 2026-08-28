@@ -23,7 +23,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="recordName">DNS record name.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>The TXT records currently stored for the name.</returns>
-        Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken);
+        public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken);
 
         /// <summary>
         /// Creates one TXT record.
@@ -33,7 +33,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="recordValue">TXT value content.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Created TXT record information.</returns>
-        Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken);
+        public Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken);
 
         /// <summary>
         /// Deletes one TXT record by identifier.
@@ -41,6 +41,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="zoneId">Cloudflare zone identifier.</param>
         /// <param name="recordId">Record identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
+        public Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
     }
 }

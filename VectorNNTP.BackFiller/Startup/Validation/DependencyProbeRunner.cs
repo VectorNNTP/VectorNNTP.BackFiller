@@ -6,7 +6,6 @@
 // Runs startup dependency probes, DNS reconciliation, and certificate availability checks.
 
 using VectorNNTP.Backfiller.Configuration;
-using VectorNNTP.Backfiller.Runtime.RabbitMq;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {

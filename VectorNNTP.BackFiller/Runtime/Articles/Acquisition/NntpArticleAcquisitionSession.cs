@@ -14,7 +14,6 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text;
-using Serilog.Context;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
@@ -220,10 +219,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
             catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
             {
-                if (connectionLoggingScope is not null)
-                {
-                    connectionLoggingScope.Dispose();
-                }
+                connectionLoggingScope?.Dispose();
 
                 if (stream is not null)
                 {
@@ -324,15 +320,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             {
                 await WriteCommandAsync("DATE", _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
                 string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
-                if (!TryParseStatusLine(statusLine, out int statusCode, out string statusText))
-                {
-                    throw new NntpArticleAcquisitionException(
+                return !TryParseStatusLine(statusLine, out int statusCode, out string statusText)
+                    ? throw new NntpArticleAcquisitionException(
                         NntpArticleAcquisitionFailureCode.MalformedResponse,
                         statusContext,
-                        "Malformed NNTP DATE status line.");
-                }
-
-                return ClassifyDateStatus(statusCode, statusText);
+                        "Malformed NNTP DATE status line.")
+                    : ClassifyDateStatus(statusCode, statusText);
             }
             catch (Exception ex) when (TryMapFailure(ex, cancellationToken, out NntpArticleAcquisitionResult failure))
             {
@@ -417,17 +410,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionTraceContext passRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
             await WriteCommandAsync($"AUTHINFO PASS {_endpoint.Password}", _options.CommandTimeout, cancellationToken, passWrite, redactCredentials: true).ConfigureAwait(false);
             string passLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, passRead).ConfigureAwait(false);
-            if (!TryParseStatusLine(passLine, out int passCode, out string passText))
-            {
-                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO PASS status line.");
-            }
-
-            if (passCode == 281)
-            {
-                return null;
-            }
-
-            return ClassifyAuthInfoPassFailureStatus(passCode, passText);
+            return !TryParseStatusLine(passLine, out int passCode, out string passText)
+                ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO PASS status line.")
+                : passCode == 281 ? null : ClassifyAuthInfoPassFailureStatus(passCode, passText);
         }
 
         /// <summary>
@@ -529,7 +514,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 }
 
                 byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
-                await ExecuteWithTimeoutAsync(
+                _ = await ExecuteWithTimeoutAsync(
                     timeout,
                     cancellationToken,
                     async token =>
@@ -545,7 +530,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
             finally
             {
-                _commandWriteGate.Release();
+                _ = _commandWriteGate.Release();
             }
         }
 
@@ -768,27 +753,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionOptions options)
         {
-            if (string.IsNullOrWhiteSpace(endpoint.Host))
-            {
-                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP host is required.");
-            }
-
-            if (endpoint.Port is <= 0 or > 65535)
-            {
-                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP port must be between 1 and 65535.");
-            }
-
-            if (options.MaxArticleBytes <= 0 || options.ReceiveBufferBytes < 1024 || options.MaxStatusLineBytes < 256)
-            {
-                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition options are out of range.");
-            }
-
-            if (options.ConnectTimeout <= TimeSpan.Zero || options.CommandTimeout <= TimeSpan.Zero || options.ReceiveTimeout <= TimeSpan.Zero)
-            {
-                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition timeouts must be greater than zero.");
-            }
-
-            return null;
+            return string.IsNullOrWhiteSpace(endpoint.Host)
+                ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP host is required.")
+                : endpoint.Port is <= 0 or > 65535
+                ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP port must be between 1 and 65535.")
+                : options.MaxArticleBytes <= 0 || options.ReceiveBufferBytes < 1024 || options.MaxStatusLineBytes < 256
+                ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition options are out of range.")
+                : options.ConnectTimeout <= TimeSpan.Zero || options.CommandTimeout <= TimeSpan.Zero || options.ReceiveTimeout <= TimeSpan.Zero
+                ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition timeouts must be greater than zero.")
+                : null;
         }
 
         /// <summary>
@@ -852,12 +825,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <returns><see langword="true"/> when QUIT write can be attempted; otherwise <see langword="false"/>.</returns>
         private bool CanAttemptQuitTransportWrite()
         {
-            if (_tcpClient.Client is not Socket socket)
-            {
-                return false;
-            }
-
-            return socket.Connected;
+            return _tcpClient.Client is Socket socket && socket.Connected;
         }
 
         /// <summary>
@@ -1089,7 +1057,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             /// <returns>Downloaded article buffer owner.</returns>
             internal DownloadedArticleBuffer Build()
             {
-                byte[] owned = Interlocked.Exchange(ref _buffer, Array.Empty<byte>());
+                byte[] owned = Interlocked.Exchange(ref _buffer, []);
                 return new DownloadedArticleBuffer(owned, _length);
             }
 
@@ -1098,7 +1066,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             /// </summary>
             public void Dispose()
             {
-                byte[] owned = Interlocked.Exchange(ref _buffer, Array.Empty<byte>());
+                byte[] owned = Interlocked.Exchange(ref _buffer, []);
                 if (owned.Length > 0)
                 {
                     ArrayPool<byte>.Shared.Return(owned);

@@ -1,3 +1,11 @@
+// <copyright file="StartupValidationPipeline.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
 
@@ -63,10 +71,10 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 .Get<BackFillerOptions>();
 
             // Validate ConnectionStrings section.
-            configErrors.AddRange(global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateConnectionStrings(configuration, configWarnings));
+            configErrors.AddRange(ConfigurationValidator.ValidateConnectionStrings(configuration, configWarnings));
 
             // Validate BackFiller section.
-            configErrors.AddRange(global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(backFiller, configWarnings));
+            configErrors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(backFiller, configWarnings));
 
             BackFillerRuntimeOptions? runtimeOptions = null;
             if (configErrors.Count == 0)

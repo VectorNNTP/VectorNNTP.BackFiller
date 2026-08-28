@@ -1,3 +1,11 @@
+// <copyright file="OperationalCommandParser.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.Collections.Frozen;
 
 namespace VectorNNTP.Backfiller.Startup.Commands
@@ -109,7 +117,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
 
             Console.Error.WriteLine($"ERROR: Unknown option '{option}'.");
             Console.Error.WriteLine("Use --help to see supported commands.");
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+            return ExitCodePolicy.ExitCodeConfigurationFailure;
         }
 
         /// <summary>
@@ -124,7 +132,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
 
             Console.Error.WriteLine($"ERROR: Multiple commands specified: '{firstCommand}' and '{secondCommand}'.");
             Console.Error.WriteLine("Specify exactly one command. Use --help to see supported commands.");
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+            return ExitCodePolicy.ExitCodeConfigurationFailure;
         }
 
         /// <summary>
@@ -137,7 +145,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
 
             Console.Error.WriteLine($"ERROR: Unexpected argument '{argument}'.");
             Console.Error.WriteLine("Use --help to see supported commands.");
-            return global::VectorNNTP.Backfiller.Startup.ExitCodePolicy.ExitCodeConfigurationFailure;
+            return ExitCodePolicy.ExitCodeConfigurationFailure;
         }
 
         /// <summary>

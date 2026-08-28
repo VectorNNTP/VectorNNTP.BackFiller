@@ -1,9 +1,16 @@
+// <copyright file="TransitPublisher.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Runtime / Articles / Acquisition
+// Typed exception model for deterministic internal failure classification without relying
+// on exception-message text parsing.
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
-using System.Threading;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
@@ -113,7 +120,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         internal TransitPublisherConnectionDiagnosticsSnapshot CaptureConnectionDiagnosticsSnapshot()
         {
             ConnectionSlotSnapshot[] slots = new ConnectionSlotSnapshot[_connections.Length];
-            List<ConnectionDiagnosticsEntry> connectionEntries = new();
+            List<ConnectionDiagnosticsEntry> connectionEntries = [];
 
             for (int i = 0; i < _connections.Length; i++)
             {
@@ -259,17 +266,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             try
             {
                 await _globalQueue.EnqueueAsync(workItem, cancellationToken).ConfigureAwait(false);
-                Interlocked.Increment(ref _totalArticlesSubmitted);
+                _ = Interlocked.Increment(ref _totalArticlesSubmitted);
                 Console.WriteLine($"[TRACE-RI-04] {TraceStamp()} PublishAsync ENQUEUED workItemId={workItem.WorkItemId} state={workItem.State} totalSubmitted={Interlocked.Read(ref _totalArticlesSubmitted)}");
             }
             catch (OperationCanceledException)
             {
-                _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
+                _ = _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
                 throw;
             }
             catch (Exception)
             {
-                _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
+                _ = _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
                 throw;
             }
 
@@ -310,24 +317,24 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             throw new OperationCanceledException("Transit publish canceled.", cancellationToken);
         }
 
-        internal void MarkSubmissionPumpFaultMeasurementWindow(long measurementStartStopwatchTick, long measurementEndStopwatchTick, bool measurementBoundaryObserved)
+        internal static void MarkSubmissionPumpFaultMeasurementWindow(long measurementStartStopwatchTick, long measurementEndStopwatchTick, bool measurementBoundaryObserved)
         {
         }
 
-        internal void MarkSubmissionPumpFaultProducerCompletion(bool allProducersCompleted)
+        internal static void MarkSubmissionPumpFaultProducerCompletion(bool allProducersCompleted)
         {
         }
 
-        internal void MarkSubmissionPumpFaultDispatchersCompleted(bool dispatchersCompleted)
+        internal static void MarkSubmissionPumpFaultDispatchersCompleted(bool dispatchersCompleted)
         {
         }
 
-        internal PumpFaultTelemetrySnapshot? CaptureSubmissionPumpFaultTelemetrySnapshot()
+        internal static PumpFaultTelemetrySnapshot? CaptureSubmissionPumpFaultTelemetrySnapshot()
         {
             return null;
         }
 
-        internal SubmissionPumpFaultCounts CaptureSubmissionPumpFaultCounts()
+        internal static SubmissionPumpFaultCounts CaptureSubmissionPumpFaultCounts()
         {
             return new SubmissionPumpFaultCounts(
                 TotalFaultCount: 0,
@@ -339,11 +346,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             foreach (TransitConnection connection in _connections)
             {
-                TransitConnection.P1GreetingProvenanceSnapshot? snapshot = connection?.CaptureFirstP1GreetingProvenanceSnapshot();
-                if (snapshot is not null)
-                {
-                    return snapshot;
-                }
+                // TODO: CK Code Commented out for now because it is not used and causes a warning. Uncomment if needed in the future.
+                //TransitConnection.P1GreetingProvenanceSnapshot? snapshot = connection?.CaptureFirstP1GreetingProvenanceSnapshot();
+                //if (snapshot is not null)
+                //{
+                //    return snapshot;
+                //}
             }
 
             return null;
@@ -516,7 +524,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     await _globalQueue.DrainEligibleRetriesAsync(cancellationToken).ConfigureAwait(false);
 
                     bool hasWork = await _globalQueue.WaitForWorkAsync(cancellationToken).ConfigureAwait(false);
-                    Console.WriteLine($"[TRACE-RI-12] {TraceStamp()} Worker WAIT-FOR-WORK slot={slotIndex} connectionId={(connection?.ConnectionId ?? "none")} hasWork={hasWork}");
+                    //Console.WriteLine($"[TRACE-RI-12] {TraceStamp()} Worker WAIT-FOR-WORK slot={slotIndex} connectionId={(connection?.ConnectionId ?? "none")} hasWork={hasWork}");
                     if (!hasWork)
                     {
                         continue;
@@ -525,7 +533,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     if (connection is null)
                     {
                         connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: false, cancellationToken).ConfigureAwait(false);
-                        Console.WriteLine($"[TRACE-RI-11] {TraceStamp()} Worker INITIAL-CONNECTION-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
+                        //Console.WriteLine($"[TRACE-RI-11] {TraceStamp()} Worker INITIAL-CONNECTION-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
                         _connections[slotIndex] = connection;
                     }
 
@@ -675,7 +683,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
                     finally
                     {
-                        reconnectGate.Release();
+                        _ = reconnectGate.Release();
                     }
                 }
             }
@@ -693,12 +701,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                TransitConnection? current = _connections[slotIndex];
-                if (current is null)
-                {
-                    throw new InvalidOperationException("Cannot reconnect because no active connection exists for the slot.");
-                }
-
+                TransitConnection? current = _connections[slotIndex] ?? throw new InvalidOperationException("Cannot reconnect because no active connection exists for the slot.");
                 await RequeueClaimedAndOutstandingAfterFaultAsync(current, claimed: null, cancellationToken).ConfigureAwait(false);
                 _ = TrackDeferredConnectionDisposal(current);
 
@@ -707,13 +710,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     return;
                 }
 
-                Interlocked.Increment(ref _totalReconnects);
+                _ = Interlocked.Increment(ref _totalReconnects);
                 TransitConnection replacement = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
                 _connections[slotIndex] = replacement;
             }
             finally
             {
-                reconnectGate.Release();
+                _ = reconnectGate.Release();
             }
         }
 
@@ -729,7 +732,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 CompleteTerminal(completedItem, completedResult);
             }
 
-            Dictionary<long, TransitWorkItem> unresolvedById = new();
+            Dictionary<long, TransitWorkItem> unresolvedById = [];
 
             IReadOnlyList<TransitWorkItem> unresolvedOwned = connection.DrainOutstandingOwnedWorkForRetry();
             Console.WriteLine($"[TRACE-RI-22] {TraceStamp()} Requeue DRAIN-OWNED connectionId={connection.ConnectionId} unresolvedOwnedCount={unresolvedOwned.Count}");
@@ -849,31 +852,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             bool removed = _activeWorkItems.TryRemove(item.WorkItemId, out _);
             Console.WriteLine($"[TRACE-RI-30] {TraceStamp()} CompleteTerminal ACTIVE-REMOVE workItemId={item.WorkItemId} removed={removed} activeCount={_activeWorkItems.Count}");
 
-            switch (result.Status)
+            _ = result.Status switch
             {
-                case TransitPublishStatus.Accepted:
-                    Interlocked.Increment(ref _totalArticlesAccepted);
-                    break;
-                case TransitPublishStatus.Rejected:
-                    Interlocked.Increment(ref _totalArticlesRejected);
-                    break;
-                case TransitPublishStatus.Canceled:
-                    Interlocked.Increment(ref _totalArticlesCanceled);
-                    break;
-                case TransitPublishStatus.Ambiguous:
-                    Interlocked.Increment(ref _totalArticlesAmbiguous);
-                    break;
-                default:
-                    Interlocked.Increment(ref _totalArticlesFailed);
-                    break;
-            }
-
+                TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
+                TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
+                TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
+                _ => Interlocked.Increment(ref _totalArticlesFailed),
+            };
             _ = item.TrySetCompletionResult(result);
         }
 
         private async Task ForceTerminalizeRemainingWorkAsync()
         {
-            TransitWorkItem[] remaining = _activeWorkItems.Values.ToArray();
+            TransitWorkItem[] remaining = [.. _activeWorkItems.Values];
             Console.WriteLine($"[TRACE-RI-31] {TraceStamp()} ForceTerminalize ENTER remainingCount={remaining.Length}");
             foreach (TransitWorkItem item in remaining)
             {
@@ -913,25 +905,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 bool removed = _activeWorkItems.TryRemove(item.WorkItemId, out _);
                 Console.WriteLine($"[TRACE-RI-33] {TraceStamp()} ForceTerminalize ACTIVE-REMOVE workItemId={item.WorkItemId} removed={removed} activeCount={_activeWorkItems.Count}");
 
-                switch (forced.Status)
+                _ = forced.Status switch
                 {
-                    case TransitPublishStatus.Accepted:
-                        Interlocked.Increment(ref _totalArticlesAccepted);
-                        break;
-                    case TransitPublishStatus.Rejected:
-                        Interlocked.Increment(ref _totalArticlesRejected);
-                        break;
-                    case TransitPublishStatus.Canceled:
-                        Interlocked.Increment(ref _totalArticlesCanceled);
-                        break;
-                    case TransitPublishStatus.Ambiguous:
-                        Interlocked.Increment(ref _totalArticlesAmbiguous);
-                        break;
-                    default:
-                        Interlocked.Increment(ref _totalArticlesFailed);
-                        break;
-                }
-
+                    TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
+                    TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
+                    TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                    TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
+                    _ => Interlocked.Increment(ref _totalArticlesFailed),
+                };
                 _ = item.TrySetCompletionResult(forced);
             }
 
@@ -971,7 +952,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     responseProgressTimeout: initializationResponseProgressTimeout,
                     responseProgressCheckInterval: _connectionResponseProgressCheckInterval,
                     timingCollector: _timingCollector);
-                Console.WriteLine($"[TRACE-RI-36] {TraceStamp()} InitLoop CONNECTION-CREATED slot={slotIndex} reconnecting={reconnecting} attempt={attempt} connectionId={connection.ConnectionId} timeoutMs={(initializationResponseProgressTimeout?.TotalMilliseconds.ToString("F0") ?? "null")} hasOutstanding={hasOutstandingAdmittedWork}");
+                Console.WriteLine($"[TRACE-RI-36] {TraceStamp()} InitLoop CONNECTION-CREATED slot={slotIndex} reconnecting={reconnecting} attempt={attempt} connectionId={connection.ConnectionId} timeoutMs={initializationResponseProgressTimeout?.TotalMilliseconds.ToString("F0") ?? "null"} hasOutstanding={hasOutstandingAdmittedWork}");
 
                 try
                 {
@@ -1008,7 +989,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                     bool hasOutstandingNow = HasOutstandingAdmittedWork();
                     Console.WriteLine($"[TRACE-RI-43] {TraceStamp()} InitLoop FAILURE-COUNT-BEFORE slot={slotIndex} reconnecting={reconnecting} attempt={attempt} failureCount={consecutiveLifecycleInitializationFailures} hasOutstanding={hasOutstandingNow} threshold={_runtimeOptions.TransitRetryMaxAttempts}");
-                    Interlocked.Increment(ref _totalReconnects);
+                    _ = Interlocked.Increment(ref _totalReconnects);
                     consecutiveLifecycleInitializationFailures++;
                     bool thresholdReached = hasOutstandingNow && consecutiveLifecycleInitializationFailures >= _runtimeOptions.TransitRetryMaxAttempts;
                     Console.WriteLine($"[TRACE-RI-44] {TraceStamp()} InitLoop FAILURE-COUNT-AFTER slot={slotIndex} reconnecting={reconnecting} attempt={attempt} failureCount={consecutiveLifecycleInitializationFailures} thresholdReached={thresholdReached}");
@@ -1045,12 +1026,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private TimeSpan? ResolveInitializationResponseProgressTimeout(bool reconnecting, bool hasOutstandingAdmittedWork)
         {
-            if (reconnecting || hasOutstandingAdmittedWork)
-            {
-                return _runtimeOptions.EffectiveTransitReconnectInitializationTimeout;
-            }
-
-            return _connectionResponseProgressTimeout;
+            return reconnecting || hasOutstandingAdmittedWork
+                ? _runtimeOptions.EffectiveTransitReconnectInitializationTimeout
+                : _connectionResponseProgressTimeout;
         }
 
         private static TimeSpan ComputeRetryDelay(int attempt)
@@ -1082,30 +1060,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentNullException.ThrowIfNull(connection);
             ArgumentNullException.ThrowIfNull(exception);
 
-            bool result;
-            if (exception is TransitConnection.TransitConnectionLifecycleException)
-            {
-                result = true;
-            }
-            else if (connection.CurrentState == TransitConnectionState.Faulted || connection.IsResponseLoopFaulted)
-            {
-                result = exception is IOException
+            bool result = exception is TransitConnection.TransitConnectionLifecycleException || (connection.CurrentState == TransitConnectionState.Faulted || connection.IsResponseLoopFaulted
+                    ? exception is IOException
                     or ObjectDisposedException
                     or SocketException
                     or TimeoutException
-                    or System.Threading.Channels.ChannelClosedException;
-            }
-            else
-            {
-                result = exception is IOException
+                    or System.Threading.Channels.ChannelClosedException
+                    : exception is IOException
                     or ObjectDisposedException
                     or SocketException
                     || (exception is InvalidOperationException invalid
                         && (IsInitializationProtocolFailure(connection, invalid)
                             || invalid.Message.Contains("connection", StringComparison.OrdinalIgnoreCase)
-                            || invalid.Message.Contains("Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal)));
-            }
-
+                            || invalid.Message.Contains("Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal))));
             Console.WriteLine($"[TRACE-RI-50] {TraceStamp()} LifecycleFilter connectionId={connection.ConnectionId} state={connection.CurrentState} responseLoopFaulted={connection.IsResponseLoopFaulted} exType={exception.GetType().FullName} exMessage={exception.Message} result={result}");
             return result;
         }
@@ -1141,7 +1108,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private async Task AwaitDeferredConnectionDisposalsAsync()
         {
-            Task[] pending = _deferredConnectionDisposals.Values.ToArray();
+            Task[] pending = [.. _deferredConnectionDisposals.Values];
             if (pending.Length == 0)
             {
                 return;
@@ -1254,37 +1221,37 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             internal string FullFirstFaultStackTrace => FirstFault?.SourceException.ToString() ?? string.Empty;
 
-            internal string TopStackFrameDeclaringType => string.Empty;
+            internal static string TopStackFrameDeclaringType => string.Empty;
 
-            internal string TopStackFrameMethodName => string.Empty;
+            internal static string TopStackFrameMethodName => string.Empty;
 
-            internal long MillisecondsFromMeasurementStart => 0;
+            internal static long MillisecondsFromMeasurementStart => 0;
 
-            internal long MillisecondsFromMeasurementEnd => 0;
+            internal static long MillisecondsFromMeasurementEnd => 0;
 
             internal PumpFaultMeasurementState MeasurementStateAtFault => MeasurementState;
 
-            internal long QueuedSubmissionCount => 0;
+            internal static long QueuedSubmissionCount => 0;
 
-            internal int InFlightCount => 0;
+            internal static int InFlightCount => 0;
 
-            internal int ActiveSubmissionCount => 0;
+            internal static int ActiveSubmissionCount => 0;
 
-            internal int? ChannelImmediateAvailableCount => 0;
+            internal static int? ChannelImmediateAvailableCount => 0;
 
-            internal int ActiveConnectionCount => 0;
+            internal static int ActiveConnectionCount => 0;
 
-            internal int ReadyConnectionCount => 0;
+            internal static int ReadyConnectionCount => 0;
 
-            internal int FaultedConnectionCount => 0;
+            internal static int FaultedConnectionCount => 0;
 
-            internal int ReconnectingConnectionCount => 0;
+            internal static int ReconnectingConnectionCount => 0;
 
-            internal long OutstandingConnectionOperations => 0;
+            internal static long OutstandingConnectionOperations => 0;
 
-            internal ProducerCompletionState ProducerCompletionState => ProducerCompletionState.Unknown;
+            internal static ProducerCompletionState ProducerCompletionState => ProducerCompletionState.Unknown;
 
-            internal DispatchersCompletedState DispatchersCompletedState => DispatchersCompletedState.Unknown;
+            internal static DispatchersCompletedState DispatchersCompletedState => DispatchersCompletedState.Unknown;
         }
 
         internal enum TransitPublisherPumpFaultOrigin
