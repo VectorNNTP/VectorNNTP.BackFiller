@@ -61,7 +61,7 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(NntpArticleGrabberFailureCode.None, result.FailureCode);
                 Assert.Equal("<workflow-success@test>", result.MessageId);
                 Assert.NotNull(result.Success);
-                Assert.True(result.Success!.Parse.IsAccepted);
+                Assert.True(result.Success.Parse.IsAccepted);
                 Assert.Equal(NntpArticleType.Text, result.Success.Parse.ArticleType);
             }
         }
@@ -100,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
 
                 Assert.False(result.IsSuccess);
                 Assert.Equal(NntpArticleGrabberFailureCode.InvalidHeaders, result.FailureCode);
-                Assert.NotNull(result.ParseFailureCode);
+                _ = Assert.NotNull(result.ParseFailureCode);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.AcquisitionFailureCode);
             }
         }

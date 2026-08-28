@@ -1,21 +1,22 @@
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using Xunit;
 
-namespace VectorNNTP.Backfiller.Tests;
-
-/// <summary>
-/// Tests immutable account snapshot state creation semantics.
-/// </summary>
-public sealed class NntpAccountSnapshotStateTests
+namespace VectorNNTP.Backfiller.Tests
 {
-    [Fact]
-    public void Empty_ReturnsServerIdAndNoAccounts()
+    /// <summary>
+    /// Tests immutable account snapshot state creation semantics.
+    /// </summary>
+    public sealed class NntpAccountSnapshotStateTests
     {
-        const byte serverId = 12;
+        [Fact]
+        public void Empty_ReturnsServerIdAndNoAccounts()
+        {
+            const byte ServerId = 12;
 
-        NntpAccountSnapshotState snapshotState = NntpAccountSnapshotState.Empty(serverId);
+            NntpAccountSnapshotState snapshotState = NntpAccountSnapshotState.Empty(ServerId);
 
-        Assert.Equal(serverId, snapshotState.ServerId);
-        Assert.Empty(snapshotState.Accounts);
+            Assert.Equal(ServerId, snapshotState.ServerId);
+            Assert.Empty(snapshotState.Accounts);
+        }
     }
 }

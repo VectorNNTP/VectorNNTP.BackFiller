@@ -1,85 +1,95 @@
+// <copyright file="FixedArticleLimiterTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / yEnc
+// Corpus-backed and synthetic contract tests for the yEnc article validator,
+// covering protocol parsing, integrity classification, malformed input handling,
+// and NNTP dot-stuffing interactions.
+
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
 
-namespace VectorNNTP.Backfiller.Tests;
-
-/// <summary>
-/// Validates exact global reservation behavior for fixed-count benchmark production.
-/// </summary>
-public sealed class FixedArticleLimiterTests
+namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Verifies one-article fixed-count reservations admit exactly one token.
+    /// Validates exact global reservation behavior for fixed-count benchmark production.
     /// </summary>
-    [Fact]
-    public void TryReserveNext_WhenTargetIsOne_AllowsExactlyOneReservation()
+    public sealed class FixedArticleLimiterTests
     {
-        FixedArticleLimiter limiter = new(1);
-
-        bool first = limiter.TryReserveNext();
-        bool second = limiter.TryReserveNext();
-
-        Assert.True(first);
-        Assert.False(second);
-    }
-
-    /// <summary>
-    /// Verifies two-hundred-article fixed-count reservations admit exactly two hundred tokens.
-    /// </summary>
-    [Fact]
-    public void TryReserveNext_WhenTargetIsTwoHundred_AllowsExactlyTwoHundredReservations()
-    {
-        FixedArticleLimiter limiter = new(200);
-
-        int granted = 0;
-        for (int i = 0; i < 250; i++)
+        /// <summary>
+        /// Verifies one-article fixed-count reservations admit exactly one token.
+        /// </summary>
+        [Fact]
+        public void TryReserveNext_WhenTargetIsOne_AllowsExactlyOneReservation()
         {
-            if (limiter.TryReserveNext())
-            {
-                granted++;
-            }
+            FixedArticleLimiter limiter = new(1);
+
+            bool first = limiter.TryReserveNext();
+            bool second = limiter.TryReserveNext();
+
+            Assert.True(first);
+            Assert.False(second);
         }
 
-        Assert.Equal(200, granted);
-    }
-
-    /// <summary>
-    /// Verifies concurrent multi-worker reservations are globally bounded to exactly the configured target.
-    /// </summary>
-    [Fact]
-    public async Task TryReserveNext_WhenInvokedConcurrently_IsGloballyBoundedToTargetAsync()
-    {
-        const int target = 200;
-        const int workers = 8;
-
-        FixedArticleLimiter limiter = new(target);
-        int granted = 0;
-
-        Task[] tasks = new Task[workers];
-        for (int i = 0; i < workers; i++)
+        /// <summary>
+        /// Verifies two-hundred-article fixed-count reservations admit exactly two hundred tokens.
+        /// </summary>
+        [Fact]
+        public void TryReserveNext_WhenTargetIsTwoHundred_AllowsExactlyTwoHundredReservations()
         {
-            tasks[i] = Task.Run(() =>
+            FixedArticleLimiter limiter = new(200);
+
+            int granted = 0;
+            for (int i = 0; i < 250; i++)
             {
-                while (limiter.TryReserveNext())
+                if (limiter.TryReserveNext())
                 {
-                    Interlocked.Increment(ref granted);
+                    granted++;
                 }
-            });
+            }
+
+            Assert.Equal(200, granted);
         }
 
-        await Task.WhenAll(tasks).ConfigureAwait(false);
+        /// <summary>
+        /// Verifies concurrent multi-worker reservations are globally bounded to exactly the configured target.
+        /// </summary>
+        [Fact]
+        public async Task TryReserveNext_WhenInvokedConcurrently_IsGloballyBoundedToTargetAsync()
+        {
+            const int Target = 200;
+            const int Workers = 8;
 
-        Assert.Equal(target, granted);
-    }
+            FixedArticleLimiter limiter = new(Target);
+            int granted = 0;
 
-    /// <summary>
-    /// Verifies invalid non-positive targets are rejected.
-    /// </summary>
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Constructor_WhenTargetIsNotPositive_ThrowsArgumentOutOfRangeException(int target)
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new FixedArticleLimiter(target));
+            Task[] tasks = new Task[Workers];
+            for (int i = 0; i < Workers; i++)
+            {
+                tasks[i] = Task.Run(() =>
+                {
+                    while (limiter.TryReserveNext())
+                    {
+                        _ = Interlocked.Increment(ref granted);
+                    }
+                });
+            }
+
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+
+            Assert.Equal(Target, granted);
+        }
+
+        /// <summary>
+        /// Verifies invalid non-positive targets are rejected.
+        /// </summary>
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        public void Constructor_WhenTargetIsNotPositive_ThrowsArgumentOutOfRangeException(int target)
+        {
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => new FixedArticleLimiter(target));
+        }
     }
 }

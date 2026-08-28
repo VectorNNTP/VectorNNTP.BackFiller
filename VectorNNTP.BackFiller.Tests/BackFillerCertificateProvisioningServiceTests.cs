@@ -1,3 +1,12 @@
+// <copyright file="BackFillerCertificateProvisioningServiceTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / yEnc
+// Corpus-backed and synthetic contract tests for the yEnc article validator,
+// covering protocol parsing, integrity classification, malformed input handling,
+// and NNTP dot-stuffing interactions.
+
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -5,224 +14,225 @@ using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using Xunit;
 
-namespace VectorNNTP.Backfiller.Tests;
-
-public sealed class BackFillerCertificateProvisioningServiceTests
+namespace VectorNNTP.Backfiller.Tests
 {
-    [Fact]
-    public async Task EnsureCertificateAvailabilityAsync_WhenCertificateMissing_ProvisionsAndPublishes()
+    public sealed class BackFillerCertificateProvisioningServiceTests
     {
-        string tempDir = CreateUniqueTempDirectory();
-        try
+        [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenCertificateMissing_ProvisionsAndPublishes()
         {
-            BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
-            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
 
-            BackFillerCertificateState state = new();
-            BackFillerCertificateStore store = new();
-            FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
-            BackFillerCertificateProvisioningService service = new(
-                store,
-                issuer,
-                state,
-                NullLogger<BackFillerCertificateProvisioningService>.Instance,
-                TimeProvider.System);
+                BackFillerCertificateState state = new();
+                BackFillerCertificateStore store = new();
+                FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
+                BackFillerCertificateProvisioningService service = new(
+                    store,
+                    issuer,
+                    state,
+                    NullLogger<BackFillerCertificateProvisioningService>.Instance,
+                    TimeProvider.System);
 
-            await service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
+                await service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
 
-            Assert.Equal(1, issuer.IssueCallCount);
-            Assert.True(state.HasCertificate);
+                Assert.Equal(1, issuer.IssueCallCount);
+                Assert.True(state.HasCertificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
         }
-        finally
+
+        [Fact]
+        public async Task TryRenewIfDueAsync_WhenCertificateNotDue_DoesNotIssue()
         {
-            DeleteDirectoryIfExists(tempDir);
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 7);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+                BackFillerCertificateState state = new();
+                BackFillerCertificateStore store = new();
+                FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
+                BackFillerCertificateProvisioningService service = new(
+                    store,
+                    issuer,
+                    state,
+                    NullLogger<BackFillerCertificateProvisioningService>.Instance,
+                    TimeProvider.System);
+
+                bool renewed = await service.TryRenewIfDueAsync(runtime, CancellationToken.None);
+
+                Assert.False(renewed);
+                Assert.Equal(0, issuer.IssueCallCount);
+                Assert.True(state.HasCertificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
         }
-    }
 
-    [Fact]
-    public async Task TryRenewIfDueAsync_WhenCertificateNotDue_DoesNotIssue()
-    {
-        string tempDir = CreateUniqueTempDirectory();
-        try
+        [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenCalledConcurrently_OnlyProvisionsOnce()
         {
-            BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 7);
-            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
-            WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
 
-            BackFillerCertificateState state = new();
-            BackFillerCertificateStore store = new();
-            FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
-            BackFillerCertificateProvisioningService service = new(
-                store,
-                issuer,
-                state,
-                NullLogger<BackFillerCertificateProvisioningService>.Instance,
-                TimeProvider.System);
+                BackFillerCertificateState state = new();
+                BackFillerCertificateStore store = new();
+                FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
+                BackFillerCertificateProvisioningService service = new(
+                    store,
+                    issuer,
+                    state,
+                    NullLogger<BackFillerCertificateProvisioningService>.Instance,
+                    TimeProvider.System);
 
-            bool renewed = await service.TryRenewIfDueAsync(runtime, CancellationToken.None);
+                Task first = service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
+                Task second = service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
 
-            Assert.False(renewed);
-            Assert.Equal(0, issuer.IssueCallCount);
-            Assert.True(state.HasCertificate);
+                await Task.WhenAll(first, second);
+
+                Assert.Equal(1, issuer.IssueCallCount);
+                Assert.True(state.HasCertificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
         }
-        finally
+
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(BackFillerLetsEncryptRuntimeOptions letsEncrypt)
         {
-            DeleteDirectoryIfExists(tempDir);
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: letsEncrypt.CanonicalCertificateSubjectName,
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "example.com",
+                ValidatedLogDirectory: Path.GetTempPath(),
+                ValidatedCertificateDirectory: Path.GetDirectoryName(letsEncrypt.CertificatePfxPath)!,
+                RabbitMqHosts: ["localhost"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: false,
+                TransitServerHost: "localhost",
+                TransitServerPort: 119,
+                TransitServerUseSsl: false,
+                BindPort: 119,
+                ConfiguredBindAddressTokens: ["127.0.0.1"],
+                ShutdownGracePeriodSeconds: 120,
+                ShutdownDrainQueuedWork: true,
+                ShutdownFinishActiveArticles: true,
+                RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
+                WriteBatchCoalesceMicroseconds: 250,
+                LetsEncrypt: letsEncrypt);
         }
-    }
 
-    [Fact]
-    public async Task EnsureCertificateAvailabilityAsync_WhenCalledConcurrently_OnlyProvisionsOnce()
-    {
-        string tempDir = CreateUniqueTempDirectory();
-        try
+        private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir, string fqdn, int renewBeforeExpiryDays = 7)
         {
-            BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com");
-            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
-
-            BackFillerCertificateState state = new();
-            BackFillerCertificateStore store = new();
-            FakeAcmeCertificateIssuer issuer = new("bf-01.example.com");
-            BackFillerCertificateProvisioningService service = new(
-                store,
-                issuer,
-                state,
-                NullLogger<BackFillerCertificateProvisioningService>.Instance,
-                TimeProvider.System);
-
-            Task first = service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
-            Task second = service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
-
-            await Task.WhenAll(first, second);
-
-            Assert.Equal(1, issuer.IssueCallCount);
-            Assert.True(state.HasCertificate);
+            _ = Directory.CreateDirectory(tempDir);
+            return new BackFillerLetsEncryptRuntimeOptions(
+                Enabled: true,
+                CanonicalCertificateSubjectName: fqdn,
+                AcmeAccountEmail: "security@example.com",
+                AcmeAccountKeyPemPath: Path.Combine(tempDir, "account.key"),
+                CertificatePfxPath: Path.Combine(tempDir, "backfiller-listener.pfx"),
+                CertificatePrivateKeyPemPath: Path.Combine(tempDir, "certificate.key"),
+                PfxExportPassword: "UnitTest-PfxPassword-123!",
+                RenewBeforeExpiryDays: renewBeforeExpiryDays,
+                RenewalCheckIntervalHours: 6,
+                RenewalJitterRatio: 0.1,
+                UseStagingDirectory: true,
+                AcmeTransientRetryMaxAttempts: 5,
+                DnsPropagationDelaySeconds: 0,
+                DnsTxtPollIntervalSeconds: 1,
+                DnsTxtPollTimeoutSeconds: 10,
+                DnsAuthoritativeNsCacheMinutes: 1,
+                DnsAuthoritativeQuorumRatio: 0.7,
+                CloudFlareApiToken: "token",
+                CloudFlareZoneId: "zone");
         }
-        finally
+
+        private static void WriteValidPfx(string pfxPath, string password, string fqdn, DateTimeOffset notBeforeUtc, DateTimeOffset notAfterUtc)
         {
-            DeleteDirectoryIfExists(tempDir);
-        }
-    }
-
-    private static BackFillerRuntimeOptions CreateRuntimeOptions(BackFillerLetsEncryptRuntimeOptions letsEncrypt)
-    {
-        return new BackFillerRuntimeOptions(
-            CanonicalBackFillerFqdn: letsEncrypt.CanonicalCertificateSubjectName,
-            BackFillerId: 1,
-            CanonicalDnsSuffix: "example.com",
-            ValidatedLogDirectory: Path.GetTempPath(),
-            ValidatedCertificateDirectory: Path.GetDirectoryName(letsEncrypt.CertificatePfxPath)!,
-            RabbitMqHosts: ["localhost"],
-            RabbitMqPort: 5672,
-            RabbitMqEnableSsl: false,
-            TransitServerHost: "localhost",
-            TransitServerPort: 119,
-            TransitServerUseSsl: false,
-            BindPort: 119,
-            ConfiguredBindAddressTokens: ["127.0.0.1"],
-            ShutdownGracePeriodSeconds: 120,
-            ShutdownDrainQueuedWork: true,
-            ShutdownFinishActiveArticles: true,
-            RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
-            WriteBatchCoalesceMicroseconds: 250,
-            LetsEncrypt: letsEncrypt);
-    }
-
-    private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir, string fqdn, int renewBeforeExpiryDays = 7)
-    {
-        Directory.CreateDirectory(tempDir);
-        return new BackFillerLetsEncryptRuntimeOptions(
-            Enabled: true,
-            CanonicalCertificateSubjectName: fqdn,
-            AcmeAccountEmail: "security@example.com",
-            AcmeAccountKeyPemPath: Path.Combine(tempDir, "account.key"),
-            CertificatePfxPath: Path.Combine(tempDir, "backfiller-listener.pfx"),
-            CertificatePrivateKeyPemPath: Path.Combine(tempDir, "certificate.key"),
-            PfxExportPassword: "UnitTest-PfxPassword-123!",
-            RenewBeforeExpiryDays: renewBeforeExpiryDays,
-            RenewalCheckIntervalHours: 6,
-            RenewalJitterRatio: 0.1,
-            UseStagingDirectory: true,
-            AcmeTransientRetryMaxAttempts: 5,
-            DnsPropagationDelaySeconds: 0,
-            DnsTxtPollIntervalSeconds: 1,
-            DnsTxtPollTimeoutSeconds: 10,
-            DnsAuthoritativeNsCacheMinutes: 1,
-            DnsAuthoritativeQuorumRatio: 0.7,
-            CloudFlareApiToken: "token",
-            CloudFlareZoneId: "zone");
-    }
-
-    private static void WriteValidPfx(string pfxPath, string password, string fqdn, DateTimeOffset notBeforeUtc, DateTimeOffset notAfterUtc)
-    {
-        using RSA rsa = RSA.Create(2048);
-        CertificateRequest request = new(
-            $"CN={fqdn}",
-            rsa,
-            HashAlgorithmName.SHA256,
-            RSASignaturePadding.Pkcs1);
-
-        SubjectAlternativeNameBuilder sanBuilder = new();
-        sanBuilder.AddDnsName(fqdn);
-        request.CertificateExtensions.Add(sanBuilder.Build());
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
-        OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
-        request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, true));
-
-        using X509Certificate2 certificate = request.CreateSelfSigned(notBeforeUtc, notAfterUtc);
-        File.WriteAllBytes(pfxPath, certificate.Export(X509ContentType.Pkcs12, password));
-    }
-
-    private sealed class FakeAcmeCertificateIssuer(string fqdn) : IAcmeCertificateIssuer
-    {
-        private readonly string _fqdn = fqdn;
-
-        internal int IssueCallCount { get; private set; }
-
-        public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
-        {
-            IssueCallCount++;
-
             using RSA rsa = RSA.Create(2048);
             CertificateRequest request = new(
-                $"CN={_fqdn}",
+                $"CN={fqdn}",
                 rsa,
                 HashAlgorithmName.SHA256,
                 RSASignaturePadding.Pkcs1);
-            SubjectAlternativeNameBuilder san = new();
-            san.AddDnsName(_fqdn);
-            request.CertificateExtensions.Add(san.Build());
 
-            using X509Certificate2 certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
-            AcmeOrderIssueResult result = new(
-                LeafCertificateDer: certificate.Export(X509ContentType.Cert),
-                ChainDer: [],
-                CertificatePrivateKeyPem: rsa.ExportPkcs8PrivateKeyPem());
+            SubjectAlternativeNameBuilder sanBuilder = new();
+            sanBuilder.AddDnsName(fqdn);
+            request.CertificateExtensions.Add(sanBuilder.Build());
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
+            OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, true));
 
-            return Task.FromResult(result);
-        }
-    }
-
-    private static string CreateUniqueTempDirectory()
-    {
-        string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-ProvisionTests-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static void DeleteDirectoryIfExists(string path)
-    {
-        if (!Directory.Exists(path))
-        {
-            return;
+            using X509Certificate2 certificate = request.CreateSelfSigned(notBeforeUtc, notAfterUtc);
+            File.WriteAllBytes(pfxPath, certificate.Export(X509ContentType.Pkcs12, password));
         }
 
-        try
+        private sealed class FakeAcmeCertificateIssuer(string fqdn) : IAcmeCertificateIssuer
         {
-            Directory.Delete(path, recursive: true);
+            private readonly string _fqdn = fqdn;
+
+            internal int IssueCallCount { get; private set; }
+
+            public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
+            {
+                IssueCallCount++;
+
+                using RSA rsa = RSA.Create(2048);
+                CertificateRequest request = new(
+                    $"CN={_fqdn}",
+                    rsa,
+                    HashAlgorithmName.SHA256,
+                    RSASignaturePadding.Pkcs1);
+                SubjectAlternativeNameBuilder san = new();
+                san.AddDnsName(_fqdn);
+                request.CertificateExtensions.Add(san.Build());
+
+                using X509Certificate2 certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+                AcmeOrderIssueResult result = new(
+                    LeafCertificateDer: certificate.Export(X509ContentType.Cert),
+                    ChainDer: [],
+                    CertificatePrivateKeyPem: rsa.ExportPkcs8PrivateKeyPem());
+
+                return Task.FromResult(result);
+            }
         }
-        catch
+
+        private static string CreateUniqueTempDirectory()
         {
+            string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-ProvisionTests-{Guid.NewGuid():N}");
+            _ = Directory.CreateDirectory(path);
+            return path;
+        }
+
+        private static void DeleteDirectoryIfExists(string path)
+        {
+            if (!Directory.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(path, recursive: true);
+            }
+            catch
+            {
+            }
         }
     }
 }

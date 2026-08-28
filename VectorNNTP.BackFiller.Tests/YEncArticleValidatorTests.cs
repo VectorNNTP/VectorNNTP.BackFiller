@@ -344,7 +344,7 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public void Validate_WhenPayloadLineStartsWithEscapedYEndText_DoesNotFalseTerminate()
         {
-            byte[] payload = [(byte)119, (byte)59, (byte)68, (byte)67, (byte)58, (byte)246, (byte)59, (byte)72, (byte)57, (byte)9, (byte)57, (byte)56];
+            byte[] payload = [119, 59, 68, 67, 58, 246, 59, 72, 57, 9, 57, 56];
             byte[] article = BuildSinglePartArticle(payload, includeDotStuffedLeadingDotLine: false);
 
             YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
@@ -364,11 +364,11 @@ namespace VectorNNTP.Backfiller.Tests
             YEncArticleValidationResult warmup = YEncArticleValidator.Validate(article);
             Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, warmup.Status);
 
-            const int iterations = 16;
+            const int Iterations = 16;
             long before = GC.GetAllocatedBytesForCurrentThread();
             YEncArticleValidationStatus lastStatus = YEncArticleValidationStatus.ValidNonYEnc;
 
-            for (int i = 0; i < iterations; i++)
+            for (int i = 0; i < Iterations; i++)
             {
                 lastStatus = YEncArticleValidator.Validate(article).Status;
             }
@@ -889,7 +889,7 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public void Validate_WhenArticleBoundaryVariantsAreProvided_ReturnsExpectedStatuses()
         {
-            Assert.Equal(YEncArticleValidationStatus.ValidNonYEnc, YEncArticleValidator.Validate(ReadOnlySpan<byte>.Empty).Status);
+            Assert.Equal(YEncArticleValidationStatus.ValidNonYEnc, YEncArticleValidator.Validate([]).Status);
 
             byte[] beginOnly = "=ybegin line=128 size=1 name=test.bin\r\n"u8.ToArray();
             Assert.Equal(YEncArticleValidationStatus.Truncated, YEncArticleValidator.Validate(beginOnly).Status);

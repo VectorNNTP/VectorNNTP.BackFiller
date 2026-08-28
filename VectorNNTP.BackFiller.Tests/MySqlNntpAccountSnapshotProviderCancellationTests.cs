@@ -1,66 +1,76 @@
+// <copyright file="MySqlNntpAccountSnapshotProviderCancellationTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / yEnc
+// Corpus-backed and synthetic contract tests for the yEnc article validator,
+// covering protocol parsing, integrity classification, malformed input handling,
+// and NNTP dot-stuffing interactions.
+
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using Xunit;
 
-namespace VectorNNTP.Backfiller.Tests;
-
-/// <summary>
-/// Tests cancellation and publication semantics for account snapshot loading.
-/// </summary>
-public sealed class MySqlNntpAccountSnapshotProviderCancellationTests
+namespace VectorNNTP.Backfiller.Tests
 {
-    [Fact]
-    public async Task LoadInitialSnapshotAsync_DoesNotApplyProviderOwnedTimeoutAndPreservesSnapshotUntilCallerCancels()
+    /// <summary>
+    /// Tests cancellation and publication semantics for account snapshot loading.
+    /// </summary>
+    public sealed class MySqlNntpAccountSnapshotProviderCancellationTests
     {
-        NntpAccountSnapshot initial = BuildAccount(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        [Fact]
+        public async Task LoadInitialSnapshotAsync_DoesNotApplyProviderOwnedTimeoutAndPreservesSnapshotUntilCallerCancels()
+        {
+            NntpAccountSnapshot initial = BuildAccount(Guid.Parse("11111111-1111-1111-1111-111111111111"));
 
-        int queryCallCount = 0;
-        MySqlNntpAccountSnapshotProvider provider = new(
-            1,
-            NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
-            async cancellationToken =>
-            {
-                queryCallCount++;
-
-                if (queryCallCount == 1)
+            int queryCallCount = 0;
+            MySqlNntpAccountSnapshotProvider provider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                async cancellationToken =>
                 {
-                    return [initial];
-                }
+                    queryCallCount++;
 
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
-                return [];
-            });
+                    if (queryCallCount == 1)
+                    {
+                        return [initial];
+                    }
 
-        await provider.LoadInitialSnapshotAsync(CancellationToken.None);
-        NntpAccountSnapshotState baseline = provider.CurrentSnapshot;
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    return [];
+                });
 
-        using CancellationTokenSource cts = new();
-        Task reloadTask = provider.LoadInitialSnapshotAsync(cts.Token);
+            await provider.LoadInitialSnapshotAsync(CancellationToken.None);
+            NntpAccountSnapshotState baseline = provider.CurrentSnapshot;
 
-        Task completedTask = await Task.WhenAny(reloadTask, Task.Delay(TimeSpan.FromSeconds(6)));
-        Assert.NotSame(reloadTask, completedTask);
+            using CancellationTokenSource cts = new();
+            Task reloadTask = provider.LoadInitialSnapshotAsync(cts.Token);
 
-        cts.Cancel();
+            Task completedTask = await Task.WhenAny(reloadTask, Task.Delay(TimeSpan.FromSeconds(6)));
+            Assert.NotSame(reloadTask, completedTask);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await reloadTask.ConfigureAwait(false));
+            cts.Cancel();
 
-        Assert.Same(baseline, provider.CurrentSnapshot);
-        Assert.Single(provider.CurrentSnapshot.Accounts);
-        Assert.Equal(initial.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
-    }
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await reloadTask.ConfigureAwait(false));
 
-    private static NntpAccountSnapshot BuildAccount(Guid entryId)
-    {
-        return new NntpAccountSnapshot(
-            EntryId: entryId,
-            Backbone: "BackboneA",
-            Hostname: "news.example.com",
-            KeepAliveSeconds: 120,
-            MaxConnections: 10,
-            Password: "secret",
-            Port: 563,
-            ServerId: 1,
-            Username: "user",
-            UseSsl: true);
+            Assert.Same(baseline, provider.CurrentSnapshot);
+            _ = Assert.Single(provider.CurrentSnapshot.Accounts);
+            Assert.Equal(initial.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
+        }
+
+        private static NntpAccountSnapshot BuildAccount(Guid entryId)
+        {
+            return new NntpAccountSnapshot(
+                EntryId: entryId,
+                Backbone: "BackboneA",
+                Hostname: "news.example.com",
+                KeepAliveSeconds: 120,
+                MaxConnections: 10,
+                Password: "secret",
+                Port: 563,
+                ServerId: 1,
+                Username: "user",
+                UseSsl: true);
+        }
     }
 }

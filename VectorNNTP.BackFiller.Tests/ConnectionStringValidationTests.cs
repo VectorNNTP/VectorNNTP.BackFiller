@@ -93,7 +93,7 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert
-            Assert.Single(diagnostics);
+            _ = Assert.Single(diagnostics);
             Assert.Contains("required", diagnostics[0].Message, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert
-            Assert.Single(diagnostics);
+            _ = Assert.Single(diagnostics);
             Assert.Contains("required", diagnostics[0].Message, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -125,7 +125,7 @@ namespace VectorNNTP.Backfiller.Tests
                 "ConnectionStrings:GrabberDB");
 
             // Assert
-            Assert.Single(diagnostics);
+            _ = Assert.Single(diagnostics);
             Assert.Contains("required", diagnostics[0].Message, StringComparison.OrdinalIgnoreCase);
         }
 

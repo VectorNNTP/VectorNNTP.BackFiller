@@ -28,4 +28,8 @@
 	<ProjectReference Include="..\VectorNNTP.BackFiller.Benchmarks\VectorNNTP.BackFiller.Benchmarks.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="TestResults\" />
+  </ItemGroup>
+
 </Project>

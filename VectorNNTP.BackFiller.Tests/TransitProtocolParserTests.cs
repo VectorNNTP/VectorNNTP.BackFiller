@@ -1,193 +1,202 @@
+// <copyright file="TransitProtocolParserTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / yEnc
+// Corpus-backed and synthetic contract tests for the yEnc article validator,
+// covering protocol parsing, integrity classification, malformed input handling,
+// and NNTP dot-stuffing interactions.
+
 using System.IO.Pipelines;
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
-namespace VectorNNTP.Backfiller.Tests;
-
-/// <summary>
-/// Tests NNTP protocol parsing semantics for greeting and CAPABILITIES handling.
-/// </summary>
-public sealed class TransitProtocolParserTests
+namespace VectorNNTP.Backfiller.Tests
 {
-    [Fact]
-    public async Task ReadNntpLineAsync_WhenCrLfLine_ReturnsLineWithoutCrLf()
+    /// <summary>
+    /// Tests NNTP protocol parsing semantics for greeting and CAPABILITIES handling.
+    /// </summary>
+    public sealed class TransitProtocolParserTests
     {
-        Pipe pipe = new();
-        await pipe.Writer.WriteAsync(Encoding.ASCII.GetBytes("200 transit ready\r\n"));
+        [Fact]
+        public async Task ReadNntpLineAsync_WhenCrLfLine_ReturnsLineWithoutCrLf()
+        {
+            Pipe pipe = new();
+            _ = await pipe.Writer.WriteAsync(Encoding.ASCII.GetBytes("200 transit ready\r\n"));
 
-        string line = await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None);
+            string line = await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None);
 
-        Assert.Equal("200 transit ready", line);
-    }
+            Assert.Equal("200 transit ready", line);
+        }
 
-    [Fact]
-    public void ValidateGreeting_When200Or201_DoesNotThrow()
-    {
-        TransitProtocolParser.ValidateGreeting("200 transit posting allowed");
-        TransitProtocolParser.ValidateGreeting("201 transit no posting");
-    }
+        [Fact]
+        public void ValidateGreeting_When200Or201_DoesNotThrow()
+        {
+            TransitProtocolParser.ValidateGreeting("200 transit posting allowed");
+            TransitProtocolParser.ValidateGreeting("201 transit no posting");
+        }
 
-    [Fact]
-    public void ValidateGreeting_WhenUnexpected_Throws()
-    {
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => TransitProtocolParser.ValidateGreeting("400 temporary failure"));
+        [Fact]
+        public void ValidateGreeting_WhenUnexpected_Throws()
+        {
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+                () => TransitProtocolParser.ValidateGreeting("400 temporary failure"));
 
-        Assert.Contains("Unexpected NNTP greeting response code", ex.Message, StringComparison.Ordinal);
-    }
+            Assert.Contains("Unexpected NNTP greeting response code", ex.Message, StringComparison.Ordinal);
+        }
 
-    [Fact]
-    public void ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_IgnoresCompressionAndDetectsSupportedFeatures()
-    {
-        string[] lines =
-        [
-            "101 Capability list:",
-            "VERSION 2",
-            "STARTTLS",
-            "COMPRESS DEFLATE",
-            "STREAMING",
-            ".",
-        ];
+        [Fact]
+        public void ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_IgnoresCompressionAndDetectsSupportedFeatures()
+        {
+            string[] lines =
+            [
+                "101 Capability list:",
+                "VERSION 2",
+                "STARTTLS",
+                "COMPRESS DEFLATE",
+                "STREAMING",
+                ".",
+            ];
 
-        TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
+            TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
 
-        Assert.True(snapshot.SupportsStartTls);
-        Assert.True(snapshot.SupportsStreaming);
-    }
+            Assert.True(snapshot.SupportsStartTls);
+            Assert.True(snapshot.SupportsStreaming);
+        }
 
-    [Fact]
-    public void ParseCapabilitiesResponse_WhenMalformed_Throws()
-    {
-        string[] lines =
-        [
-            "101 Capability list:",
-            "VERSION 2",
-            "STREAMING",
-        ];
+        [Fact]
+        public void ParseCapabilitiesResponse_WhenMalformed_Throws()
+        {
+            string[] lines =
+            [
+                "101 Capability list:",
+                "VERSION 2",
+                "STREAMING",
+            ];
 
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => TransitProtocolParser.ParseCapabilitiesResponse(lines));
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+                () => TransitProtocolParser.ParseCapabilitiesResponse(lines));
 
-        Assert.Contains("missing multiline terminator", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
+            Assert.Contains("missing multiline terminator", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
 
-    [Fact]
-    public void ParseStatusLine_WhenValid_ParsesCodeTextAndTokens()
-    {
-        (int code, string text, string[] tokens) = TransitProtocolParser.ParseStatusLine("203 streaming allowed");
+        [Fact]
+        public void ParseStatusLine_WhenValid_ParsesCodeTextAndTokens()
+        {
+            (int code, string text, string[] tokens) = TransitProtocolParser.ParseStatusLine("203 streaming allowed");
 
-        Assert.Equal(203, code);
-        Assert.Equal("streaming allowed", text);
-        Assert.Equal(["streaming", "allowed"], tokens);
-    }
+            Assert.Equal(203, code);
+            Assert.Equal("streaming allowed", text);
+            Assert.Equal(["streaming", "allowed"], tokens);
+        }
 
-    [Fact]
-    public void ParseStatusLine_WhenMissingSeparatorAfterCode_Throws()
-    {
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => TransitProtocolParser.ParseStatusLine("239<id> transferred"));
+        [Fact]
+        public void ParseStatusLine_WhenMissingSeparatorAfterCode_Throws()
+        {
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+                () => TransitProtocolParser.ParseStatusLine("239<id> transferred"));
 
-        Assert.Contains("Malformed NNTP response", ex.Message, StringComparison.OrdinalIgnoreCase);
-    }
+            Assert.Contains("Malformed NNTP response", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
 
-    [Fact]
-    public void ParseCapabilitiesResponse_WhenMixedCaseAndParameters_DetectsSupportedFeatures()
-    {
-        string[] lines =
-        [
-            "101 Capability list:",
-            "version 2",
-            "starttls",
-            "streaming posting",
-            "x-feature custom",
-            ".",
-        ];
+        [Fact]
+        public void ParseCapabilitiesResponse_WhenMixedCaseAndParameters_DetectsSupportedFeatures()
+        {
+            string[] lines =
+            [
+                "101 Capability list:",
+                "version 2",
+                "starttls",
+                "streaming posting",
+                "x-feature custom",
+                ".",
+            ];
 
-        TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
+            TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
 
-        Assert.True(snapshot.SupportsStartTls);
-        Assert.True(snapshot.SupportsStreaming);
-    }
+            Assert.True(snapshot.SupportsStartTls);
+            Assert.True(snapshot.SupportsStreaming);
+        }
 
-    [Fact]
-    public void ParseCapabilitiesResponse_WhenStreamTokenPresent_DetectsStreamingSupport()
-    {
-        string[] lines =
-        [
-            "101 Capability list:",
-            "VERSION 2",
-            "STREAM",
-            ".",
-        ];
+        [Fact]
+        public void ParseCapabilitiesResponse_WhenStreamTokenPresent_DetectsStreamingSupport()
+        {
+            string[] lines =
+            [
+                "101 Capability list:",
+                "VERSION 2",
+                "STREAM",
+                ".",
+            ];
 
-        TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
+            TransitCapabilitySnapshot snapshot = TransitProtocolParser.ParseCapabilitiesResponse(lines);
 
-        Assert.True(snapshot.SupportsStreaming);
-    }
+            Assert.True(snapshot.SupportsStreaming);
+        }
 
-    [Fact]
-    public void ParseCapabilitiesResponse_WhenStatusCodeNot101_Throws()
-    {
-        string[] lines =
-        [
-            "500 command not recognized",
-            ".",
-        ];
+        [Fact]
+        public void ParseCapabilitiesResponse_WhenStatusCodeNot101_Throws()
+        {
+            string[] lines =
+            [
+                "500 command not recognized",
+                ".",
+            ];
 
-        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
-            () => TransitProtocolParser.ParseCapabilitiesResponse(lines));
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(
+                () => TransitProtocolParser.ParseCapabilitiesResponse(lines));
 
-        Assert.Contains("Unexpected CAPABILITIES response code", ex.Message, StringComparison.Ordinal);
-    }
+            Assert.Contains("Unexpected CAPABILITIES response code", ex.Message, StringComparison.Ordinal);
+        }
 
-    [Fact]
-    public async Task ReadNntpLineWithByteCountAsync_WhenCrLfLine_ReturnsLineAndByteCount()
-    {
-        Pipe pipe = new();
-        await pipe.Writer.WriteAsync(Encoding.ASCII.GetBytes("239 <id> ok\r\n"));
+        [Fact]
+        public async Task ReadNntpLineWithByteCountAsync_WhenCrLfLine_ReturnsLineAndByteCount()
+        {
+            Pipe pipe = new();
+            _ = await pipe.Writer.WriteAsync(Encoding.ASCII.GetBytes("239 <id> ok\r\n"));
 
-        (string line, int bytesRead) = await TransitProtocolParser.ReadNntpLineWithByteCountAsync(pipe.Reader, CancellationToken.None);
+            (string line, int bytesRead) = await TransitProtocolParser.ReadNntpLineWithByteCountAsync(pipe.Reader, CancellationToken.None);
 
-        Assert.Equal("239 <id> ok", line);
-        Assert.Equal(13, bytesRead);
-    }
+            Assert.Equal("239 <id> ok", line);
+            Assert.Equal(13, bytesRead);
+        }
 
-    [Fact]
-    public async Task ReadNntpLineWithByteCountAndCompletionAsync_WhenCompletedWithoutLine_ReturnsCompletionMarker()
-    {
-        Pipe pipe = new();
-        await pipe.Writer.CompleteAsync();
+        [Fact]
+        public async Task ReadNntpLineWithByteCountAndCompletionAsync_WhenCompletedWithoutLine_ReturnsCompletionMarker()
+        {
+            Pipe pipe = new();
+            await pipe.Writer.CompleteAsync();
 
-        (string? line, int bytesRead, bool completedWithoutLine) = await TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false);
+            (string? line, int bytesRead, bool completedWithoutLine) = await TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false);
 
-        Assert.Null(line);
-        Assert.Equal(0, bytesRead);
-        Assert.True(completedWithoutLine);
-    }
+            Assert.Null(line);
+            Assert.Equal(0, bytesRead);
+            Assert.True(completedWithoutLine);
+        }
 
-    [Fact]
-    public async Task ReadNntpLineAsync_WhenCompletedWithoutLine_Throws()
-    {
-        Pipe pipe = new();
-        await pipe.Writer.CompleteAsync();
+        [Fact]
+        public async Task ReadNntpLineAsync_WhenCompletedWithoutLine_Throws()
+        {
+            Pipe pipe = new();
+            await pipe.Writer.CompleteAsync();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
-    }
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
+        }
 
-    [Fact]
-    public async Task ReadNntpLineAsync_WhenLineExceedsMaximumWithoutNewline_Throws()
-    {
-        Pipe pipe = new();
-        byte[] oversizedLine = new byte[(16 * 1024) + 1];
-        Array.Fill(oversizedLine, (byte)'A');
+        [Fact]
+        public async Task ReadNntpLineAsync_WhenLineExceedsMaximumWithoutNewline_Throws()
+        {
+            Pipe pipe = new();
+            byte[] oversizedLine = new byte[(16 * 1024) + 1];
+            Array.Fill(oversizedLine, (byte)'A');
 
-        await pipe.Writer.WriteAsync(oversizedLine);
+            _ = await pipe.Writer.WriteAsync(oversizedLine);
 
-        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
+            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
 
-        Assert.Contains("exceeded maximum length", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("exceeded maximum length", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

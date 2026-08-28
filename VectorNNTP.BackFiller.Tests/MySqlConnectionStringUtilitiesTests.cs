@@ -1,6 +1,7 @@
 // MySqlConnectionStringUtilitiesTests.cs -- Tests for canonical MySQL connection string interpretation.
 
 using System.Data.Common;
+using MySqlConnector;
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
 
@@ -321,7 +322,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
-        public void TryGetPassword_WhenUnterminatedSingleQuotedValue_ReturnsFalse()
+        public void TryGetPasswordWhenUnterminatedSingleQuotedValueReturnsFalse()
         {
             // Arrange - unterminated single-quoted password value
             string unterminatedQuote = "Server=localhost;Database=test;User ID=admin;Password='secret";
@@ -693,7 +694,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
+            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out _);
 
             // Assert
             Assert.False(result);
@@ -706,7 +707,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetDatabase(connectionString, out string? database);
+            bool result = MySqlConnectionStringUtilities.TryGetDatabase(connectionString, out _);
 
             // Assert
             Assert.False(result);
@@ -719,7 +720,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=test;User ID=";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out string? username);
+            bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out _);
 
             // Assert
             Assert.False(result);
@@ -732,7 +733,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=test;User ID=admin;Password=";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetPassword(connectionString, out string? password);
+            bool result = MySqlConnectionStringUtilities.TryGetPassword(connectionString, out _);
 
             // Assert
             Assert.False(result);
@@ -917,7 +918,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=db01;Data Source=db02;Host=db03;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
+            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out _);
 
             // Assert - Must reject ambiguous configuration
             Assert.False(result);
@@ -930,7 +931,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=test;User ID=alice;Username=bob;Uid=charlie";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out string? username);
+            bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out _);
 
             // Assert - Must reject ambiguous configuration
             Assert.False(result);
@@ -943,7 +944,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=db01;Server=db02;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
+            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out _);
 
             // Assert - Must reject duplicate key with different values
             Assert.False(result);
@@ -956,7 +957,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Password=secret2";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetPassword(connectionString, out string? password);
+            bool result = MySqlConnectionStringUtilities.TryGetPassword(connectionString, out _);
 
             // Assert - Must reject duplicate key with different values (SECURITY)
             Assert.False(result);
@@ -969,7 +970,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=test;User ID=alice;User ID=bob";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out string? username);
+            bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out _);
 
             // Assert - Must reject duplicate key with different values
             Assert.False(result);
@@ -982,7 +983,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Database=dbA;Database=dbB;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryGetDatabase(connectionString, out string? database);
+            bool result = MySqlConnectionStringUtilities.TryGetDatabase(connectionString, out _);
 
             // Assert - Must reject duplicate key with different values
             Assert.False(result);
@@ -1288,7 +1289,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=db01;Host=db02;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out var builder);
+            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder? builder);
 
             // Assert
             Assert.False(result);
@@ -1302,7 +1303,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=db01;Server=db02;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out var builder);
+            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder?qqqqqqqqqqqqqqqqqqqqqqqqqqqq builder);
 
             // Assert
             Assert.False(result);
@@ -1316,7 +1317,7 @@ namespace VectorNNTP.Backfiller.Tests
             string malformedConnectionString = "Server=localhost;Invalid;;Syntax";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParseEffective(malformedConnectionString, out var builder);
+            bool result = MySqlConnectionStringUtilities.TryParseEffective(malformedConnectionString, out MySqlConnectionStringBuilder? builder);
 
             // Assert
             Assert.False(result);
@@ -1327,11 +1328,11 @@ namespace VectorNNTP.Backfiller.Tests
         public void TryParseEffective_WhenNullOrEmpty_MatchesProviderBehavior()
         {
             // Act & Assert - null: provider accepts null as empty connection string
-            Assert.True(MySqlConnectionStringUtilities.TryParseEffective(null, out var builder1));
+            Assert.True(MySqlConnectionStringUtilities.TryParseEffective(null, out MySqlConnectionStringBuilder? builder1));
             Assert.NotNull(builder1);
 
             // Act & Assert - empty: provider accepts empty connection string
-            Assert.True(MySqlConnectionStringUtilities.TryParseEffective("", out var builder2));
+            Assert.True(MySqlConnectionStringUtilities.TryParseEffective("", out MySqlConnectionStringBuilder? builder2));
             Assert.NotNull(builder2);
         }
 
@@ -1342,7 +1343,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=localhost;Host=localhost;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out var builder);
+            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder? builder);
 
             // Assert
             Assert.True(result);
@@ -1357,7 +1358,7 @@ namespace VectorNNTP.Backfiller.Tests
             string ambiguousConnectionString = "Server=db01;Host=db02;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParse(ambiguousConnectionString, out var builder);
+            bool result = MySqlConnectionStringUtilities.TryParse(ambiguousConnectionString, out MySqlConnectionStringBuilder? builder);
 
             // Assert - TryParse succeeds but silently applies last-write-wins
             Assert.True(result);
@@ -1415,7 +1416,7 @@ namespace VectorNNTP.Backfiller.Tests
             bool providerAcceptsSyntax;
             try
             {
-                var builder = new DbConnectionStringBuilder
+                DbConnectionStringBuilder builder = new()
                 {
                     ConnectionString = connectionString
                 };
