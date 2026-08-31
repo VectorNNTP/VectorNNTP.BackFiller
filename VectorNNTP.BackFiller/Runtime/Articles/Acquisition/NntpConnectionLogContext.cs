@@ -16,20 +16,23 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     /// The context is created once per connection and reused for the full lifetime of the session so that all logs
     /// emitted while the connection is active can carry the same human-readable prefix and structured properties.
     /// </remarks>
-    /// <param name="Backbone">Provider/backbone name.</param>
-    /// <param name="AccountUsername">Configured account username.</param>
-    /// <param name="AccountId">Stable account identifier.</param>
-    /// <param name="ServerId">Owning server identifier.</param>
-    /// <param name="Host">Remote NNTP host.</param>
-    /// <param name="Port">Remote NNTP port.</param>
-    /// <param name="UseSsl">Whether SSL/TLS is enabled.</param>
-    /// <param name="ConnectionNumber">One-based connection number within the account.</param>
-    /// <param name="ConnectionLimit">Maximum configured connections for the account.</param>
     internal sealed class NntpConnectionLogContext
     {
         private readonly KeyValuePair<string, object?>[] _scopeProperties;
         private readonly string _connectionPrefix;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="NntpConnectionLogContext"/> class.
+        /// </summary>
+        /// <param name="backbone"></param>
+        /// <param name="accountUsername"></param>
+        /// <param name="accountId"></param>
+        /// <param name="serverId"></param>
+        /// <param name="host"></param>
+        /// <param name="port"></param>
+        /// <param name="useSsl"></param>
+        /// <param name="connectionNumber"></param>
+        /// <param name="connectionLimit"></param>
         public NntpConnectionLogContext(
             string backbone,
             string accountUsername,
