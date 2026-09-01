@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vectornntp.local/protocols/rabbitmq-article-work-request.v1.schema.json",
+  "title": "BackFiller RabbitMQ Article-Work Request v1",
+  "description": "Canonical application-level wire contract for BackFiller article retrieval work requests carried in RabbitMQ payloads.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version",
+    "requestId",
+    "messageId",
+    "backbone"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Application-level protocol version identifier."
+    },
+    "requestId": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 1,
+      "description": "Application request identity preserved across redelivery."
+    },
+    "messageId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical NNTP Message-ID used for ARTICLE retrieval."
+    },
+    "backbone": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target backbone identity; runtime enforces case-insensitive match to consuming queue context."
+    }
+  }
+}

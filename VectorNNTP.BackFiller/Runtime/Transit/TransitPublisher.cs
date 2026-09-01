@@ -462,8 +462,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 previousCompleted = completedNow;
                 await Task.Delay(TimeSpan.FromMilliseconds(100), CancellationToken.None).ConfigureAwait(false);
             }
-            foreach (Task worker in _connectionWorkers)
+            foreach (Task? worker in _connectionWorkers)
             {
+                if (worker is null)
+                {
+                    continue;
+                }
+
                 TimeSpan remaining = absoluteEnd - _timeProvider.GetUtcNow();
                 if (remaining <= TimeSpan.Zero)
                 {

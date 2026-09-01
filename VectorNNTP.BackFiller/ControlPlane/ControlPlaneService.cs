@@ -14,6 +14,21 @@ using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 namespace VectorNNTP.Backfiller.ControlPlane
 {
     /// <summary>
+    /// Provides backbone-scoped NNTP session leases from the control-plane managed account runtimes.
+    /// </summary>
+    internal interface IBackboneSessionLeaseProvider
+    {
+        /// <summary>
+        /// Acquires one NNTP session lease for a requested backbone.
+        /// </summary>
+        /// <param name="backbone">Backbone namespace to route work against.</param>
+        /// <param name="messageId">Message-ID used for lease correlation logging.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Exclusive NNTP session lease scoped to the selected account runtime.</returns>
+        public ValueTask<NntpArticleSessionLease> AcquireSessionLeaseAsync(string backbone, string messageId, CancellationToken cancellationToken);
+    }
+
+    /// <summary>
     /// Runs the control-plane background loop for the service lifetime.
     /// </summary>
     /// <param name="logger">The logger used for control-plane diagnostics.</param>
@@ -26,7 +41,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         TimeProvider timeProvider,
         MySqlNntpAccountSnapshotProvider snapshotProvider,
         ILoggerFactory? loggerFactory = null,
-        RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService
+        RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
@@ -98,6 +113,55 @@ namespace VectorNNTP.Backfiller.ControlPlane
                     ? runtime.Manager.ActiveSessionCount
                     : 0;
             }
+        }
+
+        /// <summary>
+        /// Acquires one session lease for the requested backbone from the currently managed account runtimes.
+        /// </summary>
+        /// <param name="backbone">Backbone namespace to route work against.</param>
+        /// <param name="messageId">Message-ID correlation value for session-leasing diagnostics.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>Exclusive session lease for one account runtime matching <paramref name="backbone"/>.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="backbone"/> or <paramref name="messageId"/> is blank.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when no runtime currently exists for the requested backbone.</exception>
+        public async ValueTask<NntpArticleSessionLease> AcquireSessionLeaseAsync(string backbone, string messageId, CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+
+            List<AccountRuntimeState> candidates;
+            lock (_accountRuntimeGate)
+            {
+                candidates = [.. _accountRuntimes.Values
+                    .Where(runtime => string.Equals(runtime.LastAppliedAccount.Backbone, backbone, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(static runtime => runtime.LastAppliedAccount.EntryId)];
+            }
+
+            if (candidates.Count == 0)
+            {
+                throw new InvalidOperationException($"No NNTP account runtime is currently available for backbone '{backbone}'.");
+            }
+
+            for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                AccountRuntimeState candidate = candidates[candidateIndex];
+                try
+                {
+                    return await candidate.Manager.AcquireAsync(messageId, cancellationToken).ConfigureAwait(false);
+                }
+                catch (ObjectDisposedException)
+                {
+                    continue;
+                }
+                catch (InvalidOperationException)
+                {
+                    continue;
+                }
+            }
+
+            throw new InvalidOperationException($"No active NNTP session lease could be acquired for backbone '{backbone}'.");
         }
 
         /// <summary>

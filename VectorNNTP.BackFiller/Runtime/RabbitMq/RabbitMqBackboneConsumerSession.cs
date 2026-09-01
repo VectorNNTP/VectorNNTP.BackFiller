@@ -320,8 +320,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 RoutingKey: args.RoutingKey,
                 Exchange: args.Exchange,
                 ConnectionGeneration: deliveryGeneration,
+                RabbitMqMessageId: args.BasicProperties?.MessageId,
+                CorrelationId: args.BasicProperties?.CorrelationId,
+                ReplyTo: args.BasicProperties?.ReplyTo,
                 Payload: args.Body,
-                CancellationToken: cancellationToken);
+                CancellationToken: cancellationToken,
+                Settlement: new RabbitMqDeliverySettlement(this, args.DeliveryTag, deliveryGeneration));
 
             try
             {
@@ -426,6 +430,72 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private bool IsEventFromActiveConsumer(object sender)
         {
             return _consumer is not null && ReferenceEquals(sender, _consumer);
+        }
+
+        private sealed class RabbitMqDeliverySettlement : IRabbitMqDeliverySettlement
+        {
+            private readonly RabbitMqBackboneConsumerSession _owner;
+            private readonly ulong _deliveryTag;
+            private readonly long _deliveryGeneration;
+            private int _settled;
+
+            internal RabbitMqDeliverySettlement(RabbitMqBackboneConsumerSession owner, ulong deliveryTag, long deliveryGeneration)
+            {
+                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+                _deliveryTag = deliveryTag;
+                _deliveryGeneration = deliveryGeneration;
+            }
+
+            public async ValueTask AckAsync(CancellationToken cancellationToken)
+            {
+                await SettleAsync(requeue: null, cancellationToken).ConfigureAwait(false);
+            }
+
+            public async ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
+            {
+                await SettleAsync(requeue, cancellationToken).ConfigureAwait(false);
+            }
+
+            private async ValueTask SettleAsync(bool? requeue, CancellationToken cancellationToken)
+            {
+                if (Interlocked.Exchange(ref _settled, 1) != 0)
+                {
+                    throw new InvalidOperationException("RabbitMQ delivery has already been settled.");
+                }
+
+                await _owner._lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (_owner._ownedChannel is null || !_owner._running)
+                    {
+                        throw new InvalidOperationException("RabbitMQ consumer session channel is not available for settlement.");
+                    }
+
+                    long activeGeneration = _owner.ActiveConnectionGeneration;
+                    if (activeGeneration <= 0 || activeGeneration != _deliveryGeneration || _owner._ownedChannel.ConnectionGeneration != _deliveryGeneration)
+                    {
+                        throw new InvalidOperationException("RabbitMQ delivery settlement channel generation is stale.");
+                    }
+
+                    if (requeue.HasValue)
+                    {
+                        await _owner._ownedChannel.Channel.BasicNackAsync(_deliveryTag, multiple: false, requeue: requeue.Value, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await _owner._ownedChannel.Channel.BasicAckAsync(_deliveryTag, multiple: false, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    _ = Interlocked.Exchange(ref _settled, 0);
+                    throw;
+                }
+                finally
+                {
+                    _ = _owner._lifecycleGate.Release();
+                }
+            }
         }
 
         private IDisposable BeginConnectionScope()

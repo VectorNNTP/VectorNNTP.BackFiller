@@ -441,7 +441,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 }
 
                 LogSessionLeaseAcquired(_logger, messageId, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
-                return new NntpArticleSessionLease(this, slotIndex, slot.Session);
+                return new NntpArticleSessionLease(this, slotIndex, slot.SlotId, slot.Account, slot.Endpoint, slot.Session);
             }
         }
 
@@ -1362,6 +1362,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private readonly int _slotIndex;
 
         /// <summary>
+        /// Backing account snapshot used for this lease assignment.
+        /// </summary>
+        private readonly NntpAccountSnapshot _account;
+
+        /// <summary>
+        /// Backing endpoint snapshot used for this lease assignment.
+        /// </summary>
+        private readonly NntpArticleAcquisitionEndpoint _endpoint;
+
+        /// <summary>
         /// Ensures release runs exactly once.
         /// </summary>
         private int _released;
@@ -1376,14 +1386,23 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// </summary>
         /// <param name="owner">Owning manager.</param>
         /// <param name="slotIndex">Assigned slot index.</param>
+        /// <param name="slotId">Stable slot identifier for diagnostics.</param>
+        /// <param name="account">Owning account snapshot.</param>
+        /// <param name="endpoint">Owning endpoint settings.</param>
         /// <param name="session">Assigned acquisition session.</param>
         internal NntpArticleSessionLease(
             NntpArticleExecutionSessionManager owner,
             int slotIndex,
+            int slotId,
+            NntpAccountSnapshot account,
+            NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionSession session)
         {
             _owner = owner ?? throw new ArgumentNullException(nameof(owner));
             _slotIndex = slotIndex;
+            SlotId = slotId;
+            _account = account;
+            _endpoint = endpoint;
             Session = session ?? throw new ArgumentNullException(nameof(session));
         }
 
@@ -1391,6 +1410,46 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// Gets the leased session that may execute exactly one active ARTICLE operation at a time.
         /// </summary>
         internal NntpArticleAcquisitionSession Session { get; }
+
+        /// <summary>
+        /// Gets the stable slot identifier used by the owning session manager.
+        /// </summary>
+        internal int SlotId { get; }
+
+        /// <summary>
+        /// Gets the owning account identifier for this lease.
+        /// </summary>
+        internal Guid AccountId => _account.EntryId;
+
+        /// <summary>
+        /// Gets the owning backbone namespace for this lease.
+        /// </summary>
+        internal string Backbone => _account.Backbone;
+
+        /// <summary>
+        /// Gets the account username associated with this lease.
+        /// </summary>
+        internal string AccountUsername => _account.Username;
+
+        /// <summary>
+        /// Gets the configured account connection limit associated with this lease.
+        /// </summary>
+        internal int ConnectionLimit => _account.MaxConnections;
+
+        /// <summary>
+        /// Gets the provider endpoint host associated with this lease.
+        /// </summary>
+        internal string Host => _endpoint.Host;
+
+        /// <summary>
+        /// Gets the provider endpoint port associated with this lease.
+        /// </summary>
+        internal int Port => _endpoint.Port;
+
+        /// <summary>
+        /// Gets a value indicating whether this lease endpoint uses SSL/TLS.
+        /// </summary>
+        internal bool UseSsl => _endpoint.UseSsl;
 
         /// <summary>
         /// Reports the terminal acquisition outcome for this lease operation.

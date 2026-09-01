@@ -35,7 +35,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// </summary>
         /// <param name="runtimeOptions">Validated immutable runtime snapshot used to build parser identity.</param>
         /// <param name="logger">Workflow logger.</param>
-        internal NntpArticleGrabberWorkflow(
+        public NntpArticleGrabberWorkflow(
             BackFillerRuntimeOptions runtimeOptions,
             ILogger<NntpArticleGrabberWorkflow> logger)
         {

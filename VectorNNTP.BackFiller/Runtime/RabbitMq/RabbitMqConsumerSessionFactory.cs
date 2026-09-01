@@ -40,7 +40,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
         private readonly ILoggerFactory _loggerFactory;
 
-        internal RabbitMqConsumerSessionFactory(
+        public RabbitMqConsumerSessionFactory(
             RabbitMqConnectionManager connectionManager,
             RabbitMqTopologyInitializer topologyInitializer,
             ILoggerFactory loggerFactory)
@@ -92,7 +92,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private volatile bool _shutdownRequested;
         private int _callbacksDisposed;
 
-        internal RabbitMqConsumerService(
+        public RabbitMqConsumerService(
             BackFillerRuntimeOptions runtimeOptions,
             MySqlNntpAccountSnapshotProvider accountSnapshotProvider,
             RabbitMqConnectionManager connectionManager,
@@ -282,7 +282,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                             desiredIdentity.ConnectionLimit,
                             sessionKey);
                     }
-                    else if (runtimeState.Identity != desiredIdentity)
+                    else if (RequiresSessionReplacement(runtimeState.Identity, desiredIdentity))
                     {
                         await runtimeState.Session.StopAsync(cancellationToken).ConfigureAwait(false);
                         await runtimeState.Session.DisposeAsync().ConfigureAwait(false);
@@ -302,6 +302,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                             desiredIdentity.ConnectionNumber,
                             desiredIdentity.ConnectionLimit,
                             sessionKey);
+                    }
+                    else
+                    {
+                        runtimeState.Identity = desiredIdentity;
                     }
 
                     runtimeState.Desired = true;
@@ -423,9 +427,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _forcedShutdownRegistration.Dispose();
         }
 
+        private static bool RequiresSessionReplacement(RabbitMqConsumerSessionIdentity existingIdentity, RabbitMqConsumerSessionIdentity desiredIdentity)
+        {
+            ArgumentNullException.ThrowIfNull(existingIdentity);
+            ArgumentNullException.ThrowIfNull(desiredIdentity);
+
+            return !string.Equals(existingIdentity.Backbone, desiredIdentity.Backbone, StringComparison.Ordinal);
+        }
+
         private sealed class SessionRuntimeState(RabbitMqConsumerSessionIdentity identity, IRabbitMqConsumerSession session)
         {
-            internal RabbitMqConsumerSessionIdentity Identity { get; } = identity;
+            internal RabbitMqConsumerSessionIdentity Identity { get; set; } = identity;
 
             internal IRabbitMqConsumerSession Session { get; } = session;
 

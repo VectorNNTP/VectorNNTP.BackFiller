@@ -8,6 +8,8 @@
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
+using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
 using VectorNNTP.Backfiller.Runtime.Listener;
@@ -134,7 +136,8 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             _ = services.AddSingleton<RabbitMqTopologyInitializer>();
             _ = services.AddSingleton<IRabbitMqConsumerSessionFactory, RabbitMqConsumerSessionFactory>();
             _ = services.AddHostedService<RabbitMqStartupInitializer>();
-            _ = services.AddHostedService<RabbitMqConsumerService>();
+            _ = services.AddSingleton<RabbitMqConsumerService>();
+            _ = services.AddHostedService(static provider => provider.GetRequiredService<RabbitMqConsumerService>());
         }
 
         /// <summary>
@@ -166,13 +169,33 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers the control-plane hosted service.
+        /// Registers the control-plane hosted service and its runtime lease-provider interface.
         /// </summary>
         /// <param name="services">Service collection to register the control-plane hosted service into.</param>
         internal static void RegisterControlPlaneService(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
-            _ = services.AddHostedService<ControlPlaneService>();
+            _ = services.AddSingleton<ControlPlaneService>();
+            _ = services.AddSingleton<IBackboneSessionLeaseProvider>(static provider => provider.GetRequiredService<ControlPlaneService>());
+            _ = services.AddHostedService(static provider => provider.GetRequiredService<ControlPlaneService>());
+        }
+
+        /// <summary>
+        /// Registers Phase 3 article-processing services that consume RabbitMQ deliveries and classify ARTICLE outcomes.
+        /// </summary>
+        /// <param name="services">Service collection to register article processing services into.</param>
+        internal static void RegisterArticleProcessingServices(IServiceCollection services)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            _ = services.AddSingleton<NntpArticleGrabberWorkflow>();
+            _ = services.AddSingleton<IRabbitMqArticleWorkRequestParser, RabbitMqArticleWorkRequestParser>();
+            _ = services.AddSingleton<IBackboneArticleRetriever, BackboneArticleRetriever>();
+            _ = services.AddSingleton<IArticleWorkProcessor, ArticleWorkProcessor>();
+            _ = services.AddSingleton<IArticleWorkDispositionPlanner, ArticleWorkDispositionPlanner>();
+            _ = services.AddSingleton<IArticleWorkResponseFactory, ArticleWorkResponseFactory>();
+            _ = services.AddSingleton<IRabbitMqArticleResponsePublisher, RabbitMqArticleResponsePublisher>();
+            _ = services.AddSingleton<IArticleWorkResultSink, RabbitMqArticleResultSink>();
+            _ = services.AddHostedService<RabbitMqArticleProcessingService>();
         }
 
         /// <summary>
@@ -227,6 +250,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
             // Register RabbitMQ startup initialization after account load so topology can be scoped per backbone.
             RegisterRabbitMqInfrastructureServices(services);
+
+            // Register Phase 3 RabbitMQ article processing/classification services.
+            RegisterArticleProcessingServices(services);
 
             // Register transit publisher startup initialization before control-plane runtime loops start.
             RegisterTransitPublisherServices(services);

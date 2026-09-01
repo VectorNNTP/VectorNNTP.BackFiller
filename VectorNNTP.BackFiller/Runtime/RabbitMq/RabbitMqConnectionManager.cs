@@ -50,7 +50,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <param name="timeProvider">Unified time provider.</param>
         /// <param name="logger">RabbitMQ lifecycle logger.</param>
         /// <param name="connector">Optional connector implementation for tests.</param>
-        internal RabbitMqConnectionManager(
+        public RabbitMqConnectionManager(
             BackFillerRuntimeOptions runtimeOptions,
             ShutdownCoordinator shutdownCoordinator,
             TimeProvider timeProvider,
@@ -144,10 +144,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="owner">Logical owner name for diagnostics.</param>
         /// <param name="cancellationToken">Channel-creation cancellation token.</param>
+        /// <param name="enablePublisherConfirmations">Whether publisher confirmations should be enabled on the created channel.</param>
         /// <returns>Independently owned channel lease.</returns>
-        internal async Task<RabbitMqOwnedChannel> CreateOwnedChannelAsync(string owner, CancellationToken cancellationToken)
+        internal async Task<RabbitMqOwnedChannel> CreateOwnedChannelAsync(string owner, CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(owner);
+            ThrowIfStopping();
 
             IRabbitMqBrokerConnection connection = _connection
                 ?? throw new InvalidOperationException("RabbitMQ connection has not been established.");
@@ -157,8 +159,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 throw new InvalidOperationException("RabbitMQ connection is not open.");
             }
 
-            IRabbitMqChannel channel = await connection.CreateChannelAsync(cancellationToken).ConfigureAwait(false);
-            return new RabbitMqOwnedChannel(channel, owner, ConnectionGeneration);
+            long generation = ConnectionGeneration;
+            IRabbitMqChannel channel = await connection.CreateChannelAsync(cancellationToken, enablePublisherConfirmations).ConfigureAwait(false);
+            return new RabbitMqOwnedChannel(channel, owner, generation);
         }
 
         /// <summary>
@@ -394,7 +397,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private void OnConnectionShutdown(object? sender, ShutdownEventArgs eventArgs)
         {
             LogConnectionShutdown(_logger, eventArgs.ReplyCode, eventArgs.ReplyText, eventArgs.Initiator.ToString());
+
+            if (_disposeRequested || _shutdownCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             _state = RabbitMqInfrastructureState.Reconnecting;
+            QueueRecovery($"connection-shutdown:{eventArgs.ReplyCode}");
         }
 
         private void OnCallbackException(object? sender, CallbackExceptionEventArgs eventArgs)

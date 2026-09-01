@@ -285,8 +285,11 @@ namespace VectorNNTP.Backfiller.Configuration
     internal sealed class RabbitMqOptions
     {
         /// <summary>
-        /// Gets or sets the maximum duration, in seconds, an application operation may retain a RabbitMQ channel lease.
+        /// Gets or sets the maximum allowed duration, in seconds, for RabbitMQ operation-timeout coherence validation.
         /// </summary>
+        /// <remarks>
+        /// Current runtime does not enforce channel lease revocation; this value is validated and projected for lifecycle policy coherence.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds must be between 1 and 3600")]
         public int? ChannelLeaseTimeoutSeconds { get; set; } = 60;
@@ -340,22 +343,31 @@ namespace VectorNNTP.Backfiller.Configuration
         public int? Port { get; set; } = 5672;
 
         /// <summary>
-        /// Gets or sets the target number of reusable RabbitMQ channels maintained by the work-ingestion subsystem.
+        /// Gets or sets the bounded in-memory delivery buffer capacity used by RabbitMQ consumer infrastructure.
         /// </summary>
+        /// <remarks>
+        /// Current runtime uses this value for delivery-channel buffering, not RabbitMQ channel-object pooling.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ChannelPoolSize is required")]
         [Range(1, 8192, ErrorMessage = "BackFiller:RabbitMQ:ChannelPoolSize must be between 1 and 8192")]
         public int? ChannelPoolSize { get; set; } = 512;
 
         /// <summary>
-        /// Gets or sets the configured minimum number of RabbitMQ connections retained by the subsystem.
+        /// Gets or sets the configured minimum RabbitMQ connection count target for future pool-scaling policy.
         /// </summary>
+        /// <remarks>
+        /// Current runtime uses a single active RabbitMQ connection manager connection; this value is validated/projected but not enforced.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MinConnections is required")]
         [Range(1, 512, ErrorMessage = "BackFiller:RabbitMQ:MinConnections must be between 1 and 512")]
         public int? MinConnections { get; set; } = 4;
 
         /// <summary>
-        /// Gets or sets the configured maximum number of RabbitMQ connections available to the subsystem.
+        /// Gets or sets the configured maximum RabbitMQ connection count limit for future pool-scaling policy.
         /// </summary>
+        /// <remarks>
+        /// Current runtime uses a single active RabbitMQ connection manager connection; this value is validated/projected but not enforced.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaxConnections is required")]
         [Range(1, 512, ErrorMessage = "BackFiller:RabbitMQ:MaxConnections must be between 1 and 512")]
         public int? MaxConnections { get; set; } = 16;
@@ -368,22 +380,31 @@ namespace VectorNNTP.Backfiller.Configuration
         public int? MaxConsecutiveRecoveryFailures { get; set; } = 5;
 
         /// <summary>
-        /// Gets or sets the maximum number of pending operations that may wait for a RabbitMQ channel lease.
+        /// Gets or sets the maximum pending channel-lease waiter target for future RabbitMQ channel-pool policy.
         /// </summary>
+        /// <remarks>
+        /// Current runtime creates owned channels directly without a shared lease-waiter queue; this value is validated/projected but not enforced.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaxPendingLeaseWaiters is required")]
         [Range(0, 65536, ErrorMessage = "BackFiller:RabbitMQ:MaxPendingLeaseWaiters must be between 0 and 65536")]
         public int? MaxPendingLeaseWaiters { get; set; } = 1024;
 
         /// <summary>
-        /// Gets or sets the minimum idle duration, in seconds, before an otherwise eligible RabbitMQ connection can be considered for scale-down.
+        /// Gets or sets the minimum idle duration, in seconds, for future RabbitMQ connection scale-down policy.
         /// </summary>
+        /// <remarks>
+        /// Current runtime does not implement multi-connection scale-down logic; this value is validated/projected for planned policy.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ConnectionScaleDownIdleSeconds is required")]
         [Range(30, 86400, ErrorMessage = "BackFiller:RabbitMQ:ConnectionScaleDownIdleSeconds must be between 30 and 86400")]
         public int? ConnectionScaleDownIdleSeconds { get; set; } = 300;
 
         /// <summary>
-        /// Gets or sets the minimum cooldown, in seconds, between successful pool scale-down operations.
+        /// Gets or sets the cooldown, in seconds, for future RabbitMQ connection scale-down policy.
         /// </summary>
+        /// <remarks>
+        /// Current runtime does not implement connection pool scale-down operations; this value is validated/projected for planned policy.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ScaleDownCooldownSeconds is required")]
         [Range(0, 3600, ErrorMessage = "BackFiller:RabbitMQ:ScaleDownCooldownSeconds must be between 0 and 3600")]
         public int? ScaleDownCooldownSeconds { get; set; } = 30;
@@ -410,8 +431,11 @@ namespace VectorNNTP.Backfiller.Configuration
         public int? PoolReconnectMaxDelayMs { get; set; } = 30000;
 
         /// <summary>
-        /// Gets or sets the minimum lifetime, in seconds, a healthy RabbitMQ connection should remain eligible for normal operation before idle retirement.
+        /// Gets or sets the minimum healthy RabbitMQ connection lifetime policy, in seconds, for future idle-retirement logic.
         /// </summary>
+        /// <remarks>
+        /// Current runtime does not enforce connection lifetime retirement; this value is validated/projected for planned policy.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds is required")]
         [Range(30, 86400, ErrorMessage = "BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds must be between 30 and 86400")]
         public int? MinimumConnectionLifetimeSeconds { get; set; } = 300;
@@ -424,22 +448,31 @@ namespace VectorNNTP.Backfiller.Configuration
         public int? PublishConfirmTimeoutSeconds { get; set; } = 10;
 
         /// <summary>
-        /// Gets or sets the absolute maximum shutdown-drain duration, in seconds, for RabbitMQ consumers, channels, and connections.
+        /// Gets or sets the maximum RabbitMQ shutdown-drain budget, in seconds, used for shutdown-policy validation and runtime projection.
         /// </summary>
+        /// <remarks>
+        /// Current RabbitMQ shutdown/disposal flow is cancellation-driven; this value is not used as an active internal timer in RabbitMQ components.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds must be between 1 and 3600")]
         public int? MaximumShutdownDrainTimeoutSeconds { get; set; } = 30;
 
         /// <summary>
-        /// Gets or sets the minimum acceptable effective RabbitMQ capacity ratio before the subsystem is considered degraded.
+        /// Gets or sets the degraded-capacity threshold policy for future RabbitMQ health evaluation logic.
         /// </summary>
+        /// <remarks>
+        /// Current runtime does not compute capacity-ratio degradation from this value; it remains a validated/projected policy input.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:DegradedThreshold is required")]
         [Range(0.000001d, 1d, ErrorMessage = "BackFiller:RabbitMQ:DegradedThreshold must be greater than 0 and less than or equal to 1")]
         public double? DegradedThreshold { get; set; } = 0.75;
 
         /// <summary>
-        /// Gets or sets the number of consecutive unhealthy evaluations required before RabbitMQ is classified as unhealthy.
+        /// Gets or sets the consecutive-unhealthy threshold policy for future RabbitMQ health evaluation logic.
         /// </summary>
+        /// <remarks>
+        /// Current runtime does not maintain an unhealthy-evaluation counter from this value; it remains a validated/projected policy input.
+        /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:UnhealthyThreshold is required")]
         [Range(1, 120, ErrorMessage = "BackFiller:RabbitMQ:UnhealthyThreshold must be between 1 and 120")]
         public int? UnhealthyThreshold { get; set; } = 5;

@@ -82,8 +82,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     RoutingKey: topologyEntityName,
                     QueueArguments: new Dictionary<string, object?>(StringComparer.Ordinal)
                     {
-                        ["x-expires"] = 120000,
-                        ["x-message-ttl"] = 1000,
                         ["x-queue-type"] = "quorum",
                     }));
             }
@@ -107,6 +105,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     {
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         private readonly ILogger<RabbitMqTopologyInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        private readonly SemaphoreSlim _initializationGate = new(1, 1);
+        private readonly HashSet<string> _declaredTopologyKeys = new(StringComparer.Ordinal);
+        private long _declaredTopologyGeneration;
 
         /// <summary>
         /// Declares all required RabbitMQ topology for configured backbones.
@@ -127,13 +128,49 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             LogTopologyInitializationStarted(_logger, definitions.Count);
 
-            foreach (RabbitMqBackboneTopologyDefinition definition in definitions)
+            await _initializationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                await DeclareBackboneTopologyAsync(definition, cancellationToken).ConfigureAwait(false);
-            }
+                long generation = _connectionManager.ConnectionGeneration;
+                if (generation <= 0)
+                {
+                    throw new InvalidOperationException("RabbitMQ connection generation is not available for topology initialization.");
+                }
 
-            _connectionManager.MarkTopologyReady();
-            LogTopologyInitializationCompleted(_logger, definitions.Count);
+                if (_declaredTopologyGeneration != generation)
+                {
+                    _declaredTopologyKeys.Clear();
+                    _declaredTopologyGeneration = generation;
+                }
+
+                int declaredCount = 0;
+                for (int i = 0; i < definitions.Count; i++)
+                {
+                    RabbitMqBackboneTopologyDefinition definition = definitions[i];
+                    string declarationKey = BuildTopologyDeclarationKey(definition.QueueName);
+                    if (_declaredTopologyKeys.Contains(declarationKey))
+                    {
+                        continue;
+                    }
+
+                    await DeclareBackboneTopologyAsync(definition, cancellationToken).ConfigureAwait(false);
+                    _ = _declaredTopologyKeys.Add(declarationKey);
+                    declaredCount++;
+                }
+
+                _connectionManager.MarkTopologyReady();
+                LogTopologyInitializationCompleted(_logger, declaredCount);
+            }
+            finally
+            {
+                _ = _initializationGate.Release();
+            }
+        }
+
+        private static string BuildTopologyDeclarationKey(string queueName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
+            return queueName;
         }
 
         private async Task DeclareBackboneTopologyAsync(

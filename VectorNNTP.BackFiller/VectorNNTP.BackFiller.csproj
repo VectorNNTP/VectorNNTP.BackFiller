@@ -239,7 +239,4 @@
 		<RuntimeHostConfigurationOption Include="System.Net.Sockets.DefaultReceiveBufferSize" Value="4194304" />
 
 	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Docs\" />
-	</ItemGroup>
 </Project>

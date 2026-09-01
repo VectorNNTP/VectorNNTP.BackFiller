@@ -44,6 +44,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
+    /// Owns settlement of one RabbitMQ delivery on its original consumer channel.
+    /// </summary>
+    internal interface IRabbitMqDeliverySettlement
+    {
+        /// <summary>
+        /// Acknowledges the delivery.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public ValueTask AckAsync(CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Negatively acknowledges the delivery.
+        /// </summary>
+        /// <param name="requeue">Whether RabbitMQ should requeue the delivery.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken);
+    }
+
+    /// <summary>
     /// Receives RabbitMQ deliveries from infrastructure-owned consumer sessions.
     /// </summary>
     internal interface IRabbitMqDeliverySink

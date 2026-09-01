@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vectornntp.local/protocols/rabbitmq-article-work-response.v1.schema.json",
+  "title": "BackFiller RabbitMQ Article-Work Response v1",
+  "description": "Canonical application-level wire contract for BackFiller article retrieval responses carried in RabbitMQ RPC payloads.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "requestId",
+    "messageId",
+    "backbone",
+    "outcome"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Application-level protocol version identifier."
+    },
+    "requestId": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 1,
+      "description": "Application request identity copied from request JSON payload."
+    },
+    "messageId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical NNTP Message-ID copied from request JSON payload."
+    },
+    "backbone": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Backbone identity copied from request JSON payload."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "Success",
+        "ArticleNotFound",
+        "InvalidArticle",
+        "InvalidRequest"
+      ],
+      "description": "Terminal response outcome emitted to NNRPD."
+    },
+    "uri": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Success retrieval location when available; null when not available in runtime architecture."
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Terminal failure detail for non-success terminal outcomes."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "Success"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "uri"
+        ],
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "enum": [
+              "ArticleNotFound",
+              "InvalidArticle",
+              "InvalidRequest"
+            ]
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "required": [
+          "error"
+        ],
+        "not": {
+          "required": [
+            "uri"
+          ]
+        }
+      }
+    }
+  ]
+}

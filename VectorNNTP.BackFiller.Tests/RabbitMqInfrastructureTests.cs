@@ -40,8 +40,8 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(options.Username, factory.UserName);
             Assert.Equal(options.Password, factory.Password);
             Assert.True(factory.Ssl.Enabled);
-            Assert.True(factory.AutomaticRecoveryEnabled);
-            Assert.True(factory.TopologyRecoveryEnabled);
+            Assert.False(factory.AutomaticRecoveryEnabled);
+            Assert.False(factory.TopologyRecoveryEnabled);
         }
 
         [Fact]
@@ -97,7 +97,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
-        public async Task ConnectionManager_WhenAutomaticRecoveryErrorsReachThreshold_AttemptsConnectionReplacement()
+        public async Task ConnectionManager_WhenConnectionShutdownObserved_AttemptsConnectionReplacement()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
             FakeRabbitMqBrokerConnector connector = new();
@@ -112,11 +112,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, manager.ConnectionGeneration);
 
             FakeRabbitMqBrokerConnection firstConnection = connector.LastConnection ?? throw new InvalidOperationException("Expected first connection.");
-
-            for (int i = 0; i < runtimeOptions.RabbitMq!.MaxConsecutiveRecoveryFailures; i++)
-            {
-                firstConnection.RaiseConnectionRecoveryError(new InvalidOperationException("simulated automatic recovery failure"));
-            }
+            firstConnection.RaiseConnectionShutdown();
 
             bool recovered = await WaitForAsync(
                 () => connector.ConnectCallCount >= 2 &&
@@ -145,10 +141,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdownCoordinator.SignalGracefulShutdown(TimeSpan.FromSeconds(1), ShutdownCoordinator.ShutdownReason.HostStopping);
 
             FakeRabbitMqBrokerConnection firstConnection = connector.LastConnection ?? throw new InvalidOperationException("Expected first connection.");
-            for (int i = 0; i < runtimeOptions.RabbitMq!.MaxConsecutiveRecoveryFailures; i++)
-            {
-                firstConnection.RaiseConnectionRecoveryError(new InvalidOperationException("simulated automatic recovery failure"));
-            }
+            firstConnection.RaiseConnectionShutdown();
 
             await Task.Delay(250).ConfigureAwait(false);
             Assert.Equal(initialConnectCount, connector.ConnectCallCount);
@@ -199,14 +192,11 @@ namespace VectorNNTP.Backfiller.Tests
             RabbitMqBackboneTopologyDefinition definition = Assert.Single(RabbitMqTopologyBuilder.BuildDefinitions(1, ["Giganews"]));
 
             Assert.NotNull(definition.QueueArguments);
-            Assert.True(definition.QueueArguments!.TryGetValue("x-queue-type", out object? queueType));
+            Assert.Single(definition.QueueArguments!);
+            Assert.True(definition.QueueArguments.TryGetValue("x-queue-type", out object? queueType));
             Assert.Equal("quorum", queueType as string);
-
-            Assert.True(definition.QueueArguments.TryGetValue("x-message-ttl", out object? messageTtl));
-            Assert.Equal(1000, Assert.IsType<int>(messageTtl));
-
-            Assert.True(definition.QueueArguments.TryGetValue("x-expires", out object? expires));
-            Assert.Equal(120000, Assert.IsType<int>(expires));
+            Assert.False(definition.QueueArguments.ContainsKey("x-message-ttl"));
+            Assert.False(definition.QueueArguments.ContainsKey("x-expires"));
 
             Assert.True(definition.QueueDurable);
             Assert.False(definition.QueueExclusive);
@@ -228,9 +218,14 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
 
             await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None).ConfigureAwait(false);
+            int channelsAfterFirstInit = connector.LastConnection?.ChannelCreateCount ?? throw new InvalidOperationException("Expected initialized RabbitMQ connection.");
+
             await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None).ConfigureAwait(false);
+            int channelsAfterSecondInit = connector.LastConnection?.ChannelCreateCount ?? throw new InvalidOperationException("Expected initialized RabbitMQ connection.");
 
             Assert.Equal(RabbitMqInfrastructureState.TopologyReady, manager.State);
+            Assert.Equal(2, channelsAfterFirstInit);
+            Assert.Equal(2, channelsAfterSecondInit);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
 
@@ -331,6 +326,8 @@ namespace VectorNNTP.Backfiller.Tests
 
             public bool IsOpen { get; private set; } = true;
 
+            internal int ChannelCreateCount => Volatile.Read(ref _channelCounter);
+
             public string EndpointHostName { get; } = host;
 
             public int EndpointPort { get; } = port;
@@ -353,9 +350,10 @@ namespace VectorNNTP.Backfiller.Tests
 
             public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
-            public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken)
+            public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                _ = enablePublisherConfirmations;
                 int next = Interlocked.Increment(ref _channelCounter);
                 IRabbitMqChannel channel = new FakeRabbitMqChannel(next);
                 return Task.FromResult(channel);
@@ -443,6 +441,34 @@ namespace VectorNNTP.Backfiller.Tests
                 cancellationToken.ThrowIfCancellationRequested();
                 _ = consumerTag;
                 return Task.CompletedTask;
+            }
+
+            public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = deliveryTag;
+                _ = multiple;
+                return ValueTask.CompletedTask;
+            }
+
+            public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = deliveryTag;
+                _ = multiple;
+                _ = requeue;
+                return ValueTask.CompletedTask;
+            }
+
+            public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = exchange;
+                _ = routingKey;
+                _ = mandatory;
+                _ = basicProperties;
+                _ = body;
+                return ValueTask.CompletedTask;
             }
 
             public ValueTask DisposeAsync()

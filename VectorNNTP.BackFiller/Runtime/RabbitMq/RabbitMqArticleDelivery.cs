@@ -20,6 +20,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// <param name="RoutingKey">Routing key observed on delivery.</param>
     /// <param name="Exchange">Exchange observed on delivery.</param>
     /// <param name="ConnectionGeneration">Connection generation associated with the consumer channel that received this delivery.</param>
+    /// <param name="RabbitMqMessageId">Optional RabbitMQ BasicProperties MessageId value set by the publisher.</param>
+    /// <param name="CorrelationId">Optional RabbitMQ BasicProperties CorrelationId value set by the publisher.</param>
+    /// <param name="ReplyTo">Optional RabbitMQ BasicProperties ReplyTo value set by the publisher.</param>
     /// <param name="Payload">Raw RabbitMQ payload bytes.</param>
     /// <param name="CancellationToken">Delivery cancellation token that is canceled when the owning consumer session is stopped.</param>
     internal sealed record RabbitMqArticleDelivery(
@@ -32,6 +35,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         string RoutingKey,
         string Exchange,
         long ConnectionGeneration,
+        string? RabbitMqMessageId,
+        string? CorrelationId,
+        string? ReplyTo,
         ReadOnlyMemory<byte> Payload,
-        CancellationToken CancellationToken);
+        CancellationToken CancellationToken,
+        IRabbitMqDeliverySettlement Settlement);
 }

@@ -6,6 +6,7 @@
 // Typed exception model for deterministic internal failure classification without relying
 // on exception-message text parsing.
 
+using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
@@ -99,8 +100,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Creates a dedicated owned channel on this connection.
         /// </summary>
         /// <param name="cancellationToken">Channel-creation cancellation token.</param>
+        /// <param name="enablePublisherConfirmations">Whether publisher confirmation mode should be enabled for this channel.</param>
         /// <returns>New RabbitMQ channel adapter.</returns>
-        public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken);
+        public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false);
     }
 
     /// <summary>
@@ -142,6 +144,21 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Cancels a consumer by broker-assigned tag.
         /// </summary>
         public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Acknowledges a delivery tag.
+        /// </summary>
+        public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Negatively acknowledges a delivery tag.
+        /// </summary>
+        public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Publishes one message payload.
+        /// </summary>
+        public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken);
     }
 
     /// <summary>
@@ -273,9 +290,15 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
         /// <inheritdoc/>
-        public async Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken)
+        public async Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
         {
-            IChannel channel = await _connection.CreateChannelAsync(options: default, cancellationToken: cancellationToken).ConfigureAwait(false);
+            CreateChannelOptions channelOptions = new(
+                publisherConfirmationsEnabled: enablePublisherConfirmations,
+                publisherConfirmationTrackingEnabled: enablePublisherConfirmations,
+                outstandingPublisherConfirmationsRateLimiter: null,
+                consumerDispatchConcurrency: null);
+
+            IChannel channel = await _connection.CreateChannelAsync(options: channelOptions, cancellationToken: cancellationToken).ConfigureAwait(false);
             return new RabbitMqChannelAdapter(channel);
         }
 
@@ -349,9 +372,26 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(consumerTag);
-            // TODO: CK CHANGE
-            //return _channel.BasicCancelAsync(consumerTag, cancellationToken);
-            return Task.FromResult(false);
+            return _channel.BasicCancelAsync(consumerTag, cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
+        {
+            return _channel.BasicAckAsync(deliveryTag, multiple, cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
+        {
+            return _channel.BasicNackAsync(deliveryTag, multiple, requeue, cancellationToken: cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(basicProperties);
+            return _channel.BasicPublishAsync(exchange, routingKey, mandatory, basicProperties, body, cancellationToken);
         }
 
         /// <inheritdoc/>

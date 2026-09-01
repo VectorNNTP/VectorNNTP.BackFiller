@@ -14,7 +14,9 @@ using Microsoft.Extensions.Options;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.Backfiller.Startup.Hosting;
@@ -167,12 +169,12 @@ namespace VectorNNTP.Backfiller.Tests
 
             ServiceLifecycle lifecycle = new(TimeProvider.System);
 
+            _ = builder.Services.AddSingleton(runtimeOptions);
             HostComposer.ConfigureHostServices(builder, runtimeOptions, lifecycle);
 
-            ServiceDescriptor[] controlPlaneHostedServiceDescriptors =
+            ServiceDescriptor[] controlPlaneDescriptors =
                 [.. builder.Services.Where(static d =>
-                    d.ServiceType == typeof(IHostedService)
-                    && d.ImplementationType == typeof(ControlPlaneService))];
+                    d.ServiceType == typeof(ControlPlaneService))];
 
             ServiceDescriptor[] accountInitializerHostedServiceDescriptors =
                 [.. builder.Services.Where(static d =>
@@ -192,7 +194,7 @@ namespace VectorNNTP.Backfiller.Tests
                 [.. builder.Services.Where(static d =>
                     d.ServiceType == typeof(TransitPublisher))];
 
-            _ = Assert.Single(controlPlaneHostedServiceDescriptors);
+            _ = Assert.Single(controlPlaneDescriptors);
             _ = Assert.Single(accountInitializerHostedServiceDescriptors);
             _ = Assert.Single(transitInitializerHostedServiceDescriptors);
             _ = Assert.Single(providerDescriptors);
@@ -200,8 +202,11 @@ namespace VectorNNTP.Backfiller.Tests
 
             using IHost host = builder.Build();
             ServiceLifecycle resolvedLifecycle = host.Services.GetRequiredService<ServiceLifecycle>();
+            ControlPlaneService controlPlane = host.Services.GetRequiredService<ControlPlaneService>();
+            IBackboneSessionLeaseProvider leaseProvider = host.Services.GetRequiredService<IBackboneSessionLeaseProvider>();
 
             Assert.Same(lifecycle, resolvedLifecycle);
+            Assert.Same(controlPlane, leaseProvider);
         }
 
         [Fact]
@@ -288,6 +293,58 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
+        public void ConfigureHostServices_RabbitMqGraphResolvesCoreServices()
+        {
+            HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+            _ = builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:Shutdown:GracePeriodSeconds"] = "120",
+                ["BackFiller:Shutdown:StopNewWorkAdmission"] = "true",
+                ["BackFiller:Shutdown:FinishActiveArticles"] = "true",
+                ["BackFiller:Shutdown:DrainQueuedWork"] = "true",
+                ["BackFiller:Id"] = "12",
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+
+            BackFillerRuntimeOptions runtimeOptions = new(
+                CanonicalBackFillerFqdn: "bf-12.example.com",
+                BackFillerId: 12,
+                CanonicalDnsSuffix: "example.com",
+                ValidatedLogDirectory: Path.GetTempPath(),
+                ValidatedCertificateDirectory: Path.GetTempPath(),
+                RabbitMqHosts: ["localhost"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: false,
+                TransitServerHost: "localhost",
+                TransitServerPort: 119,
+                TransitServerUseSsl: false,
+                BindPort: 119,
+                ConfiguredBindAddressTokens: ["127.0.0.1"],
+                ShutdownGracePeriodSeconds: 120,
+                ShutdownDrainQueuedWork: true,
+                ShutdownFinishActiveArticles: true,
+                RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
+                WriteBatchCoalesceMicroseconds: 250,
+                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
+
+            HostComposer.ConfigureHostServices(builder, runtimeOptions, new ServiceLifecycle(TimeProvider.System));
+            _ = builder.Services.AddSingleton(runtimeOptions);
+
+            using IHost host = builder.Build();
+
+            _ = host.Services.GetRequiredService<RabbitMqConnectionManager>();
+            _ = host.Services.GetRequiredService<RabbitMqTopologyInitializer>();
+            _ = host.Services.GetRequiredService<RabbitMqConsumerService>();
+            _ = host.Services.GetRequiredService<IRabbitMqArticleResponsePublisher>();
+            _ = host.Services.GetRequiredService<IArticleWorkResultSink>();
+
+            IHostedService processingHostedService = host.Services
+                .GetServices<IHostedService>()
+                .Single(static service => service is RabbitMqArticleProcessingService);
+            Assert.IsType<RabbitMqArticleProcessingService>(processingHostedService);
+        }
+
+        [Fact]
         public void ShouldPublishReadiness_WhenApplicationStoppingAlreadySignaled_ReturnsFalse()
         {
             FakeHostApplicationLifetime lifetime = new();
@@ -371,7 +428,41 @@ namespace VectorNNTP.Backfiller.Tests
                 ShutdownDrainQueuedWork: true,
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
-                WriteBatchCoalesceMicroseconds: 250);
+                WriteBatchCoalesceMicroseconds: 250,
+                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
+        }
+
+        private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
+        {
+            return new RabbitMqRuntimeOptions(
+                Hosts: ["localhost"],
+                Port: 5672,
+                Username: "nntparticles",
+                Password: "super-secret",
+                VirtualHost: "/",
+                EnableSsl: enableSsl,
+                ChannelLeaseTimeoutSeconds: 60,
+                RpcTimeoutSeconds: 30,
+                ConnectionBlockedTimeoutSeconds: 30,
+                ChannelPoolSize: 512,
+                MinConnections: 4,
+                MaxConnections: 16,
+                MaxConsecutiveRecoveryFailures: 5,
+                MaxPendingLeaseWaiters: 1024,
+                ConnectionScaleDownIdleSeconds: 300,
+                ScaleDownCooldownSeconds: 30,
+                NetworkRecoveryIntervalSeconds: 5,
+                PoolReconnectBaseDelayMs: 50,
+                PoolReconnectMaxDelayMs: 250,
+                MinimumConnectionLifetimeSeconds: 300,
+                PublishConfirmTimeoutSeconds: 10,
+                MaximumShutdownDrainTimeoutSeconds: 30,
+                DegradedThreshold: 0.75,
+                UnhealthyThreshold: 5,
+                RequestedHeartbeatSeconds: 60,
+                SocketTimeoutSeconds: 30,
+                RequestedChannelMax: 2047,
+                ConsumerPrefetchCount: null);
         }
 
         /// <summary>
