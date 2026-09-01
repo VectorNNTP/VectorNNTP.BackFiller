@@ -9,6 +9,17 @@
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
+    /// Tracks admission lifecycle for one RabbitMQ delivery accepted by a logical consumer session.
+    /// </summary>
+    internal interface IRabbitMqAdmittedDeliveryTracker
+    {
+        /// <summary>
+        /// Marks the admitted delivery as terminally settled on its owning channel.
+        /// </summary>
+        public void MarkSettled();
+    }
+
+    /// <summary>
     /// Immutable RabbitMQ article-work delivery envelope passed from infrastructure to processing layers.
     /// </summary>
     /// <param name="Backbone">Backbone namespace that owns the delivery queue.</param>
@@ -24,7 +35,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// <param name="CorrelationId">Optional RabbitMQ BasicProperties CorrelationId value set by the publisher.</param>
     /// <param name="ReplyTo">Optional RabbitMQ BasicProperties ReplyTo value set by the publisher.</param>
     /// <param name="Payload">Raw RabbitMQ payload bytes.</param>
-    /// <param name="CancellationToken">Delivery cancellation token that is canceled when the owning consumer session is stopped.</param>
+    /// <param name="CancellationToken">Delivery cancellation token associated with delivery lifecycle semantics.</param>
+    /// <param name="AdmissionTracker">Optional admitted-delivery tracker used by session drain accounting.</param>
     internal sealed record RabbitMqArticleDelivery(
         string Backbone,
         string Queue,
@@ -40,5 +52,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         string? ReplyTo,
         ReadOnlyMemory<byte> Payload,
         CancellationToken CancellationToken,
-        IRabbitMqDeliverySettlement Settlement);
+        IRabbitMqDeliverySettlement Settlement,
+        IRabbitMqAdmittedDeliveryTracker? AdmissionTracker = null);
 }

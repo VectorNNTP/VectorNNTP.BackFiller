@@ -122,6 +122,48 @@ May change across redelivery or consumer recovery:
 
 ACK/NACK policy is defined by the response/disposition protocol and remains transport metadata driven.
 
+## Consumer Lifecycle and Retirement Contract (Model B)
+BackFiller uses independent RabbitMQ consumer-session and NNTP execution-session pools with coordinated retirement and drain.
+
+RabbitMQ consumer session lifecycle states:
+- `Running`: deliveries may be admitted into processing.
+- `Retiring`: new admissions are blocked; already admitted deliveries are drained.
+- `Stopped`: consumer/channel are retired.
+
+Admission semantics:
+- A delivery is admitted only after the consumer session accepts responsibility and hands it into the delivery pipeline.
+- Admission creates in-flight accounting owned by the receiving consumer session.
+
+Retirement/drain sequence:
+1. Transition `Running` -> `Retiring`.
+2. Request `BasicCancelAsync` for the consumer tag.
+3. Wait until all admitted deliveries for that session reach terminal settlement.
+4. Dispose the consumer channel.
+5. Transition to `Stopped`.
+
+Settlement requirement:
+- Delivery settlement stays on the original consumer channel.
+- Delivery tags are channel-scoped and are not settled through another channel.
+- Channel-close requeue is treated as a broker safety net, not the primary lifecycle mechanism.
+
+Relationship to NNTP execution sessions:
+- RabbitMQ consumer sessions and NNTP sessions are independent resources.
+- NNTP work remains lease-based through `NntpArticleExecutionSessionManager`.
+- Retired NNTP slots stop new lease admission and drain active lease work per manager semantics.
+
+Capacity behavior:
+- RabbitMQ logical consumer identity is `AccountId:ConnectionNumber`; each live identity owns exactly one consumer/channel instance.
+- N->N+1 adds only delta consumer/channel and preserves existing consumer/channel instances.
+- N->N-1 retires only surplus consumer/channel after drain; retained sessions stay active.
+- A retiring logical session key remains reserved until that session completes stop/drain/dispose; reconcile cannot recreate that same key during retirement.
+- For N->N-1->N+1, retired key recreation occurs only after prior retirement completion; duplicate live session/channel objects for the same key are disallowed.
+- Delivery admission racing retirement is atomic at the consumer lifecycle gate: delivery is either admitted-and-counted for drain or rejected-before-processing.
+- Admitted deliveries settle on original channel (`Publish -> Confirm -> Ack/Nack`), and channel disposal occurs only after admitted-settlement drain completes.
+- Cross-plane ordering for capacity reduction is `Rabbit retirement/drain -> NNTP retirement effectiveness`.
+- Capacity changes do not create or replace the single process-level RabbitMQ TCP connection.
+- Capacity changes do not alter connection generation; generation changes only on actual connection replacement.
+- Capacity-only reconciliation does not redeclare already-initialized topology for the same connection generation.
+
 ## Versioning Strategy
 - `version` is the application-level compatibility key.
 - Version `1` is the current canonical schema.

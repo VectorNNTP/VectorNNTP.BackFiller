@@ -10,6 +10,7 @@ using System.Net.Security;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
 
 namespace VectorNNTP.Backfiller.ControlPlane
 {
@@ -40,6 +41,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         ILogger<ControlPlaneService> logger,
         TimeProvider timeProvider,
         MySqlNntpAccountSnapshotProvider snapshotProvider,
+        IRabbitMqCapacityRetirementCoordinator rabbitMqCapacityRetirementCoordinator,
         ILoggerFactory? loggerFactory = null,
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
@@ -70,6 +72,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// Optional per-acquisition-session TLS server-certificate validation callback used by created session managers.
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback = serverCertificateValidationCallback;
+
+        /// <summary>
+        /// Cross-plane coordinator enforcing RabbitMQ retirement-drain before NNTP capacity retirement becomes effective.
+        /// </summary>
+        private readonly IRabbitMqCapacityRetirementCoordinator _rabbitMqCapacityRetirementCoordinator = rabbitMqCapacityRetirementCoordinator ?? throw new ArgumentNullException(nameof(rabbitMqCapacityRetirementCoordinator));
 
         /// <summary>
         /// Mutable account runtime map keyed by authoritative account entry identifier.
@@ -312,6 +319,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
             {
                 try
                 {
+                    await RetireRabbitMqCapacityBoundaryAsync(accountId, retainConnectionCount: 0, cancellationToken).ConfigureAwait(false);
                     LogAccountRemoved(_logger, accountId, runtime.LastAppliedAccount.Hostname, runtime.LastAppliedAccount.Port, runtime.LastAppliedAccount.UseSsl);
                     await runtime.Manager.DisposeAsync().ConfigureAwait(false);
                 }
@@ -339,6 +347,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
 
                 try
                 {
+                    int previousCapacity = existingRuntime.LastAppliedAccount.MaxConnections;
+                    int desiredCapacity = desiredAccount.MaxConnections;
+                    if (desiredCapacity < previousCapacity)
+                    {
+                        await RetireRabbitMqCapacityBoundaryAsync(accountId, desiredCapacity, cancellationToken).ConfigureAwait(false);
+                    }
+
                     NntpAccountSessionReconcileResult result = await existingRuntime.Manager.ReconcileAccountAsync(desiredAccount, cancellationToken).ConfigureAwait(false);
                     existingRuntime.LastAppliedAccount = desiredAccount;
                     LogAccountReconciled(
@@ -432,6 +447,12 @@ namespace VectorNNTP.Backfiller.ControlPlane
                     LogAccountRemovalFailed(_logger, accountId, ex);
                 }
             }
+        }
+
+        private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
+        {
+            return _rabbitMqCapacityRetirementCoordinator
+                .RetireCapacityAsync(accountId, retainConnectionCount, cancellationToken);
         }
 
         /// <summary>

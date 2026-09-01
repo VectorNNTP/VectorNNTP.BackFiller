@@ -137,6 +137,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             _ = services.AddSingleton<IRabbitMqConsumerSessionFactory, RabbitMqConsumerSessionFactory>();
             _ = services.AddHostedService<RabbitMqStartupInitializer>();
             _ = services.AddSingleton<RabbitMqConsumerService>();
+            _ = services.AddSingleton<IRabbitMqCapacityRetirementCoordinator>(static provider => provider.GetRequiredService<RabbitMqConsumerService>());
             _ = services.AddHostedService(static provider => provider.GetRequiredService<RabbitMqConsumerService>());
         }
 

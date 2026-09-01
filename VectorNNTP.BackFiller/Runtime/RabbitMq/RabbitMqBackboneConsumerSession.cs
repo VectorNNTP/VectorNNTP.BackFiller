@@ -29,10 +29,19 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private AsyncEventingBasicConsumer? _consumer;
         private string? _consumerTag;
         private CancellationTokenSource? _sessionCancellation;
+        private TaskCompletionSource<bool> _drainCompletion = CreateCompletedDrainSource();
         private long _activeConnectionGeneration;
-        private bool _running;
+        private int _admittedDeliveryCount;
+        private RabbitMqConsumerLifecycleState _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
         private bool _disposed;
         private IDisposable? _connectionScope;
+
+        private enum RabbitMqConsumerLifecycleState
+        {
+            Running,
+            Retiring,
+            Stopped,
+        }
 
         internal RabbitMqBackboneConsumerSession(
             RabbitMqConsumerSessionIdentity identity,
@@ -61,9 +70,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         RabbitMqConsumerSessionIdentity IRabbitMqConsumerSession.Identity => _identity;
 
-        internal bool IsRunning => _running;
+        internal bool IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
-        bool IRabbitMqConsumerSession.IsRunning => _running;
+        bool IRabbitMqConsumerSession.IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
         internal long ActiveConnectionGeneration => Interlocked.Read(ref _activeConnectionGeneration);
 
@@ -81,7 +90,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (_disposed || !_running)
+                if (_disposed || _lifecycleState is not RabbitMqConsumerLifecycleState.Running)
                 {
                     return;
                 }
@@ -113,7 +122,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             try
             {
                 ThrowIfDisposed();
-                if (_running)
+                if (_lifecycleState is not RabbitMqConsumerLifecycleState.Stopped)
                 {
                     return;
                 }
@@ -126,12 +135,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
-        public async Task StopAsync(CancellationToken cancellationToken)
+        public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
         {
             await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await StopCoreAsync(cancellationToken, expectedShutdown: true).ConfigureAwait(false);
+                await StopCoreAsync(cancellationToken, expectedShutdown: true, cancelAdmittedWork).ConfigureAwait(false);
             }
             finally
             {
@@ -151,7 +160,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                await StopCoreAsync(CancellationToken.None, expectedShutdown: true).ConfigureAwait(false);
+                await StopCoreAsync(CancellationToken.None, expectedShutdown: true, cancelAdmittedWork: true).ConfigureAwait(false);
             }
             finally
             {
@@ -162,7 +171,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
-            if (_running || _ownedChannel is not null || _consumer is not null)
+            if (_lifecycleState is not RabbitMqConsumerLifecycleState.Stopped || _ownedChannel is not null || _consumer is not null)
             {
                 throw new InvalidOperationException("RabbitMQ consumer session cannot start while a consumer instance is still active.");
             }
@@ -197,7 +206,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 _consumerTag = consumerTag;
-                _running = true;
+                _lifecycleState = RabbitMqConsumerLifecycleState.Running;
+                _drainCompletion = CreateCompletedDrainSource();
+                _admittedDeliveryCount = 0;
                 LogConsumerStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _queueName, ActiveConnectionGeneration, consumerTag);
             }
             catch
@@ -218,7 +229,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
 
                 _consumerTag = null;
-                _running = false;
+                _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+                _admittedDeliveryCount = 0;
+                _drainCompletion = CreateCompletedDrainSource();
                 _connectionScope?.Dispose();
                 _connectionScope = null;
                 _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
@@ -226,15 +239,24 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
-        private async Task StopCoreAsync(CancellationToken cancellationToken, bool expectedShutdown)
+        private async Task StopCoreAsync(CancellationToken cancellationToken, bool expectedShutdown, bool cancelAdmittedWork)
         {
-            bool hasSessionResources = _running || _ownedChannel is not null || _consumer is not null || _sessionCancellation is not null || !string.IsNullOrWhiteSpace(_consumerTag);
+            bool hasSessionResources = _lifecycleState is not RabbitMqConsumerLifecycleState.Stopped || _ownedChannel is not null || _consumer is not null || _sessionCancellation is not null || !string.IsNullOrWhiteSpace(_consumerTag);
             if (!hasSessionResources)
             {
                 return;
             }
 
-            _running = false;
+            if (_lifecycleState is RabbitMqConsumerLifecycleState.Running)
+            {
+                _lifecycleState = RabbitMqConsumerLifecycleState.Retiring;
+                if (_admittedDeliveryCount > 0)
+                {
+                    _drainCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+
+                LogConsumerRetiring(_logger, _identity.Backbone, _identity.SessionOrdinal, _admittedDeliveryCount);
+            }
 
             try
             {
@@ -253,6 +275,29 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 throw;
             }
 
+            if (cancelAdmittedWork)
+            {
+                _sessionCancellation?.Cancel();
+            }
+
+            Task drainTask = _drainCompletion.Task;
+            if (!drainTask.IsCompleted)
+            {
+                LogConsumerDrainStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _admittedDeliveryCount);
+            }
+
+            _ = _lifecycleGate.Release();
+            try
+            {
+                await drainTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            LogConsumerDrainCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal);
+
             if (_consumer is not null)
             {
                 _consumer.ReceivedAsync -= OnReceivedAsync;
@@ -261,7 +306,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _consumer = null;
             }
 
-            _sessionCancellation?.Cancel();
             _sessionCancellation?.Dispose();
             _sessionCancellation = null;
 
@@ -285,6 +329,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _ownedChannel = null;
             _consumerTag = null;
             _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
+            _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+            _admittedDeliveryCount = 0;
+            _drainCompletion = CreateCompletedDrainSource();
 
             _connectionScope?.Dispose();
             _connectionScope = null;
@@ -297,7 +344,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task OnReceivedAsync(object sender, BasicDeliverEventArgs args)
         {
-            if (!_running || !IsEventFromActiveConsumer(sender))
+            if (!IsEventFromActiveConsumer(sender))
             {
                 return;
             }
@@ -308,6 +355,28 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             {
                 LogDeliveryIgnoredFromStaleGeneration(_logger, _identity.Backbone, _identity.SessionOrdinal, deliveryGeneration, _connectionManager.ConnectionGeneration);
                 return;
+            }
+
+            await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            RabbitMqAdmittedDeliveryTracker? tracker = null;
+            try
+            {
+                if (_lifecycleState is not RabbitMqConsumerLifecycleState.Running || !IsEventFromActiveConsumer(sender))
+                {
+                    return;
+                }
+
+                _admittedDeliveryCount++;
+                if (_admittedDeliveryCount == 1)
+                {
+                    _drainCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+
+                tracker = new RabbitMqAdmittedDeliveryTracker(this);
+            }
+            finally
+            {
+                _ = _lifecycleGate.Release();
             }
 
             RabbitMqArticleDelivery delivery = new(
@@ -325,7 +394,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 ReplyTo: args.BasicProperties?.ReplyTo,
                 Payload: args.Body,
                 CancellationToken: cancellationToken,
-                Settlement: new RabbitMqDeliverySettlement(this, args.DeliveryTag, deliveryGeneration));
+                Settlement: new RabbitMqDeliverySettlement(this, args.DeliveryTag, deliveryGeneration, tracker),
+                AdmissionTracker: tracker);
 
             try
             {
@@ -333,12 +403,18 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                tracker?.MarkSettled();
+            }
+            catch
+            {
+                tracker?.MarkSettled();
+                throw;
             }
         }
 
         private async Task OnConsumerShutdownAsync(object sender, ShutdownEventArgs args)
         {
-            if (!_running || _disposed || !IsEventFromActiveConsumer(sender))
+            if (_lifecycleState is not RabbitMqConsumerLifecycleState.Running || _disposed || !IsEventFromActiveConsumer(sender))
             {
                 return;
             }
@@ -348,7 +424,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                if (_disposed || !_running || !IsEventFromActiveConsumer(sender))
+                if (_disposed || _lifecycleState is not RabbitMqConsumerLifecycleState.Running || !IsEventFromActiveConsumer(sender))
                 {
                     return;
                 }
@@ -367,7 +443,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task OnConsumerUnregisteredAsync(object sender, ConsumerEventArgs args)
         {
-            if (_disposed || !_running || !IsEventFromActiveConsumer(sender))
+            if (_disposed || _lifecycleState is not RabbitMqConsumerLifecycleState.Running || !IsEventFromActiveConsumer(sender))
             {
                 return;
             }
@@ -378,7 +454,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                if (_disposed || !_running || !IsEventFromActiveConsumer(sender))
+                if (_disposed || _lifecycleState is not RabbitMqConsumerLifecycleState.Running || !IsEventFromActiveConsumer(sender))
                 {
                     return;
                 }
@@ -400,7 +476,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             long previousGeneration = ActiveConnectionGeneration;
             LogConsumerRecreationStarting(_logger, _identity.Backbone, _identity.SessionOrdinal, previousGeneration, requestedGeneration);
 
-            await StopCoreAsync(CancellationToken.None, expectedShutdown: false).ConfigureAwait(false);
+            await StopCoreAsync(CancellationToken.None, expectedShutdown: false, cancelAdmittedWork: true).ConfigureAwait(false);
             await StartCoreAsync(cancellationToken).ConfigureAwait(false);
 
             LogConsumerRecreationCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal, ActiveConnectionGeneration);
@@ -408,7 +484,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private bool IsActiveConsumerStaleForCurrentConnection()
         {
-            if (!_running || _ownedChannel is null)
+            if (_lifecycleState is not RabbitMqConsumerLifecycleState.Running || _ownedChannel is null)
             {
                 return false;
             }
@@ -432,18 +508,70 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             return _consumer is not null && ReferenceEquals(sender, _consumer);
         }
 
+        private async Task OnAdmittedDeliverySettledAsync()
+        {
+            await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                if (_admittedDeliveryCount <= 0)
+                {
+                    return;
+                }
+
+                _admittedDeliveryCount--;
+                if (_admittedDeliveryCount == 0)
+                {
+                    _ = _drainCompletion.TrySetResult(true);
+                }
+            }
+            finally
+            {
+                _ = _lifecycleGate.Release();
+            }
+        }
+
+        private static TaskCompletionSource<bool> CreateCompletedDrainSource()
+        {
+            TaskCompletionSource<bool> source = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = source.TrySetResult(true);
+            return source;
+        }
+
+        private sealed class RabbitMqAdmittedDeliveryTracker : IRabbitMqAdmittedDeliveryTracker
+        {
+            private readonly RabbitMqBackboneConsumerSession _owner;
+            private int _completed;
+
+            internal RabbitMqAdmittedDeliveryTracker(RabbitMqBackboneConsumerSession owner)
+            {
+                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            }
+
+            public void MarkSettled()
+            {
+                if (Interlocked.Exchange(ref _completed, 1) != 0)
+                {
+                    return;
+                }
+
+                _ = _owner.OnAdmittedDeliverySettledAsync();
+            }
+        }
+
         private sealed class RabbitMqDeliverySettlement : IRabbitMqDeliverySettlement
         {
             private readonly RabbitMqBackboneConsumerSession _owner;
             private readonly ulong _deliveryTag;
             private readonly long _deliveryGeneration;
+            private readonly RabbitMqAdmittedDeliveryTracker? _admissionTracker;
             private int _settled;
 
-            internal RabbitMqDeliverySettlement(RabbitMqBackboneConsumerSession owner, ulong deliveryTag, long deliveryGeneration)
+            internal RabbitMqDeliverySettlement(RabbitMqBackboneConsumerSession owner, ulong deliveryTag, long deliveryGeneration, RabbitMqAdmittedDeliveryTracker? admissionTracker)
             {
                 _owner = owner ?? throw new ArgumentNullException(nameof(owner));
                 _deliveryTag = deliveryTag;
                 _deliveryGeneration = deliveryGeneration;
+                _admissionTracker = admissionTracker;
             }
 
             public async ValueTask AckAsync(CancellationToken cancellationToken)
@@ -466,7 +594,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 await _owner._lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
-                    if (_owner._ownedChannel is null || !_owner._running)
+                    if (_owner._ownedChannel is null || _owner._lifecycleState is RabbitMqConsumerLifecycleState.Stopped)
                     {
                         throw new InvalidOperationException("RabbitMQ consumer session channel is not available for settlement.");
                     }
@@ -485,6 +613,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     {
                         await _owner._ownedChannel.Channel.BasicAckAsync(_deliveryTag, multiple: false, cancellationToken).ConfigureAwait(false);
                     }
+
+                    _admissionTracker?.MarkSettled();
                 }
                 catch
                 {
@@ -557,6 +687,21 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static void LogConsumerStopped(ILogger logger, string backbone, int sessionOrdinal)
         {
             logger.LogInformation("RabbitMQ consumer session stopped. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
+        }
+
+        private static void LogConsumerRetiring(ILogger logger, string backbone, int sessionOrdinal, int admittedCount)
+        {
+            logger.LogInformation("RabbitMQ consumer session entering retiring state. Backbone={Backbone} Session={SessionOrdinal} AdmittedDeliveries={AdmittedDeliveries}", backbone, sessionOrdinal, admittedCount);
+        }
+
+        private static void LogConsumerDrainStarted(ILogger logger, string backbone, int sessionOrdinal, int admittedCount)
+        {
+            logger.LogInformation("RabbitMQ consumer drain started. Backbone={Backbone} Session={SessionOrdinal} PendingAdmittedDeliveries={PendingAdmittedDeliveries}", backbone, sessionOrdinal, admittedCount);
+        }
+
+        private static void LogConsumerDrainCompleted(ILogger logger, string backbone, int sessionOrdinal)
+        {
+            logger.LogInformation("RabbitMQ consumer drain completed. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
         }
 
         private static void LogConsumerShutdownObserved(ILogger logger, string backbone, int sessionOrdinal, ushort replyCode, string replyText, string initiator)

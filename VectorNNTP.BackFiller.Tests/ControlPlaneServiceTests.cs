@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Tests.TestInfrastructure;
 using Xunit;
 
@@ -39,7 +40,8 @@ namespace VectorNNTP.Backfiller.Tests
                 new MySqlNntpAccountSnapshotProvider(
                     1,
                     NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
-                    static _ => Task.FromResult<List<NntpAccountSnapshot>>([])));
+                    static _ => Task.FromResult<List<NntpAccountSnapshot>>([])),
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             Assert.False(service.IsStartupInitializationComplete);
 
@@ -62,7 +64,8 @@ namespace VectorNNTP.Backfiller.Tests
                 new MySqlNntpAccountSnapshotProvider(
                     1,
                     NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
-                    static _ => Task.FromResult<List<NntpAccountSnapshot>>([])));
+                    static _ => Task.FromResult<List<NntpAccountSnapshot>>([])),
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             using CancellationTokenSource cancellationTokenSource = new();
             cancellationTokenSource.Cancel();
@@ -105,6 +108,7 @@ namespace VectorNNTP.Backfiller.Tests
                 loggerProvider.CreateLogger<ControlPlaneService>(),
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
                 snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator(),
                 loggerProvider);
 
             using CancellationTokenSource startupCancellation = new();
@@ -159,7 +163,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -195,7 +200,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -238,7 +244,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -282,7 +289,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -329,7 +337,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -370,11 +379,14 @@ namespace VectorNNTP.Backfiller.Tests
             await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
 
             CapturingLoggerProvider loggerProvider = new();
+            TrackingRabbitMqCapacityRetirementCoordinator rabbitCoordinator = new();
             ControlPlaneService service = new(
                 loggerProvider.CreateLogger<ControlPlaneService>(),
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
                 snapshotProvider,
-                loggerProvider);
+                rabbitCoordinator,
+                loggerProvider,
+                serverCertificateValidationCallback: null);
 
             await service.StartAsync(CancellationToken.None);
 
@@ -386,6 +398,10 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(2, service.GetManagedAccountActiveSessionCount(accountId));
             await WaitForConditionAsync(() => server.ActiveConnectionCount == 2);
+
+            Assert.Single(rabbitCoordinator.Calls);
+            Assert.Equal(accountId, rabbitCoordinator.Calls[0].AccountId);
+            Assert.Equal(2, rabbitCoordinator.Calls[0].RetainConnectionCount);
 
             Assert.Contains(
                 loggerProvider.Entries,
@@ -403,8 +419,52 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Confirms keepalive-only changes do not recreate existing sessions.
+        /// Confirms capacity decreases do not become effective for NNTP until Rabbit retirement coordination completes.
         /// </summary>
+        [Fact]
+        public async Task RefreshAndReconcileOnceAsync_WhenCapacityDecreases_WaitsForRabbitRetirementBeforeNntpRetirementBecomesEffective()
+        {
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 3).ConfigureAwait(true);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 3, port: server.Port),
+        ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            BlockingRabbitMqCapacityRetirementCoordinator rabbitCoordinator = new();
+            ControlPlaneService service = new(
+                NullLogger<ControlPlaneService>.Instance,
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                rabbitCoordinator,
+                loggerFactory: null,
+                serverCertificateValidationCallback: null);
+
+            await service.StartAsync(CancellationToken.None);
+            Assert.Equal(3, service.GetManagedAccountActiveSessionCount(accountId));
+
+            desiredAccounts[0] = CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port);
+            Task reconcileTask = service.RefreshAndReconcileOnceAsync(CancellationToken.None);
+
+            await rabbitCoordinator.Called.Task.ConfigureAwait(false);
+            Assert.Equal(3, service.GetManagedAccountActiveSessionCount(accountId));
+
+            rabbitCoordinator.Release();
+            await reconcileTask.ConfigureAwait(false);
+
+            Assert.Equal(1, service.GetManagedAccountActiveSessionCount(accountId));
+            await service.StopAsync(CancellationToken.None);
+        }
+
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenKeepAliveChanges_DoesNotReconnectOrReauthenticate()
         {
@@ -427,7 +487,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -469,7 +530,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -516,7 +578,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -561,6 +624,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
                 snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator(),
                 serverCertificateValidationCallback: server.ServerCertificateValidationCallback);
 
             await service.StartAsync(CancellationToken.None);
@@ -613,7 +677,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             Assert.Equal(0, service.GetManagedAccountActiveSessionCount(accountId));
 
@@ -653,7 +718,8 @@ namespace VectorNNTP.Backfiller.Tests
             ControlPlaneService service = new(
                 NullLogger<ControlPlaneService>.Instance,
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
-                snapshotProvider);
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
 
             await service.StartAsync(CancellationToken.None);
 
@@ -668,6 +734,38 @@ namespace VectorNNTP.Backfiller.Tests
             await WaitForConditionAsync(() => server.ActiveConnectionCount == 0);
 
             await service.StopAsync(CancellationToken.None);
+        }
+
+        private sealed record RabbitMqRetirementCall(Guid AccountId, int RetainConnectionCount);
+
+        private sealed class TrackingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
+        {
+            internal List<RabbitMqRetirementCall> Calls { get; } = [];
+
+            public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Calls.Add(new RabbitMqRetirementCall(accountId, retainConnectionCount));
+                return Task.CompletedTask;
+            }
+        }
+
+        private sealed class BlockingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
+        {
+            private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            internal TaskCompletionSource<bool> Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Called.TrySetResult(true);
+                await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            internal void Release()
+            {
+                _ = _release.TrySetResult(true);
+            }
         }
 
         /// <summary>

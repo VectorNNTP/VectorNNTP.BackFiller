@@ -40,7 +40,23 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Requests cooperative stop and disposes broker registration/channel for this session.
         /// </summary>
         /// <param name="cancellationToken">Shutdown-aware cancellation token.</param>
-        public Task StopAsync(CancellationToken cancellationToken);
+        /// <param name="cancelAdmittedWork">When <see langword="true"/>, cancels admitted-delivery processing tokens as part of shutdown semantics.</param>
+        public Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork);
+    }
+
+    /// <summary>
+    /// Coordinates account-capacity retirement boundaries for RabbitMQ consumer sessions.
+    /// </summary>
+    internal interface IRabbitMqCapacityRetirementCoordinator
+    {
+        /// <summary>
+        /// Retires all logical RabbitMQ consumer sessions for one account above the retained capacity boundary.
+        /// </summary>
+        /// <param name="accountId">Stable account identifier.</param>
+        /// <param name="retainConnectionCount">Number of logical consumer ordinals that must remain active.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task that completes after targeted sessions have drained and been disposed.</returns>
+        public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken);
     }
 
     /// <summary>
