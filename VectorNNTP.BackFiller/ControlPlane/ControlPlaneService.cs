@@ -42,6 +42,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         TimeProvider timeProvider,
         MySqlNntpAccountSnapshotProvider snapshotProvider,
         IRabbitMqCapacityRetirementCoordinator rabbitMqCapacityRetirementCoordinator,
+        IBackboneUsableCapacityStateWriter? backboneUsableCapacityStateWriter = null,
         ILoggerFactory? loggerFactory = null,
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
@@ -77,6 +78,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// Cross-plane coordinator enforcing RabbitMQ retirement-drain before NNTP capacity retirement becomes effective.
         /// </summary>
         private readonly IRabbitMqCapacityRetirementCoordinator _rabbitMqCapacityRetirementCoordinator = rabbitMqCapacityRetirementCoordinator ?? throw new ArgumentNullException(nameof(rabbitMqCapacityRetirementCoordinator));
+
+        /// <summary>
+        /// Writes authoritative usable NNTP capacity snapshots for admission-control consumers.
+        /// </summary>
+        private readonly IBackboneUsableCapacityStateWriter _backboneUsableCapacityStateWriter = backboneUsableCapacityStateWriter ?? NoOpBackboneUsableCapacityStateWriter.Instance;
 
         /// <summary>
         /// Mutable account runtime map keyed by authoritative account entry identifier.
@@ -315,6 +321,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 }
             }
 
+            PublishBackboneUsableCapacitySnapshot();
+
             foreach ((Guid accountId, AccountRuntimeState runtime) in accountsToRemove)
             {
                 try
@@ -342,6 +350,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 if (existingRuntime is null)
                 {
                     await AddAccountRuntimeAsync(desiredAccount, cancellationToken).ConfigureAwait(false);
+                    PublishBackboneUsableCapacitySnapshot();
                     continue;
                 }
 
@@ -356,6 +365,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
 
                     NntpAccountSessionReconcileResult result = await existingRuntime.Manager.ReconcileAccountAsync(desiredAccount, cancellationToken).ConfigureAwait(false);
                     existingRuntime.LastAppliedAccount = desiredAccount;
+                    PublishBackboneUsableCapacitySnapshot();
                     LogAccountReconciled(
                         _logger,
                         result.AccountEntryId,
@@ -381,6 +391,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            PublishBackboneUsableCapacitySnapshot();
             LogAccountReconciliationCompleted(_logger, snapshot.ServerId, desiredAccounts.Count);
         }
 
@@ -447,6 +458,36 @@ namespace VectorNNTP.Backfiller.ControlPlane
                     LogAccountRemovalFailed(_logger, accountId, ex);
                 }
             }
+
+            PublishBackboneUsableCapacitySnapshot();
+        }
+
+        private void PublishBackboneUsableCapacitySnapshot()
+        {
+            Dictionary<string, int> capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
+
+            lock (_accountRuntimeGate)
+            {
+                foreach (AccountRuntimeState runtime in _accountRuntimes.Values)
+                {
+                    string backbone = runtime.LastAppliedAccount.Backbone;
+                    if (string.IsNullOrWhiteSpace(backbone))
+                    {
+                        continue;
+                    }
+
+                    int activeSessionCount = runtime.Manager.ActiveSessionCount;
+                    if (!capacityByBackbone.TryGetValue(backbone, out int current))
+                    {
+                        capacityByBackbone[backbone] = activeSessionCount;
+                        continue;
+                    }
+
+                    capacityByBackbone[backbone] = current + activeSessionCount;
+                }
+            }
+
+            _backboneUsableCapacityStateWriter.PublishSnapshot(capacityByBackbone);
         }
 
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
@@ -460,6 +501,16 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// </summary>
         /// <param name="LastAppliedAccount">Most recent desired account snapshot applied to this runtime.</param>
         /// <param name="Manager">Owned session manager implementing persistent session lifecycle for the account.</param>
+        private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
+        {
+            internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
+
+            public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
+            {
+                ArgumentNullException.ThrowIfNull(capacityByBackbone);
+            }
+        }
+
         private sealed record AccountRuntimeState(
             NntpAccountSnapshot LastAppliedAccount,
             NntpArticleExecutionSessionManager Manager)

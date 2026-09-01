@@ -8,6 +8,7 @@
 
 using System.Threading.Channels;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 
@@ -39,15 +40,26 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private readonly RabbitMqConnectionManager _connectionManager;
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly string? _diagnosticCorrelationId;
 
         public RabbitMqConsumerSessionFactory(
             RabbitMqConnectionManager connectionManager,
             RabbitMqTopologyInitializer topologyInitializer,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            BackFillerRuntimeOptions runtimeOptions)
         {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+
             _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+
+            RabbitMqRuntimeOptions rabbitMq = runtimeOptions.RabbitMq
+                ?? throw new InvalidOperationException("Validated runtime RabbitMQ settings were not provided.");
+
+            _diagnosticCorrelationId = string.IsNullOrWhiteSpace(rabbitMq.DiagnosticPayloadCorrelationId)
+                ? null
+                : rabbitMq.DiagnosticPayloadCorrelationId.Trim();
         }
 
         /// <inheritdoc/>
@@ -65,7 +77,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _topologyInitializer,
                 deliverySink,
                 _loggerFactory.CreateLogger<RabbitMqBackboneConsumerSession>(),
-                prefetchCount);
+                prefetchCount,
+                _diagnosticCorrelationId);
         }
     }
 
@@ -82,6 +95,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private readonly ShutdownCoordinator _shutdownCoordinator;
         private readonly RabbitMqConsumerInfrastructureOptions _consumerOptions;
         private readonly ILogger<RabbitMqConsumerService> _logger;
+        private readonly IBackboneUsableCapacityProvider _capacityProvider;
         private readonly SemaphoreSlim _stateGate = new(1, 1);
         private readonly CancellationTokenSource _shutdownCts = new();
         private readonly Dictionary<string, SessionRuntimeState> _sessionRuntimes = new(StringComparer.Ordinal);
@@ -100,18 +114,32 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IRabbitMqConsumerSessionFactory sessionFactory,
             ShutdownCoordinator shutdownCoordinator,
             ILogger<RabbitMqConsumerService> logger)
+            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger)
+        {
+        }
+
+        public RabbitMqConsumerService(
+            BackFillerRuntimeOptions runtimeOptions,
+            MySqlNntpAccountSnapshotProvider accountSnapshotProvider,
+            RabbitMqConnectionManager connectionManager,
+            IRabbitMqConsumerSessionFactory sessionFactory,
+            ShutdownCoordinator shutdownCoordinator,
+            IBackboneUsableCapacityProvider capacityProvider,
+            ILogger<RabbitMqConsumerService> logger)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(accountSnapshotProvider);
             ArgumentNullException.ThrowIfNull(connectionManager);
             ArgumentNullException.ThrowIfNull(sessionFactory);
             ArgumentNullException.ThrowIfNull(shutdownCoordinator);
+            ArgumentNullException.ThrowIfNull(capacityProvider);
             ArgumentNullException.ThrowIfNull(logger);
 
             _accountSnapshotProvider = accountSnapshotProvider;
             _connectionManager = connectionManager;
             _sessionFactory = sessionFactory;
             _shutdownCoordinator = shutdownCoordinator;
+            _capacityProvider = capacityProvider;
             _logger = logger;
 
             _consumerOptions = RabbitMqConsumerInfrastructureOptions.FromRuntimeOptions(runtimeOptions);
@@ -333,7 +361,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
 
                 NntpAccountSnapshotState snapshot = _accountSnapshotProvider.CurrentSnapshot;
-                desiredSessions = BuildDesiredSessions(snapshot);
+                desiredSessions = BuildDesiredSessions(snapshot, ResolveBackboneUsableCapacity);
 
                 foreach ((string sessionKey, RabbitMqConsumerSessionIdentity desiredIdentity) in desiredSessions)
                 {
@@ -433,9 +461,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             LogConsumerReconcileCompleted(_logger, desiredSessions.Count, activeCount);
         }
 
-        private Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(NntpAccountSnapshotState snapshot)
+        private Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(
+            NntpAccountSnapshotState snapshot,
+            Func<string, bool> hasUsableBackboneCapacity)
         {
             ArgumentNullException.ThrowIfNull(snapshot);
+            ArgumentNullException.ThrowIfNull(hasUsableBackboneCapacity);
 
             Dictionary<string, RabbitMqConsumerSessionIdentity> desired = new(StringComparer.Ordinal);
             foreach (NntpAccountSnapshot account in snapshot.Accounts)
@@ -446,6 +477,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
 
                 if (account.MaxConnections <= 0)
+                {
+                    continue;
+                }
+
+                if (!hasUsableBackboneCapacity(account.Backbone))
                 {
                     continue;
                 }
@@ -468,6 +504,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             return desired;
+        }
+
+        private bool ResolveBackboneUsableCapacity(string backbone)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
+            return _capacityProvider.HasUsableCapacityForBackbone(backbone);
         }
 
         private async Task StopAllSessionsAsync(CancellationToken cancellationToken)
@@ -627,6 +669,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             internal IRabbitMqConsumerSession Session { get; } = session;
 
             internal bool Desired { get; set; }
+        }
+
+        private sealed class AlwaysAvailableBackboneCapacityProvider : IBackboneUsableCapacityProvider
+        {
+            internal static readonly AlwaysAvailableBackboneCapacityProvider Instance = new();
+
+            public bool HasUsableCapacityForBackbone(string backbone)
+            {
+                return !string.IsNullOrWhiteSpace(backbone);
+            }
         }
 
         private sealed class RetiringSessionRuntimeState(RabbitMqConsumerSessionIdentity identity, Task retirementTask)

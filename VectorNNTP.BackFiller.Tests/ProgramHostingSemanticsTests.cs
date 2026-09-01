@@ -334,9 +334,17 @@ namespace VectorNNTP.Backfiller.Tests
 
             _ = host.Services.GetRequiredService<RabbitMqConnectionManager>();
             _ = host.Services.GetRequiredService<RabbitMqTopologyInitializer>();
-            _ = host.Services.GetRequiredService<RabbitMqConsumerService>();
+            RabbitMqConsumerService rabbitConsumerService = host.Services.GetRequiredService<RabbitMqConsumerService>();
+            ControlPlaneService controlPlaneService = host.Services.GetRequiredService<ControlPlaneService>();
+            IBackboneUsableCapacityProvider capacityProvider = host.Services.GetRequiredService<IBackboneUsableCapacityProvider>();
+            IBackboneUsableCapacityStateWriter capacityWriter = host.Services.GetRequiredService<IBackboneUsableCapacityStateWriter>();
             _ = host.Services.GetRequiredService<IRabbitMqArticleResponsePublisher>();
             _ = host.Services.GetRequiredService<IArticleWorkResultSink>();
+
+            Assert.NotSame(controlPlaneService, capacityProvider);
+            Assert.Same(capacityProvider, capacityWriter);
+            Assert.IsType<BackboneUsableCapacityState>(capacityProvider);
+            Assert.IsAssignableFrom<IRabbitMqCapacityRetirementCoordinator>(rabbitConsumerService);
 
             IHostedService processingHostedService = host.Services
                 .GetServices<IHostedService>()

@@ -6,6 +6,8 @@
 // Typed exception model for deterministic internal failure classification without relying
 // on exception-message text parsing.
 
+using System.Security.Cryptography;
+using System.Text;
 using RabbitMQ.Client.Events;
 using Serilog.Context;
 
@@ -23,6 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private readonly IRabbitMqDeliverySink _deliverySink;
         private readonly ILogger<RabbitMqBackboneConsumerSession> _logger;
         private readonly ushort? _prefetchCount;
+        private readonly string? _diagnosticCorrelationId;
         private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
         private RabbitMqOwnedChannel? _ownedChannel;
@@ -49,7 +52,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             RabbitMqTopologyInitializer topologyInitializer,
             IRabbitMqDeliverySink deliverySink,
             ILogger<RabbitMqBackboneConsumerSession> logger,
-            ushort? prefetchCount)
+            ushort? prefetchCount,
+            string? diagnosticCorrelationId = null)
         {
             ArgumentNullException.ThrowIfNull(identity);
             ArgumentNullException.ThrowIfNull(connectionManager);
@@ -64,6 +68,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _deliverySink = deliverySink;
             _logger = logger;
             _prefetchCount = prefetchCount;
+            _diagnosticCorrelationId = string.IsNullOrWhiteSpace(diagnosticCorrelationId)
+                ? null
+                : diagnosticCorrelationId.Trim();
         }
 
         internal RabbitMqConsumerSessionIdentity Identity => _identity;
@@ -379,6 +386,27 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _lifecycleGate.Release();
             }
 
+            string? correlationId = args.BasicProperties?.CorrelationId;
+            string? rabbitMqMessageId = args.BasicProperties?.MessageId;
+            string? replyTo = args.BasicProperties?.ReplyTo;
+
+            if (ShouldLogDiagnosticPayload(correlationId))
+            {
+                LogPayloadDiagnosticAtCallbackEntry(
+                    _logger,
+                    DateTimeOffset.UtcNow,
+                    _identity.Backbone,
+                    _identity.SessionOrdinal,
+                    _identity.SessionKey,
+                    args.DeliveryTag,
+                    correlationId,
+                    rabbitMqMessageId,
+                    replyTo,
+                    args.Body);
+            }
+
+            byte[] payloadCopy = args.Body.ToArray();
+
             RabbitMqArticleDelivery delivery = new(
                 Backbone: _identity.Backbone,
                 Queue: _queueName,
@@ -389,10 +417,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 RoutingKey: args.RoutingKey,
                 Exchange: args.Exchange,
                 ConnectionGeneration: deliveryGeneration,
-                RabbitMqMessageId: args.BasicProperties?.MessageId,
-                CorrelationId: args.BasicProperties?.CorrelationId,
-                ReplyTo: args.BasicProperties?.ReplyTo,
-                Payload: args.Body,
+                RabbitMqMessageId: rabbitMqMessageId,
+                CorrelationId: correlationId,
+                ReplyTo: replyTo,
+                Payload: payloadCopy,
                 CancellationToken: cancellationToken,
                 Settlement: new RabbitMqDeliverySettlement(this, args.DeliveryTag, deliveryGeneration, tracker),
                 AdmissionTracker: tracker);
@@ -747,6 +775,45 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static void LogConsumerCancellationObserved(ILogger logger, string backbone, int sessionOrdinal, int consumerTagCount)
         {
             logger.LogWarning("RabbitMQ consumer unregistered by broker. Backbone={Backbone} Session={SessionOrdinal} ConsumerTagCount={ConsumerTagCount}", backbone, sessionOrdinal, consumerTagCount);
+        }
+
+        private bool ShouldLogDiagnosticPayload(string? correlationId)
+        {
+            return !string.IsNullOrWhiteSpace(_diagnosticCorrelationId)
+                && !string.IsNullOrWhiteSpace(correlationId)
+                && string.Equals(_diagnosticCorrelationId, correlationId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void LogPayloadDiagnosticAtCallbackEntry(
+            ILogger logger,
+            DateTimeOffset timestampUtc,
+            string backbone,
+            int sessionOrdinal,
+            string sessionKey,
+            ulong deliveryTag,
+            string? correlationId,
+            string? rabbitMqMessageId,
+            string? replyTo,
+            ReadOnlyMemory<byte> payload)
+        {
+            string payloadUtf8 = Encoding.UTF8.GetString(payload.Span);
+            string payloadHex = Convert.ToHexString(payload.Span);
+            string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
+
+            logger.LogInformation(
+                "RabbitMQ payload diagnostic callback-entry. TimestampUtc={TimestampUtc:o} Backbone={Backbone} Session={SessionOrdinal} SessionKey={SessionKey} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}",
+                timestampUtc,
+                backbone,
+                sessionOrdinal,
+                sessionKey,
+                deliveryTag,
+                correlationId,
+                rabbitMqMessageId,
+                replyTo,
+                payload.Length,
+                payloadUtf8,
+                payloadHex,
+                payloadSha256);
         }
 
         private static void LogDeliveryIgnoredFromStaleGeneration(ILogger logger, string backbone, int sessionOrdinal, long deliveryGeneration, long currentGeneration)

@@ -6,7 +6,11 @@
 // Phase 3 RabbitMQ delivery payload parser that extracts Message-ID work requests without
 // inventing unsupported legacy wire-protocol assumptions.
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
@@ -24,11 +28,45 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     {
         private const int SupportedVersion = 1;
 
+        private readonly ILogger<RabbitMqArticleWorkRequestParser> _logger;
+        private readonly string? _diagnosticCorrelationId;
+
+        /// <summary>
+        /// Initializes a new parser instance.
+        /// </summary>
+        /// <param name="runtimeOptions">Immutable runtime options used for optional targeted diagnostics.</param>
+        /// <param name="logger">Logger.</param>
+        public RabbitMqArticleWorkRequestParser(
+            BackFillerRuntimeOptions? runtimeOptions = null,
+            ILogger<RabbitMqArticleWorkRequestParser>? logger = null)
+        {
+            _logger = logger ?? NullLogger<RabbitMqArticleWorkRequestParser>.Instance;
+
+            RabbitMqRuntimeOptions? rabbitMq = runtimeOptions?.RabbitMq;
+            _diagnosticCorrelationId = string.IsNullOrWhiteSpace(rabbitMq?.DiagnosticPayloadCorrelationId)
+                ? null
+                : rabbitMq.DiagnosticPayloadCorrelationId.Trim();
+        }
+
         /// <inheritdoc/>
         public ValueTask<RabbitMqArticleWorkParseResult> ParseAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(delivery);
             cancellationToken.ThrowIfCancellationRequested();
+
+            bool shouldLogDiagnosticPayload = ShouldLogDiagnosticPayload(delivery.CorrelationId);
+            if (shouldLogDiagnosticPayload)
+            {
+                LogPayloadDiagnosticAtParserEntry(
+                    _logger,
+                    DateTimeOffset.UtcNow,
+                    delivery.CorrelationId,
+                    delivery.RabbitMqMessageId,
+                    delivery.ReplyTo,
+                    delivery.ConsumerIdentity,
+                    delivery.DeliveryTag,
+                    delivery.Payload);
+            }
 
             if (delivery.Payload.IsEmpty)
             {
@@ -40,8 +78,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             {
                 jsonDocument = JsonDocument.Parse(delivery.Payload);
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
+                if (shouldLogDiagnosticPayload)
+                {
+                    LogPayloadDiagnosticJsonException(
+                        _logger,
+                        delivery.CorrelationId,
+                        delivery.DeliveryTag,
+                        ex.Message,
+                        ex.Path,
+                        ex.LineNumber,
+                        ex.BytePositionInLine);
+                }
+
                 return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload was not valid JSON."));
             }
 
@@ -108,8 +158,75 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
-        private static RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
+        private bool ShouldLogDiagnosticPayload(string? correlationId)
         {
+            return !string.IsNullOrWhiteSpace(_diagnosticCorrelationId)
+                && !string.IsNullOrWhiteSpace(correlationId)
+                && string.Equals(_diagnosticCorrelationId, correlationId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void LogPayloadDiagnosticAtParserEntry(
+            ILogger logger,
+            DateTimeOffset timestampUtc,
+            string? correlationId,
+            string? rabbitMqMessageId,
+            string? replyTo,
+            string consumerIdentity,
+            ulong deliveryTag,
+            ReadOnlyMemory<byte> payload)
+        {
+            string payloadUtf8 = Encoding.UTF8.GetString(payload.Span);
+            string payloadHex = Convert.ToHexString(payload.Span);
+            string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
+
+            logger.LogInformation(
+                "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc:o} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}",
+                timestampUtc,
+                consumerIdentity,
+                deliveryTag,
+                correlationId,
+                rabbitMqMessageId,
+                replyTo,
+                payload.Length,
+                payloadUtf8,
+                payloadHex,
+                payloadSha256);
+        }
+
+        private static void LogPayloadDiagnosticJsonException(
+            ILogger logger,
+            string? correlationId,
+            ulong deliveryTag,
+            string message,
+            string? path,
+            long? lineNumber,
+            long? bytePositionInLine)
+        {
+            logger.LogWarning(
+                "RabbitMQ payload diagnostic parser JsonException. CorrelationId={CorrelationId} DeliveryTag={DeliveryTag} JsonExceptionMessage={JsonExceptionMessage} JsonPath={JsonPath} JsonLineNumber={JsonLineNumber} JsonBytePositionInLine={JsonBytePositionInLine}",
+                correlationId,
+                deliveryTag,
+                message,
+                path,
+                lineNumber,
+                bytePositionInLine);
+        }
+
+        private RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
+        {
+            string payloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
+
+            _logger.LogWarning(
+                "RabbitMQ article-work request rejected. Reason={Reason} CorrelationId={CorrelationId} ReplyTo={ReplyTo} RabbitMqMessageId={RabbitMqMessageId} DeliveryTag={DeliveryTag} Backbone={Backbone} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}",
+                reason,
+                delivery.CorrelationId,
+                delivery.ReplyTo,
+                delivery.RabbitMqMessageId,
+                delivery.DeliveryTag,
+                delivery.Backbone,
+                delivery.Payload.Length,
+                payloadSha256);
+
             ArticleWorkProcessingResult result = new(
                 Request: new RabbitMqArticleWorkRequest(
                     Version: SupportedVersion,

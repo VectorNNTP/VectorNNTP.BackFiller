@@ -42,32 +42,43 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             try
             {
                 BackboneArticleRetrievalResult retrieval = await _retriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
-                NntpArticleGrabberResult grabberResult = retrieval.GrabberResult;
+                NntpArticleSessionLease? lease = retrieval.Lease;
 
-                (ArticleWorkProcessingOutcome outcome, ArticleWorkDispositionRecommendation disposition) = Classify(grabberResult);
-                ArticleWorkProcessingResult result = new(
-                    Request: request,
-                    Delivery: delivery,
-                    Outcome: outcome,
-                    Disposition: disposition,
-                    GrabberResult: grabberResult,
-                    ProviderFailureCode: grabberResult.AcquisitionFailureCode,
-                    ResponseCode: grabberResult.ResponseCode,
-                    ResponseText: grabberResult.ResponseText,
-                    UnexpectedException: null);
+                try
+                {
+                    NntpArticleGrabberResult grabberResult = retrieval.GrabberResult;
+                    (ArticleWorkProcessingOutcome outcome, ArticleWorkDispositionRecommendation disposition) = Classify(grabberResult);
+                    ArticleWorkProcessingResult result = new(
+                        Request: request,
+                        Delivery: delivery,
+                        Outcome: outcome,
+                        Disposition: disposition,
+                        GrabberResult: grabberResult,
+                        ProviderFailureCode: grabberResult.AcquisitionFailureCode,
+                        ResponseCode: grabberResult.ResponseCode,
+                        ResponseText: grabberResult.ResponseText,
+                        UnexpectedException: null);
 
-                _logger.LogInformation(
-                    "Article processing completed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} ProviderFailureCode={ProviderFailureCode} ResponseCode={ResponseCode}",
-                    request.RequestId,
-                    result.CorrelationId,
-                    request.MessageId,
-                    request.Backbone,
-                    result.Outcome,
-                    result.Disposition,
-                    result.ProviderFailureCode,
-                    result.ResponseCode);
+                    _logger.LogInformation(
+                        "Article processing completed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} ProviderFailureCode={ProviderFailureCode} ResponseCode={ResponseCode}",
+                        request.RequestId,
+                        result.CorrelationId,
+                        request.MessageId,
+                        request.Backbone,
+                        result.Outcome,
+                        result.Disposition,
+                        result.ProviderFailureCode,
+                        result.ResponseCode);
 
-                return result;
+                    return result;
+                }
+                finally
+                {
+                    if (lease is not null)
+                    {
+                        await lease.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

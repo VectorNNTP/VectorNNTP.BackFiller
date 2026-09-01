@@ -176,6 +176,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         internal static void RegisterControlPlaneService(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
+            _ = services.AddSingleton<BackboneUsableCapacityState>();
+            _ = services.AddSingleton<IBackboneUsableCapacityProvider>(static provider => provider.GetRequiredService<BackboneUsableCapacityState>());
+            _ = services.AddSingleton<IBackboneUsableCapacityStateWriter>(static provider => provider.GetRequiredService<BackboneUsableCapacityState>());
             _ = services.AddSingleton<ControlPlaneService>();
             _ = services.AddSingleton<IBackboneSessionLeaseProvider>(static provider => provider.GetRequiredService<ControlPlaneService>());
             _ = services.AddHostedService(static provider => provider.GetRequiredService<ControlPlaneService>());

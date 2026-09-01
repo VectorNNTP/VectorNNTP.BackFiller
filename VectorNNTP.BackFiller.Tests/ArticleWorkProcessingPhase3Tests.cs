@@ -6,13 +6,17 @@
 // Focused Phase 3 tests for JSON application payload parsing, AMQP RPC metadata separation,
 // deterministic classification, and identity preservation boundaries.
 
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
-using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using Xunit;
 
@@ -119,6 +123,36 @@ namespace VectorNNTP.Backfiller.Tests
                 .ConfigureAwait(false);
 
             AssertInvalidRequest(parseResult);
+        }
+
+        [Fact]
+        public async Task ParseAsync_WhenInvalidRequest_EmitsWarningWithExactFailureReasonAndDeliveryContextAsync()
+        {
+            List<CapturedLogEntry> entries = [];
+            ILogger<RabbitMqArticleWorkRequestParser> logger = new CapturingLogger<RabbitMqArticleWorkRequestParser>(entries);
+            RabbitMqArticleWorkRequestParser parser = new(logger: logger);
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                "{invalid",
+                backbone: "Giganews",
+                correlationId: "corr-parser-failure",
+                replyTo: "rpc.reply.queue",
+                deliveryTag: 37);
+
+            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None).ConfigureAwait(false);
+
+            AssertInvalidRequest(parseResult);
+
+            CapturedLogEntry warning = Assert.Single(entries, static entry => entry.Level == LogLevel.Warning && entry.Message.Contains("RabbitMQ article-work request rejected.", StringComparison.Ordinal));
+            Assert.Contains("Reason=RabbitMQ article-work payload was not valid JSON.", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("CorrelationId=corr-parser-failure", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("ReplyTo=rpc.reply.queue", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("RabbitMqMessageId=rmq-id-17", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("DeliveryTag=37", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("Backbone=Giganews", warning.Message, StringComparison.Ordinal);
+            Assert.Contains("PayloadLength=8", warning.Message, StringComparison.Ordinal);
+            string expectedPayloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
+            Assert.Contains($"PayloadSha256={expectedPayloadSha256}", warning.Message, StringComparison.Ordinal);
+            Assert.Equal("RabbitMQ article-work payload was not valid JSON.", parseResult.Failure?.ResponseText);
         }
 
         [Fact]
@@ -397,6 +431,187 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(NntpArticleAcquisitionFailureCode.Cancelled, result.ProviderFailureCode);
         }
 
+        [Fact]
+        public async Task ProcessAsync_WhenLeaseIsAcquiredAndWorkflowSucceeds_DisposesLeaseAndAllowsImmediateReuseAsync()
+        {
+            await using FakeLeaseServer server = await FakeLeaseServer.StartAsync().ConfigureAwait(false);
+            await using NntpArticleExecutionSessionManager manager = await CreateSingleSlotManagerAsync(server.Port).ConfigureAwait(false);
+
+            int acquiredSlotId = -1;
+            FakeBackboneArticleRetriever retriever = new(async request =>
+            {
+                NntpArticleSessionLease lease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+                acquiredSlotId = lease.SlotId;
+                return new BackboneArticleRetrievalResult(lease, CreateSuccessfulGrabberResult(request.MessageId));
+            });
+
+            ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
+            RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-success@example.com>", "BackboneA");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-success", replyTo: "rpc.responses");
+
+            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(ArticleWorkProcessingOutcome.Success, result.Outcome);
+            Assert.Equal(ArticleWorkDispositionRecommendation.Ack, result.Disposition);
+
+            await using NntpArticleSessionLease reacquiredLease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(acquiredSlotId, reacquiredLease.SlotId);
+            result.Dispose();
+        }
+
+        [Fact]
+        public async Task ProcessAsync_WhenFailureOccursAfterLeaseAcquisition_ReleasesLeaseExactlyOnceForReuseAsync()
+        {
+            await using FakeLeaseServer server = await FakeLeaseServer.StartAsync().ConfigureAwait(false);
+            await using NntpArticleExecutionSessionManager manager = await CreateSingleSlotManagerAsync(server.Port).ConfigureAwait(false);
+
+            int acquiredSlotId = -1;
+            FakeBackboneArticleRetriever retriever = new(async request =>
+            {
+                NntpArticleSessionLease lease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+                acquiredSlotId = lease.SlotId;
+                return new BackboneArticleRetrievalResult(lease, GrabberResult: null!);
+            });
+
+            ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
+            RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-failure@example.com>", "BackboneA");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-failure", replyTo: "rpc.responses");
+
+            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(ArticleWorkProcessingOutcome.UnexpectedFailure, result.Outcome);
+            Assert.NotNull(result.UnexpectedException);
+
+            await using NntpArticleSessionLease reacquiredLease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(acquiredSlotId, reacquiredLease.SlotId);
+        }
+
+        [Fact]
+        public async Task ProcessAsync_ReleasesLeaseBeforeDownstreamProcessingStageBeginsAsync()
+        {
+            await using FakeLeaseServer server = await FakeLeaseServer.StartAsync().ConfigureAwait(false);
+            await using NntpArticleExecutionSessionManager manager = await CreateSingleSlotManagerAsync(server.Port).ConfigureAwait(false);
+
+            FakeBackboneArticleRetriever retriever = new(async request =>
+            {
+                NntpArticleSessionLease lease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+                return new BackboneArticleRetrievalResult(lease, CreateSuccessfulGrabberResult(request.MessageId));
+            });
+
+            ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
+            RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-ordering@example.com>", "BackboneA");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-order", replyTo: "rpc.responses");
+
+            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
+
+            TaskCompletionSource<bool> allowDownstream = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task downstreamTask = Task.Run(async () =>
+            {
+                await allowDownstream.Task.ConfigureAwait(false);
+                result.Dispose();
+            });
+
+            await using NntpArticleSessionLease downstreamStageLease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+            Assert.False(allowDownstream.Task.IsCompleted);
+
+            allowDownstream.SetResult(true);
+            await downstreamTask.ConfigureAwait(false);
+        }
+
+        [Fact]
+        public async Task ProcessAsync_WhenTwoRequestsRunSequentially_ReusesSameSlotWithoutDelayAsync()
+        {
+            await using FakeLeaseServer server = await FakeLeaseServer.StartAsync().ConfigureAwait(false);
+            await using NntpArticleExecutionSessionManager manager = await CreateSingleSlotManagerAsync(server.Port).ConfigureAwait(false);
+
+            List<int> slotIds = [];
+            FakeBackboneArticleRetriever retriever = new(async request =>
+            {
+                NntpArticleSessionLease lease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+                slotIds.Add(lease.SlotId);
+                return new BackboneArticleRetrievalResult(lease, CreateSuccessfulGrabberResult(request.MessageId));
+            });
+
+            ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
+
+            RabbitMqArticleWorkRequest firstRequest = new(1, Guid.NewGuid(), "<lease-reuse-1@example.com>", "BackboneA");
+            RabbitMqArticleDelivery firstDelivery = CreateDelivery(CreateValidJsonPayload(firstRequest.RequestId, firstRequest.MessageId, firstRequest.Backbone), correlationId: "rpc-lease-reuse-1", replyTo: "rpc.responses");
+            ArticleWorkProcessingResult firstResult = await processor.ProcessAsync(firstRequest, firstDelivery, CancellationToken.None).ConfigureAwait(false);
+
+            RabbitMqArticleWorkRequest secondRequest = new(1, Guid.NewGuid(), "<lease-reuse-2@example.com>", "BackboneA");
+            RabbitMqArticleDelivery secondDelivery = CreateDelivery(CreateValidJsonPayload(secondRequest.RequestId, secondRequest.MessageId, secondRequest.Backbone), correlationId: "rpc-lease-reuse-2", replyTo: "rpc.responses");
+            ArticleWorkProcessingResult secondResult = await processor.ProcessAsync(secondRequest, secondDelivery, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(2, slotIds.Count);
+            Assert.Equal(slotIds[0], slotIds[1]);
+
+            firstResult.Dispose();
+            secondResult.Dispose();
+        }
+
+        [Fact]
+        public async Task ProcessAsync_DisposingProcessingResultDoesNotTriggerSecondLeaseReleaseAsync()
+        {
+            await using FakeLeaseServer server = await FakeLeaseServer.StartAsync().ConfigureAwait(false);
+            await using NntpArticleExecutionSessionManager manager = await CreateSingleSlotManagerAsync(server.Port).ConfigureAwait(false);
+
+            FakeBackboneArticleRetriever retriever = new(async request =>
+            {
+                NntpArticleSessionLease lease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+                return new BackboneArticleRetrievalResult(lease, CreateSuccessfulGrabberResult(request.MessageId));
+            });
+
+            ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
+            RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-no-double-dispose@example.com>", "BackboneA");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-nodouble", replyTo: "rpc.responses");
+
+            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
+
+            result.Dispose();
+            result.Dispose();
+
+            await using NntpArticleSessionLease heldLease = await manager.AcquireAsync(request.MessageId, CancellationToken.None).ConfigureAwait(false);
+            Task<NntpArticleSessionLease> blockedAcquireTask = manager.AcquireAsync(request.MessageId, CancellationToken.None).AsTask();
+
+            Assert.False(blockedAcquireTask.IsCompleted);
+
+            await heldLease.DisposeAsync().ConfigureAwait(false);
+            await using NntpArticleSessionLease nextLease = await blockedAcquireTask.ConfigureAwait(false);
+        }
+
+        private static NntpArticleGrabberResult CreateSuccessfulGrabberResult(string messageId)
+        {
+            return new NntpArticleGrabberResult(
+                MessageId: messageId,
+                IsSuccess: true,
+                FailureCode: NntpArticleGrabberFailureCode.None,
+                AcquisitionFailureCode: null,
+                ParseFailureCode: null,
+                YEncStatus: null,
+                ResponseCode: 220,
+                ResponseText: "Article retrieved.",
+                Success: null);
+        }
+
+        private static async Task<NntpArticleExecutionSessionManager> CreateSingleSlotManagerAsync(int port)
+        {
+            NntpAccountSnapshot account = new(
+                EntryId: Guid.NewGuid(),
+                Backbone: "BackboneA",
+                Hostname: "127.0.0.1",
+                KeepAliveSeconds: 30,
+                MaxConnections: 1,
+                Password: string.Empty,
+                Port: (ushort)port,
+                ServerId: 1,
+                Username: string.Empty,
+                UseSsl: false);
+
+            NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+            return manager;
+        }
+
         private static void AssertInvalidRequest(RabbitMqArticleWorkParseResult parseResult)
         {
             Assert.False(parseResult.IsSuccess);
@@ -468,6 +683,115 @@ namespace VectorNNTP.Backfiller.Tests
                 cancellationToken.ThrowIfCancellationRequested();
                 _ = requeue;
                 return ValueTask.CompletedTask;
+            }
+        }
+
+        private sealed record CapturedLogEntry(LogLevel Level, string Message);
+
+        private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries) : ILogger<T>
+        {
+            private readonly List<CapturedLogEntry> _entries = entries ?? throw new ArgumentNullException(nameof(entries));
+
+            public IDisposable BeginScope<TState>(TState state)
+                where TState : notnull
+            {
+                return NullScope.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                string message = formatter(state, exception);
+                _entries.Add(new CapturedLogEntry(logLevel, message));
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                internal static readonly NullScope Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
+        }
+
+        private sealed class FakeLeaseServer : IAsyncDisposable
+        {
+            private readonly TcpListener _listener;
+            private readonly CancellationTokenSource _shutdown;
+            private readonly Task _acceptLoop;
+
+            private FakeLeaseServer(TcpListener listener)
+            {
+                _listener = listener;
+                _shutdown = new CancellationTokenSource();
+                _acceptLoop = AcceptLoopAsync();
+            }
+
+            internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+            internal static Task<FakeLeaseServer> StartAsync()
+            {
+                TcpListener listener = new(IPAddress.Loopback, 0);
+                listener.Start();
+                return Task.FromResult(new FakeLeaseServer(listener));
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                _shutdown.Cancel();
+                _listener.Stop();
+
+                try
+                {
+                    await _acceptLoop.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                _shutdown.Dispose();
+            }
+
+            private async Task AcceptLoopAsync()
+            {
+                while (!_shutdown.IsCancellationRequested)
+                {
+                    try
+                    {
+                        using TcpClient client = await _listener.AcceptTcpClientAsync(_shutdown.Token).ConfigureAwait(false);
+                        using NetworkStream stream = client.GetStream();
+                        await WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+
+                        try
+                        {
+                            await Task.Delay(Timeout.Infinite, _shutdown.Token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            return;
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            private static async Task WriteAsciiLineAsync(Stream stream, string line)
+            {
+                byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
+                await stream.WriteAsync(bytes, CancellationToken.None).ConfigureAwait(false);
+                await stream.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             }
         }
     }

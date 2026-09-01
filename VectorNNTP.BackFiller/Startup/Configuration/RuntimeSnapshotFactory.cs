@@ -156,7 +156,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 RequestedHeartbeatSeconds: rabbitMq.RequestedHeartbeatSeconds ?? 0,
                 SocketTimeoutSeconds: rabbitMq.SocketTimeoutSeconds ?? 0,
                 RequestedChannelMax: rabbitMq.RequestedChannelMax ?? 0,
-                ConsumerPrefetchCount: rabbitMq.ConsumerPrefetchCount);
+                ConsumerPrefetchCount: rabbitMq.ConsumerPrefetchCount,
+                DiagnosticPayloadCorrelationId: rabbitMq.DiagnosticPayloadCorrelationId);
         }
 
         /// <summary>

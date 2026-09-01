@@ -38,6 +38,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="SocketTimeoutSeconds">Socket read/write timeout in seconds.</param>
     /// <param name="RequestedChannelMax">Requested channel max for AMQP negotiation.</param>
     /// <param name="ConsumerPrefetchCount">Optional RabbitMQ consumer prefetch count; when <see langword="null"/>, channel defaults are preserved.</param>
+    /// <param name="DiagnosticPayloadCorrelationId">Optional AMQP CorrelationId used to gate temporary payload diagnostics.</param>
     internal sealed record RabbitMqRuntimeOptions(
         IReadOnlyList<string> Hosts,
         int Port,
@@ -66,7 +67,8 @@ namespace VectorNNTP.Backfiller.Configuration
         int RequestedHeartbeatSeconds,
         int SocketTimeoutSeconds,
         int RequestedChannelMax,
-        ushort? ConsumerPrefetchCount)
+        ushort? ConsumerPrefetchCount,
+        string? DiagnosticPayloadCorrelationId = null)
     {
         /// <summary>
         /// Gets a sanitized connection name used when no explicit RabbitMQ client-provided name exists in configuration.

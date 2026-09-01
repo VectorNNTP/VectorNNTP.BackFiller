@@ -503,6 +503,11 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         [Range(1, 65535, ErrorMessage = "BackFiller:RabbitMQ:ConsumerPrefetchCount must be between 1 and 65535")]
         public ushort? ConsumerPrefetchCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets an optional AMQP CorrelationId used to gate temporary payload diagnostics.
+        /// </summary>
+        public string? DiagnosticPayloadCorrelationId { get; set; }
     }
 
     /// <summary>

@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
                 snapshotProvider,
                 new TrackingRabbitMqCapacityRetirementCoordinator(),
-                loggerProvider);
+                loggerFactory: loggerProvider);
 
             using CancellationTokenSource startupCancellation = new();
             Task startTask = service.StartAsync(startupCancellation.Token);
@@ -385,7 +385,7 @@ namespace VectorNNTP.Backfiller.Tests
                 new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
                 snapshotProvider,
                 rabbitCoordinator,
-                loggerProvider,
+                loggerFactory: loggerProvider,
                 serverCertificateValidationCallback: null);
 
             await service.StartAsync(CancellationToken.None);
@@ -736,6 +736,76 @@ namespace VectorNNTP.Backfiller.Tests
             await service.StopAsync(CancellationToken.None);
         }
 
+        [Fact]
+        public async Task StartAsync_PublishesAuthoritativeBackboneCapacitySnapshot()
+        {
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port),
+            ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            RecordingBackboneUsableCapacityStateWriter capacityWriter = new();
+            ControlPlaneService service = new(
+                NullLogger<ControlPlaneService>.Instance,
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator(),
+                capacityWriter);
+
+            await service.StartAsync(CancellationToken.None);
+
+            Assert.True(capacityWriter.GetLatestCapacity("Giganews") > 0);
+
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        [Fact]
+        public async Task RefreshAndReconcileOnceAsync_WhenCapacityDropsToZero_PublishesZeroBackboneCapacitySnapshot()
+        {
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port),
+            ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            RecordingBackboneUsableCapacityStateWriter capacityWriter = new();
+            ControlPlaneService service = new(
+                NullLogger<ControlPlaneService>.Instance,
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator(),
+                capacityWriter);
+
+            await service.StartAsync(CancellationToken.None);
+            Assert.True(capacityWriter.GetLatestCapacity("Giganews") > 0);
+
+            desiredAccounts[0] = CreateAccountSnapshot(accountId, maxConnections: 0, port: server.Port);
+            await service.RefreshAndReconcileOnceAsync(CancellationToken.None);
+
+            Assert.Equal(0, capacityWriter.GetLatestCapacity("Giganews"));
+
+            await service.StopAsync(CancellationToken.None);
+        }
+
         private sealed record RabbitMqRetirementCall(Guid AccountId, int RetainConnectionCount);
 
         private sealed class TrackingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
@@ -765,6 +835,50 @@ namespace VectorNNTP.Backfiller.Tests
             internal void Release()
             {
                 _ = _release.TrySetResult(true);
+            }
+        }
+
+        private sealed class RecordingBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
+        {
+            private readonly object _gate = new();
+            private readonly List<Dictionary<string, int>> _snapshots = [];
+
+            internal IReadOnlyList<IReadOnlyDictionary<string, int>> Snapshots
+            {
+                get
+                {
+                    lock (_gate)
+                    {
+                        return [.. _snapshots.Select(static snapshot => (IReadOnlyDictionary<string, int>)snapshot)];
+                    }
+                }
+            }
+
+            public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
+            {
+                ArgumentNullException.ThrowIfNull(capacityByBackbone);
+
+                Dictionary<string, int> copy = new(capacityByBackbone, StringComparer.OrdinalIgnoreCase);
+                lock (_gate)
+                {
+                    _snapshots.Add(copy);
+                }
+            }
+
+            internal int GetLatestCapacity(string backbone)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
+
+                lock (_gate)
+                {
+                    if (_snapshots.Count == 0)
+                    {
+                        return 0;
+                    }
+
+                    Dictionary<string, int> latest = _snapshots[^1];
+                    return latest.TryGetValue(backbone, out int value) ? value : 0;
+                }
             }
         }
 

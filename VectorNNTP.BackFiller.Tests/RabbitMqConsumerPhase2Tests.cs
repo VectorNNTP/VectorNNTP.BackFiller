@@ -7,10 +7,12 @@
 // manual-ack registration semantics, generation-based recreation, and shutdown safety.
 
 using System.Reflection;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
@@ -104,6 +106,56 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(payload, delivery.Payload.ToArray());
 
             Assert.False(consumerChannel.LastConsumeAutoAck);
+
+            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
+        public async Task Delivery_HandoffRetainsOwnedPayloadAfterSourceBufferMutation()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 7, connectionLimit: 16),
+                manager,
+                topologyInitializer,
+                sink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: null);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            byte[] sourcePayload = [0x7B, 0x22, 0x61, 0x22, 0x3A, 0x31, 0x7D];
+            byte[] expectedPayload = sourcePayload.ToArray();
+            string expectedSha256 = Convert.ToHexString(SHA256.HashData(expectedPayload));
+
+            await consumerChannel.DeliverAsync(
+                deliveryTag: 9001,
+                redelivered: false,
+                exchange: "grabbers.giganews",
+                routingKey: "grabbers.giganews",
+                payload: sourcePayload,
+                cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+            for (int i = 0; i < sourcePayload.Length; i++)
+            {
+                sourcePayload[i] ^= 0xFF;
+            }
+
+            RabbitMqArticleDelivery delivery = Assert.Single(sink.Deliveries);
+            byte[] deliveryPayload = delivery.Payload.ToArray();
+            string actualSha256 = Convert.ToHexString(SHA256.HashData(deliveryPayload));
+
+            Assert.Equal(expectedPayload, deliveryPayload);
+            Assert.Equal(expectedSha256, actualSha256);
 
             await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
@@ -681,6 +733,93 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
+        public async Task RetireCapacityAsync_WhenAdmittedDeliveryIsInFlight_DrainsSettlementBeforeChannelDispose()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            ObservingRealSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey1 = $"{accountId:N}:1";
+            string sessionKey2 = $"{accountId:N}:2";
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(10));
+            CancellationToken timeoutToken = timeoutCts.Token;
+
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 2)).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(2, service.ActiveSessionCount);
+            Assert.Equal(1, connector.ConnectCallCount);
+            long initialGeneration = manager.ConnectionGeneration;
+
+            ObservedSessionRuntime firstSession = sessionFactory.RequireLatestSession(sessionKey1);
+            ObservedSessionRuntime secondSession = sessionFactory.RequireLatestSession(sessionKey2);
+            Assert.True(firstSession.IsRunning);
+            Assert.True(secondSession.IsRunning);
+
+            TrackingConnection connection = connector.RequireLastConnection();
+            List<TrackingChannel> consumerChannels = [.. connection.Channels.Where(static channel => channel.ConsumeCallCount == 1)];
+            Assert.Equal(2, consumerChannels.Count);
+
+            TrackingChannel firstChannel = consumerChannels[0];
+            TrackingChannel secondChannel = consumerChannels[1];
+            Assert.True(firstChannel.IsConsumerCurrentlyActive);
+            Assert.True(secondChannel.IsConsumerCurrentlyActive);
+
+            await secondChannel.DeliverAsync(1101UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x41 }, cancellationToken: timeoutToken).ConfigureAwait(false);
+            RabbitMqArticleDelivery admitted = await sessionFactory.WaitForDeliveryAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(sessionKey2, admitted.ConsumerIdentity);
+            Assert.Single(sessionFactory.GetDeliveriesForSession(sessionKey2));
+
+            Task retirementTask = service.RetireCapacityAsync(accountId, retainConnectionCount: 1, timeoutToken);
+            await secondChannel.CancelObserved.WaitAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.False(retirementTask.IsCompleted);
+
+            await secondChannel.DeliverAsync(1102UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x42 }, cancellationToken: timeoutToken).ConfigureAwait(false);
+            Assert.Single(sessionFactory.GetDeliveriesForSession(sessionKey2));
+            Assert.False(retirementTask.IsCompleted);
+
+            await admitted.Settlement.AckAsync(timeoutToken).ConfigureAwait(false);
+            await secondChannel.DisposedObserved.WaitAsync(timeoutToken).ConfigureAwait(false);
+
+            int cancelIndex = secondChannel.OperationLog.IndexOf("cancel");
+            int ackIndex = secondChannel.OperationLog.IndexOf("ack");
+            int disposeIndex = secondChannel.OperationLog.IndexOf("dispose");
+            Assert.True(cancelIndex >= 0);
+            Assert.True(ackIndex > cancelIndex);
+            Assert.True(disposeIndex > ackIndex);
+
+            await retirementTask.WaitAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(1, service.ActiveSessionCount);
+            Assert.True(firstSession.IsRunning);
+            Assert.False(secondSession.IsRunning);
+
+            Assert.Equal(0, firstSession.StopCallCount);
+            Assert.Equal(0, firstSession.DisposeCallCount);
+            Assert.Equal(1, sessionFactory.GetCreatedCount(sessionKey1));
+            Assert.Equal(1, sessionFactory.GetCreatedCount(sessionKey2));
+
+            Assert.Equal(1, secondSession.StopCallCount);
+            Assert.Equal(1, secondSession.DisposeCallCount);
+            Assert.Equal(0, firstChannel.AckCallCount);
+            Assert.Equal(1, secondChannel.AckCallCount);
+            Assert.Equal(1, connector.ConnectCallCount);
+            Assert.Equal(initialGeneration, manager.ConnectionGeneration);
+
+            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
         public async Task RetireCapacityAsync_WhenShutdownSignaled_CompletesWithoutDeadlock()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
@@ -999,6 +1138,100 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
+        public async Task ReconcileSessions_WhenStartupCapacityIsUnavailable_DoesNotStartConsumerUntilCapacityBecomesAvailable()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            TrackingSessionFactory sessionFactory = new(manager, topologyInitializer);
+            CapacityStateBackboneCapacityProvider controlPlane = new();
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, controlPlane, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey1 = $"{accountId:N}:1";
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+
+            controlPlane.SetBackboneCapacity("Giganews", hasCapacity: false);
+            await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(0, service.ActiveSessionCount);
+            Assert.Throws<InvalidOperationException>(() => sessionFactory.RequireSession(sessionKey1));
+
+            controlPlane.SetBackboneCapacity("Giganews", hasCapacity: true);
+            await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingSession started = sessionFactory.RequireSession(sessionKey1);
+            Assert.Equal(1, started.StartCallCount);
+            Assert.True(started.IsRunning);
+
+            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
+        public async Task ReconcileSessions_WhenRuntimeCapacityDropsToZero_StopsNewAdmissionAndResumesAfterRecovery()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            ObservingRealSessionFactory sessionFactory = new(manager, topologyInitializer);
+            CapacityStateBackboneCapacityProvider capacityProvider = new();
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, capacityProvider, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey1 = $"{accountId:N}:1";
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+
+            capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: true);
+            await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            ObservedSessionRuntime firstRuntime = sessionFactory.RequireLatestSession(sessionKey1);
+            TrackingChannel firstChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
+
+            await firstChannel.DeliverAsync(3001UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x01 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleDelivery admitted = await sessionFactory.WaitForDeliveryAsync(sessionKey1, CancellationToken.None).ConfigureAwait(false);
+
+            capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: false);
+            Task retireReconcile = service.ReconcileOnceAsync(CancellationToken.None);
+            await firstChannel.CancelObserved.ConfigureAwait(false);
+
+            await admitted.Settlement.AckAsync(CancellationToken.None).ConfigureAwait(false);
+            await retireReconcile.ConfigureAwait(false);
+
+            Assert.Equal(1, firstRuntime.StopCallCount);
+            Assert.False(firstRuntime.LastCancelAdmittedWork ?? true);
+            Assert.True(firstChannel.CancelCallCount >= 1);
+            Assert.False(firstChannel.IsConsumerCurrentlyActive);
+            Assert.Single(firstRuntime.Deliveries);
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await firstChannel.DeliverAsync(3002UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x02 }, cancellationToken: CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.Single(firstRuntime.Deliveries);
+
+            capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: true);
+            await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(2, sessionFactory.GetCreatedCount(sessionKey1));
+            ObservedSessionRuntime recoveredRuntime = sessionFactory.RequireLatestSession(sessionKey1);
+            Assert.True(recoveredRuntime.IsRunning);
+
+            TrackingChannel secondChannel = connector.RequireLastConnection().Channels.Where(static channel => channel.ConsumeCallCount == 1).Last();
+            await secondChannel.DeliverAsync(3003UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x03 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleDelivery resumed = await recoveredRuntime.WaitForDeliveryAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(3003UL, resumed.DeliveryTag);
+
+            await resumed.Settlement.AckAsync(CancellationToken.None).ConfigureAwait(false);
+
+            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
         public async Task ActiveSessionCount_IsConsistentlySynchronized()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
@@ -1151,6 +1384,23 @@ namespace VectorNNTP.Backfiller.Tests
                 return _sessions.TryGetValue(sessionKey, out TrackingSession? session)
                     ? session
                     : throw new InvalidOperationException($"Expected tracked RabbitMQ session '{sessionKey}'.");
+            }
+        }
+
+        private sealed class CapacityStateBackboneCapacityProvider : IBackboneUsableCapacityProvider
+        {
+            private readonly Dictionary<string, bool> _capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
+
+            internal void SetBackboneCapacity(string backbone, bool hasCapacity)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
+                _capacityByBackbone[backbone] = hasCapacity;
+            }
+
+            public bool HasUsableCapacityForBackbone(string backbone)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
+                return _capacityByBackbone.TryGetValue(backbone, out bool hasCapacity) && hasCapacity;
             }
         }
 
@@ -1363,6 +1613,176 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 DisposeCalled = true;
                 await StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            }
+        }
+
+        private sealed class ObservingRealSessionFactory : IRabbitMqConsumerSessionFactory
+        {
+            private readonly Dictionary<string, List<ObservedSessionRuntime>> _sessionsByKey = new(StringComparer.Ordinal);
+            private readonly object _gate = new();
+            private readonly RabbitMqConnectionManager _connectionManager;
+            private readonly RabbitMqTopologyInitializer _topologyInitializer;
+
+            internal ObservingRealSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer)
+            {
+                _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+                _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
+            }
+
+            public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
+            {
+                ArgumentNullException.ThrowIfNull(identity);
+                ArgumentNullException.ThrowIfNull(deliverySink);
+
+                ObservedSessionRuntime runtime = new(identity, deliverySink);
+                IRabbitMqDeliverySink observingSink = new ForwardingObservingDeliverySink(runtime, deliverySink);
+                RabbitMqBackboneConsumerSession innerSession = new(identity, _connectionManager, _topologyInitializer, observingSink, NullLogger<RabbitMqBackboneConsumerSession>.Instance, prefetchCount);
+                runtime.AttachSession(innerSession);
+
+                lock (_gate)
+                {
+                    if (!_sessionsByKey.TryGetValue(identity.SessionKey, out List<ObservedSessionRuntime>? sessions))
+                    {
+                        sessions = [];
+                        _sessionsByKey[identity.SessionKey] = sessions;
+                    }
+
+                    sessions.Add(runtime);
+                }
+
+                return runtime;
+            }
+
+            internal ObservedSessionRuntime RequireLatestSession(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    if (!_sessionsByKey.TryGetValue(sessionKey, out List<ObservedSessionRuntime>? sessions) || sessions.Count == 0)
+                    {
+                        throw new InvalidOperationException($"Expected observed session '{sessionKey}'.");
+                    }
+
+                    return sessions[^1];
+                }
+            }
+
+            internal int GetCreatedCount(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    return _sessionsByKey.TryGetValue(sessionKey, out List<ObservedSessionRuntime>? sessions)
+                        ? sessions.Count
+                        : 0;
+                }
+            }
+
+            internal async Task<RabbitMqArticleDelivery> WaitForDeliveryAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                ObservedSessionRuntime session = RequireLatestSession(sessionKey);
+                return await session.WaitForDeliveryAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            internal IReadOnlyList<RabbitMqArticleDelivery> GetDeliveriesForSession(string sessionKey)
+            {
+                return RequireLatestSession(sessionKey).Deliveries;
+            }
+        }
+
+        private sealed class ObservedSessionRuntime : IRabbitMqConsumerSession
+        {
+            private readonly RabbitMqConsumerSessionIdentity _identity;
+            private readonly IRabbitMqDeliverySink _downstreamSink;
+            private readonly List<RabbitMqArticleDelivery> _deliveries = [];
+            private readonly TaskCompletionSource<RabbitMqArticleDelivery> _firstDelivery = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private RabbitMqBackboneConsumerSession? _inner;
+
+            internal ObservedSessionRuntime(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink downstreamSink)
+            {
+                _identity = identity ?? throw new ArgumentNullException(nameof(identity));
+                _downstreamSink = downstreamSink ?? throw new ArgumentNullException(nameof(downstreamSink));
+            }
+
+            public RabbitMqConsumerSessionIdentity Identity => _identity;
+
+            public bool IsRunning => _inner?.IsRunning ?? false;
+
+            public long ActiveConnectionGeneration => _inner?.ActiveConnectionGeneration ?? 0;
+
+            internal int StopCallCount { get; private set; }
+
+            internal int DisposeCallCount { get; private set; }
+
+            internal bool? LastCancelAdmittedWork { get; private set; }
+
+            internal IReadOnlyList<RabbitMqArticleDelivery> Deliveries => _deliveries;
+
+            internal void AttachSession(RabbitMqBackboneConsumerSession session)
+            {
+                _inner = session ?? throw new ArgumentNullException(nameof(session));
+            }
+
+            internal ValueTask OnDeliveryObservedAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _deliveries.Add(delivery);
+                _ = _firstDelivery.TrySetResult(delivery);
+                return ValueTask.CompletedTask;
+            }
+
+            internal async Task<RabbitMqArticleDelivery> WaitForDeliveryAsync(CancellationToken cancellationToken)
+            {
+                return await _firstDelivery.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            public async Task StartAsync(CancellationToken cancellationToken)
+            {
+                if (_inner is null)
+                {
+                    throw new InvalidOperationException("Observed session has not been attached to an inner RabbitMQ session.");
+                }
+
+                await _inner.StartAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
+            {
+                StopCallCount++;
+                LastCancelAdmittedWork = cancelAdmittedWork;
+                if (_inner is null)
+                {
+                    throw new InvalidOperationException("Observed session has not been attached to an inner RabbitMQ session.");
+                }
+
+                await _inner.StopAsync(cancellationToken, cancelAdmittedWork).ConfigureAwait(false);
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                DisposeCallCount++;
+                if (_inner is null)
+                {
+                    return;
+                }
+
+                await _inner.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        private sealed class ForwardingObservingDeliverySink : IRabbitMqDeliverySink
+        {
+            private readonly ObservedSessionRuntime _owner;
+            private readonly IRabbitMqDeliverySink _inner;
+
+            internal ForwardingObservingDeliverySink(ObservedSessionRuntime owner, IRabbitMqDeliverySink inner)
+            {
+                _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+                _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            }
+
+            public async ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
+            {
+                await _owner.OnDeliveryObservedAsync(delivery, cancellationToken).ConfigureAwait(false);
+                await _inner.OnDeliveryAsync(delivery, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -1739,6 +2159,8 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly IChannel _underlyingChannel = DispatchProxy.Create<IChannel, NoOpChannelProxy>();
             private IAsyncBasicConsumer? _consumer;
             private string? _consumerTag;
+            private readonly TaskCompletionSource<bool> _cancelObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _disposedObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             public IChannel UnderlyingChannel => _underlyingChannel;
 
@@ -1761,6 +2183,10 @@ namespace VectorNNTP.Backfiller.Tests
             public List<string> OperationLog { get; } = [];
 
             public bool IsConsumerCurrentlyActive => ConsumeCallCount > CancelCallCount && !Disposed;
+
+            public Task CancelObserved => _cancelObserved.Task;
+
+            public Task DisposedObserved => _disposedObserved.Task;
 
             public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -1809,6 +2235,7 @@ namespace VectorNNTP.Backfiller.Tests
                     CancelCallCount++;
                     _consumerTag = null;
                     OperationLog.Add("cancel");
+                    _ = _cancelObserved.TrySetResult(true);
                 }
 
                 return Task.CompletedTask;
@@ -1872,6 +2299,7 @@ namespace VectorNNTP.Backfiller.Tests
                 _consumer = null;
                 _consumerTag = null;
                 OperationLog.Add("dispose");
+                _ = _disposedObserved.TrySetResult(true);
                 return ValueTask.CompletedTask;
             }
         }
