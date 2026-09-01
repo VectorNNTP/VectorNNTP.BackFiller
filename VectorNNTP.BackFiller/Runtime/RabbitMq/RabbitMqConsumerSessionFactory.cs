@@ -212,9 +212,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         {
             get
             {
-                lock (_sessionRuntimes)
+                _stateGate.Wait(CancellationToken.None);
+                try
                 {
                     return _sessionRuntimes.Count;
+                }
+                finally
+                {
+                    _ = _stateGate.Release();
                 }
             }
         }
@@ -336,7 +341,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                     if (_retiringSessionRuntimes.TryGetValue(sessionKey, out RetiringSessionRuntimeState? retiring))
                     {
-                        if (!retiring.RetirementTask.IsCompleted)
+                        if (!retiring.RetirementTask.IsCompletedSuccessfully)
                         {
                             continue;
                         }
@@ -539,13 +544,15 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task ExecuteRetirementOperationAsync(RetirementOperation operation, CancellationToken cancellationToken, bool cancelAdmittedWork)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(operation);
 
             Exception? failure = null;
+            bool retirementCompleted = false;
             try
             {
                 await operation.Runtime.Session.StopAsync(cancellationToken, cancelAdmittedWork).ConfigureAwait(false);
                 await operation.Runtime.Session.DisposeAsync().ConfigureAwait(false);
+                retirementCompleted = true;
 
                 LogConsumerSessionRetired(
                     _logger,
@@ -565,7 +572,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 await _stateGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
                 try
                 {
-                    if (_retiringSessionRuntimes.TryGetValue(operation.SessionKey, out RetiringSessionRuntimeState? tracked) &&
+                    if (retirementCompleted &&
+                        _retiringSessionRuntimes.TryGetValue(operation.SessionKey, out RetiringSessionRuntimeState? tracked) &&
                         ReferenceEquals(tracked.RetirementTask, operation.CompletionSource.Task))
                     {
                         _ = _retiringSessionRuntimes.Remove(operation.SessionKey);
@@ -592,7 +600,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             List<string> completedKeys = [];
             foreach ((string sessionKey, RetiringSessionRuntimeState retiring) in _retiringSessionRuntimes)
             {
-                if (retiring.RetirementTask.IsCompleted)
+                if (retiring.RetirementTask.IsCompletedSuccessfully)
                 {
                     completedKeys.Add(sessionKey);
                 }
