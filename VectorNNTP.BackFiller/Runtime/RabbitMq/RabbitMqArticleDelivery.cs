@@ -14,6 +14,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// <param name="Backbone">Backbone namespace that owns the delivery queue.</param>
     /// <param name="Queue">Queue name receiving the delivery.</param>
     /// <param name="ConsumerTag">Broker-assigned consumer tag for the receiving consumer.</param>
+    /// <param name="ConsumerIdentity">Stable logical consumer-session identity that received the delivery.</param>
     /// <param name="DeliveryTag">Broker delivery tag used by future ACK/NACK operations.</param>
     /// <param name="Redelivered">Whether the broker marked this delivery as a redelivery.</param>
     /// <param name="RoutingKey">Routing key observed on delivery.</param>
@@ -25,6 +26,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         string Backbone,
         string Queue,
         string ConsumerTag,
+        string ConsumerIdentity,
         ulong DeliveryTag,
         bool Redelivered,
         string RoutingKey,

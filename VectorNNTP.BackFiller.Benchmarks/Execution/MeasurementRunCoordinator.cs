@@ -24,8 +24,8 @@ internal static class MeasurementRunCoordinator
         long measurementStartTick = Stopwatch.GetTimestamp();
         metrics.MarkMeasurementStart(measurementStartTick);
         TransitPublisher.MarkSubmissionPumpFaultMeasurementWindow(measurementStartTick, measurementEndStopwatchTick: 0, measurementBoundaryObserved: false);
-        publisher.MarkSubmissionPumpFaultProducerCompletion(allProducersCompleted: false);
-        publisher.MarkSubmissionPumpFaultDispatchersCompleted(dispatchersCompleted: false);
+        TransitPublisher.MarkSubmissionPumpFaultProducerCompletion(allProducersCompleted: false);
+        TransitPublisher.MarkSubmissionPumpFaultDispatchersCompleted(dispatchersCompleted: false);
         Console.WriteLine($"Measurement start UTC: {measurementStartUtc:O}");
 
         Process process = Process.GetCurrentProcess();

@@ -124,7 +124,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers RabbitMQ infrastructure services and startup initializer.
+        /// Registers RabbitMQ infrastructure services, startup initializer, and runtime consumer-session reconciliation.
         /// </summary>
         /// <param name="services">Service collection to register RabbitMQ services into.</param>
         internal static void RegisterRabbitMqInfrastructureServices(IServiceCollection services)
@@ -132,7 +132,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             ArgumentNullException.ThrowIfNull(services);
             _ = services.AddSingleton<RabbitMqConnectionManager>();
             _ = services.AddSingleton<RabbitMqTopologyInitializer>();
+            _ = services.AddSingleton<IRabbitMqConsumerSessionFactory, RabbitMqConsumerSessionFactory>();
             _ = services.AddHostedService<RabbitMqStartupInitializer>();
+            _ = services.AddHostedService<RabbitMqConsumerService>();
         }
 
         /// <summary>

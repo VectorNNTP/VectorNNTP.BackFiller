@@ -1303,7 +1303,7 @@ namespace VectorNNTP.Backfiller.Tests
             string connectionString = "Server=db01;Server=db02;Database=test;User ID=admin";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder?qqqqqqqqqqqqqqqqqqqqqqqqqqqq builder);
+            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder? builder);
 
             // Assert
             Assert.False(result);

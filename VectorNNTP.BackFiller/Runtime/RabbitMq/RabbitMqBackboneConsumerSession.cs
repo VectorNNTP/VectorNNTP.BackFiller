@@ -73,7 +73,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         {
             ArgumentNullException.ThrowIfNull(args);
 
-            if (_disposed)
+            if (_disposed || !args.IsReplacement)
             {
                 return;
             }
@@ -81,12 +81,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                if (!_running)
+                if (_disposed || !_running)
                 {
                     return;
                 }
@@ -97,10 +92,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     return;
                 }
 
-                LogConsumerRecreationStarting(_logger, _identity.Backbone, _identity.SessionOrdinal, currentGeneration, args.ConnectionGeneration);
-                await StopCoreAsync(CancellationToken.None, expectedShutdown: false).ConfigureAwait(false);
-                await StartCoreAsync(cancellationToken).ConfigureAwait(false);
-                LogConsumerRecreationCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal, ActiveConnectionGeneration);
+                if (!IsActiveConsumerStaleForCurrentConnection())
+                {
+                    return;
+                }
+
+                await RecreateConsumerCoreAsync(args.ConnectionGeneration, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -165,12 +162,18 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
+            if (_running || _ownedChannel is not null || _consumer is not null)
+            {
+                throw new InvalidOperationException("RabbitMQ consumer session cannot start while a consumer instance is still active.");
+            }
+
             await _connectionManager.EnsureConnectedAsync(cancellationToken).ConfigureAwait(false);
             await _topologyInitializer.InitializeAsync(_identity.ServerId, [_identity.Backbone], cancellationToken).ConfigureAwait(false);
 
             RabbitMqOwnedChannel owned = await _connectionManager.CreateOwnedChannelAsync($"rabbitmq-consumer:{_identity.SessionKey}", cancellationToken).ConfigureAwait(false);
             _ownedChannel = owned;
-            _activeConnectionGeneration = owned.ConnectionGeneration;
+            _ = Interlocked.Exchange(ref _activeConnectionGeneration, owned.ConnectionGeneration);
+            _sessionCancellation = new CancellationTokenSource();
 
             if (_prefetchCount.HasValue)
             {
@@ -178,19 +181,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 LogConsumerPrefetchConfigured(_logger, _identity.Backbone, _identity.SessionOrdinal, _prefetchCount.Value);
             }
 
-            _sessionCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            AsyncEventingBasicConsumer consumer = new(_ownedChannel.Channel.UnderlyingChannel);
+            AsyncEventingBasicConsumer consumer = new(owned.Channel.UnderlyingChannel);
             consumer.ReceivedAsync += OnReceivedAsync;
             consumer.ShutdownAsync += OnConsumerShutdownAsync;
             consumer.UnregisteredAsync += OnConsumerUnregisteredAsync;
             _consumer = consumer;
-
             _connectionScope = BeginConnectionScope();
 
             try
             {
-                string consumerTag = await _ownedChannel.Channel.BasicConsumeAsync(
+                string consumerTag = await owned.Channel.BasicConsumeAsync(
                     queue: _queueName,
                     autoAck: false,
                     consumer: consumer,
@@ -198,8 +198,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                 _consumerTag = consumerTag;
                 _running = true;
-
-                LogConsumerStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _queueName, _activeConnectionGeneration, consumerTag);
+                LogConsumerStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _queueName, ActiveConnectionGeneration, consumerTag);
             }
             catch
             {
@@ -207,8 +206,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 consumer.ShutdownAsync -= OnConsumerShutdownAsync;
                 consumer.UnregisteredAsync -= OnConsumerUnregisteredAsync;
                 _consumer = null;
-                _connectionScope?.Dispose();
-                _connectionScope = null;
 
                 _sessionCancellation?.Cancel();
                 _sessionCancellation?.Dispose();
@@ -220,6 +217,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     _ownedChannel = null;
                 }
 
+                _consumerTag = null;
+                _running = false;
+                _connectionScope?.Dispose();
+                _connectionScope = null;
                 _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
                 throw;
             }
@@ -227,10 +228,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task StopCoreAsync(CancellationToken cancellationToken, bool expectedShutdown)
         {
-            if (!_running)
+            bool hasSessionResources = _running || _ownedChannel is not null || _consumer is not null || _sessionCancellation is not null || !string.IsNullOrWhiteSpace(_consumerTag);
+            if (!hasSessionResources)
             {
                 return;
             }
+
+            _running = false;
 
             try
             {
@@ -280,7 +284,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             _ownedChannel = null;
             _consumerTag = null;
-            _running = false;
             _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
 
             _connectionScope?.Dispose();
@@ -294,22 +297,29 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         private async Task OnReceivedAsync(object sender, BasicDeliverEventArgs args)
         {
-            if (!_running)
+            if (!_running || !IsEventFromActiveConsumer(sender))
             {
                 return;
             }
 
             CancellationToken cancellationToken = _sessionCancellation?.Token ?? CancellationToken.None;
+            long deliveryGeneration = ActiveConnectionGeneration;
+            if (deliveryGeneration <= 0 || _connectionManager.ConnectionGeneration > deliveryGeneration)
+            {
+                LogDeliveryIgnoredFromStaleGeneration(_logger, _identity.Backbone, _identity.SessionOrdinal, deliveryGeneration, _connectionManager.ConnectionGeneration);
+                return;
+            }
 
             RabbitMqArticleDelivery delivery = new(
                 Backbone: _identity.Backbone,
                 Queue: _queueName,
                 ConsumerTag: args.ConsumerTag,
+                ConsumerIdentity: _identity.SessionKey,
                 DeliveryTag: args.DeliveryTag,
                 Redelivered: args.Redelivered,
                 RoutingKey: args.RoutingKey,
                 Exchange: args.Exchange,
-                ConnectionGeneration: ActiveConnectionGeneration,
+                ConnectionGeneration: deliveryGeneration,
                 Payload: args.Body,
                 CancellationToken: cancellationToken);
 
@@ -322,40 +332,100 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
-        private Task OnConsumerShutdownAsync(object sender, ShutdownEventArgs args)
+        private async Task OnConsumerShutdownAsync(object sender, ShutdownEventArgs args)
         {
-            LogConsumerShutdownObserved(_logger, _identity.Backbone, _identity.SessionOrdinal, args.ReplyCode, args.ReplyText, args.Initiator.ToString());
-            return Task.CompletedTask;
-        }
-
-        private async Task OnConsumerUnregisteredAsync(object sender, ConsumerEventArgs args)
-        {
-            if (_disposed)
+            if (!_running || _disposed || !IsEventFromActiveConsumer(sender))
             {
                 return;
             }
 
-            //int consumerTagCount = args.ConsumerTags.Count;
-            // TODO: CK TMP CHANGE
-            int consumerTagCount = 0;
-            LogConsumerCancellationObserved(_logger, _identity.Backbone, _identity.SessionOrdinal, consumerTagCount);
+            LogConsumerShutdownObserved(_logger, _identity.Backbone, _identity.SessionOrdinal, args.ReplyCode, args.ReplyText, args.Initiator.ToString());
 
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                if (_disposed || !_running)
+                if (_disposed || !_running || !IsEventFromActiveConsumer(sender))
                 {
                     return;
                 }
 
-                await StopCoreAsync(CancellationToken.None, expectedShutdown: false).ConfigureAwait(false);
-                await StartCoreAsync(CancellationToken.None).ConfigureAwait(false);
-                LogConsumerRecreationCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal, ActiveConnectionGeneration);
+                await RecreateConsumerCoreAsync(_connectionManager.ConnectionGeneration, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogConsumerRecreationFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex);
             }
             finally
             {
                 _ = _lifecycleGate.Release();
             }
+        }
+
+        private async Task OnConsumerUnregisteredAsync(object sender, ConsumerEventArgs args)
+        {
+            if (_disposed || !_running || !IsEventFromActiveConsumer(sender))
+            {
+                return;
+            }
+
+            int consumerTagCount = args.ConsumerTags.Length;
+            LogConsumerCancellationObserved(_logger, _identity.Backbone, _identity.SessionOrdinal, consumerTagCount);
+
+            await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                if (_disposed || !_running || !IsEventFromActiveConsumer(sender))
+                {
+                    return;
+                }
+
+                await RecreateConsumerCoreAsync(_connectionManager.ConnectionGeneration, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogConsumerRecreationFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex);
+            }
+            finally
+            {
+                _ = _lifecycleGate.Release();
+            }
+        }
+
+        private async Task RecreateConsumerCoreAsync(long requestedGeneration, CancellationToken cancellationToken)
+        {
+            long previousGeneration = ActiveConnectionGeneration;
+            LogConsumerRecreationStarting(_logger, _identity.Backbone, _identity.SessionOrdinal, previousGeneration, requestedGeneration);
+
+            await StopCoreAsync(CancellationToken.None, expectedShutdown: false).ConfigureAwait(false);
+            await StartCoreAsync(cancellationToken).ConfigureAwait(false);
+
+            LogConsumerRecreationCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal, ActiveConnectionGeneration);
+        }
+
+        private bool IsActiveConsumerStaleForCurrentConnection()
+        {
+            if (!_running || _ownedChannel is null)
+            {
+                return false;
+            }
+
+            long activeGeneration = ActiveConnectionGeneration;
+            if (activeGeneration <= 0)
+            {
+                return true;
+            }
+
+            if (_ownedChannel.ConnectionGeneration != activeGeneration)
+            {
+                return true;
+            }
+
+            return _connectionManager.ConnectionGeneration > activeGeneration;
+        }
+
+        private bool IsEventFromActiveConsumer(object sender)
+        {
+            return _consumer is not null && ReferenceEquals(sender, _consumer);
         }
 
         private IDisposable BeginConnectionScope()
@@ -462,6 +532,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static void LogConsumerCancellationObserved(ILogger logger, string backbone, int sessionOrdinal, int consumerTagCount)
         {
             logger.LogWarning("RabbitMQ consumer unregistered by broker. Backbone={Backbone} Session={SessionOrdinal} ConsumerTagCount={ConsumerTagCount}", backbone, sessionOrdinal, consumerTagCount);
+        }
+
+        private static void LogDeliveryIgnoredFromStaleGeneration(ILogger logger, string backbone, int sessionOrdinal, long deliveryGeneration, long currentGeneration)
+        {
+            logger.LogDebug("RabbitMQ delivery ignored because session generation is stale. Backbone={Backbone} Session={SessionOrdinal} DeliveryGeneration={DeliveryGeneration} CurrentGeneration={CurrentGeneration}", backbone, sessionOrdinal, deliveryGeneration, currentGeneration);
+        }
+
+        private static void LogConsumerRecreationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
+        {
+            logger.LogError(exception, "RabbitMQ consumer recreation failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
         }
     }
 }

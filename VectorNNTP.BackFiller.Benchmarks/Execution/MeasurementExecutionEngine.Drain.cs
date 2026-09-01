@@ -40,7 +40,7 @@ internal static partial class MeasurementExecutionEngine
         {
         }
 
-        publisher.MarkSubmissionPumpFaultProducerCompletion(producersCompleted);
+        TransitPublisher.MarkSubmissionPumpFaultProducerCompletion(producersCompleted);
 
         queue.StopAdmission();
 
@@ -101,7 +101,7 @@ internal static partial class MeasurementExecutionEngine
         }
 
         await dispatcherDrainTask.ConfigureAwait(false);
-        publisher.MarkSubmissionPumpFaultDispatchersCompleted(dispatchersCompleted: true);
+        TransitPublisher.MarkSubmissionPumpFaultDispatchersCompleted(dispatchersCompleted: true);
         drainStopwatch.Stop();
 
         DateTimeOffset postDrainFinalUtc = DateTimeOffset.UtcNow;

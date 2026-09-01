@@ -420,6 +420,31 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.CompletedTask;
             }
 
+            public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = prefetchSize;
+                _ = prefetchCount;
+                _ = global;
+                return Task.CompletedTask;
+            }
+
+            public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = queue;
+                _ = autoAck;
+                _ = consumer;
+                return Task.FromResult($"ctag-{id}");
+            }
+
+            public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                _ = consumerTag;
+                return Task.CompletedTask;
+            }
+
             public ValueTask DisposeAsync()
             {
                 _ = id;

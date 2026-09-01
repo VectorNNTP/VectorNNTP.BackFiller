@@ -86,8 +86,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private readonly CancellationTokenSource _shutdownCts = new();
         private readonly Dictionary<string, SessionRuntimeState> _sessionRuntimes = new(StringComparer.Ordinal);
         private readonly Channel<RabbitMqArticleDelivery> _deliveryChannel;
+        private readonly IDisposable _gracefulShutdownRegistration;
+        private readonly IDisposable _forcedShutdownRegistration;
 
         private volatile bool _shutdownRequested;
+        private int _callbacksDisposed;
 
         internal RabbitMqConsumerService(
             BackFillerRuntimeOptions runtimeOptions,
@@ -120,8 +123,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             });
 
             _connectionManager.ConnectionReplaced += OnConnectionReplaced;
-            _ = _shutdownCoordinator.GracefulShutdownStartedToken.Register(OnShutdownSignaled);
-            _ = _shutdownCoordinator.ForcedShutdownToken.Register(OnShutdownSignaled);
+            _gracefulShutdownRegistration = _shutdownCoordinator.GracefulShutdownStartedToken.Register(OnShutdownSignaled);
+            _forcedShutdownRegistration = _shutdownCoordinator.ForcedShutdownToken.Register(OnShutdownSignaled);
         }
 
         /// <summary>
@@ -187,7 +190,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             await StopAllSessionsAsync(CancellationToken.None).ConfigureAwait(false);
             _ = _deliveryChannel.Writer.TryComplete();
-            _connectionManager.ConnectionReplaced -= OnConnectionReplaced;
+            DisposeLifecycleCallbacks();
             _shutdownCts.Dispose();
 
             LogConsumerServiceStopped(_logger);
@@ -249,6 +252,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     return;
                 }
 
+                foreach (SessionRuntimeState runtime in _sessionRuntimes.Values)
+                {
+                    runtime.Desired = false;
+                }
+
                 NntpAccountSnapshotState snapshot = _accountSnapshotProvider.CurrentSnapshot;
                 Dictionary<string, RabbitMqConsumerSessionIdentity> desiredSessions = BuildDesiredSessions(snapshot);
 
@@ -295,6 +303,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                             desiredIdentity.ConnectionLimit,
                             sessionKey);
                     }
+
+                    runtimeState.Desired = true;
 
                     if (!runtimeState.Session.IsRunning)
                     {
@@ -367,19 +377,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
             }
 
-            foreach (SessionRuntimeState runtime in _sessionRuntimes.Values)
-            {
-                runtime.Desired = false;
-            }
-
-            foreach (string key in desired.Keys)
-            {
-                if (_sessionRuntimes.TryGetValue(key, out SessionRuntimeState? runtime))
-                {
-                    runtime.Desired = true;
-                }
-            }
-
             return desired;
         }
 
@@ -410,7 +407,20 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             _shutdownRequested = true;
+            DisposeLifecycleCallbacks();
             _shutdownCts.Cancel();
+        }
+
+        private void DisposeLifecycleCallbacks()
+        {
+            if (Interlocked.Exchange(ref _callbacksDisposed, 1) != 0)
+            {
+                return;
+            }
+
+            _connectionManager.ConnectionReplaced -= OnConnectionReplaced;
+            _gracefulShutdownRegistration.Dispose();
+            _forcedShutdownRegistration.Dispose();
         }
 
         private sealed class SessionRuntimeState(RabbitMqConsumerSessionIdentity identity, IRabbitMqConsumerSession session)
