@@ -8,7 +8,7 @@
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Maintains one created DNS-01 TXT record so ACME challenge cleanup can reliably remove it.
+    /// Represents one created DNS-01 TXT record and its provider identifier for reliable ACME cleanup.
     /// </summary>
     /// <remarks>
     /// This lease is scoped only to ACME challenge TXT records and is unrelated to the A/AAAA records that keep the
