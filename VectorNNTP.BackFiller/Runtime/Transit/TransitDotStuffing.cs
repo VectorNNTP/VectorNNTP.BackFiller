@@ -31,8 +31,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal static class TransitDotStuffing
     {
         /// <summary>
-        /// Handles get required destination length for transit dot stuffing.
+        /// Calculates the destination size required after dot-stuffing and optional trailing-CRLF insertion.
         /// </summary>
+        /// <param name="source">Source article bytes.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">Whether a final CRLF is added when the source does not end in LF.</param>
+        /// <param name="stuffedDotCount">Receives the number of leading line dots that require escaping.</param>
+        /// <returns>The required destination length in bytes.</returns>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
             stuffedDotCount = 0;
