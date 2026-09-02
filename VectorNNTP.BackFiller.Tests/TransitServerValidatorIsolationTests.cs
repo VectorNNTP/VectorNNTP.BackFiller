@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for transit server validator isolation.
+// Focused tests for transit server validator isolation, covering configuration and validation contracts; NNTP article and transport behavior.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -13,24 +13,24 @@ using Xunit.Abstractions;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Documents the TransitServerValidatorIsolationTests test type and its protected contract.
+    /// Covers transit server validator isolation behavior and invariants exercised by this test suite.
     /// </summary>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
         /// <summary>
-        /// Stores the _out fixture value used by these tests.
+        /// Supplies  out for the fixture or scenario under test.
         /// </summary>
         private readonly ITestOutputHelper _out = output;
 
         /// <summary>
-        /// Verifies the Build scenario and expected contract.
+        /// Exercises build behavior, including the expected result and failure semantics.
         /// </summary>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {
             return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         }
         /// <summary>
-        /// Verifies the TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline scenario and expected contract.
+        /// Exercises transit server  use ssl missing  default false  direct and full pipeline behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline()
@@ -86,7 +86,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(configResult.Errors, static e => e.Setting == "BackFiller:TransitServer:UseSsl");
         }
         /// <summary>
-        /// Verifies the TransitServer_UseSslTrue_Port119 scenario and expected contract.
+        /// Exercises transit server  use ssl true  port119 behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port119()
@@ -128,7 +128,7 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally non-TLS", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the TransitServer_UseSslFalse_Port563 scenario and expected contract.
+        /// Exercises transit server  use ssl false  port563 behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslFalse_Port563()
@@ -167,7 +167,7 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally TLS", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the TransitServer_UseSslTrue_Port563 scenario and expected contract.
+        /// Exercises transit server  use ssl true  port563 behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port563()

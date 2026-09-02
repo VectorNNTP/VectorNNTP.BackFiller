@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for bind address dns address deriver.
+// Focused tests for bind address dns address deriver, covering configuration and validation contracts.
 
 using System.Net;
 using VectorNNTP.Backfiller.Configuration;

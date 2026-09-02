@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for rabbit mq article work response wire protocol.
+// Focused tests for rabbit mq article work response wire protocol, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqArticleWorkResponseWireProtocolTests
     {
         /// <summary>
-        /// Verifies the SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull scenario and expected contract.
+        /// Exercises serialize v1  when success  contains canonical fields and uri null behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull()
@@ -39,7 +39,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("replyTo", json, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the SerializeV1_WhenTerminalFailure_ContainsErrorAndNoUri scenario and expected contract.
+        /// Exercises serialize v1  when terminal failure  contains error and no uri behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void SerializeV1_WhenTerminalFailure_ContainsErrorAndNoUri()
@@ -60,7 +60,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("\"uri\"", json, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Verifies the ParseV1_WhenPayloadIsValid_RoundTripsCanonicalFields scenario and expected contract.
+        /// Exercises parse v1  when payload is valid  round trips canonical fields behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseV1_WhenPayloadIsValid_RoundTripsCanonicalFields()
@@ -85,7 +85,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(source.Error, parsed.Error);
         }
         /// <summary>
-        /// Verifies the ParseV1_WhenVersionUnsupported_ThrowsInvalidOperationException scenario and expected contract.
+        /// Exercises parse v1  when version unsupported  throws invalid operation exception behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseV1_WhenVersionUnsupported_ThrowsInvalidOperationException()

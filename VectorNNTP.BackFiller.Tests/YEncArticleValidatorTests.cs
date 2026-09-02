@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for y enc article validator.
+// Focused tests for y enc article validator, covering configuration and validation contracts; NNTP article and transport behavior.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;
@@ -363,7 +363,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, warmup.Status);
 
             /// <summary>
-            /// Stores the Iterations fixture value used by these tests.
+            /// Supplies iterations for the fixture or scenario under test.
             /// </summary>
             const int Iterations = 16;
             long before = GC.GetAllocatedBytesForCurrentThread();
@@ -933,7 +933,7 @@ namespace VectorNNTP.Backfiller.Tests
         private static string ResolveFixtureRoot()
         {
             /// <summary>
-            /// Stores the SolutionMarker fixture value used by these tests.
+            /// Supplies solution marker for the fixture or scenario under test.
             /// </summary>
             const string SolutionMarker = "VectorNNTP.BackFiller.slnx";
             string? current = AppContext.BaseDirectory;

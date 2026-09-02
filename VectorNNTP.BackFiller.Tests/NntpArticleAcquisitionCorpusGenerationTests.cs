@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for nntp article acquisition corpus generation.
+// Focused tests for nntp article acquisition corpus generation, covering NNTP article and transport behavior.
 
 using System.Security.Cryptography;
 using System.Text;

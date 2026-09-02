@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for rabbit mq consumer phase2.
+// Focused tests for rabbit mq consumer phase2, covering dependency integration and failure handling.
 
 using System.Reflection;
 using System.Security.Cryptography;
@@ -111,7 +111,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the Delivery_HandoffRetainsOwnedPayloadAfterSourceBufferMutation scenario and expected contract.
+        /// Exercises delivery  handoff retains owned payload after source buffer mutation behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task Delivery_HandoffRetainsOwnedPayloadAfterSourceBufferMutation()
@@ -341,7 +341,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the StopAsync_WhenInFlightDeliveryExists_WaitsForSettlementBeforeChannelDispose scenario and expected contract.
+        /// Exercises stop async  when in flight delivery exists  waits for settlement before channel dispose behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task StopAsync_WhenInFlightDeliveryExists_WaitsForSettlementBeforeChannelDispose()
@@ -386,7 +386,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the StopAsync_WhenRetiring_RejectsNewDeliveryAdmission scenario and expected contract.
+        /// Exercises stop async  when retiring  rejects new delivery admission behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task StopAsync_WhenRetiring_RejectsNewDeliveryAdmission()
@@ -427,7 +427,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateIdentity scenario and expected contract.
+        /// Exercises create identity behavior, including the expected result and failure semantics.
         /// </summary>
         private static RabbitMqConsumerSessionIdentity CreateIdentity(string backbone, int connectionNumber, int connectionLimit)
         {
@@ -444,7 +444,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateRuntimeOptions scenario and expected contract.
+        /// Exercises create runtime options behavior, including the expected result and failure semantics.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(ushort? prefetchCount, int maxConsecutiveRecoveryFailures)
         {
@@ -500,7 +500,7 @@ namespace VectorNNTP.Backfiller.Tests
                 RabbitMq: rabbitMq);
         }
         /// <summary>
-        /// Verifies the ReconcileSessions_WhenCapacityIncreases_RetainsExistingSessionAndAddsOnlyDeltaChannels scenario and expected contract.
+        /// Exercises reconcile sessions  when capacity increases  retains existing session and adds only delta channels behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReconcileSessions_WhenCapacityIncreases_RetainsExistingSessionAndAddsOnlyDeltaChannels()
@@ -553,7 +553,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ReconcileSessions_WhenCapacityChanges_RetainsDeltasAndKeepsConnectionGenerationStable scenario and expected contract.
+        /// Exercises reconcile sessions  when capacity changes  retains deltas and keeps connection generation stable behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReconcileSessions_WhenCapacityChanges_RetainsDeltasAndKeepsConnectionGenerationStable()
@@ -605,7 +605,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the CapacityChanges_DoNotCreateRabbitMqTcpConnections scenario and expected contract.
+        /// Exercises capacity changes  do not create rabbit mq tcp connections behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task CapacityChanges_DoNotCreateRabbitMqTcpConnections()
@@ -639,7 +639,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the CapacityChanges_DoNotChangeConnectionGeneration scenario and expected contract.
+        /// Exercises capacity changes  do not change connection generation behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task CapacityChanges_DoNotChangeConnectionGeneration()
@@ -674,7 +674,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ReconcileSessions_WhenUnrelatedAccountCapacityMetadataChanges_DoesNotReplaceExistingSession scenario and expected contract.
+        /// Exercises reconcile sessions  when unrelated account capacity metadata changes  does not replace existing session behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReconcileSessions_WhenUnrelatedAccountCapacityMetadataChanges_DoesNotReplaceExistingSession()
@@ -711,7 +711,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_WhenReducingCapacity_RetiresOnlySessionsAboveBoundary scenario and expected contract.
+        /// Exercises retire capacity async  when reducing capacity  retires only sessions above boundary behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_WhenReducingCapacity_RetiresOnlySessionsAboveBoundary()
@@ -755,7 +755,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_WhenAdmittedDeliveryIsInFlight_DrainsSettlementBeforeChannelDispose scenario and expected contract.
+        /// Exercises retire capacity async  when admitted delivery is in flight  drains settlement before channel dispose behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_WhenAdmittedDeliveryIsInFlight_DrainsSettlementBeforeChannelDispose()
@@ -844,7 +844,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_WhenShutdownSignaled_CompletesWithoutDeadlock scenario and expected contract.
+        /// Exercises retire capacity async  when shutdown signaled  completes without deadlock behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_WhenShutdownSignaled_CompletesWithoutDeadlock()
@@ -873,7 +873,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the NToNMinusOneThenNPlusOne_WhileRetirementDraining_DoesNotCreateDuplicateLogicalSession scenario and expected contract.
+        /// Exercises n to n minus one then n plus one  while retirement draining  does not create duplicate logical session behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task NToNMinusOneThenNPlusOne_WhileRetirementDraining_DoesNotCreateDuplicateLogicalSession()
@@ -927,7 +927,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the CapacityIncreaseBeforeRetirementBegins_DoesNotRetireNowDesiredSession scenario and expected contract.
+        /// Exercises capacity increase before retirement begins  does not retire now desired session behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task CapacityIncreaseBeforeRetirementBegins_DoesNotRetireNowDesiredSession()
@@ -962,7 +962,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_PreCanceledToken_DoesNotStrandReservation scenario and expected contract.
+        /// Exercises retire capacity async  pre canceled token  does not strand reservation behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_PreCanceledToken_DoesNotStrandReservation()
@@ -998,7 +998,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_StopFailure_DoesNotAllowDuplicateLogicalSession scenario and expected contract.
+        /// Exercises retire capacity async  stop failure  does not allow duplicate logical session behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_StopFailure_DoesNotAllowDuplicateLogicalSession()
@@ -1031,7 +1031,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_DisposeFailure_DoesNotAllowDuplicateLogicalSession scenario and expected contract.
+        /// Exercises retire capacity async  dispose failure  does not allow duplicate logical session behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_DisposeFailure_DoesNotAllowDuplicateLogicalSession()
@@ -1064,7 +1064,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the RetireCapacityAsync_CancellationDuringDrain_DoesNotStrandReservation scenario and expected contract.
+        /// Exercises retire capacity async  cancellation during drain  does not strand reservation behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RetireCapacityAsync_CancellationDuringDrain_DoesNotStrandReservation()
@@ -1102,7 +1102,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ConcurrentRetireCalls_DoNotDoubleDispose scenario and expected contract.
+        /// Exercises concurrent retire calls  do not double dispose behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ConcurrentRetireCalls_DoNotDoubleDispose()
@@ -1140,7 +1140,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ConcurrentReconcileAndRetire_DoNotCreateDuplicateLogicalSession scenario and expected contract.
+        /// Exercises concurrent reconcile and retire  do not create duplicate logical session behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ConcurrentReconcileAndRetire_DoNotCreateDuplicateLogicalSession()
@@ -1180,7 +1180,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ReconcileSessions_WhenStartupCapacityIsUnavailable_DoesNotStartConsumerUntilCapacityBecomesAvailable scenario and expected contract.
+        /// Exercises reconcile sessions  when startup capacity is unavailable  does not start consumer until capacity becomes available behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReconcileSessions_WhenStartupCapacityIsUnavailable_DoesNotStartConsumerUntilCapacityBecomesAvailable()
@@ -1216,7 +1216,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ReconcileSessions_WhenRuntimeCapacityDropsToZero_StopsNewAdmissionAndResumesAfterRecovery scenario and expected contract.
+        /// Exercises reconcile sessions  when runtime capacity drops to zero  stops new admission and resumes after recovery behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReconcileSessions_WhenRuntimeCapacityDropsToZero_StopsNewAdmissionAndResumesAfterRecovery()
@@ -1278,7 +1278,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ActiveSessionCount_IsConsistentlySynchronized scenario and expected contract.
+        /// Exercises active session count  is consistently synchronized behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ActiveSessionCount_IsConsistentlySynchronized()
@@ -1311,7 +1311,7 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ShutdownWhileRetirementDraining_CompletesWithoutDeadlock scenario and expected contract.
+        /// Exercises shutdown while retirement draining  completes without deadlock behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ShutdownWhileRetirementDraining_CompletesWithoutDeadlock()
@@ -1346,7 +1346,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateAccountSnapshot scenario and expected contract.
+        /// Exercises create account snapshot behavior, including the expected result and failure semantics.
         /// </summary>
         private static NntpAccountSnapshot CreateAccountSnapshot(Guid entryId, byte maxConnections)
         {
@@ -1364,7 +1364,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the WaitForAsync scenario and expected contract.
+        /// Exercises wait for async behavior, including the expected result and failure semantics.
         /// </summary>
         private static async Task<bool> WaitForAsync(Func<bool> predicate, TimeSpan timeout)
         {
@@ -1383,21 +1383,21 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the MutableAccountSnapshotProvider test type and its protected contract.
+        /// Covers mutable account snapshot provider behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class MutableAccountSnapshotProvider
         {
             /// <summary>
-            /// Stores the _gate fixture value used by these tests.
+            /// Exercises  gate behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly object _gate = new();
             /// <summary>
-            /// Stores the _accounts fixture value used by these tests.
+            /// Supplies  accounts for the fixture or scenario under test.
             /// </summary>
             private List<NntpAccountSnapshot> _accounts = [];
 
             /// <summary>
-            /// Verifies the MutableAccountSnapshotProvider scenario and expected contract.
+            /// Exercises mutable account snapshot provider behavior, including the expected result and failure semantics.
             /// </summary>
             internal MutableAccountSnapshotProvider(byte serverId)
             {
@@ -1408,12 +1408,12 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Provider value used by this test fixture.
+            /// Supplies provider for the fixture or scenario under test.
             /// </summary>
             internal MySqlNntpAccountSnapshotProvider Provider { get; }
 
             /// <summary>
-            /// Verifies the SetSingleAccountAsync scenario and expected contract.
+            /// Exercises set single account async behavior, including the expected result and failure semantics.
             /// </summary>
             internal async Task SetSingleAccountAsync(NntpAccountSnapshot account)
             {
@@ -1428,7 +1428,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the QueryAccountsAsync scenario and expected contract.
+            /// Exercises query accounts async behavior, including the expected result and failure semantics.
             /// </summary>
             private Task<List<NntpAccountSnapshot>> QueryAccountsAsync(CancellationToken cancellationToken)
             {
@@ -1442,25 +1442,25 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the TrackingSessionFactory test type and its protected contract.
+        /// Covers tracking session factory behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class TrackingSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer) : IRabbitMqConsumerSessionFactory
         {
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  sessions behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, TrackingSession> _sessions = new(StringComparer.Ordinal);
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Exercises  connection manager behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Exercises  topology initializer behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
 
             /// <summary>
-            /// Verifies the CreateSession scenario and expected contract.
+            /// Exercises create session behavior, including the expected result and failure semantics.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -1473,7 +1473,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RequireSession scenario and expected contract.
+            /// Exercises require session behavior, including the expected result and failure semantics.
             /// </summary>
             internal TrackingSession RequireSession(string sessionKey)
             {
@@ -1484,17 +1484,17 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the CapacityStateBackboneCapacityProvider test type and its protected contract.
+        /// Covers capacity state backbone capacity provider behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class CapacityStateBackboneCapacityProvider : IBackboneUsableCapacityProvider
         {
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  capacity by backbone behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, bool> _capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>
-            /// Verifies the SetBackboneCapacity scenario and expected contract.
+            /// Exercises set backbone capacity behavior, including the expected result and failure semantics.
             /// </summary>
             internal void SetBackboneCapacity(string backbone, bool hasCapacity)
             {
@@ -1503,7 +1503,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the HasUsableCapacityForBackbone scenario and expected contract.
+            /// Exercises has usable capacity for backbone behavior, including the expected result and failure semantics.
             /// </summary>
             public bool HasUsableCapacityForBackbone(string backbone)
             {
@@ -1513,37 +1513,37 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the BlockingStopSessionFactory test type and its protected contract.
+        /// Covers blocking stop session factory behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class BlockingStopSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer) : IRabbitMqConsumerSessionFactory
         {
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  sessions by key behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, List<BlockingStopTrackingSession>> _sessionsByKey = new(StringComparer.Ordinal);
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  stop blocks behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopBlocks = new(StringComparer.Ordinal);
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  stop started behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopStarted = new(StringComparer.Ordinal);
             /// <summary>
-            /// Stores the _gate fixture value used by these tests.
+            /// Exercises  gate behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly object _gate = new();
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Exercises  connection manager behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Exercises  topology initializer behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
 
             /// <summary>
-            /// Verifies the CreateSession scenario and expected contract.
+            /// Exercises create session behavior, including the expected result and failure semantics.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -1567,7 +1567,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RequireLatestSession scenario and expected contract.
+            /// Exercises require latest session behavior, including the expected result and failure semantics.
             /// </summary>
             internal BlockingStopTrackingSession RequireLatestSession(string sessionKey)
             {
@@ -1583,7 +1583,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the GetCreatedCount scenario and expected contract.
+            /// Exercises get created count behavior, including the expected result and failure semantics.
             /// </summary>
             internal int GetCreatedCount(string sessionKey)
             {
@@ -1594,7 +1594,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the GetRunningCount scenario and expected contract.
+            /// Exercises get running count behavior, including the expected result and failure semantics.
             /// </summary>
             internal int GetRunningCount(string sessionKey)
             {
@@ -1610,7 +1610,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BlockStopForSession scenario and expected contract.
+            /// Exercises block stop for session behavior, including the expected result and failure semantics.
             /// </summary>
             internal void BlockStopForSession(string sessionKey)
             {
@@ -1622,7 +1622,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the WaitForStopStartedAsync scenario and expected contract.
+            /// Exercises wait for stop started async behavior, including the expected result and failure semantics.
             /// </summary>
             internal async Task WaitForStopStartedAsync(string sessionKey, CancellationToken cancellationToken)
             {
@@ -1641,7 +1641,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the ReleaseStop scenario and expected contract.
+            /// Exercises release stop behavior, including the expected result and failure semantics.
             /// </summary>
             internal void ReleaseStop(string sessionKey)
             {
@@ -1655,7 +1655,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the AwaitStopGateAsync scenario and expected contract.
+            /// Exercises await stop gate async behavior, including the expected result and failure semantics.
             /// </summary>
             internal async Task AwaitStopGateAsync(string sessionKey, CancellationToken cancellationToken)
             {
@@ -1681,33 +1681,33 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the TrackingSession test type and its protected contract.
+        /// Covers tracking session behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class TrackingSession : IRabbitMqConsumerSession
         {
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Supplies  connection manager for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager;
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Supplies  topology initializer for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer;
             /// <summary>
-            /// Stores the _deliverySink fixture value used by these tests.
+            /// Supplies  delivery sink for the fixture or scenario under test.
             /// </summary>
             private readonly IRabbitMqDeliverySink _deliverySink;
             /// <summary>
-            /// Stores the _prefetchCount fixture value used by these tests.
+            /// Supplies  prefetch count for the fixture or scenario under test.
             /// </summary>
             private readonly ushort? _prefetchCount;
             /// <summary>
-            /// Stores the _ownedChannel fixture value used by these tests.
+            /// Supplies  owned channel for the fixture or scenario under test.
             /// </summary>
             private RabbitMqOwnedChannel? _ownedChannel;
 
             /// <summary>
-            /// Verifies the TrackingSession scenario and expected contract.
+            /// Exercises tracking session behavior, including the expected result and failure semantics.
             /// </summary>
             internal TrackingSession(
                 RabbitMqConsumerSessionIdentity identity,
@@ -1724,42 +1724,42 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Identity value used by this test fixture.
+            /// Supplies identity for the fixture or scenario under test.
             /// </summary>
             public RabbitMqConsumerSessionIdentity Identity { get; }
 
             /// <summary>
-            /// Stores the IsRunning value used by this test fixture.
+            /// Supplies is running for the fixture or scenario under test.
             /// </summary>
             public bool IsRunning { get; private set; }
 
             /// <summary>
-            /// Stores the ActiveConnectionGeneration value used by this test fixture.
+            /// Supplies active connection generation for the fixture or scenario under test.
             /// </summary>
             public long ActiveConnectionGeneration { get; private set; }
 
             /// <summary>
-            /// Stores the StartCallCount value used by this test fixture.
+            /// Supplies start call count for the fixture or scenario under test.
             /// </summary>
             internal int StartCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the StopCallCount value used by this test fixture.
+            /// Supplies stop call count for the fixture or scenario under test.
             /// </summary>
             internal int StopCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the LastCancelAdmittedWork value used by this test fixture.
+            /// Supplies last cancel admitted work for the fixture or scenario under test.
             /// </summary>
             internal bool? LastCancelAdmittedWork { get; private set; }
 
             /// <summary>
-            /// Stores the DisposeCalled value used by this test fixture.
+            /// Supplies dispose called for the fixture or scenario under test.
             /// </summary>
             internal bool DisposeCalled { get; private set; }
 
             /// <summary>
-            /// Verifies the StartAsync scenario and expected contract.
+            /// Exercises start async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -1788,7 +1788,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the StopAsync scenario and expected contract.
+            /// Exercises stop async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -1811,7 +1811,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -1821,29 +1821,29 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the ObservingRealSessionFactory test type and its protected contract.
+        /// Covers observing real session factory behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class ObservingRealSessionFactory : IRabbitMqConsumerSessionFactory
         {
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  sessions by key behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, List<ObservedSessionRuntime>> _sessionsByKey = new(StringComparer.Ordinal);
             /// <summary>
-            /// Stores the _gate fixture value used by these tests.
+            /// Exercises  gate behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly object _gate = new();
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Supplies  connection manager for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager;
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Supplies  topology initializer for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer;
 
             /// <summary>
-            /// Verifies the ObservingRealSessionFactory scenario and expected contract.
+            /// Exercises observing real session factory behavior, including the expected result and failure semantics.
             /// </summary>
             internal ObservingRealSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer)
             {
@@ -1852,7 +1852,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the CreateSession scenario and expected contract.
+            /// Exercises create session behavior, including the expected result and failure semantics.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -1879,7 +1879,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RequireLatestSession scenario and expected contract.
+            /// Exercises require latest session behavior, including the expected result and failure semantics.
             /// </summary>
             internal ObservedSessionRuntime RequireLatestSession(string sessionKey)
             {
@@ -1895,7 +1895,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the GetCreatedCount scenario and expected contract.
+            /// Exercises get created count behavior, including the expected result and failure semantics.
             /// </summary>
             internal int GetCreatedCount(string sessionKey)
             {
@@ -1908,7 +1908,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the WaitForDeliveryAsync scenario and expected contract.
+            /// Exercises wait for delivery async behavior, including the expected result and failure semantics.
             /// </summary>
             internal async Task<RabbitMqArticleDelivery> WaitForDeliveryAsync(string sessionKey, CancellationToken cancellationToken)
             {
@@ -1917,7 +1917,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the GetDeliveriesForSession scenario and expected contract.
+            /// Exercises get deliveries for session behavior, including the expected result and failure semantics.
             /// </summary>
             internal IReadOnlyList<RabbitMqArticleDelivery> GetDeliveriesForSession(string sessionKey)
             {
@@ -1926,33 +1926,33 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the ObservedSessionRuntime test type and its protected contract.
+        /// Covers observed session runtime behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class ObservedSessionRuntime : IRabbitMqConsumerSession
         {
             /// <summary>
-            /// Stores the _identity fixture value used by these tests.
+            /// Supplies  identity for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqConsumerSessionIdentity _identity;
             /// <summary>
-            /// Stores the _downstreamSink fixture value used by these tests.
+            /// Supplies  downstream sink for the fixture or scenario under test.
             /// </summary>
             private readonly IRabbitMqDeliverySink _downstreamSink;
             /// <summary>
-            /// Stores the _deliveries fixture value used by these tests.
+            /// Supplies  deliveries for the fixture or scenario under test.
             /// </summary>
             private readonly List<RabbitMqArticleDelivery> _deliveries = [];
             /// <summary>
-            /// Stores the _firstDelivery fixture value used by these tests.
+            /// Exercises  first delivery behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly TaskCompletionSource<RabbitMqArticleDelivery> _firstDelivery = new(TaskCreationOptions.RunContinuationsAsynchronously);
             /// <summary>
-            /// Stores the _inner fixture value used by these tests.
+            /// Supplies  inner for the fixture or scenario under test.
             /// </summary>
             private RabbitMqBackboneConsumerSession? _inner;
 
             /// <summary>
-            /// Verifies the ObservedSessionRuntime scenario and expected contract.
+            /// Exercises observed session runtime behavior, including the expected result and failure semantics.
             /// </summary>
             internal ObservedSessionRuntime(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink downstreamSink)
             {
@@ -1961,42 +1961,42 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Identity value used by this test fixture.
+            /// Supplies identity for the fixture or scenario under test.
             /// </summary>
             public RabbitMqConsumerSessionIdentity Identity => _identity;
 
             /// <summary>
-            /// Stores the IsRunning value used by this test fixture.
+            /// Supplies is running for the fixture or scenario under test.
             /// </summary>
             public bool IsRunning => _inner?.IsRunning ?? false;
 
             /// <summary>
-            /// Stores the ActiveConnectionGeneration value used by this test fixture.
+            /// Supplies active connection generation for the fixture or scenario under test.
             /// </summary>
             public long ActiveConnectionGeneration => _inner?.ActiveConnectionGeneration ?? 0;
 
             /// <summary>
-            /// Stores the StopCallCount value used by this test fixture.
+            /// Supplies stop call count for the fixture or scenario under test.
             /// </summary>
             internal int StopCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the DisposeCallCount value used by this test fixture.
+            /// Supplies dispose call count for the fixture or scenario under test.
             /// </summary>
             internal int DisposeCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the LastCancelAdmittedWork value used by this test fixture.
+            /// Supplies last cancel admitted work for the fixture or scenario under test.
             /// </summary>
             internal bool? LastCancelAdmittedWork { get; private set; }
 
             /// <summary>
-            /// Stores the Deliveries value used by this test fixture.
+            /// Supplies deliveries for the fixture or scenario under test.
             /// </summary>
             internal IReadOnlyList<RabbitMqArticleDelivery> Deliveries => _deliveries;
 
             /// <summary>
-            /// Verifies the AttachSession scenario and expected contract.
+            /// Exercises attach session behavior, including the expected result and failure semantics.
             /// </summary>
             internal void AttachSession(RabbitMqBackboneConsumerSession session)
             {
@@ -2004,7 +2004,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the OnDeliveryObservedAsync scenario and expected contract.
+            /// Exercises on delivery observed async behavior, including the expected result and failure semantics.
             /// </summary>
             internal ValueTask OnDeliveryObservedAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
             {
@@ -2015,7 +2015,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the WaitForDeliveryAsync scenario and expected contract.
+            /// Exercises wait for delivery async behavior, including the expected result and failure semantics.
             /// </summary>
             internal async Task<RabbitMqArticleDelivery> WaitForDeliveryAsync(CancellationToken cancellationToken)
             {
@@ -2023,7 +2023,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the StartAsync scenario and expected contract.
+            /// Exercises start async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -2036,7 +2036,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the StopAsync scenario and expected contract.
+            /// Exercises stop async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -2051,7 +2051,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -2066,21 +2066,21 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the ForwardingObservingDeliverySink test type and its protected contract.
+        /// Covers forwarding observing delivery sink behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class ForwardingObservingDeliverySink : IRabbitMqDeliverySink
         {
             /// <summary>
-            /// Stores the _owner fixture value used by these tests.
+            /// Supplies  owner for the fixture or scenario under test.
             /// </summary>
             private readonly ObservedSessionRuntime _owner;
             /// <summary>
-            /// Stores the _inner fixture value used by these tests.
+            /// Supplies  inner for the fixture or scenario under test.
             /// </summary>
             private readonly IRabbitMqDeliverySink _inner;
 
             /// <summary>
-            /// Verifies the ForwardingObservingDeliverySink scenario and expected contract.
+            /// Exercises forwarding observing delivery sink behavior, including the expected result and failure semantics.
             /// </summary>
             internal ForwardingObservingDeliverySink(ObservedSessionRuntime owner, IRabbitMqDeliverySink inner)
             {
@@ -2089,7 +2089,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the OnDeliveryAsync scenario and expected contract.
+            /// Exercises on delivery async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
             {
@@ -2099,37 +2099,37 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the BlockingStopTrackingSession test type and its protected contract.
+        /// Covers blocking stop tracking session behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class BlockingStopTrackingSession : IRabbitMqConsumerSession
         {
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Supplies  connection manager for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager;
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Supplies  topology initializer for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer;
             /// <summary>
-            /// Stores the _deliverySink fixture value used by these tests.
+            /// Supplies  delivery sink for the fixture or scenario under test.
             /// </summary>
             private readonly IRabbitMqDeliverySink _deliverySink;
             /// <summary>
-            /// Stores the _prefetchCount fixture value used by these tests.
+            /// Supplies  prefetch count for the fixture or scenario under test.
             /// </summary>
             private readonly ushort? _prefetchCount;
             /// <summary>
-            /// Stores the _owner fixture value used by these tests.
+            /// Supplies  owner for the fixture or scenario under test.
             /// </summary>
             private readonly BlockingStopSessionFactory _owner;
             /// <summary>
-            /// Stores the _ownedChannel fixture value used by these tests.
+            /// Supplies  owned channel for the fixture or scenario under test.
             /// </summary>
             private RabbitMqOwnedChannel? _ownedChannel;
 
             /// <summary>
-            /// Verifies the BlockingStopTrackingSession scenario and expected contract.
+            /// Exercises blocking stop tracking session behavior, including the expected result and failure semantics.
             /// </summary>
             internal BlockingStopTrackingSession(
                 RabbitMqConsumerSessionIdentity identity,
@@ -2148,37 +2148,37 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Identity value used by this test fixture.
+            /// Supplies identity for the fixture or scenario under test.
             /// </summary>
             public RabbitMqConsumerSessionIdentity Identity { get; }
 
             /// <summary>
-            /// Stores the IsRunning value used by this test fixture.
+            /// Supplies is running for the fixture or scenario under test.
             /// </summary>
             public bool IsRunning { get; private set; }
 
             /// <summary>
-            /// Stores the ActiveConnectionGeneration value used by this test fixture.
+            /// Supplies active connection generation for the fixture or scenario under test.
             /// </summary>
             public long ActiveConnectionGeneration { get; private set; }
 
             /// <summary>
-            /// Stores the StartCallCount value used by this test fixture.
+            /// Supplies start call count for the fixture or scenario under test.
             /// </summary>
             internal int StartCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the StopCallCount value used by this test fixture.
+            /// Supplies stop call count for the fixture or scenario under test.
             /// </summary>
             internal int StopCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the DisposeCalled value used by this test fixture.
+            /// Supplies dispose called for the fixture or scenario under test.
             /// </summary>
             internal bool DisposeCalled { get; private set; }
 
             /// <summary>
-            /// Verifies the StartAsync scenario and expected contract.
+            /// Exercises start async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -2207,7 +2207,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the StopAsync scenario and expected contract.
+            /// Exercises stop async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -2236,7 +2236,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -2246,56 +2246,56 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the RetirementFailureMode test type and its protected contract.
+        /// Covers retirement failure mode behavior and invariants exercised by this test suite.
         /// </summary>
         private enum RetirementFailureMode
         {
             /// <summary>
-            /// Defines the None value covered by this test contract.
+            /// Supplies the covered member for the fixture or scenario under test.
             /// </summary>
             None,
             /// <summary>
-            /// Defines the StopThrowsBeforeStopping value covered by this test contract.
+            /// Supplies the covered member for the fixture or scenario under test.
             /// </summary>
             StopThrowsBeforeStopping,
             /// <summary>
-            /// Defines the StopThrowsAfterStopping value covered by this test contract.
+            /// Supplies the covered member for the fixture or scenario under test.
             /// </summary>
             StopThrowsAfterStopping,
             /// <summary>
-            /// Defines the DisposeThrowsAfterStop value covered by this test contract.
+            /// Supplies the covered member for the fixture or scenario under test.
             /// </summary>
             DisposeThrowsAfterStop,
         }
 
         /// <summary>
-        /// Documents the FaultInjectingSessionFactory test type and its protected contract.
+        /// Covers fault injecting session factory behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class FaultInjectingSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer) : IRabbitMqConsumerSessionFactory
         {
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  sessions by key behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, List<FaultInjectingSession>> _sessionsByKey = new(StringComparer.Ordinal);
             /// <summary>
-            /// Documents the new member and its test-supporting contract.
+            /// Exercises  failure modes by session key behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly Dictionary<string, RetirementFailureMode> _failureModesBySessionKey = new(StringComparer.Ordinal);
             /// <summary>
-            /// Stores the _gate fixture value used by these tests.
+            /// Exercises  gate behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly object _gate = new();
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Exercises  connection manager behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Exercises  topology initializer behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
 
             /// <summary>
-            /// Verifies the CreateSession scenario and expected contract.
+            /// Exercises create session behavior, including the expected result and failure semantics.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -2325,7 +2325,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the SetFailureMode scenario and expected contract.
+            /// Exercises set failure mode behavior, including the expected result and failure semantics.
             /// </summary>
             internal void SetFailureMode(string sessionKey, RetirementFailureMode mode)
             {
@@ -2336,7 +2336,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the GetCreatedCount scenario and expected contract.
+            /// Exercises get created count behavior, including the expected result and failure semantics.
             /// </summary>
             internal int GetCreatedCount(string sessionKey)
             {
@@ -2348,37 +2348,37 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the FaultInjectingSession test type and its protected contract.
+        /// Covers fault injecting session behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class FaultInjectingSession : IRabbitMqConsumerSession
         {
             /// <summary>
-            /// Stores the _connectionManager fixture value used by these tests.
+            /// Supplies  connection manager for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqConnectionManager _connectionManager;
             /// <summary>
-            /// Stores the _topologyInitializer fixture value used by these tests.
+            /// Supplies  topology initializer for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqTopologyInitializer _topologyInitializer;
             /// <summary>
-            /// Stores the _deliverySink fixture value used by these tests.
+            /// Supplies  delivery sink for the fixture or scenario under test.
             /// </summary>
             private readonly IRabbitMqDeliverySink _deliverySink;
             /// <summary>
-            /// Stores the _prefetchCount fixture value used by these tests.
+            /// Supplies  prefetch count for the fixture or scenario under test.
             /// </summary>
             private readonly ushort? _prefetchCount;
             /// <summary>
-            /// Stores the _failureMode fixture value used by these tests.
+            /// Supplies  failure mode for the fixture or scenario under test.
             /// </summary>
             private readonly RetirementFailureMode _failureMode;
             /// <summary>
-            /// Stores the _ownedChannel fixture value used by these tests.
+            /// Supplies  owned channel for the fixture or scenario under test.
             /// </summary>
             private RabbitMqOwnedChannel? _ownedChannel;
 
             /// <summary>
-            /// Verifies the FaultInjectingSession scenario and expected contract.
+            /// Exercises fault injecting session behavior, including the expected result and failure semantics.
             /// </summary>
             internal FaultInjectingSession(
                 RabbitMqConsumerSessionIdentity identity,
@@ -2397,32 +2397,32 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Identity value used by this test fixture.
+            /// Supplies identity for the fixture or scenario under test.
             /// </summary>
             public RabbitMqConsumerSessionIdentity Identity { get; }
 
             /// <summary>
-            /// Stores the IsRunning value used by this test fixture.
+            /// Supplies is running for the fixture or scenario under test.
             /// </summary>
             public bool IsRunning { get; private set; }
 
             /// <summary>
-            /// Stores the ActiveConnectionGeneration value used by this test fixture.
+            /// Supplies active connection generation for the fixture or scenario under test.
             /// </summary>
             public long ActiveConnectionGeneration { get; private set; }
 
             /// <summary>
-            /// Stores the StopCallCount value used by this test fixture.
+            /// Supplies stop call count for the fixture or scenario under test.
             /// </summary>
             internal int StopCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the DisposeCallCount value used by this test fixture.
+            /// Supplies dispose call count for the fixture or scenario under test.
             /// </summary>
             internal int DisposeCallCount { get; private set; }
 
             /// <summary>
-            /// Verifies the StartAsync scenario and expected contract.
+            /// Exercises start async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -2450,7 +2450,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the StopAsync scenario and expected contract.
+            /// Exercises stop async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -2486,7 +2486,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -2507,12 +2507,12 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class RecordingDeliverySink : IRabbitMqDeliverySink
         {
             /// <summary>
-            /// Stores the Deliveries value used by this test fixture.
+            /// Supplies deliveries for the fixture or scenario under test.
             /// </summary>
             internal List<RabbitMqArticleDelivery> Deliveries { get; } = [];
 
             /// <summary>
-            /// Verifies the OnDeliveryAsync scenario and expected contract.
+            /// Exercises on delivery async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
             {
@@ -2528,26 +2528,26 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class TrackingBrokerConnector : IRabbitMqBrokerConnector
         {
             /// <summary>
-            /// Stores the _connections fixture value used by these tests.
+            /// Supplies  connections for the fixture or scenario under test.
             /// </summary>
             private readonly List<TrackingConnection> _connections = [];
             /// <summary>
-            /// Stores the _connectCallCount fixture value used by these tests.
+            /// Supplies  connect call count for the fixture or scenario under test.
             /// </summary>
             private int _connectCallCount;
 
             /// <summary>
-            /// Stores the ConnectCallCount value used by this test fixture.
+            /// Exercises connect call count behavior, including the expected result and failure semantics.
             /// </summary>
             internal int ConnectCallCount => Volatile.Read(ref _connectCallCount);
 
             /// <summary>
-            /// Stores the AllConnections value used by this test fixture.
+            /// Supplies all connections for the fixture or scenario under test.
             /// </summary>
             internal IReadOnlyList<TrackingConnection> AllConnections => _connections;
 
             /// <summary>
-            /// Verifies the ConnectAsync scenario and expected contract.
+            /// Exercises connect async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
             {
@@ -2560,7 +2560,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RequireLastConnection scenario and expected contract.
+            /// Exercises require last connection behavior, including the expected result and failure semantics.
             /// </summary>
             internal TrackingConnection RequireLastConnection()
             {
@@ -2574,77 +2574,77 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class TrackingConnection(string host, int port, string virtualHost, string clientProvidedName) : IRabbitMqBrokerConnection
         {
             /// <summary>
-            /// Stores the IsOpen value used by this test fixture.
+            /// Supplies is open for the fixture or scenario under test.
             /// </summary>
             public bool IsOpen { get; private set; } = true;
 
             /// <summary>
-            /// Stores the EndpointHostName value used by this test fixture.
+            /// Supplies endpoint host name for the fixture or scenario under test.
             /// </summary>
             public string EndpointHostName { get; } = host;
 
             /// <summary>
-            /// Stores the EndpointPort value used by this test fixture.
+            /// Supplies endpoint port for the fixture or scenario under test.
             /// </summary>
             public int EndpointPort { get; } = port;
 
             /// <summary>
-            /// Stores the VirtualHost value used by this test fixture.
+            /// Supplies virtual host for the fixture or scenario under test.
             /// </summary>
             public string VirtualHost { get; } = virtualHost;
 
             /// <summary>
-            /// Stores the ClientProvidedName value used by this test fixture.
+            /// Supplies client provided name for the fixture or scenario under test.
             /// </summary>
             public string ClientProvidedName { get; } = clientProvidedName;
 
             /// <summary>
-            /// Stores the UnderlyingConnection value used by this test fixture.
+            /// Exercises underlying connection behavior, including the expected result and failure semantics.
             /// </summary>
             public IConnection UnderlyingConnection => throw new NotSupportedException();
 
             /// <summary>
-            /// Stores the Channels value used by this test fixture.
+            /// Supplies channels for the fixture or scenario under test.
             /// </summary>
             public List<TrackingChannel> Channels { get; } = [];
 
             /// <summary>
-            /// Stores the Disposed value used by this test fixture.
+            /// Supplies disposed for the fixture or scenario under test.
             /// </summary>
             public bool Disposed { get; private set; }
 
             /// <summary>
-            /// Documents the ConnectionShutdown member and its test-supporting contract.
+            /// Supplies connection shutdown for the fixture or scenario under test.
             /// </summary>
             public event EventHandler<ShutdownEventArgs>? ConnectionShutdown;
 
             /// <summary>
-            /// Documents the CallbackException member and its test-supporting contract.
+            /// Supplies callback exception for the fixture or scenario under test.
             /// </summary>
             public event EventHandler<CallbackExceptionEventArgs>? CallbackException;
 
             /// <summary>
-            /// Documents the ConnectionBlocked member and its test-supporting contract.
+            /// Supplies connection blocked for the fixture or scenario under test.
             /// </summary>
             public event EventHandler<ConnectionBlockedEventArgs>? ConnectionBlocked;
 
             /// <summary>
-            /// Documents the ConnectionUnblocked member and its test-supporting contract.
+            /// Supplies connection unblocked for the fixture or scenario under test.
             /// </summary>
             public event EventHandler<AsyncEventArgs>? ConnectionUnblocked;
 
             /// <summary>
-            /// Documents the ConnectionRecoveryError member and its test-supporting contract.
+            /// Supplies connection recovery error for the fixture or scenario under test.
             /// </summary>
             public event EventHandler<ConnectionRecoveryErrorEventArgs>? ConnectionRecoveryError;
 
             /// <summary>
-            /// Documents the RecoverySucceeded member and its test-supporting contract.
+            /// Supplies recovery succeeded for the fixture or scenario under test.
             /// </summary>
             public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
             /// <summary>
-            /// Verifies the CreateChannelAsync scenario and expected contract.
+            /// Exercises create channel async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
@@ -2656,7 +2656,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask DisposeAsync()
             {
@@ -2666,7 +2666,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RaiseConnectionShutdown scenario and expected contract.
+            /// Exercises raise connection shutdown behavior, including the expected result and failure semantics.
             /// </summary>
             internal void RaiseConnectionShutdown()
             {
@@ -2674,7 +2674,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RaiseRecoverySucceeded scenario and expected contract.
+            /// Exercises raise recovery succeeded behavior, including the expected result and failure semantics.
             /// </summary>
             internal void RaiseRecoverySucceeded()
             {
@@ -2688,93 +2688,93 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class TrackingChannel : IRabbitMqChannel
         {
             /// <summary>
-            /// Stores the _underlyingChannel fixture value used by these tests.
+            /// Exercises  underlying channel behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly IChannel _underlyingChannel = DispatchProxy.Create<IChannel, NoOpChannelProxy>();
             /// <summary>
-            /// Stores the _consumer fixture value used by these tests.
+            /// Supplies  consumer for the fixture or scenario under test.
             /// </summary>
             private IAsyncBasicConsumer? _consumer;
             /// <summary>
-            /// Stores the _consumerTag fixture value used by these tests.
+            /// Supplies  consumer tag for the fixture or scenario under test.
             /// </summary>
             private string? _consumerTag;
             /// <summary>
-            /// Stores the _cancelObserved fixture value used by these tests.
+            /// Exercises  cancel observed behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly TaskCompletionSource<bool> _cancelObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
             /// <summary>
-            /// Stores the _disposedObserved fixture value used by these tests.
+            /// Exercises  disposed observed behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly TaskCompletionSource<bool> _disposedObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             /// <summary>
-            /// Stores the UnderlyingChannel value used by this test fixture.
+            /// Supplies underlying channel for the fixture or scenario under test.
             /// </summary>
             public IChannel UnderlyingChannel => _underlyingChannel;
 
             /// <summary>
-            /// Stores the Disposed value used by this test fixture.
+            /// Supplies disposed for the fixture or scenario under test.
             /// </summary>
             public bool Disposed { get; private set; }
 
             /// <summary>
-            /// Stores the ConsumeCallCount value used by this test fixture.
+            /// Supplies consume call count for the fixture or scenario under test.
             /// </summary>
             public int ConsumeCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the CancelCallCount value used by this test fixture.
+            /// Supplies cancel call count for the fixture or scenario under test.
             /// </summary>
             public int CancelCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the LastConsumeAutoAck value used by this test fixture.
+            /// Supplies last consume auto ack for the fixture or scenario under test.
             /// </summary>
             public bool LastConsumeAutoAck { get; private set; }
 
             /// <summary>
-            /// Stores the LastConsumeQueue value used by this test fixture.
+            /// Supplies last consume queue for the fixture or scenario under test.
             /// </summary>
             public string LastConsumeQueue { get; private set; } = string.Empty;
 
             /// <summary>
-            /// Stores the LastPrefetchCount value used by this test fixture.
+            /// Supplies last prefetch count for the fixture or scenario under test.
             /// </summary>
             public ushort? LastPrefetchCount { get; private set; }
 
             /// <summary>
-            /// Stores the AckCallCount value used by this test fixture.
+            /// Supplies ack call count for the fixture or scenario under test.
             /// </summary>
             public int AckCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the NackCallCount value used by this test fixture.
+            /// Supplies nack call count for the fixture or scenario under test.
             /// </summary>
             public int NackCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the OperationLog value used by this test fixture.
+            /// Supplies operation log for the fixture or scenario under test.
             /// </summary>
             public List<string> OperationLog { get; } = [];
 
             /// <summary>
-            /// Stores the IsConsumerCurrentlyActive value used by this test fixture.
+            /// Supplies is consumer currently active for the fixture or scenario under test.
             /// </summary>
             public bool IsConsumerCurrentlyActive => ConsumeCallCount > CancelCallCount && !Disposed;
 
             /// <summary>
-            /// Stores the CancelObserved value used by this test fixture.
+            /// Supplies cancel observed for the fixture or scenario under test.
             /// </summary>
             public Task CancelObserved => _cancelObserved.Task;
 
             /// <summary>
-            /// Stores the DisposedObserved value used by this test fixture.
+            /// Supplies disposed observed for the fixture or scenario under test.
             /// </summary>
             public Task DisposedObserved => _disposedObserved.Task;
 
             /// <summary>
-            /// Verifies the ExchangeDeclareAsync scenario and expected contract.
+            /// Exercises exchange declare async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -2783,7 +2783,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the QueueDeclareAsync scenario and expected contract.
+            /// Exercises queue declare async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -2792,7 +2792,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the QueueBindAsync scenario and expected contract.
+            /// Exercises queue bind async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -2801,7 +2801,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BasicQosAsync scenario and expected contract.
+            /// Exercises basic qos async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken)
             {
@@ -2813,7 +2813,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BasicConsumeAsync scenario and expected contract.
+            /// Exercises basic consume async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken)
             {
@@ -2828,7 +2828,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BasicCancelAsync scenario and expected contract.
+            /// Exercises basic cancel async behavior, including the expected result and failure semantics.
             /// </summary>
             public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
             {
@@ -2845,7 +2845,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BasicAckAsync scenario and expected contract.
+            /// Exercises basic ack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
             {
@@ -2858,7 +2858,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BasicNackAsync scenario and expected contract.
+            /// Exercises basic nack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
             {
@@ -2872,7 +2872,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BasicPublishAsync scenario and expected contract.
+            /// Exercises basic publish async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
             {
@@ -2886,7 +2886,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DeliverAsync scenario and expected contract.
+            /// Exercises deliver async behavior, including the expected result and failure semantics.
             /// </summary>
             public async Task DeliverAsync(ulong deliveryTag, bool redelivered, string exchange, string routingKey, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
             {
@@ -2909,7 +2909,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask DisposeAsync()
             {
@@ -2928,7 +2928,7 @@ namespace VectorNNTP.Backfiller.Tests
         private class NoOpChannelProxy : DispatchProxy
         {
             /// <summary>
-            /// Verifies the Invoke scenario and expected contract.
+            /// Exercises invoke behavior, including the expected result and failure semantics.
             /// </summary>
             protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
             {
@@ -2972,7 +2972,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the CreateDefaultValue scenario and expected contract.
+            /// Exercises create default value behavior, including the expected result and failure semantics.
             /// </summary>
             private static object? CreateDefaultValue(Type type)
             {

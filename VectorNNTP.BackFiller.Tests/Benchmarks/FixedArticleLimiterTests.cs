@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the fixed article limiter benchmark component.
+// Focused tests for fixed article limiter, covering NNTP article and transport behavior.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -57,11 +57,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         public async Task TryReserveNext_WhenInvokedConcurrently_IsGloballyBoundedToTargetAsync()
         {
             /// <summary>
-            /// Stores the Target fixture value used by these tests.
+            /// Supplies target for the fixture or scenario under test.
             /// </summary>
             const int Target = 200;
             /// <summary>
-            /// Stores the Workers fixture value used by these tests.
+            /// Supplies workers for the fixture or scenario under test.
             /// </summary>
             const int Workers = 8;
 

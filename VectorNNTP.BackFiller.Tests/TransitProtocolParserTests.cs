@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for transit protocol parser.
+// Focused tests for transit protocol parser, covering NNTP article and transport behavior.
 
 using System.IO.Pipelines;
 using System.Text;
@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class TransitProtocolParserTests
     {
         /// <summary>
-        /// Verifies the ReadNntpLineAsync_WhenCrLfLine_ReturnsLineWithoutCrLf scenario and expected contract.
+        /// Exercises read nntp line async  when cr lf line  returns line without cr lf behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReadNntpLineAsync_WhenCrLfLine_ReturnsLineWithoutCrLf()
@@ -31,7 +31,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("200 transit ready", line);
         }
         /// <summary>
-        /// Verifies the ValidateGreeting_When200Or201_DoesNotThrow scenario and expected contract.
+        /// Exercises validate greeting  when200 or201  does not throw behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ValidateGreeting_When200Or201_DoesNotThrow()
@@ -40,7 +40,7 @@ namespace VectorNNTP.Backfiller.Tests
             TransitProtocolParser.ValidateGreeting("201 transit no posting");
         }
         /// <summary>
-        /// Verifies the ValidateGreeting_WhenUnexpected_Throws scenario and expected contract.
+        /// Exercises validate greeting  when unexpected  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ValidateGreeting_WhenUnexpected_Throws()
@@ -51,7 +51,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("Unexpected NNTP greeting response code", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Verifies the ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_IgnoresCompressionAndDetectsSupportedFeatures scenario and expected contract.
+        /// Exercises parse capabilities response  when start tls compress streaming present  ignores compression and detects supported features behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseCapabilitiesResponse_WhenStartTlsCompressStreamingPresent_IgnoresCompressionAndDetectsSupportedFeatures()
@@ -72,7 +72,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(snapshot.SupportsStreaming);
         }
         /// <summary>
-        /// Verifies the ParseCapabilitiesResponse_WhenMalformed_Throws scenario and expected contract.
+        /// Exercises parse capabilities response  when malformed  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseCapabilitiesResponse_WhenMalformed_Throws()
@@ -90,7 +90,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("missing multiline terminator", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the ParseStatusLine_WhenValid_ParsesCodeTextAndTokens scenario and expected contract.
+        /// Exercises parse status line  when valid  parses code text and tokens behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseStatusLine_WhenValid_ParsesCodeTextAndTokens()
@@ -102,7 +102,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(["streaming", "allowed"], tokens);
         }
         /// <summary>
-        /// Verifies the ParseStatusLine_WhenMissingSeparatorAfterCode_Throws scenario and expected contract.
+        /// Exercises parse status line  when missing separator after code  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseStatusLine_WhenMissingSeparatorAfterCode_Throws()
@@ -113,7 +113,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("Malformed NNTP response", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the ParseCapabilitiesResponse_WhenMixedCaseAndParameters_DetectsSupportedFeatures scenario and expected contract.
+        /// Exercises parse capabilities response  when mixed case and parameters  detects supported features behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseCapabilitiesResponse_WhenMixedCaseAndParameters_DetectsSupportedFeatures()
@@ -134,7 +134,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(snapshot.SupportsStreaming);
         }
         /// <summary>
-        /// Verifies the ParseCapabilitiesResponse_WhenStreamTokenPresent_DetectsStreamingSupport scenario and expected contract.
+        /// Exercises parse capabilities response  when stream token present  detects streaming support behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseCapabilitiesResponse_WhenStreamTokenPresent_DetectsStreamingSupport()
@@ -152,7 +152,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(snapshot.SupportsStreaming);
         }
         /// <summary>
-        /// Verifies the ParseCapabilitiesResponse_WhenStatusCodeNot101_Throws scenario and expected contract.
+        /// Exercises parse capabilities response  when status code not101  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void ParseCapabilitiesResponse_WhenStatusCodeNot101_Throws()
@@ -169,7 +169,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("Unexpected CAPABILITIES response code", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Verifies the ReadNntpLineWithByteCountAsync_WhenCrLfLine_ReturnsLineAndByteCount scenario and expected contract.
+        /// Exercises read nntp line with byte count async  when cr lf line  returns line and byte count behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReadNntpLineWithByteCountAsync_WhenCrLfLine_ReturnsLineAndByteCount()
@@ -183,7 +183,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(13, bytesRead);
         }
         /// <summary>
-        /// Verifies the ReadNntpLineWithByteCountAndCompletionAsync_WhenCompletedWithoutLine_ReturnsCompletionMarker scenario and expected contract.
+        /// Exercises read nntp line with byte count and completion async  when completed without line  returns completion marker behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReadNntpLineWithByteCountAndCompletionAsync_WhenCompletedWithoutLine_ReturnsCompletionMarker()
@@ -198,7 +198,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(completedWithoutLine);
         }
         /// <summary>
-        /// Verifies the ReadNntpLineAsync_WhenCompletedWithoutLine_Throws scenario and expected contract.
+        /// Exercises read nntp line async  when completed without line  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReadNntpLineAsync_WhenCompletedWithoutLine_Throws()
@@ -209,7 +209,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None));
         }
         /// <summary>
-        /// Verifies the ReadNntpLineAsync_WhenLineExceedsMaximumWithoutNewline_Throws scenario and expected contract.
+        /// Exercises read nntp line async  when line exceeds maximum without newline  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ReadNntpLineAsync_WhenLineExceedsMaximumWithoutNewline_Throws()

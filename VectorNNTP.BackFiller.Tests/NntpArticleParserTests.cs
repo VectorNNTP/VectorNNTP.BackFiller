@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for nntp article parser.
+// Focused tests for nntp article parser, covering NNTP article and transport behavior.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.DateParser;

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for transit global work queue.
+// Focused tests for transit global work queue, covering NNTP article and transport behavior.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
@@ -16,7 +16,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class TransitGlobalWorkQueueTests
     {
         /// <summary>
-        /// Verifies the EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting scenario and expected contract.
+        /// Exercises enqueue and claim  when capacity available  updates queue and in flight accounting behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting()
@@ -40,7 +40,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, queue.InFlightCount);
         }
         /// <summary>
-        /// Verifies the EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity scenario and expected contract.
+        /// Exercises enqueue async  when item capacity reached  waits until claim frees capacity behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity()
@@ -62,7 +62,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(64, queue.QueuedPayloadBytes);
         }
         /// <summary>
-        /// Verifies the EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes scenario and expected contract.
+        /// Exercises enqueue async  when payload byte capacity reached  waits until claim frees bytes behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes()
@@ -84,7 +84,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, queue.QueuedPayloadBytes);
         }
         /// <summary>
-        /// Verifies the ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay scenario and expected contract.
+        /// Exercises schedule retry async  when attempt budget remaining  requeues after delay behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay()
@@ -117,7 +117,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(2, retried!.AttemptCount);
         }
         /// <summary>
-        /// Verifies the TransitWorkItem_TryComplete_AllowsExactlyOneTerminalCompletion scenario and expected contract.
+        /// Exercises transit work item  try complete  allows exactly one terminal completion behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void TransitWorkItem_TryComplete_AllowsExactlyOneTerminalCompletion()
@@ -146,7 +146,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitWorkItemState.CompletedAccepted, item.State);
         }
         /// <summary>
-        /// Verifies the TransitWorkItem_RetryAttemptBudget_IsBoundedToThreeTransmissions scenario and expected contract.
+        /// Exercises transit work item  retry attempt budget  is bounded to three transmissions behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void TransitWorkItem_RetryAttemptBudget_IsBoundedToThreeTransmissions()
@@ -181,7 +181,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(item.HasAttemptsRemaining());
         }
         /// <summary>
-        /// Verifies the MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation scenario and expected contract.
+        /// Exercises mark in flight terminal  when no in flight ownership  throws invariant violation behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation()
@@ -193,7 +193,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateItem scenario and expected contract.
+        /// Exercises create item behavior, including the expected result and failure semantics.
         /// </summary>
         private static TransitWorkItem CreateItem(long id, string messageId, int payloadSize)
         {

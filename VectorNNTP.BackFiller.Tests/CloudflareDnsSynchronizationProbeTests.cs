@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for cloudflare dns synchronization probe.
+// Focused tests for cloudflare dns synchronization probe, covering certificate and DNS dependency behavior.
 
 using System.Net;
 using CloudFlare.Client.Enumerators;
@@ -19,7 +19,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class CloudflareDnsSynchronizationProbeTests
     {
         /// <summary>
-        /// Stores the GeneratedFqdn fixture value used by these tests.
+        /// Supplies generated fqdn for the fixture or scenario under test.
         /// </summary>
         private const string GeneratedFqdn = "nntpbackfiller01.usenet.ninja";
 
@@ -342,11 +342,11 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class FakeCloudflareDnsFacade : ICloudflareDnsFacade
         {
             /// <summary>
-            /// Stores the _records fixture value used by these tests.
+            /// Supplies  records for the fixture or scenario under test.
             /// </summary>
             private readonly List<CloudflareDnsRecordInfo> _records;
             /// <summary>
-            /// Stores the _nextIdentifier fixture value used by these tests.
+            /// Supplies  next identifier for the fixture or scenario under test.
             /// </summary>
             private int _nextIdentifier = 1000;
 

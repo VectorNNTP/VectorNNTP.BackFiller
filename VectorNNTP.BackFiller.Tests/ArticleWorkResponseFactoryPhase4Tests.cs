@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for article work response factory phase4.
+// Focused tests for article work response factory phase4, covering NNTP article and transport behavior.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ArticleWorkResponseFactoryPhase4Tests
     {
         /// <summary>
-        /// Verifies the CreateResponse_MapsOutcomeToCanonicalPayload scenario and expected contract.
+        /// Exercises create response  maps outcome to canonical payload behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData(0, true, false)]
@@ -71,7 +71,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateResult scenario and expected contract.
+        /// Exercises create result behavior, including the expected result and failure semantics.
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
@@ -111,12 +111,12 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the NoOpSettlement test type and its protected contract.
+        /// Covers no op settlement behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Verifies the AckAsync scenario and expected contract.
+            /// Exercises ack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
@@ -125,7 +125,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the NackAsync scenario and expected contract.
+            /// Exercises nack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {

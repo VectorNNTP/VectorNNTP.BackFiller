@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for nntp article acquisition.
+// Focused tests for nntp article acquisition, covering NNTP article and transport behavior.
 
 using System.Net;
 using System.Net.Security;
@@ -926,7 +926,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
                 /// <summary>
-                /// Stores the stream value used by this test fixture.
+                /// Supplies stream for the fixture or scenario under test.
                 /// </summary>
                 static async stream =>
                 {
@@ -961,7 +961,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
                 /// <summary>
-                /// Stores the stream value used by this test fixture.
+                /// Supplies stream for the fixture or scenario under test.
                 /// </summary>
                 static async stream =>
                 {

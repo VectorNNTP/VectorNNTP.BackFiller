@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for hex u int32 parser.
+// Focused tests for hex u int32 parser, covering the covered test contracts.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

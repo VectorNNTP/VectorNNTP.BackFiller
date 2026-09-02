@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for logging async sink correctness.
+// Focused tests for logging async sink correctness, covering the covered test contracts.
 
 using Serilog;
 using Serilog.Events;
@@ -12,12 +12,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Documents the LoggingAsyncSinkCorrectnessTests test type and its protected contract.
+    /// Covers logging async sink correctness behavior and invariants exercised by this test suite.
     /// </summary>
     public sealed class LoggingAsyncSinkCorrectnessTests
     {
         /// <summary>
-        /// Verifies the AsyncSink_BlockWhenFull_EmitsAllSubmittedEvents scenario and expected contract.
+        /// Exercises async sink  block when full  emits all submitted events behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public Task AsyncSink_BlockWhenFull_EmitsAllSubmittedEvents()
@@ -43,7 +43,7 @@ namespace VectorNNTP.Backfiller.Tests
                 .CreateLogger();
 
             /// <summary>
-            /// Stores the TotalEvents fixture value used by these tests.
+            /// Supplies total events for the fixture or scenario under test.
             /// </summary>
             const int TotalEvents = 10_000;
 
@@ -63,7 +63,7 @@ namespace VectorNNTP.Backfiller.Tests
             return Task.CompletedTask;
         }
         /// <summary>
-        /// Verifies the AsyncSink_CloseAndFlushAsync_DrainsQueuedEvents scenario and expected contract.
+        /// Exercises async sink  close and flush async  drains queued events behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public Task AsyncSink_CloseAndFlushAsync_DrainsQueuedEvents()
@@ -93,7 +93,7 @@ namespace VectorNNTP.Backfiller.Tests
                 .CreateLogger();
 
             /// <summary>
-            /// Stores the TotalEvents fixture value used by these tests.
+            /// Supplies total events for the fixture or scenario under test.
             /// </summary>
             const int TotalEvents = 5_000;
 
@@ -114,7 +114,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateTempOutputDirectory scenario and expected contract.
+        /// Exercises create temp output directory behavior, including the expected result and failure semantics.
         /// </summary>
         private static string CreateTempOutputDirectory()
         {
@@ -124,7 +124,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the TryDeleteDirectory scenario and expected contract.
+        /// Exercises try delete directory behavior, including the expected result and failure semantics.
         /// </summary>
         private static void TryDeleteDirectory(string path)
         {
@@ -142,22 +142,22 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the CountingSink test type and its protected contract.
+        /// Covers counting sink behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class CountingSink : Serilog.Core.ILogEventSink
         {
             /// <summary>
-            /// Stores the _count fixture value used by these tests.
+            /// Supplies  count for the fixture or scenario under test.
             /// </summary>
             private long _count;
 
             /// <summary>
-            /// Stores the Count value used by this test fixture.
+            /// Exercises count behavior, including the expected result and failure semantics.
             /// </summary>
             public long Count => Interlocked.Read(ref _count);
 
             /// <summary>
-            /// Verifies the Emit scenario and expected contract.
+            /// Exercises emit behavior, including the expected result and failure semantics.
             /// </summary>
             public void Emit(LogEvent logEvent)
             {

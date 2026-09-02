@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for nntp account snapshot state.
+// Focused tests for nntp account snapshot state, covering NNTP article and transport behavior.
 
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using Xunit;
@@ -16,13 +16,13 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class NntpAccountSnapshotStateTests
     {
         /// <summary>
-        /// Verifies the Empty_ReturnsServerIdAndNoAccounts scenario and expected contract.
+        /// Exercises empty  returns server id and no accounts behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void Empty_ReturnsServerIdAndNoAccounts()
         {
             /// <summary>
-            /// Stores the ServerId fixture value used by these tests.
+            /// Supplies server id for the fixture or scenario under test.
             /// </summary>
             const byte ServerId = 12;
 

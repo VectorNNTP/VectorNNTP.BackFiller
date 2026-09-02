@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for nntp article execution session manager.
+// Focused tests for nntp article execution session manager, covering NNTP article and transport behavior.
 
 using System.Diagnostics;
 using System.Net;
@@ -791,7 +791,7 @@ namespace VectorNNTP.Backfiller.Tests
         public async Task InitializeAsync_WithMultipleConnections_EstablishesConnectionsConcurrently()
         {
             /// <summary>
-            /// Stores the ConnectionCount fixture value used by these tests.
+            /// Supplies connection count for the fixture or scenario under test.
             /// </summary>
             const int ConnectionCount = 4;
 
@@ -836,7 +836,7 @@ namespace VectorNNTP.Backfiller.Tests
         public async Task InitializeAsync_WhenSomeConnectionsFail_SuccessfulSessionsRemainReady()
         {
             /// <summary>
-            /// Stores the RequestedConnections fixture value used by these tests.
+            /// Supplies requested connections for the fixture or scenario under test.
             /// </summary>
             const int RequestedConnections = 4;
             int connectionAttempt = 0;
@@ -1203,7 +1203,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the FakeArticleServer test type and its protected contract.
+        /// Covers fake article server behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class FakeArticleServer : IAsyncDisposable
         {

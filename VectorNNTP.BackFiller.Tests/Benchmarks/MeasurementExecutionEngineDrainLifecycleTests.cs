@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the measurement execution engine drain lifecycle benchmark component.
+// Focused tests for measurement execution engine drain lifecycle, covering service lifecycle and shutdown contracts; benchmark measurement and runtime identity contracts.
 
 using System.Diagnostics;
 using System.Net;
@@ -183,24 +183,24 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         private sealed class DrainLifecycleFakeServer : IAsyncDisposable
         {
             /// <summary>
-            /// Stores the _listener fixture value used by these tests.
+            /// Supplies  listener for the fixture or scenario under test.
             /// </summary>
             private readonly TcpListener _listener;
             /// <summary>
-            /// Documents the _session member and its test-supporting contract.
+            /// Supplies  session for the fixture or scenario under test.
             /// </summary>
             private readonly Func<NetworkStream, CancellationToken, Task> _session;
             /// <summary>
-            /// Stores the _cts fixture value used by these tests.
+            /// Exercises  cts behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly CancellationTokenSource _cts = new();
             /// <summary>
-            /// Stores the _acceptLoop fixture value used by these tests.
+            /// Supplies  accept loop for the fixture or scenario under test.
             /// </summary>
             private readonly Task _acceptLoop;
 
             /// <summary>
-            /// Verifies the DrainLifecycleFakeServer scenario and expected contract.
+            /// Exercises drain lifecycle fake server behavior, including the expected result and failure semantics.
             /// </summary>
             private DrainLifecycleFakeServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {

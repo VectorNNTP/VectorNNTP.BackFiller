@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the measurement metrics queue telemetry benchmark component.
+// Focused tests for measurement metrics queue telemetry, covering benchmark measurement and runtime identity contracts.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for utc timestamp enricher.
+// Focused tests for utc timestamp enricher, covering the covered test contracts.
 
 using Serilog.Core;
 using Serilog.Events;

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for lets encrypt certificate dependency probe.
+// Focused tests for lets encrypt certificate dependency probe, covering certificate and DNS dependency behavior.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -12,12 +12,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Documents the LetsEncryptCertificateDependencyProbeTests test type and its protected contract.
+    /// Covers lets encrypt certificate dependency probe behavior and invariants exercised by this test suite.
     /// </summary>
     public sealed class LetsEncryptCertificateDependencyProbeTests
     {
         /// <summary>
-        /// Verifies the EnsureCertificateAvailabilityAsync_WhenAcmeAccountKeyMissing_ReturnsCertificateDependencyFailure scenario and expected contract.
+        /// Exercises ensure certificate availability async  when acme account key missing  returns certificate dependency failure behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenAcmeAccountKeyMissing_ReturnsCertificateDependencyFailure()
@@ -41,7 +41,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateRuntimeOptions scenario and expected contract.
+        /// Exercises create runtime options behavior, including the expected result and failure semantics.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(string certDir)
         {
@@ -89,7 +89,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateUniqueTempDirectory scenario and expected contract.
+        /// Exercises create unique temp directory behavior, including the expected result and failure semantics.
         /// </summary>
         private static string CreateUniqueTempDirectory()
         {
@@ -99,7 +99,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the DeleteDirectoryIfExists scenario and expected contract.
+        /// Exercises delete directory if exists behavior, including the expected result and failure semantics.
         /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {

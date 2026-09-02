@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the create benchmark result contract benchmark component.
+// Focused tests for create benchmark result contract, covering benchmark measurement and runtime identity contracts.
 
 using System.Diagnostics;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -12,12 +12,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Documents the CreateBenchmarkResultContractTests test type and its protected contract.
+    /// Covers create benchmark result contract behavior and invariants exercised by this test suite.
     /// </summary>
     public sealed class CreateBenchmarkResultContractTests
     {
         /// <summary>
-        /// Verifies the CreateBenchmarkResult_MapsDeterministicInputsToExpectedContractValues scenario and expected contract.
+        /// Exercises create benchmark result  maps deterministic inputs to expected contract values behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_MapsDeterministicInputsToExpectedContractValues()
@@ -159,7 +159,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(expectedForensic.ObservabilityNotes, result.ObservabilityNotes);
         }
         /// <summary>
-        /// Verifies the CreateBenchmarkResult_UsesExpectedThroughputAndBackpressureFormulas scenario and expected contract.
+        /// Exercises create benchmark result  uses expected throughput and backpressure formulas behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_UsesExpectedThroughputAndBackpressureFormulas()
@@ -206,7 +206,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(config.MaxResidentBytes / snapshot.ArticleBytes, result.EffectiveQueueArticleCapacityFromBytes);
         }
         /// <summary>
-        /// Verifies the CreateBenchmarkResult_HandlesZeroObservationInputsAsDefined scenario and expected contract.
+        /// Exercises create benchmark result  handles zero observation inputs as defined behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_HandlesZeroObservationInputsAsDefined()
@@ -242,7 +242,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(9, result.DrainedAfterMeasurement);
         }
         /// <summary>
-        /// Verifies the CreateBenchmarkResult_UsesProcessAndGcFallbacksWhenRuntimeSnapshotMemoryValuesUnavailable scenario and expected contract.
+        /// Exercises create benchmark result  uses process and gc fallbacks when runtime snapshot memory values unavailable behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_UsesProcessAndGcFallbacksWhenRuntimeSnapshotMemoryValuesUnavailable()
@@ -281,7 +281,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(result.AllocatedMb >= 0);
         }
         /// <summary>
-        /// Verifies the CreateBenchmarkResult_UsesCurrentGcCollectionCountsAtResultCreationTime scenario and expected contract.
+        /// Exercises create benchmark result  uses current gc collection counts at result creation time behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_UsesCurrentGcCollectionCountsAtResultCreationTime()

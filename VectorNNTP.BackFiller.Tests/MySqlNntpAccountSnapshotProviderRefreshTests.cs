@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for my sql nntp account snapshot provider refresh.
+// Focused tests for my sql nntp account snapshot provider refresh, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class MySqlNntpAccountSnapshotProviderRefreshTests
     {
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_WhenSuccessful_ReplacesSnapshotAtomically scenario and expected contract.
+        /// Exercises refresh snapshot async  when successful  replaces snapshot atomically behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenSuccessful_ReplacesSnapshotAtomically()
@@ -48,7 +48,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(refreshed.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_WhenRefreshFails_PreservesPreviousSnapshot scenario and expected contract.
+        /// Exercises refresh snapshot async  when refresh fails  preserves previous snapshot behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenRefreshFails_PreservesPreviousSnapshot()
@@ -77,7 +77,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(initial.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_WhenConcurrentCallOccurs_SkipsOverlap scenario and expected contract.
+        /// Exercises refresh snapshot async  when concurrent call occurs  skips overlap behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenConcurrentCallOccurs_SkipsOverlap()
@@ -106,7 +106,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(firstResult);
         }
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_WhenCanceled_ThrowsOperationCanceledException scenario and expected contract.
+        /// Exercises refresh snapshot async  when canceled  throws operation canceled exception behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenCanceled_ThrowsOperationCanceledException()
@@ -126,7 +126,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.RefreshSnapshotAsync(cts.Token));
         }
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_LogsDoNotContainCredentials scenario and expected contract.
+        /// Exercises refresh snapshot async  logs do not contain credentials behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_LogsDoNotContainCredentials()
@@ -147,7 +147,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("password", combined, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_WhenSuccessful_ReturnsSnapshotUsingConfiguredServerId scenario and expected contract.
+        /// Exercises refresh snapshot async  when successful  returns snapshot using configured server id behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenSuccessful_ReturnsSnapshotUsingConfiguredServerId()
@@ -164,7 +164,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the BuildAccount scenario and expected contract.
+        /// Exercises build account behavior, including the expected result and failure semantics.
         /// </summary>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {
@@ -182,12 +182,12 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the TestLogger test type and its protected contract.
+        /// Covers test logger behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class TestLogger<T> : ILogger<T>
         {
             /// <summary>
-            /// Stores the Messages value used by this test fixture.
+            /// Supplies messages for the fixture or scenario under test.
             /// </summary>
             internal List<string> Messages { get; } = [];
 

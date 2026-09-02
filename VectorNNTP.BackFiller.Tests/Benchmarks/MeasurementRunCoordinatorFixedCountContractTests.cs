@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the measurement run coordinator fixed count contract benchmark component.
+// Focused tests for measurement run coordinator fixed count contract, covering benchmark measurement and runtime identity contracts.
 
 using Xunit;
 
@@ -80,7 +80,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the ReadBenchmarkSource scenario and expected contract.
+        /// Exercises read benchmark source behavior, including the expected result and failure semantics.
         /// </summary>
         private static string ReadBenchmarkSource(params string[] pathSegments)
         {
@@ -91,7 +91,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the ResolveRepositoryRoot scenario and expected contract.
+        /// Exercises resolve repository root behavior, including the expected result and failure semantics.
         /// </summary>
         private static string ResolveRepositoryRoot()
         {
@@ -112,7 +112,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the EnumerateRootCandidates scenario and expected contract.
+        /// Exercises enumerate root candidates behavior, including the expected result and failure semantics.
         /// </summary>
         private static IEnumerable<string> EnumerateRootCandidates()
         {

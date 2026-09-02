@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for back filler listener socket service.
+// Focused tests for back filler listener socket service, covering the covered test contracts.
 
 using System.Net;
 using System.Net.Security;
@@ -21,12 +21,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Documents the BackFillerListenerSocketServiceTests test type and its protected contract.
+    /// Covers back filler listener socket service behavior and invariants exercised by this test suite.
     /// </summary>
     public sealed class BackFillerListenerSocketServiceTests
     {
         /// <summary>
-        /// Verifies the StartAsync_WithLoopbackBindAndCertificate_AcceptsTlsConnection scenario and expected contract.
+        /// Exercises start async  with loopback bind and certificate  accepts tls connection behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task StartAsync_WithLoopbackBindAndCertificate_AcceptsTlsConnection()
@@ -74,7 +74,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdown.Dispose();
         }
         /// <summary>
-        /// Verifies the StartAsync_WhenCertificateStateReplaced_NewConnectionsUseNewCertificate scenario and expected contract.
+        /// Exercises start async  when certificate state replaced  new connections use new certificate behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task StartAsync_WhenCertificateStateReplaced_NewConnectionsUseNewCertificate()
@@ -114,7 +114,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdown.Dispose();
         }
         /// <summary>
-        /// Verifies the StartAsync_WhenCertificateMissing_HandshakeFailsButListenerStaysAlive scenario and expected contract.
+        /// Exercises start async  when certificate missing  handshake fails but listener stays alive behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task StartAsync_WhenCertificateMissing_HandshakeFailsButListenerStaysAlive()
@@ -164,7 +164,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdown.Dispose();
         }
         /// <summary>
-        /// Verifies the StartAsync_WithWildcardBindListensOnLoopback scenario and expected contract.
+        /// Exercises start async  with wildcard bind listens on loopback behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task StartAsync_WithWildcardBindListensOnLoopback()
@@ -198,7 +198,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the ConnectAndGetServerThumbprintAsync scenario and expected contract.
+        /// Exercises connect and get server thumbprint async behavior, including the expected result and failure semantics.
         /// </summary>
         private static async Task<string> ConnectAndGetServerThumbprintAsync(IPAddress address, int port)
         {
@@ -223,7 +223,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the WaitForPortReadyAsync scenario and expected contract.
+        /// Exercises wait for port ready async behavior, including the expected result and failure semantics.
         /// </summary>
         private static async Task WaitForPortReadyAsync(IPAddress address, int port, TimeSpan timeout)
         {
@@ -248,7 +248,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the ReserveEphemeralTcpPort scenario and expected contract.
+        /// Exercises reserve ephemeral tcp port behavior, including the expected result and failure semantics.
         /// </summary>
         private static int ReserveEphemeralTcpPort()
         {
@@ -260,7 +260,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateServerCertificate scenario and expected contract.
+        /// Exercises create server certificate behavior, including the expected result and failure semantics.
         /// </summary>
         private static X509Certificate2 CreateServerCertificate(string dnsName)
         {
@@ -285,7 +285,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateRuntimeOptions scenario and expected contract.
+        /// Exercises create runtime options behavior, including the expected result and failure semantics.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens)
         {

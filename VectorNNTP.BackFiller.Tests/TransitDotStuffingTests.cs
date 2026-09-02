@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for transit dot stuffing.
+// Focused tests for transit dot stuffing, covering NNTP article and transport behavior.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
@@ -11,12 +11,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Documents the TransitDotStuffingTests test type and its protected contract.
+    /// Covers transit dot stuffing behavior and invariants exercised by this test suite.
     /// </summary>
     public sealed class TransitDotStuffingTests
     {
         /// <summary>
-        /// Verifies the PayloadCases scenario and expected contract.
+        /// Exercises payload cases behavior, including the expected result and failure semantics.
         /// </summary>
         public static IEnumerable<object[]> PayloadCases()
         {
@@ -38,7 +38,7 @@ namespace VectorNNTP.Backfiller.Tests
             yield return ["payload-2mib", BuildMixedPayload(2_097_152, seed: 29, dotStartEvery: 19, averageLineLength: 300)];
         }
         /// <summary>
-        /// Verifies the TryDotStuff_AllAlgorithms_MatchReference scenario and expected contract.
+        /// Exercises try dot stuff  all algorithms  match reference behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
@@ -60,7 +60,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference scenario and expected contract.
+        /// Exercises try dot stuff  without trailing crlf append  matches reference behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
@@ -82,7 +82,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the TryDotStuff_WhenDestinationTooSmall_ReturnsFalse scenario and expected contract.
+        /// Exercises try dot stuff  when destination too small  returns false behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void TryDotStuff_WhenDestinationTooSmall_ReturnsFalse()
@@ -99,7 +99,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the BuildAllByteValuesPayload scenario and expected contract.
+        /// Exercises build all byte values payload behavior, including the expected result and failure semantics.
         /// </summary>
         private static byte[] BuildAllByteValuesPayload()
         {
@@ -118,7 +118,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the BuildRandomPayload scenario and expected contract.
+        /// Exercises build random payload behavior, including the expected result and failure semantics.
         /// </summary>
         private static byte[] BuildRandomPayload(int size, int seed)
         {
@@ -135,7 +135,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the BuildMixedPayload scenario and expected contract.
+        /// Exercises build mixed payload behavior, including the expected result and failure semantics.
         /// </summary>
         private static byte[] BuildMixedPayload(int size, int seed, int dotStartEvery, int averageLineLength)
         {
@@ -180,7 +180,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the ReferenceDotStuff scenario and expected contract.
+        /// Exercises reference dot stuff behavior, including the expected result and failure semantics.
         /// </summary>
         private static byte[] ReferenceDotStuff(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf)
         {

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for back filler fqdn generation.
+// Focused tests for back filler fqdn generation, covering configuration and validation contracts.
 
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
@@ -16,7 +16,7 @@ namespace VectorNNTP.Backfiller.Tests
     public class BackFillerFqdnGenerationTests
     {
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenInputsAreValid_ReturnsCanonicalFqdn scenario and expected contract.
+        /// Exercises build back filler fqdn  when inputs are valid  returns canonical fqdn behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void BuildBackFillerFqdn_WhenInputsAreValid_ReturnsCanonicalFqdn()
@@ -29,7 +29,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("nntpbackfiller01.usenet.ninja", fqdn);
         }
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenInputsContainWhitespace_TrimsAndNormalizes scenario and expected contract.
+        /// Exercises build back filler fqdn  when inputs contain whitespace  trims and normalizes behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void BuildBackFillerFqdn_WhenInputsContainWhitespace_TrimsAndNormalizes()
@@ -42,7 +42,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("backfiller09.usenet.ninja", fqdn);
         }
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenIdIsValid_ReturnsTwoDigitId scenario and expected contract.
+        /// Exercises build back filler fqdn  when id is valid  returns two digit id behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData(0, "backfiller00.usenet.ninja")]
@@ -59,7 +59,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(expected, fqdn);
         }
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenNameMissing_ThrowsArgumentException scenario and expected contract.
+        /// Exercises build back filler fqdn  when name missing  throws argument exception behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -73,7 +73,7 @@ namespace VectorNNTP.Backfiller.Tests
                 dnsSuffix: "usenet.ninja"));
         }
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenDnsSuffixMissing_ThrowsArgumentException scenario and expected contract.
+        /// Exercises build back filler fqdn  when dns suffix missing  throws argument exception behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -87,7 +87,7 @@ namespace VectorNNTP.Backfiller.Tests
                 dnsSuffix: dnsSuffix!));
         }
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenIdOutOfRange_ThrowsArgumentOutOfRangeException scenario and expected contract.
+        /// Exercises build back filler fqdn  when id out of range  throws argument out of range exception behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData(-1)]
@@ -100,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
                 dnsSuffix: "usenet.ninja"));
         }
         /// <summary>
-        /// Verifies the BuildBackFillerFqdn_WhenNameUsesAllowedCasingOrHyphen_PreservesCanonicalizationContract scenario and expected contract.
+        /// Exercises build back filler fqdn  when name uses allowed casing or hyphen  preserves canonicalization contract behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData("Back-Filler", "back-filler01.usenet.ninja")]

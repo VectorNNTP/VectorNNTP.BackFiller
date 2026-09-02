@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for service lifecycle.
+// Focused tests for service lifecycle, covering service lifecycle and shutdown contracts.
 
 using Xunit;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;

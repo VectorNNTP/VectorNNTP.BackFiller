@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Test infrastructure supporting tls certificate fixture scenarios.
+// Focused tests for test tls certificate fixture, covering certificate and DNS dependency behavior.
 
 using System.Net;
 using System.Net.Security;

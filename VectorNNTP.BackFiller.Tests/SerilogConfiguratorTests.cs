@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for serilog configurator.
+// Focused tests for serilog configurator, covering the covered test contracts.
 
 using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Startup.Logging;
@@ -12,12 +12,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Documents the SerilogConfiguratorTests test type and its protected contract.
+    /// Covers serilog configurator behavior and invariants exercised by this test suite.
     /// </summary>
     public sealed class SerilogConfiguratorTests
     {
         /// <summary>
-        /// Verifies the ParseMicrosoftLogLevelForTesting_WhenConfiguredValueProvided_ReturnsExpectedLevel scenario and expected contract.
+        /// Exercises parse microsoft log level for testing  when configured value provided  returns expected level behavior, including the expected result and failure semantics.
         /// </summary>
         [Theory]
         [InlineData("Verbose", LogLevel.Trace)]

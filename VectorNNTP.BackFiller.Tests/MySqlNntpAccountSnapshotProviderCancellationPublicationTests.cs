@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for my sql nntp account snapshot provider cancellation publication.
+// Focused tests for my sql nntp account snapshot provider cancellation publication, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class MySqlNntpAccountSnapshotProviderCancellationPublicationTests
     {
         /// <summary>
-        /// Verifies the RefreshSnapshotAsync_WhenCanceledAfterQueryCompletes_DoesNotPublishAndThrowsCancellation scenario and expected contract.
+        /// Exercises refresh snapshot async  when canceled after query completes  does not publish and throws cancellation behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenCanceledAfterQueryCompletes_DoesNotPublishAndThrowsCancellation()
@@ -67,7 +67,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the BuildAccount scenario and expected contract.
+        /// Exercises build account behavior, including the expected result and failure semantics.
         /// </summary>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {

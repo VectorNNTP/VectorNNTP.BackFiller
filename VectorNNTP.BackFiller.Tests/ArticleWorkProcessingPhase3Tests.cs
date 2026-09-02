@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for article work processing phase3.
+// Focused tests for article work processing phase3, covering NNTP article and transport behavior.
 
 using System.Net;
 using System.Net.Sockets;
@@ -104,7 +104,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(requestId, request.RequestId);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenPayloadIsEmpty_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when payload is empty  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenPayloadIsEmpty_ReturnsInvalidRequestAsync()
@@ -115,7 +115,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenPayloadIsInvalidJson_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when payload is invalid json  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenPayloadIsInvalidJson_ReturnsInvalidRequestAsync()
@@ -126,7 +126,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenInvalidRequest_EmitsWarningWithExactFailureReasonAndDeliveryContextAsync scenario and expected contract.
+        /// Exercises parse async  when invalid request  emits warning with exact failure reason and delivery context async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenInvalidRequest_EmitsWarningWithExactFailureReasonAndDeliveryContextAsync()
@@ -158,7 +158,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("RabbitMQ article-work payload was not valid JSON.", parseResult.Failure?.ResponseText);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenPayloadIsJsonArray_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when payload is json array  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenPayloadIsJsonArray_ReturnsInvalidRequestAsync()
@@ -169,7 +169,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenPayloadIsJsonPrimitive_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when payload is json primitive  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenPayloadIsJsonPrimitive_ReturnsInvalidRequestAsync()
@@ -180,7 +180,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenVersionMissing_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when version missing  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenVersionMissing_ReturnsInvalidRequestAsync()
@@ -192,7 +192,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenVersionUnsupported_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when version unsupported  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenVersionUnsupported_ReturnsInvalidRequestAsync()
@@ -204,7 +204,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenRequestIdMissing_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when request id missing  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenRequestIdMissing_ReturnsInvalidRequestAsync()
@@ -216,7 +216,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenRequestIdInvalid_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when request id invalid  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenRequestIdInvalid_ReturnsInvalidRequestAsync()
@@ -228,7 +228,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenMessageIdMissing_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when message id missing  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenMessageIdMissing_ReturnsInvalidRequestAsync()
@@ -240,7 +240,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenMessageIdEmpty_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when message id empty  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenMessageIdEmpty_ReturnsInvalidRequestAsync()
@@ -252,7 +252,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenBackboneMissing_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when backbone missing  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenBackboneMissing_ReturnsInvalidRequestAsync()
@@ -264,7 +264,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenBackboneEmpty_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when backbone empty  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenBackboneEmpty_ReturnsInvalidRequestAsync()
@@ -276,7 +276,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenBackboneMismatchesDeliveryContext_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when backbone mismatches delivery context  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenBackboneMismatchesDeliveryContext_ReturnsInvalidRequestAsync()
@@ -288,7 +288,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenBackboneCaseDiffers_UsesCaseInsensitiveMatchingAsync scenario and expected contract.
+        /// Exercises parse async  when backbone case differs  uses case insensitive matching async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenBackboneCaseDiffers_UsesCaseInsensitiveMatchingAsync()
@@ -300,7 +300,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(parseResult.IsSuccess);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenCorrelationIdMissingInAmqpProperties_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when correlation id missing in amqp properties  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenCorrelationIdMissingInAmqpProperties_ReturnsInvalidRequestAsync()
@@ -312,7 +312,7 @@ namespace VectorNNTP.Backfiller.Tests
             AssertInvalidRequest(parseResult);
         }
         /// <summary>
-        /// Verifies the ParseAsync_WhenReplyToMissingInAmqpProperties_ReturnsInvalidRequestAsync scenario and expected contract.
+        /// Exercises parse async  when reply to missing in amqp properties  returns invalid request async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ParseAsync_WhenReplyToMissingInAmqpProperties_ReturnsInvalidRequestAsync()
@@ -395,7 +395,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotEqual(firstDelivery.ConsumerIdentity, redelivery.ConsumerIdentity);
         }
         /// <summary>
-        /// Verifies the ProcessAsync_WhenGrabberReportsArticleNotFound_ReturnsArticleNotFoundClassificationAsync scenario and expected contract.
+        /// Exercises process async  when grabber reports article not found  returns article not found classification async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_WhenGrabberReportsArticleNotFound_ReturnsArticleNotFoundClassificationAsync()
@@ -430,7 +430,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Verifies the ProcessAsync_WhenOperationTokenIsCanceled_ReturnsCancelledClassificationAsync scenario and expected contract.
+        /// Exercises process async  when operation token is canceled  returns cancelled classification async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_WhenOperationTokenIsCanceled_ReturnsCancelledClassificationAsync()
@@ -452,7 +452,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(NntpArticleAcquisitionFailureCode.Cancelled, result.ProviderFailureCode);
         }
         /// <summary>
-        /// Verifies the ProcessAsync_WhenLeaseIsAcquiredAndWorkflowSucceeds_DisposesLeaseAndAllowsImmediateReuseAsync scenario and expected contract.
+        /// Exercises process async  when lease is acquired and workflow succeeds  disposes lease and allows immediate reuse async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_WhenLeaseIsAcquiredAndWorkflowSucceeds_DisposesLeaseAndAllowsImmediateReuseAsync()
@@ -482,7 +482,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Verifies the ProcessAsync_WhenFailureOccursAfterLeaseAcquisition_ReleasesLeaseExactlyOnceForReuseAsync scenario and expected contract.
+        /// Exercises process async  when failure occurs after lease acquisition  releases lease exactly once for reuse async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_WhenFailureOccursAfterLeaseAcquisition_ReleasesLeaseExactlyOnceForReuseAsync()
@@ -511,7 +511,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(acquiredSlotId, reacquiredLease.SlotId);
         }
         /// <summary>
-        /// Verifies the ProcessAsync_ReleasesLeaseBeforeDownstreamProcessingStageBeginsAsync scenario and expected contract.
+        /// Exercises process async  releases lease before downstream processing stage begins async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_ReleasesLeaseBeforeDownstreamProcessingStageBeginsAsync()
@@ -545,7 +545,7 @@ namespace VectorNNTP.Backfiller.Tests
             await downstreamTask.ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the ProcessAsync_WhenTwoRequestsRunSequentially_ReusesSameSlotWithoutDelayAsync scenario and expected contract.
+        /// Exercises process async  when two requests run sequentially  reuses same slot without delay async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_WhenTwoRequestsRunSequentially_ReusesSameSlotWithoutDelayAsync()
@@ -578,7 +578,7 @@ namespace VectorNNTP.Backfiller.Tests
             secondResult.Dispose();
         }
         /// <summary>
-        /// Verifies the ProcessAsync_DisposingProcessingResultDoesNotTriggerSecondLeaseReleaseAsync scenario and expected contract.
+        /// Exercises process async  disposing processing result does not trigger second lease release async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task ProcessAsync_DisposingProcessingResultDoesNotTriggerSecondLeaseReleaseAsync()
@@ -611,7 +611,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateSuccessfulGrabberResult scenario and expected contract.
+        /// Exercises create successful grabber result behavior, including the expected result and failure semantics.
         /// </summary>
         private static NntpArticleGrabberResult CreateSuccessfulGrabberResult(string messageId)
         {
@@ -628,7 +628,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateSingleSlotManagerAsync scenario and expected contract.
+        /// Exercises create single slot manager async behavior, including the expected result and failure semantics.
         /// </summary>
         private static async Task<NntpArticleExecutionSessionManager> CreateSingleSlotManagerAsync(int port)
         {
@@ -650,7 +650,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the AssertInvalidRequest scenario and expected contract.
+        /// Exercises assert invalid request behavior, including the expected result and failure semantics.
         /// </summary>
         private static void AssertInvalidRequest(RabbitMqArticleWorkParseResult parseResult)
         {
@@ -662,7 +662,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateValidJsonPayload scenario and expected contract.
+        /// Exercises create valid json payload behavior, including the expected result and failure semantics.
         /// </summary>
         private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
         {
@@ -670,7 +670,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateDelivery scenario and expected contract.
+        /// Exercises create delivery behavior, including the expected result and failure semantics.
         /// </summary>
         private static RabbitMqArticleDelivery CreateDelivery(
             string payloadText,
@@ -701,17 +701,17 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the FakeBackboneArticleRetriever test type and its protected contract.
+        /// Covers fake backbone article retriever behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class FakeBackboneArticleRetriever : IBackboneArticleRetriever
         {
             /// <summary>
-            /// Documents the _implementation member and its test-supporting contract.
+            /// Supplies  implementation for the fixture or scenario under test.
             /// </summary>
             private readonly Func<RabbitMqArticleWorkRequest, ValueTask<BackboneArticleRetrievalResult>> _implementation;
 
             /// <summary>
-            /// Verifies the FakeBackboneArticleRetriever scenario and expected contract.
+            /// Exercises fake backbone article retriever behavior, including the expected result and failure semantics.
             /// </summary>
             internal FakeBackboneArticleRetriever(Func<RabbitMqArticleWorkRequest, ValueTask<BackboneArticleRetrievalResult>> implementation)
             {
@@ -719,7 +719,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the RetrieveAsync scenario and expected contract.
+            /// Exercises retrieve async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask<BackboneArticleRetrievalResult> RetrieveAsync(RabbitMqArticleWorkRequest request, CancellationToken cancellationToken)
             {
@@ -729,12 +729,12 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the NoOpDeliverySettlement test type and its protected contract.
+        /// Covers no op delivery settlement behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class NoOpDeliverySettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Verifies the AckAsync scenario and expected contract.
+            /// Exercises ack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
@@ -743,7 +743,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the NackAsync scenario and expected contract.
+            /// Exercises nack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
@@ -754,17 +754,17 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the CapturedLogEntry test type and its protected contract.
+        /// Covers captured log entry behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed record CapturedLogEntry(LogLevel Level, string Message);
 
         /// <summary>
-        /// Documents the CapturingLogger test type and its protected contract.
+        /// Covers capturing logger behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries) : ILogger<T>
         {
             /// <summary>
-            /// Stores the _entries fixture value used by these tests.
+            /// Exercises  entries behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly List<CapturedLogEntry> _entries = entries ?? throw new ArgumentNullException(nameof(entries));
 
@@ -775,7 +775,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the IsEnabled scenario and expected contract.
+            /// Exercises is enabled behavior, including the expected result and failure semantics.
             /// </summary>
             public bool IsEnabled(LogLevel logLevel)
             {
@@ -789,17 +789,17 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Documents the NullScope test type and its protected contract.
+            /// Covers null scope behavior and invariants exercised by this test suite.
             /// </summary>
             private sealed class NullScope : IDisposable
             {
                 /// <summary>
-                /// Stores the Instance fixture value used by these tests.
+                /// Exercises instance behavior, including the expected result and failure semantics.
                 /// </summary>
                 internal static readonly NullScope Instance = new();
 
                 /// <summary>
-                /// Verifies the Dispose scenario and expected contract.
+                /// Exercises dispose behavior, including the expected result and failure semantics.
                 /// </summary>
                 public void Dispose()
                 {
@@ -808,25 +808,25 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the FakeLeaseServer test type and its protected contract.
+        /// Covers fake lease server behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class FakeLeaseServer : IAsyncDisposable
         {
             /// <summary>
-            /// Stores the _listener fixture value used by these tests.
+            /// Supplies  listener for the fixture or scenario under test.
             /// </summary>
             private readonly TcpListener _listener;
             /// <summary>
-            /// Stores the _shutdown fixture value used by these tests.
+            /// Supplies  shutdown for the fixture or scenario under test.
             /// </summary>
             private readonly CancellationTokenSource _shutdown;
             /// <summary>
-            /// Stores the _acceptLoop fixture value used by these tests.
+            /// Supplies  accept loop for the fixture or scenario under test.
             /// </summary>
             private readonly Task _acceptLoop;
 
             /// <summary>
-            /// Verifies the FakeLeaseServer scenario and expected contract.
+            /// Exercises fake lease server behavior, including the expected result and failure semantics.
             /// </summary>
             private FakeLeaseServer(TcpListener listener)
             {
@@ -836,12 +836,12 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Port value used by this test fixture.
+            /// Exercises port behavior, including the expected result and failure semantics.
             /// </summary>
             internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
             /// <summary>
-            /// Verifies the StartAsync scenario and expected contract.
+            /// Exercises start async behavior, including the expected result and failure semantics.
             /// </summary>
             internal static Task<FakeLeaseServer> StartAsync()
             {
@@ -851,7 +851,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -870,7 +870,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the AcceptLoopAsync scenario and expected contract.
+            /// Exercises accept loop async behavior, including the expected result and failure semantics.
             /// </summary>
             private async Task AcceptLoopAsync()
             {
@@ -903,7 +903,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the WriteAsciiLineAsync scenario and expected contract.
+            /// Exercises write ascii line async behavior, including the expected result and failure semantics.
             /// </summary>
             private static async Task WriteAsciiLineAsync(Stream stream, string line)
             {

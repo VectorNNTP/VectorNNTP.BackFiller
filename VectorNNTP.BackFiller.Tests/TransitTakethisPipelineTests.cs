@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for transit takethis pipeline.
+// Focused tests for transit takethis pipeline, covering NNTP article and transport behavior.
 
 using System.Net;
 using System.Net.Sockets;
@@ -20,7 +20,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class TransitTakethisPipelineTests
     {
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenAccepted_PreservesPayloadBytesAndReturnsAccepted scenario and expected contract.
+        /// Exercises submit takethis async  when accepted  preserves payload bytes and returns accepted behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenAccepted_PreservesPayloadBytesAndReturnsAccepted()
@@ -68,7 +68,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenServerRejects_ReturnsRejected scenario and expected contract.
+        /// Exercises submit takethis async  when server rejects  returns rejected behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenServerRejects_ReturnsRejected()
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenServerReturns400_MarksAmbiguous scenario and expected contract.
+        /// Exercises submit takethis async  when server returns400  marks ambiguous behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenServerReturns400_MarksAmbiguous()
@@ -150,7 +150,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenLargeBinaryPayload_PreservesBytesAndReturnsAccepted scenario and expected contract.
+        /// Exercises submit takethis async  when large binary payload  preserves bytes and returns accepted behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenLargeBinaryPayload_PreservesBytesAndReturnsAccepted()
@@ -191,7 +191,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenResponsesOutOfOrder_CorrelatesByMessageId scenario and expected contract.
+        /// Exercises submit takethis async  when responses out of order  correlates by message id behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenResponsesOutOfOrder_CorrelatesByMessageId()
@@ -244,13 +244,13 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(results, r => r.MessageId == messageB && r.Status == TransitPublishStatus.Accepted);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenSixteenConcurrentSubmissionsOutOfOrder_CorrelatesAllByMessageId scenario and expected contract.
+        /// Exercises submit takethis async  when sixteen concurrent submissions out of order  correlates all by message id behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenSixteenConcurrentSubmissionsOutOfOrder_CorrelatesAllByMessageId()
         {
             /// <summary>
-            /// Stores the SubmissionCount fixture value used by these tests.
+            /// Supplies submission count for the fixture or scenario under test.
             /// </summary>
             const int SubmissionCount = 16;
             string[] messageIds = [.. Enumerable.Range(0, SubmissionCount).Select(static i => $"<msg-{i:D2}@example.com>")];
@@ -304,7 +304,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenDuplicateMessageIdInFlight_ReturnsFailedForSecondSubmission scenario and expected contract.
+        /// Exercises submit takethis async  when duplicate message id in flight  returns failed for second submission behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenDuplicateMessageIdInFlight_ReturnsFailedForSecondSubmission()
@@ -354,7 +354,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, firstResult.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenSecondCallerCanceledWhileWaitingForWriteGate_DoesNotCancelFirstInFlightSubmission scenario and expected contract.
+        /// Exercises submit takethis async  when second caller canceled while waiting for write gate  does not cancel first in flight submission behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenSecondCallerCanceledWhileWaitingForWriteGate_DoesNotCancelFirstInFlightSubmission()
@@ -420,7 +420,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(239, firstResult.ResponseCode);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenPayloadDoesNotEndWithLf_Throws scenario and expected contract.
+        /// Exercises submit takethis async  when payload does not end with lf  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenPayloadDoesNotEndWithLf_Throws()
@@ -455,7 +455,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("must end with LF", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenMessageIdContainsCrOrLf_Throws scenario and expected contract.
+        /// Exercises submit takethis async  when message id contains cr or lf  throws behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenMessageIdContainsCrOrLf_Throws()
@@ -489,7 +489,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("must not contain CR or LF", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenConnectionDrops_MarksOutstandingAmbiguous scenario and expected contract.
+        /// Exercises submit takethis async  when connection drops  marks outstanding ambiguous behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenConnectionDrops_MarksOutstandingAmbiguous()
@@ -528,7 +528,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenTakethisResponseMessageIdIsNotBracketed_FailsConnectionAndCompletesOutstandingAmbiguous scenario and expected contract.
+        /// Exercises submit takethis async  when takethis response message id is not bracketed  fails connection and completes outstanding ambiguous behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenTakethisResponseMessageIdIsNotBracketed_FailsConnectionAndCompletesOutstandingAmbiguous()
@@ -572,7 +572,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(result.ResponseCode);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenServerReturnsKnownTokenless239WithSingleOutstanding_MapsAccepted scenario and expected contract.
+        /// Exercises submit takethis async  when server returns known tokenless239 with single outstanding  maps accepted behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenServerReturnsKnownTokenless239WithSingleOutstanding_MapsAccepted()
@@ -611,7 +611,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenServerReturnsTokenless239WithMultipleOutstanding_FailsConnectionAndMarksOutstandingAmbiguous scenario and expected contract.
+        /// Exercises submit takethis async  when server returns tokenless239 with multiple outstanding  fails connection and marks outstanding ambiguous behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenServerReturnsTokenless239WithMultipleOutstanding_FailsConnectionAndMarksOutstandingAmbiguous()
@@ -659,7 +659,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(results, static result => result.MessageId == "<msg-tokenless-multi-b@example.com>" && result.Status == TransitPublishStatus.Ambiguous && result.ResponseCode is null);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenServerReturns431ForSubmittedMessage_MapsToRejectedInsteadOfHanging scenario and expected contract.
+        /// Exercises submit takethis async  when server returns431 for submitted message  maps to rejected instead of hanging behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenServerReturns431ForSubmittedMessage_MapsToRejectedInsteadOfHanging()
@@ -701,7 +701,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(messageId, result.MessageId);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenMultipleOutstandingTakethisResponsesAreWithheld_TerminalizesAsAmbiguousAndCompletes scenario and expected contract.
+        /// Exercises dispose async  when multiple outstanding takethis responses are withheld  terminalizes as ambiguous and completes behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenMultipleOutstandingTakethisResponsesAreWithheld_TerminalizesAsAmbiguousAndCompletes()
@@ -780,7 +780,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenTakethisResponseIsCorrelatedBeforeShutdown_LeavesDefinitiveResult scenario and expected contract.
+        /// Exercises dispose async  when takethis response is correlated before shutdown  leaves definitive result behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenTakethisResponseIsCorrelatedBeforeShutdown_LeavesDefinitiveResult()
@@ -837,7 +837,7 @@ namespace VectorNNTP.Backfiller.Tests
             await disposeTask.WaitAsync(disposeTimeout.Token);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenShutdownWinsPendingTakethisAndLateResponseArrives_TerminalizesOnceAsAmbiguous scenario and expected contract.
+        /// Exercises dispose async  when shutdown wins pending takethis and late response arrives  terminalizes once as ambiguous behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenShutdownWinsPendingTakethisAndLateResponseArrives_TerminalizesOnceAsAmbiguous()
@@ -917,7 +917,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenNoOutstandingTakethis_SendsQuitBeforeTransportClose scenario and expected contract.
+        /// Exercises dispose async  when no outstanding takethis  sends quit before transport close behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenNoOutstandingTakethis_SendsQuitBeforeTransportClose()
@@ -953,7 +953,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenOutstandingTakethisAndShutdownBegins_TerminalizesAndThenSendsQuit scenario and expected contract.
+        /// Exercises dispose async  when outstanding takethis and shutdown begins  terminalizes and then sends quit behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenOutstandingTakethisAndShutdownBegins_TerminalizesAndThenSendsQuit()
@@ -1031,7 +1031,7 @@ namespace VectorNNTP.Backfiller.Tests
             await disposeTask.WaitAsync(disposeTimeout.Token);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenTransportAlreadyFaulted_DoesNotAttemptQuit scenario and expected contract.
+        /// Exercises dispose async  when transport already faulted  does not attempt quit behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenTransportAlreadyFaulted_DoesNotAttemptQuit()
@@ -1077,7 +1077,7 @@ namespace VectorNNTP.Backfiller.Tests
             await disconnectObserved.Task.WaitAsync(disconnectTimeout.Token);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenQuitServerClosesImmediatelyAfterQuit_DoesNotFault scenario and expected contract.
+        /// Exercises dispose async  when quit server closes immediately after quit  does not fault behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenQuitServerClosesImmediatelyAfterQuit_DoesNotFault()
@@ -1126,7 +1126,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
-        /// Verifies the DisposeAsync_WhenQuitServerReturnsUnexpectedCode_StillDisposesSafely scenario and expected contract.
+        /// Exercises dispose async  when quit server returns unexpected code  still disposes safely behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenQuitServerReturnsUnexpectedCode_StillDisposesSafely()
@@ -1160,7 +1160,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenMixedAcceptedAndRejectedOutOfOrder_CorrelatesEachByMessageId scenario and expected contract.
+        /// Exercises submit takethis async  when mixed accepted and rejected out of order  correlates each by message id behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenMixedAcceptedAndRejectedOutOfOrder_CorrelatesEachByMessageId()
@@ -1214,7 +1214,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(results, static r => r.MessageId == "<msg-mixed-3@example.com>" && r.Status == TransitPublishStatus.Rejected && r.ResponseCode == 431);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenResponseMessageIdIsUnknown_CompletesOutstandingAsAmbiguousOnConnectionFailure scenario and expected contract.
+        /// Exercises submit takethis async  when response message id is unknown  completes outstanding as ambiguous on connection failure behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenResponseMessageIdIsUnknown_CompletesOutstandingAsAmbiguousOnConnectionFailure()
@@ -1260,7 +1260,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(results, r => r.MessageId == secondMessageId && r.Status == TransitPublishStatus.Ambiguous && r.ResponseCode is null);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenDuplicateServerResponseArrives_LaterSubmissionStillCompletesCorrectly scenario and expected contract.
+        /// Exercises submit takethis async  when duplicate server response arrives  later submission still completes correctly behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenDuplicateServerResponseArrives_LaterSubmissionStillCompletesCorrectly()
@@ -1310,7 +1310,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(239, second.ResponseCode);
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenConnectionClosesWithMultiplePending_CompletesAllAsAmbiguous scenario and expected contract.
+        /// Exercises submit takethis async  when connection closes with multiple pending  completes all as ambiguous behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenConnectionClosesWithMultiplePending_CompletesAllAsAmbiguous()
@@ -1359,13 +1359,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the SubmitTakethisAsync_WhenSixteenConcurrentTokenBearingResponses_CapturesMaxOutstandingAtLeastSixteen scenario and expected contract.
+        /// Exercises submit takethis async  when sixteen concurrent token bearing responses  captures max outstanding at least sixteen behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task SubmitTakethisAsync_WhenSixteenConcurrentTokenBearingResponses_CapturesMaxOutstandingAtLeastSixteen()
         {
             /// <summary>
-            /// Stores the submissionCount fixture value used by these tests.
+            /// Supplies submission count for the fixture or scenario under test.
             /// </summary>
             const int submissionCount = 16;
             string[] messageIds = [.. Enumerable.Range(0, submissionCount).Select(static i => $"<msg-depth-{i:D2}@example.com>")];
@@ -1416,7 +1416,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the BuildLargePayload scenario and expected contract.
+        /// Exercises build large payload behavior, including the expected result and failure semantics.
         /// </summary>
         private static byte[] BuildLargePayload()
         {
@@ -1441,29 +1441,29 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the FakeTakethisServer test type and its protected contract.
+        /// Covers fake takethis server behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class FakeTakethisServer : IAsyncDisposable
         {
             /// <summary>
-            /// Stores the _listener fixture value used by these tests.
+            /// Supplies  listener for the fixture or scenario under test.
             /// </summary>
             private readonly TcpListener _listener;
             /// <summary>
-            /// Documents the _session member and its test-supporting contract.
+            /// Supplies  session for the fixture or scenario under test.
             /// </summary>
             private readonly Func<NetworkStream, CancellationToken, Task> _session;
             /// <summary>
-            /// Stores the _cts fixture value used by these tests.
+            /// Exercises  cts behavior, including the expected result and failure semantics.
             /// </summary>
             private readonly CancellationTokenSource _cts = new();
             /// <summary>
-            /// Stores the _acceptLoop fixture value used by these tests.
+            /// Supplies  accept loop for the fixture or scenario under test.
             /// </summary>
             private readonly Task _acceptLoop;
 
             /// <summary>
-            /// Verifies the FakeTakethisServer scenario and expected contract.
+            /// Exercises fake takethis server behavior, including the expected result and failure semantics.
             /// </summary>
             private FakeTakethisServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {
@@ -1473,12 +1473,12 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the Port value used by this test fixture.
+            /// Exercises port behavior, including the expected result and failure semantics.
             /// </summary>
             internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
             /// <summary>
-            /// Verifies the StartAsync scenario and expected contract.
+            /// Exercises start async behavior, including the expected result and failure semantics.
             /// </summary>
             internal static async Task<FakeTakethisServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)
             {
@@ -1490,7 +1490,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the AcceptLoopAsync scenario and expected contract.
+            /// Exercises accept loop async behavior, including the expected result and failure semantics.
             /// </summary>
             private async Task AcceptLoopAsync()
             {
@@ -1506,7 +1506,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the ReadLineAsync scenario and expected contract.
+            /// Exercises read line async behavior, including the expected result and failure semantics.
             /// </summary>
             internal static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
             {
@@ -1538,7 +1538,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the ReadTakethisPayloadAsync scenario and expected contract.
+            /// Exercises read takethis payload async behavior, including the expected result and failure semantics.
             /// </summary>
             internal static async Task<byte[]> ReadTakethisPayloadAsync(Stream stream, CancellationToken cancellationToken)
             {
@@ -1586,7 +1586,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the ReadByteAsync scenario and expected contract.
+            /// Exercises read byte async behavior, including the expected result and failure semantics.
             /// </summary>
             private static async ValueTask<byte> ReadByteAsync(Stream stream, CancellationToken cancellationToken)
             {
@@ -1596,7 +1596,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the ExpectCommandAsync scenario and expected contract.
+            /// Exercises expect command async behavior, including the expected result and failure semantics.
             /// </summary>
             internal static async Task ExpectCommandAsync(Stream stream, string expected)
             {
@@ -1605,7 +1605,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the WriteLineAsync scenario and expected contract.
+            /// Exercises write line async behavior, including the expected result and failure semantics.
             /// </summary>
             internal static Task WriteLineAsync(Stream stream, string line)
             {
@@ -1614,7 +1614,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the DisposeAsync scenario and expected contract.
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
             /// </summary>
             public async ValueTask DisposeAsync()
             {

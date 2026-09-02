@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for rabbit mq article result sink phase4.
+// Focused tests for rabbit mq article result sink phase4, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using System.Text;
 using System.Text.Json;
@@ -20,7 +20,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqArticleResultSinkPhase4Tests
     {
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenSuccess_PublishesThenConfirmsThenAcknowledgesDeliveryTagAsync scenario and expected contract.
+        /// Exercises on processed async  when success  publishes then confirms then acknowledges delivery tag async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenSuccess_PublishesThenConfirmsThenAcknowledgesDeliveryTagAsync()
@@ -66,7 +66,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(successResponse.Error);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenPublishFails_DoesNotAckAndNacksRequeueTrueAsync scenario and expected contract.
+        /// Exercises on processed async  when publish fails  does not ack and nacks requeue true async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenPublishFails_DoesNotAckAndNacksRequeueTrueAsync()
@@ -97,7 +97,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenPublishTimesOut_DoesNotAckAndNacksRequeueTrueAsync scenario and expected contract.
+        /// Exercises on processed async  when publish times out  does not ack and nacks requeue true async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenPublishTimesOut_DoesNotAckAndNacksRequeueTrueAsync()
@@ -128,7 +128,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenArticleNotFound_NacksWithoutRequeueAsync scenario and expected contract.
+        /// Exercises on processed async  when article not found  nacks without requeue async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenArticleNotFound_NacksWithoutRequeueAsync()
@@ -163,7 +163,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenInvalidArticle_NacksWithoutRequeueAsync scenario and expected contract.
+        /// Exercises on processed async  when invalid article  nacks without requeue async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenInvalidArticle_NacksWithoutRequeueAsync()
@@ -198,7 +198,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenInvalidRequest_NacksWithoutRequeueAsync scenario and expected contract.
+        /// Exercises on processed async  when invalid request  nacks without requeue async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenInvalidRequest_NacksWithoutRequeueAsync()
@@ -233,7 +233,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenProviderFailure_NacksWithRequeueAsync scenario and expected contract.
+        /// Exercises on processed async  when provider failure  nacks with requeue async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenProviderFailure_NacksWithRequeueAsync()
@@ -264,7 +264,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0, publisher.PublishCallCount);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenCancelled_NacksWithRequeueAndDoesNotAckAsync scenario and expected contract.
+        /// Exercises on processed async  when cancelled  nacks with requeue and does not ack async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenCancelled_NacksWithRequeueAndDoesNotAckAsync()
@@ -294,7 +294,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenUnexpectedFailure_NacksWithRequeueAndDoesNotAckAsync scenario and expected contract.
+        /// Exercises on processed async  when unexpected failure  nacks with requeue and does not ack async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenUnexpectedFailure_NacksWithRequeueAndDoesNotAckAsync()
@@ -324,7 +324,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenSettlementAlreadyAcked_ThrowsOnSecondSettlementAsync scenario and expected contract.
+        /// Exercises on processed async  when settlement already acked  throws on second settlement async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenSettlementAlreadyAcked_ThrowsOnSecondSettlementAsync()
@@ -350,7 +350,7 @@ namespace VectorNNTP.Backfiller.Tests
                 async () => await sink.OnProcessedAsync(secondResult, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the OnProcessedAsync_WhenSuccessAndShutdownOccursBeforePublish_DoesNotAckAndNacksWithRequeueAsync scenario and expected contract.
+        /// Exercises on processed async  when success and shutdown occurs before publish  does not ack and nacks with requeue async behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenSuccessAndShutdownOccursBeforePublish_DoesNotAckAndNacksWithRequeueAsync()
@@ -382,7 +382,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateSink scenario and expected contract.
+        /// Exercises create sink behavior, including the expected result and failure semantics.
         /// </summary>
         private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher)
         {
@@ -394,7 +394,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateResult scenario and expected contract.
+        /// Exercises create result behavior, including the expected result and failure semantics.
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             RabbitMqArticleDelivery delivery,
@@ -417,7 +417,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateDelivery scenario and expected contract.
+        /// Exercises create delivery behavior, including the expected result and failure semantics.
         /// </summary>
         private static RabbitMqArticleDelivery CreateDelivery(
             string payloadText,
@@ -456,7 +456,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the CreateValidJsonPayload scenario and expected contract.
+        /// Exercises create valid json payload behavior, including the expected result and failure semantics.
         /// </summary>
         private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
         {
@@ -464,21 +464,21 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the TrackingResponsePublisher test type and its protected contract.
+        /// Covers tracking response publisher behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class TrackingResponsePublisher : IRabbitMqArticleResponsePublisher
         {
             /// <summary>
-            /// Stores the _status fixture value used by these tests.
+            /// Supplies  status for the fixture or scenario under test.
             /// </summary>
             private readonly RabbitMqResponsePublishStatus _status;
             /// <summary>
-            /// Stores the _sharedOperationLog fixture value used by these tests.
+            /// Supplies  shared operation log for the fixture or scenario under test.
             /// </summary>
             private readonly List<string>? _sharedOperationLog;
 
             /// <summary>
-            /// Verifies the TrackingResponsePublisher scenario and expected contract.
+            /// Exercises tracking response publisher behavior, including the expected result and failure semantics.
             /// </summary>
             internal TrackingResponsePublisher(RabbitMqResponsePublishStatus status, List<string>? sharedOperationLog = null)
             {
@@ -487,37 +487,37 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the PublishCallCount value used by this test fixture.
+            /// Supplies publish call count for the fixture or scenario under test.
             /// </summary>
             internal int PublishCallCount { get; private set; }
 
             /// <summary>
-            /// Stores the LastRoutingKey value used by this test fixture.
+            /// Supplies last routing key for the fixture or scenario under test.
             /// </summary>
             internal string? LastRoutingKey { get; private set; }
 
             /// <summary>
-            /// Stores the LastCorrelationId value used by this test fixture.
+            /// Supplies last correlation id for the fixture or scenario under test.
             /// </summary>
             internal string? LastCorrelationId { get; private set; }
 
             /// <summary>
-            /// Stores the LastResponseJson value used by this test fixture.
+            /// Supplies last response json for the fixture or scenario under test.
             /// </summary>
             internal string? LastResponseJson { get; private set; }
 
             /// <summary>
-            /// Stores the LastResponsePayload value used by this test fixture.
+            /// Supplies last response payload for the fixture or scenario under test.
             /// </summary>
             internal byte[]? LastResponsePayload { get; private set; }
 
             /// <summary>
-            /// Stores the OperationLog value used by this test fixture.
+            /// Supplies operation log for the fixture or scenario under test.
             /// </summary>
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-            /// Verifies the PublishAndConfirmAsync scenario and expected contract.
+            /// Exercises publish and confirm async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
                 ArticleWorkProcessingResult result,
@@ -544,25 +544,25 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Documents the TrackingDeliverySettlement test type and its protected contract.
+        /// Covers tracking delivery settlement behavior and invariants exercised by this test suite.
         /// </summary>
         private sealed class TrackingDeliverySettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Stores the _sharedOperationLog fixture value used by these tests.
+            /// Supplies  shared operation log for the fixture or scenario under test.
             /// </summary>
             private readonly List<string>? _sharedOperationLog;
             /// <summary>
-            /// Stores the _settled fixture value used by these tests.
+            /// Supplies  settled for the fixture or scenario under test.
             /// </summary>
             private int _settled;
             /// <summary>
-            /// Stores the _deliveryTag fixture value used by these tests.
+            /// Supplies  delivery tag for the fixture or scenario under test.
             /// </summary>
             private ulong _deliveryTag;
 
             /// <summary>
-            /// Verifies the TrackingDeliverySettlement scenario and expected contract.
+            /// Exercises tracking delivery settlement behavior, including the expected result and failure semantics.
             /// </summary>
             internal TrackingDeliverySettlement(List<string>? sharedOperationLog = null)
             {
@@ -570,27 +570,27 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Stores the AckDeliveryTag value used by this test fixture.
+            /// Supplies ack delivery tag for the fixture or scenario under test.
             /// </summary>
             internal ulong? AckDeliveryTag { get; private set; }
 
             /// <summary>
-            /// Stores the NackDeliveryTag value used by this test fixture.
+            /// Supplies nack delivery tag for the fixture or scenario under test.
             /// </summary>
             internal ulong? NackDeliveryTag { get; private set; }
 
             /// <summary>
-            /// Stores the NackRequeue value used by this test fixture.
+            /// Supplies nack requeue for the fixture or scenario under test.
             /// </summary>
             internal bool NackRequeue { get; private set; }
 
             /// <summary>
-            /// Stores the OperationLog value used by this test fixture.
+            /// Supplies operation log for the fixture or scenario under test.
             /// </summary>
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-            /// Verifies the AckAsync scenario and expected contract.
+            /// Exercises ack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
@@ -607,7 +607,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the NackAsync scenario and expected contract.
+            /// Exercises nack async behavior, including the expected result and failure semantics.
             /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
@@ -625,7 +625,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Verifies the BindDeliveryTag scenario and expected contract.
+            /// Exercises bind delivery tag behavior, including the expected result and failure semantics.
             /// </summary>
             internal void BindDeliveryTag(ulong deliveryTag)
             {

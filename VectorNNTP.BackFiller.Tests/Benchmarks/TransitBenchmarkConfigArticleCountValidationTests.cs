@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the transit benchmark config article count validation benchmark component.
+// Focused tests for transit benchmark config article count validation, covering configuration and validation contracts; NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
 
 using System.Reflection;
 using VectorNNTP.BackFiller.Benchmarks;

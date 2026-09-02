@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for shutdown coordinator resource ownership.
+// Focused tests for shutdown coordinator resource ownership, covering service lifecycle and shutdown contracts.
 
 using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ShutdownCoordinatorResourceOwnershipTests
     {
         /// <summary>
-        /// Verifies the SignalForcedShutdown_FromGraceful_DisposesGracePeriodEscalationSource scenario and expected contract.
+        /// Exercises signal forced shutdown  from graceful  disposes grace period escalation source behavior, including the expected result and failure semantics.
         /// </summary>
         [Fact]
         public void SignalForcedShutdown_FromGraceful_DisposesGracePeriodEscalationSource()

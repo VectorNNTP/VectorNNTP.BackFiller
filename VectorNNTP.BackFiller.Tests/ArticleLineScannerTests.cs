@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Behavior and contract tests for article line scanner.
+// Focused tests for article line scanner, covering NNTP article and transport behavior.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

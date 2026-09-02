@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Contract and behavior tests for the runtime execution identity capture benchmark component.
+// Focused tests for runtime execution identity capture, covering the covered test contracts.
 
 using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Transit;
