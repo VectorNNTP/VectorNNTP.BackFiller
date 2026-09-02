@@ -250,9 +250,6 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             return new SslStream(
                 innerStream,
                 leaveInnerStreamOpen,
-                /// <summary>
-                /// Coordinates static for transit server dependency probe.
-                /// </summary>
                 static (_, certificate, _, sslPolicyErrors) =>
                 {
                     _ = certificate;
