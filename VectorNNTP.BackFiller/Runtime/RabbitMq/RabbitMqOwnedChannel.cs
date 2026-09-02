@@ -16,7 +16,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
         /// <summary>
-        /// Tracks channel for rabbit mq owned channel.
+        /// Stores channel used by rabbit mq owned channel.
         /// </summary>
         private readonly IRabbitMqChannel _channel;
 
@@ -38,17 +38,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Gets the logical owner identifier for this channel lease.
+        /// Returns the logical owner identifier for this channel lease.
         /// </summary>
         internal string Owner { get; }
 
         /// <summary>
-        /// Gets the owned RabbitMQ channel adapter.
+        /// Returns the owned RabbitMQ channel adapter.
         /// </summary>
         internal IRabbitMqChannel Channel => _channel;
 
         /// <summary>
-        /// Gets the RabbitMQ connection generation associated with this channel lease.
+        /// Returns the RabbitMQ connection generation associated with this channel lease.
         /// </summary>
         internal long ConnectionGeneration { get; }
 

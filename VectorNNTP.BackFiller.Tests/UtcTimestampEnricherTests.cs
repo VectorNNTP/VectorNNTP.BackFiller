@@ -3,7 +3,8 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Focused tests for utc timestamp enricher, covering the covered test contracts.
+// Focused tests for utc timestamp enricher, covering configuration, runtime, and failure-handling contracts exercised by the tests.
+// Primary responsibility: documents the executable contracts covered by the utc timestamp enricher test suite.
 
 using Serilog.Core;
 using Serilog.Events;
@@ -55,6 +56,13 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="value">Property value.</param>
             /// <param name="destructureObjects">Destructuring hint.</param>
             /// <returns>Log event property instance.</returns>
+        /// <summary>
+        /// Confirms the create property behavior.
+        /// </summary>
+        /// <param name="name">The name used by this test scenario.</param>
+        /// <param name="value">The value used by this test scenario.</param>
+        /// <param name="destructureObjects">The destructure objects used by this test scenario.</param>
+        /// <returns>The value returned by the create property helper.</returns>
             public LogEventProperty CreateProperty(string name, object? value, bool destructureObjects = false)
             {
                 return new LogEventProperty(name, new ScalarValue(value));

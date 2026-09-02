@@ -3,7 +3,8 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Focused tests for program command line, covering the covered test contracts.
+// Focused tests for program command line, covering configuration, runtime, and failure-handling contracts exercised by the tests.
+// Primary responsibility: documents the executable contracts covered by the program command line test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup;
@@ -18,14 +19,14 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ProgramCommandLineTests
     {
         /// <summary>
-        /// Exercises program command line behavior, including the expected result and failure semantics.
+        /// Confirms the program command line tests behavior.
         /// </summary>
         public ProgramCommandLineTests()
         {
             BuildInfoService.InitializeBuildInfo(DateTimeOffset.UtcNow);
         }
         /// <summary>
-        /// Exercises try handle command  when no arguments  returns null behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when no arguments returns null behavior.
         /// </summary>
         [Fact]
         public void TryHandleCommand_WhenNoArguments_ReturnsNull()
@@ -35,7 +36,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(exitCode);
         }
         /// <summary>
-        /// Exercises try parse command line  when args is null  throws argument null exception behavior, including the expected result and failure semantics.
+        /// Confirms the try parse command line when args is null throws argument null exception behavior.
         /// </summary>
         [Fact]
         public void TryParseCommandLine_WhenArgsIsNull_ThrowsArgumentNullException()
@@ -44,7 +45,7 @@ namespace VectorNNTP.Backfiller.Tests
                 OperationalCommandParser.TryParseCommandLine(null!, out _, out _));
         }
         /// <summary>
-        /// Exercises try handle command  when simple informational command  returns success behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when simple informational command returns success behavior.
         /// </summary>
         [Theory]
         [InlineData("--help")]
@@ -58,7 +59,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when option is not exact command  returns configuration failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when option is not exact command returns configuration failure behavior.
         /// </summary>
         [Theory]
         [InlineData("--version=x")]
@@ -71,7 +72,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when argument unknown  returns configuration failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when argument unknown returns configuration failure behavior.
         /// </summary>
         [Theory]
         [InlineData("--bogus")]
@@ -83,7 +84,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when unknown option present alongside valid command  returns configuration failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when unknown option present alongside valid command returns configuration failure behavior.
         /// </summary>
         [Theory]
         [InlineData("--bogus", "--version")]
@@ -95,7 +96,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when multiple commands specified  returns configuration failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when multiple commands specified returns configuration failure behavior.
         /// </summary>
         [Theory]
         [InlineData("--version", "--help")]
@@ -108,7 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when configuration command and configuration unavailable  returns unexpected failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when configuration command and configuration unavailable returns unexpected failure behavior.
         /// </summary>
         [Theory]
         [InlineData("--dump-config")]
@@ -122,7 +123,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeUnexpectedFailure, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when dump config has configuration  returns success behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when dump config has configuration returns success behavior.
         /// </summary>
         [Fact]
         public void TryHandleCommand_WhenDumpConfigHasConfiguration_ReturnsSuccess()
@@ -142,7 +143,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when dump config includes use staging directory  prints cleartext value behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when dump config includes use staging directory prints cleartext value behavior.
         /// </summary>
         [Fact]
         public void TryHandleCommand_WhenDumpConfigIncludesUseStagingDirectory_PrintsCleartextValue()
@@ -173,7 +174,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Exercises try handle command  when multiple commands and unknown option are present  returns configuration failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when multiple commands and unknown option are present returns configuration failure behavior.
         /// </summary>
         [Fact]
         public void TryHandleCommand_WhenMultipleCommandsAndUnknownOptionArePresent_ReturnsConfigurationFailure()
@@ -183,7 +184,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
         /// <summary>
-        /// Exercises try handle command  when argument is empty or whitespace  returns configuration failure behavior, including the expected result and failure semantics.
+        /// Confirms the try handle command when argument is empty or whitespace returns configuration failure behavior.
         /// </summary>
         [Theory]
         [InlineData("")]
@@ -197,8 +198,15 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises parse and maybe execute behavior, including the expected result and failure semantics.
+        /// Confirms the parse and maybe execute behavior.
         /// </summary>
+        /// <returns>The value returned by the parse and maybe execute helper.</returns>
+        /// <summary>
+        /// Confirms the parse and maybe execute behavior.
+        /// </summary>
+        /// <param name="args">The args used by this test scenario.</param>
+        /// <param name="configuration">The configuration used by this test scenario.</param>
+        /// <returns>The value returned by the parse and maybe execute helper.</returns>
         private static int? ParseAndMaybeExecute(string[] args, IConfiguration? configuration = null)
         {
             bool parsed = OperationalCommandParser.TryParseCommandLine(args, out OperationalCommand? command, out int? parseErrorExitCode);

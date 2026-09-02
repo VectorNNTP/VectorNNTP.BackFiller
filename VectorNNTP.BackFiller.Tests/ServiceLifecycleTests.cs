@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for service lifecycle, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the service lifecycle test suite.
 
 using Xunit;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
@@ -35,6 +36,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Stopped represents orderly shutdown. Once reached, the service lifecycle is complete.
         /// No state transitions should be permitted from Stopped (including self-transitions).
         /// </remarks>
+        /// <summary>
+        /// Confirms the stopped rejects all transitions behavior.
+        /// </summary>
+        /// <param name="targetState">The target state used by this test scenario.</param>
         [Theory]
         [InlineData(ServiceLifecycle.LifecycleState.Starting)]
         [InlineData(ServiceLifecycle.LifecycleState.Validating)]
@@ -76,6 +81,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Once reached, the service lifecycle is complete and diagnostic state is preserved.
         /// No state transitions should be permitted from Faulted (including self-transitions).
         /// </remarks>
+        /// <summary>
+        /// Confirms the faulted rejects all transitions behavior.
+        /// </summary>
+        /// <param name="targetState">The target state used by this test scenario.</param>
         [Theory]
         [InlineData(ServiceLifecycle.LifecycleState.Starting)]
         [InlineData(ServiceLifecycle.LifecycleState.Validating)]
@@ -193,6 +202,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// orchestration rollback, or operator intervention. It is distinct from standard
         /// systemd SIGTERM shutdown, which is one-way.
         /// </remarks>
+        /// <summary>
+        /// Confirms the drain cancellation allows ready to draining to ready behavior.
+        /// </summary>
         [Fact]
         public void DrainCancellation_AllowsReadyToDrainingToReady()
         {
@@ -390,6 +402,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Tests the scenario: 100 concurrent readers + 1 transition writer.
         /// Ensures no exceptions, no corrupted history, and consistent final state.
         /// </remarks>
+        /// <summary>
+        /// Confirms the concurrent readers with single writer no corruption behavior.
+        /// </summary>
+        /// <returns>The value returned by the concurrent readers with single writer no corruption helper.</returns>
         [Fact]
         public async Task ConcurrentReaders_WithSingleWriter_NoCorruption()
         {
@@ -482,6 +498,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <remarks>
         /// Ensures concurrent transitions don't affect previously-retrieved history snapshots.
         /// </remarks>
+        /// <summary>
+        /// Confirms the transition history returns snapshot not live collection behavior.
+        /// </summary>
         [Fact]
         public void TransitionHistory_ReturnsSnapshot_NotLiveCollection()
         {
@@ -526,6 +545,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// completes successfully, and Subscribers B and C still execute.</para>
         /// <para>This validates the exception isolation design documented in ServiceLifecycle.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the subscriber exceptions are isolated transition completes behavior.
+        /// </summary>
         [Fact]
         public void SubscriberExceptions_AreIsolated_TransitionCompletes()
         {
@@ -688,6 +710,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// valid per the state machine rules. This proves the rejection comes from the reentrancy guard,
         /// not from ordinary transition validation.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the reentrant transition from subscriber throws invalid operation exception behavior.
+        /// </summary>
         [Fact]
         public void ReentrantTransition_FromSubscriber_ThrowsInvalidOperationException()
         {

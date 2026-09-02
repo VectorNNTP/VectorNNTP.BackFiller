@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for benchmark artifact contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the benchmark artifact contract test suite.
 
 using System.Text.Json;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -12,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Covers benchmark artifact contract behavior and invariants exercised by this test suite.
+        /// Confirms the benchmark artifact contract tests behavior.
     /// </summary>
     public sealed class BenchmarkArtifactContractTests
     {
         /// <summary>
-        /// Exercises benchmark result artifact  from  maps core benchmark and config values without reinterpretation behavior, including the expected result and failure semantics.
+        /// Confirms the benchmark result artifact from maps core benchmark and config values without reinterpretation behavior.
         /// </summary>
         [Fact]
         public void BenchmarkResultArtifact_From_MapsCoreBenchmarkAndConfigValuesWithoutReinterpretation()
@@ -92,7 +93,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(8 * (result.AverageCpuPercent / 100d), artifact.EquivalentBusyCores);
         }
         /// <summary>
-        /// Exercises json artifact writer  serialize  contains expected contract shape and property names behavior, including the expected result and failure semantics.
+        /// Confirms the json artifact writer serialize contains expected contract shape and property names behavior.
         /// </summary>
         [Fact]
         public void JsonArtifactWriter_Serialize_ContainsExpectedContractShapeAndPropertyNames()
@@ -153,7 +154,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(root.TryGetProperty("FixedCountBoundaryTelemetry", out _));
         }
         /// <summary>
-        /// Exercises benchmark result artifact  to csv  preserves header order escaping and newline contract behavior, including the expected result and failure semantics.
+        /// Confirms the benchmark result artifact to csv preserves header order escaping and newline contract behavior.
         /// </summary>
         [Fact]
         public void BenchmarkResultArtifact_ToCsv_PreservesHeaderOrderEscapingAndNewlineContract()

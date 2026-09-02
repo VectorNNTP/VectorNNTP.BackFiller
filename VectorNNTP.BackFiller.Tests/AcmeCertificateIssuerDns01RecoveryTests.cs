@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for acme certificate issuer dns01 recovery, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the acme certificate issuer dns01 recovery test suite.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
@@ -13,12 +14,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers acme certificate issuer dns01 recovery behavior and invariants exercised by this test suite.
+        /// Confirms the acme certificate issuer dns01 recovery tests behavior.
     /// </summary>
     public sealed class AcmeCertificateIssuerDns01RecoveryTests
     {
         /// <summary>
-        /// Exercises issue certificate async  when no existing txt record  creates challenge and cleans up behavior, including the expected result and failure semantics.
+        /// Confirms the issue certificate async when no existing txt record creates challenge and cleans up behavior.
         /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenNoExistingTxtRecord_CreatesChallengeAndCleansUp()
@@ -31,7 +32,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Empty(result.Api.Records);
         }
         /// <summary>
-        /// Exercises issue certificate async  when stale challenge record exists  deletes stale record and creates replacement behavior, including the expected result and failure semantics.
+        /// Confirms the issue certificate async when stale challenge record exists deletes stale record and creates replacement behavior.
         /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenStaleChallengeRecordExists_DeletesStaleRecordAndCreatesReplacement()
@@ -52,7 +53,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(result.Api.Records, record => record.Content == "old-value");
         }
         /// <summary>
-        /// Exercises issue certificate async  when exact txt already exists  reuses existing challenge value behavior, including the expected result and failure semantics.
+        /// Confirms the issue certificate async when exact txt already exists reuses existing challenge value behavior.
         /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValue()
@@ -69,7 +70,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0, result.Api.DeleteCallCount);
         }
         /// <summary>
-        /// Exercises issue certificate async  when issuance fails  still attempts cleanup behavior, including the expected result and failure semantics.
+        /// Confirms the issue certificate async when issuance fails still attempts cleanup behavior.
         /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenIssuanceFails_StillAttemptsCleanup()
@@ -82,7 +83,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises execute scenario async behavior, including the expected result and failure semantics.
+        /// Confirms the execute scenario async behavior.
         /// </summary>
         private static async Task<RecoveryScenarioResult> ExecuteScenarioAsync(
             IReadOnlyList<CloudflareTxtRecordInfo> initialRecords,
@@ -123,8 +124,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create lets encrypt options behavior, including the expected result and failure semantics.
+        /// Confirms the create lets encrypt options behavior.
         /// </summary>
+        /// <returns>The value returned by the create lets encrypt options helper.</returns>
+        /// <summary>
+        /// Confirms the create lets encrypt options behavior.
+        /// </summary>
+        /// <param name="tempDir">The temp dir used by this test scenario.</param>
+        /// <returns>The value returned by the create lets encrypt options helper.</returns>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir)
         {
             return new BackFillerLetsEncryptRuntimeOptions(
@@ -150,7 +157,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers recovery scenario behavior and invariants exercised by this test suite.
+        /// Confirms the recovery scenario behavior.
         /// </summary>
         private static class RecoveryScenario
         {
@@ -165,12 +172,20 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers recovery scenario result behavior and invariants exercised by this test suite.
+        /// Confirms the recovery scenario result behavior.
         /// </summary>
+        /// <returns>The value returned by the recovery scenario result helper.</returns>
+        /// <summary>
+        /// Confirms the recovery scenario result behavior.
+        /// </summary>
+        /// <param name="Api">The api used by this test scenario.</param>
+        /// <param name="WasSuccessful">The was successful used by this test scenario.</param>
+        /// <param name="Error">The error used by this test scenario.</param>
+        /// <returns>The value returned by the recovery scenario result helper.</returns>
         private sealed record RecoveryScenarioResult(FakeCloudflareTxtRecordApi Api, bool WasSuccessful, Exception? Error);
 
         /// <summary>
-        /// Covers fake cloudflare txt record api behavior and invariants exercised by this test suite.
+        /// Confirms the fake cloudflare txt record api behavior.
         /// </summary>
         private sealed class FakeCloudflareTxtRecordApi : ICloudflareTxtRecordApi
         {
@@ -188,7 +203,7 @@ namespace VectorNNTP.Backfiller.Tests
             private int _nextId = 1000;
 
             /// <summary>
-            /// Exercises fake cloudflare txt record api behavior, including the expected result and failure semantics.
+        /// Confirms the fake cloudflare txt record api behavior.
             /// </summary>
             internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete)
             {
@@ -210,8 +225,16 @@ namespace VectorNNTP.Backfiller.Tests
             internal int DeleteCallCount { get; private set; }
 
             /// <summary>
-            /// Exercises get txt records async behavior, including the expected result and failure semantics.
+        /// Confirms the get txt records async behavior.
             /// </summary>
+        /// <returns>The value returned by the get txt records async helper.</returns>
+        /// <summary>
+        /// Confirms the get txt records async behavior.
+        /// </summary>
+        /// <param name="zoneId">The zone id used by this test scenario.</param>
+        /// <param name="recordName">The record name used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the get txt records async helper.</returns>
             public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -219,8 +242,17 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises add txt record async behavior, including the expected result and failure semantics.
+        /// Confirms the add txt record async behavior.
             /// </summary>
+        /// <returns>The value returned by the add txt record async helper.</returns>
+        /// <summary>
+        /// Confirms the add txt record async behavior.
+        /// </summary>
+        /// <param name="zoneId">The zone id used by this test scenario.</param>
+        /// <param name="recordName">The record name used by this test scenario.</param>
+        /// <param name="recordValue">The record value used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the add txt record async helper.</returns>
             public Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -231,8 +263,16 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises delete txt record async behavior, including the expected result and failure semantics.
+        /// Confirms the delete txt record async behavior.
             /// </summary>
+        /// <returns>The value returned by the delete txt record async helper.</returns>
+        /// <summary>
+        /// Confirms the delete txt record async behavior.
+        /// </summary>
+        /// <param name="zoneId">The zone id used by this test scenario.</param>
+        /// <param name="recordId">The record id used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the delete txt record async helper.</returns>
             public Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -247,8 +287,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Confirms the dispose async behavior.
             /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
+        /// <summary>
+        /// Confirms the dispose async behavior.
+        /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
             public ValueTask DisposeAsync()
             {
                 return ValueTask.CompletedTask;
@@ -256,13 +301,22 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers fake authoritative dns txt propagation verifier behavior and invariants exercised by this test suite.
+        /// Confirms the fake authoritative dns txt propagation verifier behavior.
         /// </summary>
         private sealed class FakeAuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
         {
             /// <summary>
-            /// Exercises wait for propagation async behavior, including the expected result and failure semantics.
+        /// Confirms the wait for propagation async behavior.
             /// </summary>
+        /// <returns>The value returned by the wait for propagation async helper.</returns>
+        /// <summary>
+        /// Confirms the wait for propagation async behavior.
+        /// </summary>
+        /// <param name="fqdn">The fqdn used by this test scenario.</param>
+        /// <param name="expectedTxtValue">The expected txt value used by this test scenario.</param>
+        /// <param name="options">The options used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the wait for propagation async helper.</returns>
             public Task WaitForPropagationAsync(string fqdn, string expectedTxtValue, BackFillerLetsEncryptRuntimeOptions options, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -271,8 +325,16 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers fake acme context factory behavior and invariants exercised by this test suite.
+        /// Confirms the fake acme context factory behavior.
         /// </summary>
+        /// <returns>The value returned by the fake acme context factory helper.</returns>
+        /// <summary>
+        /// Confirms the fake acme context factory behavior.
+        /// </summary>
+        /// <param name="shouldFailValidation">The should fail validation used by this test scenario.</param>
+        /// <param name="shouldFailFinalize">The should fail finalize used by this test scenario.</param>
+        /// <param name="failChallengeAfterCreate">The fail challenge after create used by this test scenario.</param>
+        /// <returns>The value returned by the fake acme context factory helper.</returns>
         private sealed class FakeAcmeContextFactory(bool shouldFailValidation, bool shouldFailFinalize, bool failChallengeAfterCreate)
         {
             /// <summary>

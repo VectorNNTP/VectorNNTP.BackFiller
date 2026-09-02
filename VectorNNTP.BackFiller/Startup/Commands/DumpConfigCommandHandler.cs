@@ -13,7 +13,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     internal static class DumpConfigCommandHandler
     {
         /// <summary>
-        /// Tracks dump config included section prefixes for dump config command handler.
+        /// Stores dump config included section prefixes used by dump config command handler.
         /// </summary>
         private static readonly string[] DumpConfigIncludedSectionPrefixes =
         [
@@ -22,7 +22,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         ];
 
         /// <summary>
-        /// Tracks dump config clear text keys for dump config command handler.
+        /// Stores dump config clear text keys used by dump config command handler.
         /// </summary>
         private static readonly HashSet<string> DumpConfigClearTextKeys = new(StringComparer.OrdinalIgnoreCase)
         {

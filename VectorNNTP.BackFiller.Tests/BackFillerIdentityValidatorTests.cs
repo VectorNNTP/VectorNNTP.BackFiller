@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for back filler identity validator, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the back filler identity validator test suite.
 
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
@@ -16,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public class BackFillerIdentityValidatorTests
     {
         /// <summary>
-        /// Exercises validate  when inputs are valid  returns no errors behavior, including the expected result and failure semantics.
+        /// Confirms the validate when inputs are valid returns no errors behavior.
         /// </summary>
         [Fact]
         public void Validate_WhenInputsAreValid_ReturnsNoErrors()
@@ -30,7 +31,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  when dns suffix is valid multi label  returns no dns suffix error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when dns suffix is valid multi label returns no dns suffix error behavior.
         /// </summary>
         [Fact]
         public void Validate_WhenDnsSuffixIsValidMultiLabel_ReturnsNoDnsSuffixError()
@@ -47,7 +48,7 @@ namespace VectorNNTP.Backfiller.Tests
                            && d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  when dns suffix contains invalid components  returns dns suffix error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when dns suffix contains invalid components returns dns suffix error behavior.
         /// </summary>
         [Theory]
         [InlineData("https://usenet.ninja")]
@@ -69,7 +70,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:DnsSuffix", error.Setting);
         }
         /// <summary>
-        /// Exercises validate  when dns suffix missing  returns dns suffix error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when dns suffix missing returns dns suffix error behavior.
         /// </summary>
         [Fact]
         public void Validate_WhenDnsSuffixMissing_ReturnsDnsSuffixError()
@@ -87,7 +88,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:DnsSuffix", error.Setting);
         }
         /// <summary>
-        /// Exercises validate  when name is missing  returns name error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when name is missing returns name error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -108,7 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:Name", error.Setting);
         }
         /// <summary>
-        /// Exercises validate  when name is valid dns label  returns no name error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when name is valid dns label returns no name error behavior.
         /// </summary>
         [Theory]
         [InlineData("a")]
@@ -130,7 +131,7 @@ namespace VectorNNTP.Backfiller.Tests
                            && d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  when name contains invalid dns label characters  returns name error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when name contains invalid dns label characters returns name error behavior.
         /// </summary>
         [Theory]
         [InlineData("back filler")]
@@ -154,7 +155,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("valid DNS label", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Exercises validate  when name has invalid hyphen placement  returns name error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when name has invalid hyphen placement returns name error behavior.
         /// </summary>
         [Theory]
         [InlineData("-backfiller")]
@@ -175,7 +176,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("valid DNS label", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Exercises validate  when name plus id produces host label over maximum length  returns name error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when name plus id produces host label over maximum length returns name error behavior.
         /// </summary>
         [Fact]
         public void Validate_WhenNamePlusIdProducesHostLabelOverMaximumLength_ReturnsNameError()
@@ -196,7 +197,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("invalid host label", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Exercises validate  when id is in allowed range  returns no id error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when id is in allowed range returns no id error behavior.
         /// </summary>
         [Theory]
         [InlineData(0)]
@@ -216,7 +217,7 @@ namespace VectorNNTP.Backfiller.Tests
                            && d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  when id is outside allowed range  returns id error behavior, including the expected result and failure semantics.
+        /// Confirms the validate when id is outside allowed range returns id error behavior.
         /// </summary>
         [Theory]
         [InlineData(-1)]
@@ -237,7 +238,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("between 0 and 99", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Exercises format back filler id  when id is in range  returns two digit zero padded value behavior, including the expected result and failure semantics.
+        /// Confirms the format back filler id when id is in range returns two digit zero padded value behavior.
         /// </summary>
         [Theory]
         [InlineData(0, "00")]
@@ -250,7 +251,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(expected, formatted);
         }
         /// <summary>
-        /// Exercises format back filler id  when id is out of range  throws argument out of range exception behavior, including the expected result and failure semantics.
+        /// Confirms the format back filler id when id is out of range throws argument out of range exception behavior.
         /// </summary>
         [Theory]
         [InlineData(-1)]
@@ -260,7 +261,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Throws<ArgumentOutOfRangeException>(() => BackFillerIdentityValidator.FormatBackFillerId(id));
         }
         /// <summary>
-        /// Exercises back filler options  defaults dns suffix to usenet ninja behavior, including the expected result and failure semantics.
+        /// Confirms the back filler options defaults dns suffix to usenet ninja behavior.
         /// </summary>
         [Fact]
         public void BackFillerOptions_DefaultsDnsSuffixToUsenetNinja()

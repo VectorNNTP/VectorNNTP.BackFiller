@@ -32,37 +32,37 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         ILogger<BackFillerListenerSocketService> logger) : BackgroundService
     {
         /// <summary>
-        /// Tracks listen backlog for back filler listener socket service.
+        /// Stores listen backlog used by back filler listener socket service.
         /// </summary>
         private const int ListenBacklog = 512;
 
         /// <summary>
-        /// Tracks runtime options for back filler listener socket service.
+        /// Stores runtime options used by back filler listener socket service.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
-        /// Tracks certificate state for back filler listener socket service.
+        /// Stores certificate state used by back filler listener socket service.
         /// </summary>
         private readonly BackFillerCertificateState _certificateState = certificateState ?? throw new ArgumentNullException(nameof(certificateState));
         /// <summary>
-        /// Tracks shutdown coordinator for back filler listener socket service.
+        /// Stores shutdown coordinator used by back filler listener socket service.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator = shutdownCoordinator ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
         /// <summary>
-        /// Provides logging for back filler listener socket service.
+        /// Supplies the logger used by back filler listener socket service.
         /// </summary>
         private readonly ILogger<BackFillerListenerSocketService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
-        /// Tracks connections gate for back filler listener socket service.
+        /// Stores connections gate used by back filler listener socket service.
         /// </summary>
         private readonly object _connectionsGate = new();
         /// <summary>
-        /// Tracks active clients for back filler listener socket service.
+        /// Stores active clients used by back filler listener socket service.
         /// </summary>
         private readonly HashSet<TcpClient> _activeClients = [];
         /// <summary>
-        /// Tracks listen sockets for back filler listener socket service.
+        /// Stores listen sockets used by back filler listener socket service.
         /// </summary>
         private readonly List<Socket> _listenSockets = [];
 
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates run accept loop async for back filler listener socket service.
+        /// Handles run accept loop async for back filler listener socket service.
         /// </summary>
         private async Task RunAcceptLoopAsync(Socket listenSocket, CancellationToken cancellationToken)
         {
@@ -142,7 +142,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates process accepted socket async for back filler listener socket service.
+        /// Handles process accepted socket async for back filler listener socket service.
         /// </summary>
         private async Task ProcessAcceptedSocketAsync(Socket acceptedSocket, CancellationToken cancellationToken)
         {
@@ -204,7 +204,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates bind all endpoints for back filler listener socket service.
+        /// Handles bind all endpoints for back filler listener socket service.
         /// </summary>
         private void BindAllEndpoints(IReadOnlyList<IPEndPoint> endpoints)
         {
@@ -219,7 +219,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates build listen endpoints for back filler listener socket service.
+        /// Handles build listen endpoints for back filler listener socket service.
         /// </summary>
         private static IReadOnlyList<IPEndPoint> BuildListenEndpoints(BackFillerRuntimeOptions runtimeOptions)
         {
@@ -281,7 +281,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates create bound listen socket for back filler listener socket service.
+        /// Handles create bound listen socket for back filler listener socket service.
         /// </summary>
         private static Socket CreateBoundListenSocket(IPEndPoint endpoint)
         {
@@ -311,7 +311,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates get current server certificate or throw for back filler listener socket service.
+        /// Handles get current server certificate or throw for back filler listener socket service.
         /// </summary>
         private X509Certificate2 GetCurrentServerCertificateOrThrow()
         {
@@ -326,7 +326,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates wait for client disconnect async for back filler listener socket service.
+        /// Handles wait for client disconnect async for back filler listener socket service.
         /// </summary>
         private static async Task WaitForClientDisconnectAsync(SslStream sslStream, CancellationToken cancellationToken)
         {
@@ -343,7 +343,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates register client for back filler listener socket service.
+        /// Handles register client for back filler listener socket service.
         /// </summary>
         private void RegisterClient(TcpClient client)
         {
@@ -354,7 +354,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates unregister client for back filler listener socket service.
+        /// Handles unregister client for back filler listener socket service.
         /// </summary>
         private void UnregisterClient(TcpClient client)
         {
@@ -365,7 +365,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates close listen sockets for back filler listener socket service.
+        /// Handles close listen sockets for back filler listener socket service.
         /// </summary>
         private void CloseListenSockets()
         {
@@ -384,7 +384,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates close active clients for back filler listener socket service.
+        /// Handles close active clients for back filler listener socket service.
         /// </summary>
         private void CloseActiveClients()
         {
@@ -408,7 +408,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Coordinates is expected stopping socket error for back filler listener socket service.
+        /// Handles is expected stopping socket error for back filler listener socket service.
         /// </summary>
         private static bool IsExpectedStoppingSocketError(SocketError socketError, CancellationToken cancellationToken)
         {
@@ -421,7 +421,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private sealed class IPEndPointComparer : IEqualityComparer<IPEndPoint>
         {
             /// <summary>
-            /// Coordinates equals for back filler listener socket service.
+            /// Handles equals for back filler listener socket service.
             /// </summary>
             public bool Equals(IPEndPoint? x, IPEndPoint? y)
             {
@@ -429,7 +429,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
 
             /// <summary>
-            /// Coordinates get hash code for back filler listener socket service.
+            /// Handles get hash code for back filler listener socket service.
             /// </summary>
             public int GetHashCode(IPEndPoint obj)
             {
@@ -437,64 +437,64 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
         }
 
-        [LoggerMessage(EventId = 2700, Level = LogLevel.Information, Message = "Inbound BackFiller listener started; ListenerCount={ListenerCount}; Port={Port}")]
-        /// <summary>
-        /// Coordinates log listener started for back filler listener socket service.
+                /// <summary>
+        /// Emits the listener started log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2700, Level = LogLevel.Information, Message = "Inbound BackFiller listener started; ListenerCount={ListenerCount}; Port={Port}")]
         private static partial void LogListenerStarted(ILogger logger, int listenerCount, int port);
 
-        [LoggerMessage(EventId = 2701, Level = LogLevel.Information, Message = "Inbound BackFiller listener bound endpoint {Endpoint} ({AddressFamily})")]
-        /// <summary>
-        /// Coordinates log endpoint bound for back filler listener socket service.
+                /// <summary>
+        /// Emits the endpoint bound log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2701, Level = LogLevel.Information, Message = "Inbound BackFiller listener bound endpoint {Endpoint} ({AddressFamily})")]
         private static partial void LogEndpointBound(ILogger logger, string endpoint, string addressFamily);
 
-        [LoggerMessage(EventId = 2702, Level = LogLevel.Debug, Message = "Inbound BackFiller listener accepted connection from {RemoteEndpoint}")]
-        /// <summary>
-        /// Coordinates log client accepted for back filler listener socket service.
+                /// <summary>
+        /// Emits the client accepted log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2702, Level = LogLevel.Debug, Message = "Inbound BackFiller listener accepted connection from {RemoteEndpoint}")]
         private static partial void LogClientAccepted(ILogger logger, string remoteEndpoint);
 
-        [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Inbound BackFiller TLS handshake succeeded for {RemoteEndpoint}; Thumbprint={Thumbprint}")]
-        /// <summary>
-        /// Coordinates log tls handshake succeeded for back filler listener socket service.
+                /// <summary>
+        /// Emits the tls handshake succeeded log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Inbound BackFiller TLS handshake succeeded for {RemoteEndpoint}; Thumbprint={Thumbprint}")]
         private static partial void LogTlsHandshakeSucceeded(ILogger logger, string remoteEndpoint, string thumbprint);
 
-        [LoggerMessage(EventId = 2704, Level = LogLevel.Warning, Message = "Inbound BackFiller TLS handshake failed")]
-        /// <summary>
-        /// Coordinates log tls handshake failed for back filler listener socket service.
+                /// <summary>
+        /// Emits the tls handshake failed log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2704, Level = LogLevel.Warning, Message = "Inbound BackFiller TLS handshake failed")]
         private static partial void LogTlsHandshakeFailed(ILogger logger, Exception exception);
 
-        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
-        /// <summary>
-        /// Coordinates log client processing fault for back filler listener socket service.
+                /// <summary>
+        /// Emits the client processing fault log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
         private static partial void LogClientProcessingFault(ILogger logger, Exception exception);
 
-        [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
-        /// <summary>
-        /// Coordinates log connection closed during shutdown for back filler listener socket service.
+                /// <summary>
+        /// Emits the connection closed during shutdown log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
         private static partial void LogConnectionClosedDuringShutdown(ILogger logger, Exception exception);
 
-        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
-        /// <summary>
-        /// Coordinates log listener stopping by cancellation for back filler listener socket service.
+                /// <summary>
+        /// Emits the listener stopping by cancellation log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
         private static partial void LogListenerStoppingByCancellation(ILogger logger);
 
-        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
-        /// <summary>
-        /// Coordinates log listener stopped for back filler listener socket service.
+                /// <summary>
+        /// Emits the listener stopped log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
-        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
-        /// <summary>
-        /// Coordinates log listener disabled for back filler listener socket service.
+                /// <summary>
+        /// Emits the listener disabled log event for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
         private static partial void LogListenerDisabled(ILogger logger);
     }
 }

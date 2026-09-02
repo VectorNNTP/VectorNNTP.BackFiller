@@ -3,7 +3,8 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Focused tests for hex u int32 parser, covering the covered test contracts.
+// Focused tests for hex u int32 parser, covering configuration, runtime, and failure-handling contracts exercised by the tests.
+// Primary responsibility: documents the executable contracts covered by the hex uint32 parser test suite.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

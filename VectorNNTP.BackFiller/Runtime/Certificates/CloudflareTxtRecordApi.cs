@@ -21,7 +21,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class CloudflareTxtRecordApi : ICloudflareTxtRecordApi, IAsyncDisposable
     {
         /// <summary>
-        /// Tracks client for cloudflare txt record api.
+        /// Stores client used by cloudflare txt record api.
         /// </summary>
         private readonly CloudFlareClient _client;
 
@@ -147,7 +147,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build create failure message for cloudflare txt record api.
+        /// Handles build create failure message for cloudflare txt record api.
         /// </summary>
         private static string BuildCreateFailureMessage(
             string recordName,
@@ -164,7 +164,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build query failure message for cloudflare txt record api.
+        /// Handles build query failure message for cloudflare txt record api.
         /// </summary>
         private static string BuildQueryFailureMessage(
             string zoneId,
@@ -183,7 +183,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build delete failure message for cloudflare txt record api.
+        /// Handles build delete failure message for cloudflare txt record api.
         /// </summary>
         private static string BuildDeleteFailureMessage(
             string recordId,
@@ -207,7 +207,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates append cloudflare details for cloudflare txt record api.
+        /// Handles append cloudflare details for cloudflare txt record api.
         /// </summary>
         private static void AppendCloudflareDetails(
             StringBuilder message,
@@ -232,7 +232,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates append cloudflare collections for cloudflare txt record api.
+        /// Handles append cloudflare collections for cloudflare txt record api.
         /// </summary>
         private static void AppendCloudflareCollections(
             StringBuilder message,

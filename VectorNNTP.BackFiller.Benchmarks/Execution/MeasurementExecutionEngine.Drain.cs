@@ -10,12 +10,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the measurement ExecutionEngine class for benchmark or isolated-regression execution.
+/// Represents the measurement ExecutionEngine class used by the benchmark or regression gate.
 /// </summary>
 internal static partial class MeasurementExecutionEngine
 {
     /// <summary>
-    /// Performs the drain AndShutdownAsync operation.
+    /// Implements the drain AndShutdownAsync contract.
     /// </summary>
     internal static async Task<BenchmarkResult> DrainAndShutdownAsync(
         BoundedArticleQueue queue,
@@ -163,7 +163,8 @@ internal static partial class MeasurementExecutionEngine
     }
 
     /// <summary>
-    /// Performs the build BoundarySnapshot operation.
+    /// Builds BoundarySnapshot.
+
     /// </summary>
     private static FixedCountBoundarySnapshot BuildBoundarySnapshot(
         string phase,
@@ -219,7 +220,8 @@ internal static partial class MeasurementExecutionEngine
     }
 
     /// <summary>
-    /// Performs the build PostMeasurementTerminalizationSummary operation.
+    /// Builds PostMeasurementTerminalizationSummary.
+
     /// </summary>
     private static PostMeasurementTerminalizationSummary BuildPostMeasurementTerminalizationSummary(
         DateTimeOffset measurementEndUtc,

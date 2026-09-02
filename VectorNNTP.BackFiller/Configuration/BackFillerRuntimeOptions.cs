@@ -71,27 +71,27 @@ namespace VectorNNTP.Backfiller.Configuration
         RabbitMqRuntimeOptions? RabbitMq = null)
     {
         /// <summary>
-        /// Gets the effective reconnect initialization timeout.
+        /// Returns the effective reconnect initialization timeout.
         /// </summary>
         internal TimeSpan EffectiveTransitReconnectInitializationTimeout => TransitReconnectInitializationTimeout ?? TimeSpan.FromSeconds(2);
 
         /// <summary>
-        /// Gets the effective transit shutdown drain grace period.
+        /// Returns the effective transit shutdown drain grace period.
         /// </summary>
         internal TimeSpan EffectiveTransitShutdownDrainGracePeriod => TransitShutdownDrainGracePeriod ?? TimeSpan.FromMinutes(5);
 
         /// <summary>
-        /// Gets the effective transit shutdown inactivity watchdog duration.
+        /// Returns the effective transit shutdown inactivity watchdog duration.
         /// </summary>
         internal TimeSpan EffectiveTransitShutdownDrainInactivityWatchdog => TransitShutdownDrainInactivityWatchdog ?? TimeSpan.FromSeconds(30);
 
         /// <summary>
-        /// Gets the effective absolute transit shutdown maximum duration.
+        /// Returns the effective absolute transit shutdown maximum duration.
         /// </summary>
         internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
 
         /// <summary>
-        /// Gets the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
+        /// Returns the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
         /// </summary>
         internal IReadOnlyList<IPAddress> EffectiveCanonicalBindAddresses => CanonicalBindAddresses ?? [];
 

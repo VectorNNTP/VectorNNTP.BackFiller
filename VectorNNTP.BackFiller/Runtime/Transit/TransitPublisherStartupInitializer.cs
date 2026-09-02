@@ -15,11 +15,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Tracks transit publisher for transit publisher startup initializer.
+        /// Stores transit publisher used by transit publisher startup initializer.
         /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
         /// <summary>
-        /// Provides logging for transit publisher startup initializer.
+        /// Supplies the logger used by transit publisher startup initializer.
         /// </summary>
         private readonly ILogger<TransitPublisherStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -45,16 +45,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await _transitPublisher.DisposeAsync().ConfigureAwait(false);
         }
 
-        [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
-        /// <summary>
-        /// Coordinates log transit startup initializer beginning for transit publisher startup initializer.
+                /// <summary>
+        /// Emits the transit startup initializer beginning log event for transit publisher startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
         private static partial void LogTransitStartupInitializerBeginning(ILogger logger);
 
-        [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
-        /// <summary>
-        /// Coordinates log transit startup initializer completed for transit publisher startup initializer.
+                /// <summary>
+        /// Emits the transit startup initializer completed log event for transit publisher startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);
     }
 }

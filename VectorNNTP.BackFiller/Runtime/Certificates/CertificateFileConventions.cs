@@ -13,11 +13,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal static class CertificateFileConventions
     {
         /// <summary>
-        /// Tracks listener pfx file name for certificate file conventions.
+        /// Stores listener pfx file name used by certificate file conventions.
         /// </summary>
         internal const string ListenerPfxFileName = "backfiller-listener.pfx";
         /// <summary>
-        /// Tracks certificate private key pem file name for certificate file conventions.
+        /// Stores certificate private key pem file name used by certificate file conventions.
         /// </summary>
         internal const string CertificatePrivateKeyPemFileName = "backfiller-listener.key";
 

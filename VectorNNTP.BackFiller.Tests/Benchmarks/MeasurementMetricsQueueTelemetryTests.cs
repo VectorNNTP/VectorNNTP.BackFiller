@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for measurement metrics queue telemetry, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the measurement metrics queue telemetry test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for measurement metrics classification contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the measurement metrics classification contract test suite.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -12,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Covers measurement metrics classification contract behavior and invariants exercised by this test suite.
+        /// Confirms the measurement metrics classification contract tests behavior.
     /// </summary>
     public sealed class MeasurementMetricsClassificationContractTests
     {
         /// <summary>
-        /// Exercises on publish result  classifies statuses into accepted rejected and ambiguous contracts behavior, including the expected result and failure semantics.
+        /// Confirms the on publish result classifies statuses into accepted rejected and ambiguous contracts behavior.
         /// </summary>
         [Fact]
         public void OnPublishResult_ClassifiesStatusesIntoAcceptedRejectedAndAmbiguousContracts()

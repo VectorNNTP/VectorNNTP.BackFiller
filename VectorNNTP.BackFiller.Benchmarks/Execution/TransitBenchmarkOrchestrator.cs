@@ -13,12 +13,13 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the transit BenchmarkOrchestrator class for benchmark or isolated-regression execution.
+/// Represents the transit BenchmarkOrchestrator class used by the benchmark or regression gate.
 /// </summary>
 internal static class TransitBenchmarkOrchestrator
 {
     /// <summary>
-    /// Performs the run CoreAsync operation.
+    /// Runs CoreAsync.
+
     /// </summary>
     internal static async Task RunCoreAsync(
         TransitBenchmarkConfig config,
@@ -138,7 +139,8 @@ internal static class TransitBenchmarkOrchestrator
     }
 
     /// <summary>
-    /// Performs the run SmokeAsync operation.
+    /// Runs SmokeAsync.
+
     /// </summary>
     private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
@@ -167,7 +169,8 @@ internal static class TransitBenchmarkOrchestrator
     }
 
     /// <summary>
-    /// Performs the run WarmupAsync operation.
+    /// Runs WarmupAsync.
+
     /// </summary>
     private static async Task RunWarmupAsync(TransitPublisher publisher, TransitBenchmarkConfig config, PreparedBenchmarkWorkload workload, CancellationToken cancellationToken)
     {
@@ -195,7 +198,8 @@ internal static class TransitBenchmarkOrchestrator
     }
 
     /// <summary>
-    /// Performs the build RuntimeOptions operation.
+    /// Builds RuntimeOptions.
+
     /// </summary>
     internal static BackFillerRuntimeOptions BuildRuntimeOptions(TransitBenchmarkConfig config)
     {

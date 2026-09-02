@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for rabbit mq article response publisher phase4, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the rabbit mq article response publisher phase 4 test suite.
 
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,7 +24,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqArticleResponsePublisherPhase4Tests
     {
         /// <summary>
-        /// Exercises publish and confirm async  when successful  uses reply to and correlation id and returns confirmed async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when successful uses reply to and correlation id and returns confirmed async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenSuccessful_UsesReplyToAndCorrelationIdAndReturnsConfirmedAsync()
@@ -72,7 +73,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Exercises publish and confirm async  when publish throws  returns failed async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when publish throws returns failed async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenPublishThrows_ReturnsFailedAsync()
@@ -102,7 +103,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Exercises publish and confirm async  when publish cancellation timeouts  returns timed out async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when publish cancellation timeouts returns timed out async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenPublishCancellationTimeouts_ReturnsTimedOutAsync()
@@ -131,7 +132,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Exercises publish and confirm async  when connection generation changes during publish  returns failed async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when connection generation changes during publish returns failed async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenConnectionGenerationChangesDuringPublish_ReturnsFailedAsync()
@@ -166,7 +167,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Exercises publish and confirm async  when connection was replaced before publish  uses current generation channel async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when connection was replaced before publish uses current generation channel async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenConnectionWasReplacedBeforePublish_UsesCurrentGenerationChannelAsync()
@@ -200,7 +201,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Exercises publish and confirm async  when shutdown starts  rejects publish infrastructure async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when shutdown starts rejects publish infrastructure async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenShutdownStarts_RejectsPublishInfrastructureAsync()
@@ -230,7 +231,7 @@ namespace VectorNNTP.Backfiller.Tests
             result.Dispose();
         }
         /// <summary>
-        /// Exercises publish and confirm async  when concurrent publishes  reuses single owned channel async behavior, including the expected result and failure semantics.
+        /// Confirms the publish and confirm async when concurrent publishes reuses single owned channel async behavior.
         /// </summary>
         [Fact]
         public async Task PublishAndConfirmAsync_WhenConcurrentPublishes_ReusesSingleOwnedChannelAsync()
@@ -266,8 +267,17 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create success result behavior, including the expected result and failure semantics.
+        /// Confirms the create success result behavior.
         /// </summary>
+        /// <returns>The value returned by the create success result helper.</returns>
+        /// <summary>
+        /// Confirms the create success result behavior.
+        /// </summary>
+        /// <param name="deliveryTag">The delivery tag used by this test scenario.</param>
+        /// <param name="connectionGeneration">The connection generation used by this test scenario.</param>
+        /// <param name="correlationId">The correlation id used by this test scenario.</param>
+        /// <param name="replyTo">The reply to used by this test scenario.</param>
+        /// <returns>The value returned by the create success result helper.</returns>
         private static ArticleWorkProcessingResult CreateSuccessResult(ulong deliveryTag, long connectionGeneration, string correlationId, string replyTo)
         {
             Guid requestId = Guid.NewGuid();
@@ -303,16 +313,30 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create valid payload behavior, including the expected result and failure semantics.
+        /// Confirms the create valid payload behavior.
         /// </summary>
+        /// <returns>The value returned by the create valid payload helper.</returns>
+        /// <summary>
+        /// Confirms the create valid payload behavior.
+        /// </summary>
+        /// <param name="requestId">The request id used by this test scenario.</param>
+        /// <param name="messageId">The message id used by this test scenario.</param>
+        /// <param name="backbone">The backbone used by this test scenario.</param>
+        /// <returns>The value returned by the create valid payload helper.</returns>
         private static string CreateValidPayload(Guid requestId, string messageId, string backbone)
         {
             return $"{{\"version\":1,\"requestId\":\"{requestId}\",\"messageId\":\"{messageId}\",\"backbone\":\"{backbone}\"}}";
         }
 
         /// <summary>
-        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// Confirms the create runtime options behavior.
         /// </summary>
+        /// <returns>The value returned by the create runtime options helper.</returns>
+        /// <summary>
+        /// Confirms the create runtime options behavior.
+        /// </summary>
+        /// <param name="publishConfirmTimeoutSeconds">The publish confirm timeout seconds used by this test scenario.</param>
+        /// <returns>The value returned by the create runtime options helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int publishConfirmTimeoutSeconds)
         {
             RabbitMqRuntimeOptions rabbitMqOptions = new(
@@ -368,16 +392,16 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers recording broker connector behavior and invariants exercised by this test suite.
+        /// Confirms the recording broker connector behavior.
         /// </summary>
         private sealed class RecordingBrokerConnector : IRabbitMqBrokerConnector
         {
             /// <summary>
-            /// Exercises  publish started behavior, including the expected result and failure semantics.
+            /// Confirms  publish started behavior.
             /// </summary>
             private readonly SemaphoreSlim _publishStarted = new(0, 1);
             /// <summary>
-            /// Exercises  gate behavior, including the expected result and failure semantics.
+            /// Confirms  gate behavior.
             /// </summary>
             private readonly object _gate = new();
             /// <summary>
@@ -400,8 +424,16 @@ namespace VectorNNTP.Backfiller.Tests
             internal Exception? FailPublishWith { get; set; }
 
             /// <summary>
-            /// Exercises connect async behavior, including the expected result and failure semantics.
+        /// Confirms the connect async behavior.
             /// </summary>
+        /// <returns>The value returned by the connect async helper.</returns>
+        /// <summary>
+        /// Confirms the connect async behavior.
+        /// </summary>
+        /// <param name="runtimeOptions">The runtime options used by this test scenario.</param>
+        /// <param name="clientProvidedConnectionName">The client provided connection name used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the connect async helper.</returns>
             public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -423,8 +455,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises require last connection behavior, including the expected result and failure semantics.
+        /// Confirms the require last connection behavior.
             /// </summary>
+        /// <returns>The value returned by the require last connection helper.</returns>
+        /// <summary>
+        /// Confirms the require last connection behavior.
+        /// </summary>
+        /// <returns>The value returned by the require last connection helper.</returns>
             internal RecordingBrokerConnection RequireLastConnection()
             {
                 lock (_gate)
@@ -436,16 +473,28 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises wait for first publish started async behavior, including the expected result and failure semantics.
+        /// Confirms the wait for first publish started async behavior.
             /// </summary>
+        /// <returns>The value returned by the wait for first publish started async helper.</returns>
+        /// <summary>
+        /// Confirms the wait for first publish started async behavior.
+        /// </summary>
+        /// <returns>The value returned by the wait for first publish started async helper.</returns>
             internal async Task WaitForFirstPublishStartedAsync()
             {
                 await _publishStarted.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             }
 
             /// <summary>
-            /// Exercises wait for connect count async behavior, including the expected result and failure semantics.
+        /// Confirms the wait for connect count async behavior.
             /// </summary>
+        /// <returns>The value returned by the wait for connect count async helper.</returns>
+        /// <summary>
+        /// Confirms the wait for connect count async behavior.
+        /// </summary>
+        /// <param name="expectedMinimum">The expected minimum used by this test scenario.</param>
+        /// <param name="timeout">The timeout used by this test scenario.</param>
+        /// <returns>The value returned by the wait for connect count async helper.</returns>
             internal async Task WaitForConnectCountAsync(int expectedMinimum, TimeSpan timeout)
             {
                 DateTime deadline = DateTime.UtcNow + timeout;
@@ -463,7 +512,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises release publish block behavior, including the expected result and failure semantics.
+        /// Confirms the release publish block behavior.
             /// </summary>
             internal void ReleasePublishBlock()
             {
@@ -471,7 +520,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises mark publish started behavior, including the expected result and failure semantics.
+        /// Confirms the mark publish started behavior.
             /// </summary>
             internal void MarkPublishStarted()
             {
@@ -483,7 +532,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers recording broker connection behavior and invariants exercised by this test suite.
+        /// Confirms the recording broker connection behavior.
         /// </summary>
         private sealed class RecordingBrokerConnection : IRabbitMqBrokerConnection
         {
@@ -493,7 +542,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly RecordingBrokerConnector _owner;
 
             /// <summary>
-            /// Exercises recording broker connection behavior, including the expected result and failure semantics.
+        /// Confirms the recording broker connection behavior.
             /// </summary>
             internal RecordingBrokerConnection(string endpointHostName, int endpointPort, string virtualHost, string clientProvidedName, int generation, RecordingBrokerConnector owner)
             {
@@ -541,7 +590,7 @@ namespace VectorNNTP.Backfiller.Tests
             public string ClientProvidedName { get; }
 
             /// <summary>
-            /// Exercises underlying connection behavior, including the expected result and failure semantics.
+            /// Confirms underlying connection behavior.
             /// </summary>
             public IConnection UnderlyingConnection => throw new NotSupportedException();
 
@@ -576,8 +625,15 @@ namespace VectorNNTP.Backfiller.Tests
             public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
             /// <summary>
-            /// Exercises create channel async behavior, including the expected result and failure semantics.
+        /// Confirms the create channel async behavior.
             /// </summary>
+        /// <returns>The value returned by the create channel async helper.</returns>
+        /// <summary>
+        /// Confirms the create channel async behavior.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <param name="enablePublisherConfirmations">The enable publisher confirmations used by this test scenario.</param>
+        /// <returns>The value returned by the create channel async helper.</returns>
             public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -587,8 +643,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Confirms the dispose async behavior.
             /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
+        /// <summary>
+        /// Confirms the dispose async behavior.
+        /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
             public ValueTask DisposeAsync()
             {
                 IsOpen = false;
@@ -596,7 +657,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise connection shutdown behavior, including the expected result and failure semantics.
+        /// Confirms the raise connection shutdown behavior.
             /// </summary>
             internal void RaiseConnectionShutdown()
             {
@@ -605,7 +666,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers recording channel behavior and invariants exercised by this test suite.
+        /// Confirms the recording channel behavior.
         /// </summary>
         private sealed class RecordingChannel : IRabbitMqChannel
         {
@@ -615,7 +676,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly RecordingBrokerConnector _owner;
 
             /// <summary>
-            /// Exercises recording channel behavior, including the expected result and failure semantics.
+        /// Confirms the recording channel behavior.
             /// </summary>
             internal RecordingChannel(bool enablePublisherConfirmations, int createdAtGeneration, RecordingBrokerConnector owner)
             {
@@ -650,13 +711,25 @@ namespace VectorNNTP.Backfiller.Tests
             internal byte[]? LastPublishBody { get; private set; }
 
             /// <summary>
-            /// Exercises underlying channel behavior, including the expected result and failure semantics.
+            /// Confirms underlying channel behavior.
             /// </summary>
             public IChannel UnderlyingChannel => throw new NotSupportedException();
 
             /// <summary>
-            /// Exercises exchange declare async behavior, including the expected result and failure semantics.
+        /// Confirms the exchange declare async behavior.
             /// </summary>
+        /// <returns>The value returned by the exchange declare async helper.</returns>
+        /// <summary>
+        /// Confirms the exchange declare async behavior.
+        /// </summary>
+        /// <param name="exchange">The exchange used by this test scenario.</param>
+        /// <param name="type">The type used by this test scenario.</param>
+        /// <param name="durable">The durable used by this test scenario.</param>
+        /// <param name="autoDelete">The auto delete used by this test scenario.</param>
+        /// <param name="string">The string used by this test scenario.</param>
+        /// <param name="arguments">The arguments used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the exchange declare async helper.</returns>
             public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -664,8 +737,20 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises queue declare async behavior, including the expected result and failure semantics.
+        /// Confirms the queue declare async behavior.
             /// </summary>
+        /// <returns>The value returned by the queue declare async helper.</returns>
+        /// <summary>
+        /// Confirms the queue declare async behavior.
+        /// </summary>
+        /// <param name="queue">The queue used by this test scenario.</param>
+        /// <param name="durable">The durable used by this test scenario.</param>
+        /// <param name="exclusive">The exclusive used by this test scenario.</param>
+        /// <param name="autoDelete">The auto delete used by this test scenario.</param>
+        /// <param name="string">The string used by this test scenario.</param>
+        /// <param name="arguments">The arguments used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the queue declare async helper.</returns>
             public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -673,8 +758,19 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises queue bind async behavior, including the expected result and failure semantics.
+        /// Confirms the queue bind async behavior.
             /// </summary>
+        /// <returns>The value returned by the queue bind async helper.</returns>
+        /// <summary>
+        /// Confirms the queue bind async behavior.
+        /// </summary>
+        /// <param name="queue">The queue used by this test scenario.</param>
+        /// <param name="exchange">The exchange used by this test scenario.</param>
+        /// <param name="routingKey">The routing key used by this test scenario.</param>
+        /// <param name="string">The string used by this test scenario.</param>
+        /// <param name="arguments">The arguments used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the queue bind async helper.</returns>
             public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -682,8 +778,17 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic qos async behavior, including the expected result and failure semantics.
+        /// Confirms the basic qos async behavior.
             /// </summary>
+        /// <returns>The value returned by the basic qos async helper.</returns>
+        /// <summary>
+        /// Confirms the basic qos async behavior.
+        /// </summary>
+        /// <param name="prefetchSize">The prefetch size used by this test scenario.</param>
+        /// <param name="prefetchCount">The prefetch count used by this test scenario.</param>
+        /// <param name="global">The global used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the basic qos async helper.</returns>
             public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -691,8 +796,17 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic consume async behavior, including the expected result and failure semantics.
+        /// Confirms the basic consume async behavior.
             /// </summary>
+        /// <returns>The value returned by the basic consume async helper.</returns>
+        /// <summary>
+        /// Confirms the basic consume async behavior.
+        /// </summary>
+        /// <param name="queue">The queue used by this test scenario.</param>
+        /// <param name="autoAck">The auto ack used by this test scenario.</param>
+        /// <param name="consumer">The consumer used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the basic consume async helper.</returns>
             public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -700,8 +814,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic cancel async behavior, including the expected result and failure semantics.
+        /// Confirms the basic cancel async behavior.
             /// </summary>
+        /// <returns>The value returned by the basic cancel async helper.</returns>
+        /// <summary>
+        /// Confirms the basic cancel async behavior.
+        /// </summary>
+        /// <param name="consumerTag">The consumer tag used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the basic cancel async helper.</returns>
             public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -709,8 +830,16 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic ack async behavior, including the expected result and failure semantics.
+        /// Confirms the basic ack async behavior.
             /// </summary>
+        /// <returns>The value returned by the basic ack async helper.</returns>
+        /// <summary>
+        /// Confirms the basic ack async behavior.
+        /// </summary>
+        /// <param name="deliveryTag">The delivery tag used by this test scenario.</param>
+        /// <param name="multiple">The multiple used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the basic ack async helper.</returns>
             public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -720,8 +849,17 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic nack async behavior, including the expected result and failure semantics.
+        /// Confirms the basic nack async behavior.
             /// </summary>
+        /// <returns>The value returned by the basic nack async helper.</returns>
+        /// <summary>
+        /// Confirms the basic nack async behavior.
+        /// </summary>
+        /// <param name="deliveryTag">The delivery tag used by this test scenario.</param>
+        /// <param name="multiple">The multiple used by this test scenario.</param>
+        /// <param name="requeue">The requeue used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the basic nack async helper.</returns>
             public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -732,8 +870,19 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic publish async behavior, including the expected result and failure semantics.
+        /// Confirms the basic publish async behavior.
             /// </summary>
+        /// <returns>The value returned by the basic publish async helper.</returns>
+        /// <summary>
+        /// Confirms the basic publish async behavior.
+        /// </summary>
+        /// <param name="exchange">The exchange used by this test scenario.</param>
+        /// <param name="routingKey">The routing key used by this test scenario.</param>
+        /// <param name="mandatory">The mandatory used by this test scenario.</param>
+        /// <param name="basicProperties">The basic properties used by this test scenario.</param>
+        /// <param name="body">The body used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the basic publish async helper.</returns>
             public async ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
             {
                 _owner.MarkPublishStarted();
@@ -756,8 +905,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Confirms the dispose async behavior.
             /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
+        /// <summary>
+        /// Confirms the dispose async behavior.
+        /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
             public ValueTask DisposeAsync()
             {
                 return ValueTask.CompletedTask;
@@ -765,13 +919,19 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers no op settlement behavior and invariants exercised by this test suite.
+        /// Confirms the no op settlement behavior.
         /// </summary>
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Exercises ack async behavior, including the expected result and failure semantics.
+        /// Confirms the ack async behavior.
             /// </summary>
+        /// <returns>The value returned by the ack async helper.</returns>
+        /// <summary>
+        /// Confirms the ack async behavior.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the ack async helper.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -779,8 +939,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises nack async behavior, including the expected result and failure semantics.
+        /// Confirms the nack async behavior.
             /// </summary>
+        /// <returns>The value returned by the nack async helper.</returns>
+        /// <summary>
+        /// Confirms the nack async behavior.
+        /// </summary>
+        /// <param name="requeue">The requeue used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();

@@ -15,16 +15,16 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         ILogger<NntpAccountSnapshotStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Tracks snapshot provider for nntp account snapshot startup initializer.
+        /// Stores snapshot provider used by nntp account snapshot startup initializer.
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _snapshotProvider = snapshotProvider ?? throw new ArgumentNullException(nameof(snapshotProvider));
         /// <summary>
-        /// Provides logging for nntp account snapshot startup initializer.
+        /// Supplies the logger used by nntp account snapshot startup initializer.
         /// </summary>
         private readonly ILogger<NntpAccountSnapshotStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
-        /// Performs the startup-time account snapshot load and blocks host startup until complete.
+        /// Executes startup-time account snapshot load and blocks host startup until complete.
         /// </summary>
         /// <param name="cancellationToken">Startup cancellation token.</param>
         /// <returns>A task that completes after initial snapshot load succeeds.</returns>
@@ -46,16 +46,16 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             return Task.CompletedTask;
         }
 
-        [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "NNTP account startup initializer beginning initial snapshot load")]
-        /// <summary>
-        /// Coordinates log startup initializer beginning for nntp account snapshot startup initializer.
+                /// <summary>
+        /// Emits the startup initializer beginning log event for nntp account snapshot startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "NNTP account startup initializer beginning initial snapshot load")]
         private static partial void LogStartupInitializerBeginning(ILogger logger);
 
-        [LoggerMessage(EventId = 2003, Level = LogLevel.Information, Message = "NNTP account startup initializer completed; AccountsLoaded={AccountCount}")]
-        /// <summary>
-        /// Coordinates log startup initializer completed for nntp account snapshot startup initializer.
+                /// <summary>
+        /// Emits the startup initializer completed log event for nntp account snapshot startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 2003, Level = LogLevel.Information, Message = "NNTP account startup initializer completed; AccountsLoaded={AccountCount}")]
         private static partial void LogStartupInitializerCompleted(ILogger logger, int accountCount);
     }
 }

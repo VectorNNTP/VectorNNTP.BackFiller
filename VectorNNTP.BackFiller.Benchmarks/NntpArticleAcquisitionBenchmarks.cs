@@ -26,7 +26,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
     /// <summary>
-    /// Defines the nntp ArticleAcquisitionBenchmarks class for benchmark or isolated-regression execution.
+    /// Represents the nntp ArticleAcquisitionBenchmarks class used by the benchmark or regression gate.
     /// </summary>
     public class NntpArticleAcquisitionBenchmarks
     {
@@ -110,7 +110,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalSetup]
         /// <summary>
-        /// Performs the setup Async operation.
+        /// Implements the setup Async contract.
         /// </summary>
         public async Task SetupAsync()
         {
@@ -139,7 +139,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalCleanup]
         /// <summary>
-        /// Performs the cleanup Async operation.
+        /// Implements the cleanup Async contract.
         /// </summary>
         public async Task CleanupAsync()
         {
@@ -174,7 +174,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Baseline = true)]
         [BenchmarkCategory("SteadyStateArticle")]
         /// <summary>
-        /// Performs the steady StateSmallArticleAsync operation.
+        /// Implements the steady StateSmallArticleAsync contract.
         /// </summary>
         public Task<int> SteadyStateSmallArticleAsync()
         {
@@ -188,7 +188,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark]
         [BenchmarkCategory("SteadyStateArticle")]
         /// <summary>
-        /// Performs the steady StateTypicalArticleAsync operation.
+        /// Implements the steady StateTypicalArticleAsync contract.
         /// </summary>
         public Task<int> SteadyStateTypicalArticleAsync()
         {
@@ -202,7 +202,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark]
         [BenchmarkCategory("SteadyStateArticle")]
         /// <summary>
-        /// Performs the steady StateLargey EncArticleAsync operation.
+        /// Implements the steady StateLargey EncArticleAsync contract.
         /// </summary>
         public Task<int> SteadyStateLargeYEncArticleAsync()
         {
@@ -214,7 +214,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Performs the article OperationsPerMeasuredIteration operation.
+        /// Implements the article OperationsPerMeasuredIteration contract.
         /// </summary>
         public int ArticleOperationsPerMeasuredIteration()
         {
@@ -226,7 +226,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Performs the small ArticleBytes operation.
+        /// Implements the small ArticleBytes contract.
         /// </summary>
         public int SmallArticleBytes()
         {
@@ -238,7 +238,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Performs the typical ArticleBytes operation.
+        /// Implements the typical ArticleBytes contract.
         /// </summary>
         public int TypicalArticleBytes()
         {
@@ -250,7 +250,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Performs the large ArticleBytes operation.
+        /// Implements the large ArticleBytes contract.
         /// </summary>
         public int LargeArticleBytes()
         {
@@ -262,7 +262,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Performs the large y EncArticleBytes operation.
+        /// Implements the large y EncArticleBytes contract.
         /// </summary>
         public int LargeYEncArticleBytes()
         {

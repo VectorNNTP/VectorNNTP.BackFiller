@@ -7,7 +7,7 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the measurement Snapshot record struct for benchmark or isolated-regression execution.
+/// Represents the measurement Snapshot record struct used by the benchmark or regression gate.
 /// </summary>
 internal readonly record struct MeasurementSnapshot(
     long GeneratedCount,

@@ -22,95 +22,95 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
 {
     /// <summary>
-    /// Performs the greeting Bytes operation.
+    /// Implements the greeting Bytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> GreetingBytes = Encoding.ASCII.GetBytes("200 benchmark dev-null sink ready\r\n");
     /// <summary>
-    /// Performs the capabilities HeaderBytes operation.
+    /// Implements the capabilities HeaderBytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> CapabilitiesHeaderBytes = Encoding.ASCII.GetBytes("101 Capability list:\r\n");
     /// <summary>
-    /// Performs the capabilities StreamingBytes operation.
+    /// Implements the capabilities StreamingBytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> CapabilitiesStreamingBytes = Encoding.ASCII.GetBytes("STREAMING\r\n");
     /// <summary>
-    /// Performs the dot LineBytes operation.
+    /// Implements the dot LineBytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> DotLineBytes = Encoding.ASCII.GetBytes(".\r\n");
     /// <summary>
-    /// Performs the streaming PermittedBytes operation.
+    /// Implements the streaming PermittedBytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> StreamingPermittedBytes = Encoding.ASCII.GetBytes("203 Streaming permitted\r\n");
     /// <summary>
-    /// Performs the quit ResponseBytes operation.
+    /// Implements the quit ResponseBytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> QuitResponseBytes = Encoding.ASCII.GetBytes("205 closing connection\r\n");
     /// <summary>
-    /// Performs the unknown CommandBytes operation.
+    /// Implements the unknown CommandBytes contract.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> UnknownCommandBytes = Encoding.ASCII.GetBytes("500 unknown command\r\n");
     /// <summary>
-    /// Gets or sets the capabilities CommandBytes value.
+    /// Gets or sets the capabilities CommandBytes.
     /// </summary>
     private static ReadOnlySpan<byte> CapabilitiesCommandBytes => "CAPABILITIES"u8;
     /// <summary>
-    /// Gets or sets the mode StreamCommandBytes value.
+    /// Gets or sets the mode StreamCommandBytes.
     /// </summary>
     private static ReadOnlySpan<byte> ModeStreamCommandBytes => "MODE STREAM"u8;
     /// <summary>
-    /// Gets or sets the quit CommandBytes value.
+    /// Gets or sets the quit CommandBytes.
     /// </summary>
     private static ReadOnlySpan<byte> QuitCommandBytes => "QUIT"u8;
     /// <summary>
-    /// Gets or sets the check PrefixBytes value.
+    /// Gets or sets the check PrefixBytes.
     /// </summary>
     private static ReadOnlySpan<byte> CheckPrefixBytes => "CHECK "u8;
     /// <summary>
-    /// Gets or sets the takethis PrefixBytes value.
+    /// Gets or sets the takethis PrefixBytes.
     /// </summary>
     private static ReadOnlySpan<byte> TakethisPrefixBytes => "TAKETHIS "u8;
     /// <summary>
-    /// Performs the article Terminator operation.
+    /// Implements the article Terminator contract.
     /// </summary>
     private static readonly byte[] ArticleTerminator = "\r\n.\r\n"u8.ToArray();
 
     /// <summary>
-    /// Gets or sets the _listener value.
+    /// Gets or sets the _listener.
     /// </summary>
     private readonly TcpListener _listener;
     /// <summary>
-    /// Performs the _clientTasks operation.
+    /// Runs the _clientTasks benchmark scenario.
     /// </summary>
     private readonly ConcurrentDictionary<int, Task> _clientTasks = new();
     /// <summary>
-    /// Performs the _shutdown operation.
+    /// Runs the _shutdown benchmark scenario.
     /// </summary>
     private readonly CancellationTokenSource _shutdown = new();
 
     /// <summary>
-    /// Gets or sets the _acceptLoopTask value.
+    /// Gets or sets the _acceptLoopTask.
     /// </summary>
     private Task? _acceptLoopTask;
     /// <summary>
-    /// Gets or sets the _clientTaskId value.
+    /// Gets or sets the _clientTaskId.
     /// </summary>
     private int _clientTaskId;
 
     /// <summary>
-    /// Gets or sets the _acceptedArticles value.
+    /// Gets or sets the _acceptedArticles.
     /// </summary>
     private long _acceptedArticles;
     /// <summary>
-    /// Gets or sets the _consumedArticleBytes value.
+    /// Gets or sets the _consumedArticleBytes.
     /// </summary>
     private long _consumedArticleBytes;
     /// <summary>
-    /// Gets or sets the _totalConnections value.
+    /// Gets or sets the _totalConnections.
     /// </summary>
     private long _totalConnections;
 
     /// <summary>
-    /// Performs the benchmark DevNullTransitServer operation.
+    /// Implements the benchmark DevNullTransitServer contract.
     /// </summary>
     private BenchmarkDevNullTransitServer(IPAddress listenAddress, int port)
     {
@@ -264,6 +264,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// Runs NNTP command handling for a single client connection.
     /// </summary>
     /// <param name="client">The connected client.</param>
+    /// <param name="taskId">Identifier assigned to the client session.</param>
     /// <param name="cancellationToken">The server shutdown token.</param>
     /// <returns>A task representing the client session.</returns>
     private async Task HandleClientAsync(TcpClient client, int taskId, CancellationToken cancellationToken)
@@ -499,7 +500,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the try ParseCommand operation.
+    /// Implements the try ParseCommand contract.
     /// </summary>
     private static bool TryParseCommand(in ReadOnlySequence<byte> line, out ParsedCommand command)
     {
@@ -548,7 +549,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the decode MessageIdOrDefault operation.
+    /// Implements the decode MessageIdOrDefault contract.
     /// </summary>
     private static string DecodeMessageIdOrDefault(in ReadOnlySequence<byte> messageIdBytes)
     {
@@ -559,7 +560,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the ascii EqualsIgnoreCase operation.
+    /// Implements the ascii EqualsIgnoreCase contract.
     /// </summary>
     private static bool AsciiEqualsIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> expected)
     {
@@ -587,7 +588,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the ascii StartsWithIgnoreCase operation.
+    /// Implements the ascii StartsWithIgnoreCase contract.
     /// </summary>
     private static bool AsciiStartsWithIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> prefix)
     {
@@ -620,7 +621,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the try GetLastByte operation.
+    /// Implements the try GetLastByte contract.
     /// </summary>
     private static bool TryGetLastByte(in ReadOnlySequence<byte> sequence, out byte value)
     {
@@ -643,7 +644,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the to UpperAsciiInvariant operation.
+    /// Converts to UpperAsciiInvariant.
+
     /// </summary>
     private static byte ToUpperAsciiInvariant(byte value)
     {
@@ -663,7 +665,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(reader);
 
         /// <summary>
-        /// Gets or sets the terminator Length value.
+        /// Gets or sets the terminator Length.
         /// </summary>
         const int terminatorLength = 5; // "\r\n.\r\n"
         byte[] trailingWindow = new byte[terminatorLength];
@@ -723,7 +725,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// </summary>
     /// <param name="writer">The socket-bound protocol writer.</param>
     /// <param name="queueReader">The FIFO response queue reader.</param>
-    /// <param name="cancellationToken">Connection shutdown token.</param>
+    /// <param name="control">Shared control state for quit and connection completion.</param>
+    /// <param name="metrics">Counters updated while responses are transmitted.</param>
     /// <param name="onResponseWritten">Callback invoked after each response is staged.</param>
     /// <returns>A task representing the transmit loop.</returns>
     private static async Task RunTransmitLoopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopControl control, TransmitLoopMetrics metrics, Action onResponseWritten)
@@ -788,7 +791,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the send QuitAndStopAsync operation.
+    /// Implements the send QuitAndStopAsync contract.
     /// </summary>
     private static async Task SendQuitAndStopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopMetrics metrics, Action onResponseWritten)
     {
@@ -809,7 +812,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the enqueue Response operation.
+    /// Implements the enqueue Response contract.
     /// </summary>
     private static void EnqueueResponse(ChannelWriter<ResponseWorkItem> writer, in ResponseWorkItem workItem)
     {
@@ -831,7 +834,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the write Response operation.
+    /// Writes Response.
+
     /// </summary>
     private static void WriteResponse(PipeWriter writer, in ResponseWorkItem response)
     {
@@ -852,22 +856,22 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Defines the transmit LoopControl class for benchmark or isolated-regression execution.
+    /// Represents the transmit LoopControl class used by the benchmark or regression gate.
     /// </summary>
     private sealed class TransmitLoopControl
     {
         /// <summary>
-        /// Gets or sets the _quitRequested value.
+        /// Gets or sets the _quitRequested.
         /// </summary>
         private int _quitRequested;
 
         /// <summary>
-        /// Performs the is QuitRequested operation.
+        /// Implements the is QuitRequested contract.
         /// </summary>
         internal bool IsQuitRequested => Volatile.Read(ref _quitRequested) == 1;
 
         /// <summary>
-        /// Performs the request Quit operation.
+        /// Implements the request Quit contract.
         /// </summary>
         internal void RequestQuit()
         {
@@ -876,52 +880,52 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Defines the transmit LoopMetrics class for benchmark or isolated-regression execution.
+    /// Represents the transmit LoopMetrics class used by the benchmark or regression gate.
     /// </summary>
     private sealed class TransmitLoopMetrics
     {
         /// <summary>
-        /// Gets or sets the _flushCount value.
+        /// Gets or sets the _flushCount.
         /// </summary>
         private long _flushCount;
         /// <summary>
-        /// Gets or sets the _totalResponsesSent value.
+        /// Gets or sets the _totalResponsesSent.
         /// </summary>
         private long _totalResponsesSent;
         /// <summary>
-        /// Gets or sets the _maxResponsesPerFlush value.
+        /// Gets or sets the _maxResponsesPerFlush.
         /// </summary>
         private int _maxResponsesPerFlush;
 
         /// <summary>
-        /// Gets or sets the iterations value.
+        /// Gets or sets the iterations.
         /// </summary>
         internal long Iterations { get; set; }
 
         /// <summary>
-        /// Performs the flush Count operation.
+        /// Implements the flush Count contract.
         /// </summary>
         internal long FlushCount => Interlocked.Read(ref _flushCount);
 
         /// <summary>
-        /// Performs the total ResponsesSent operation.
+        /// Implements the total ResponsesSent contract.
         /// </summary>
         internal long TotalResponsesSent => Interlocked.Read(ref _totalResponsesSent);
 
         /// <summary>
-        /// Performs the max ResponsesPerFlush operation.
+        /// Implements the max ResponsesPerFlush contract.
         /// </summary>
         internal int MaxResponsesPerFlush => Volatile.Read(ref _maxResponsesPerFlush);
 
         /// <summary>
-        /// Gets or sets the average ResponsesPerFlush value.
+        /// Gets or sets the average ResponsesPerFlush.
         /// </summary>
         internal double AverageResponsesPerFlush => FlushCount == 0
             ? 0d
             : (double)TotalResponsesSent / FlushCount;
 
         /// <summary>
-        /// Performs the record Flush operation.
+        /// Implements the record Flush contract.
         /// </summary>
         internal void RecordFlush(int responsesInFlush)
         {
@@ -945,7 +949,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Defines the expected Command enum for benchmark or isolated-regression execution.
+    /// Represents the expected Command enum used by the benchmark or regression gate.
     /// </summary>
     private enum ExpectedCommand
     {
@@ -954,7 +958,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Defines the command Kind enum for benchmark or isolated-regression execution.
+    /// Represents the command Kind enum used by the benchmark or regression gate.
     /// </summary>
     private enum CommandKind
     {
@@ -967,12 +971,12 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Defines the parsed Command record struct for benchmark or isolated-regression execution.
+    /// Represents the parsed Command record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct ParsedCommand(CommandKind Kind, string MessageId);
 
     /// <summary>
-    /// Defines the response Kind enum for benchmark or isolated-regression execution.
+    /// Represents the response Kind enum used by the benchmark or regression gate.
     /// </summary>
     private enum ResponseKind
     {
@@ -982,22 +986,22 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Defines the response WorkItem record struct for benchmark or isolated-regression execution.
+    /// Represents the response WorkItem record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct ResponseWorkItem(ResponseKind Kind, string MessageId)
     {
         /// <summary>
-        /// Performs the takethis operation.
+        /// Runs the takethis benchmark scenario.
         /// </summary>
         public static ResponseWorkItem Takethis(string messageId) => new(ResponseKind.TakethisAccepted, messageId);
 
         /// <summary>
-        /// Performs the check operation.
+        /// Runs the check benchmark scenario.
         /// </summary>
         public static ResponseWorkItem Check(string messageId) => new(ResponseKind.CheckSend, messageId);
 
         /// <summary>
-        /// Performs the unknown operation.
+        /// Runs the unknown benchmark scenario.
         /// </summary>
         public static ResponseWorkItem Unknown() => new(ResponseKind.UnknownCommand, string.Empty);
     }
@@ -1012,11 +1016,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(messageId);
 
         /// <summary>
-        /// Gets or sets the response Prefix value.
+        /// Gets or sets the response Prefix.
         /// </summary>
         const string responsePrefix = "238 ";
         /// <summary>
-        /// Gets or sets the response Suffix value.
+        /// Gets or sets the response Suffix.
         /// </summary>
         const string responseSuffix = " send article to be transferred\r\n";
 
@@ -1039,11 +1043,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(messageId);
 
         /// <summary>
-        /// Gets or sets the response Prefix value.
+        /// Gets or sets the response Prefix.
         /// </summary>
         const string responsePrefix = "239 ";
         /// <summary>
-        /// Gets or sets the response Suffix value.
+        /// Gets or sets the response Suffix.
         /// </summary>
         const string responseSuffix = " Article transferred OK\r\n";
 
@@ -1098,7 +1102,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Performs the describe SocketState operation.
+    /// Implements the describe SocketState contract.
     /// </summary>
     private static string DescribeSocketState(TcpClient client)
     {

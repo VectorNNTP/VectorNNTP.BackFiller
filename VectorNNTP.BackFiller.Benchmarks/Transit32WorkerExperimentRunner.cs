@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Transit32WorkerExperimentRunner: defines the benchmark entry point or scenario for controlled performance validation.
+// Transit32WorkerExperimentRunner: compares generator, queue, and full-pipeline scaling at thirty-two workers.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -14,50 +14,51 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the transit 32 WorkerExperimentRunner class for benchmark or isolated-regression execution.
+/// Represents the transit 32 WorkerExperimentRunner class used by the benchmark or regression gate.
 /// </summary>
 internal static class Transit32WorkerExperimentRunner
 {
     /// <summary>
-    /// Gets or sets the article Bytes value.
+    /// Gets or sets the article Bytes.
     /// </summary>
     private const int ArticleBytes = 1024 * 1024;
     /// <summary>
-    /// Gets or sets the producer Workers value.
+    /// Gets or sets the producer Workers.
     /// </summary>
     private const int ProducerWorkers = 32;
     /// <summary>
-    /// Gets or sets the dispatch Workers value.
+    /// Gets or sets the dispatch Workers.
     /// </summary>
     private const int DispatchWorkers = 512;
     /// <summary>
-    /// Gets or sets the queue Articles value.
+    /// Gets or sets the queue Articles.
     /// </summary>
     private const int QueueArticles = 1024;
     /// <summary>
-    /// Gets or sets the queue Bytes value.
+    /// Gets or sets the queue Bytes.
     /// </summary>
     private const long QueueBytes = 1024L * 1024L * 1024L;
     /// <summary>
-    /// Gets or sets the queue Target value.
+    /// Gets or sets the queue Target.
     /// </summary>
     private const int QueueTarget = 512;
     /// <summary>
-    /// Gets or sets the connections value.
+    /// Gets or sets the connections.
     /// </summary>
     private const int Connections = 64;
     /// <summary>
-    /// Gets or sets the pipeline Depth value.
+    /// Gets or sets the pipeline Depth.
     /// </summary>
     private const int PipelineDepth = 16;
 
     /// <summary>
-    /// Gets or sets the required TransitHostname value.
+    /// Gets or sets the required TransitHostname.
     /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
 
     /// <summary>
-    /// Performs the run Async operation.
+    /// Runs Async.
+
     /// </summary>
     internal static async Task RunAsync(CancellationToken cancellationToken = default)
     {
@@ -75,7 +76,8 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the run GeneratorOnlyAsync operation.
+    /// Runs GeneratorOnlyAsync.
+
     /// </summary>
     private static async Task<GeneratorResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int workers, CancellationToken cancellationToken)
     {
@@ -162,7 +164,8 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the run QueueNoOpAsync operation.
+    /// Runs QueueNoOpAsync.
+
     /// </summary>
     private static async Task<QueueResult> RunQueueNoOpAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -314,7 +317,8 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the run RealPipelineAsync operation.
+    /// Runs RealPipelineAsync.
+
     /// </summary>
     private static async Task<RealPipelineResult> RunRealPipelineAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -591,7 +595,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the warmup GeneratorAsync operation.
+    /// Implements the warmup GeneratorAsync contract.
     /// </summary>
     private static async Task WarmupGeneratorAsync(int warmupSeconds, int workers, CancellationToken cancellationToken)
     {
@@ -624,7 +628,8 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the build RuntimeOptions operation.
+    /// Builds RuntimeOptions.
+
     /// </summary>
     private static BackFillerRuntimeOptions BuildRuntimeOptions(RuntimeConfig runtime)
     {
@@ -650,7 +655,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the load RuntimeConfig operation.
+    /// Implements the load RuntimeConfig contract.
     /// </summary>
     private static RuntimeConfig LoadRuntimeConfig()
     {
@@ -679,7 +684,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the find BackFillerAppSettingsPath operation.
+    /// Implements the find BackFillerAppSettingsPath contract.
     /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
@@ -699,7 +704,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the percentile Us operation.
+    /// Implements the percentile Us contract.
     /// </summary>
     private static double PercentileUs(IEnumerable<long> ticks, double percentile)
     {
@@ -715,24 +720,24 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the print ScalingEfficiency operation.
+    /// Implements the print ScalingEfficiency contract.
     /// </summary>
     private static void PrintScalingEfficiency(double current32Rate)
     {
         /// <summary>
-        /// Gets or sets the baseline 1 value.
+        /// Gets or sets the baseline 1.
         /// </summary>
         const double baseline1 = 772.2691;
         /// <summary>
-        /// Gets or sets the baseline 4 value.
+        /// Gets or sets the baseline 4.
         /// </summary>
         const double baseline4 = 2932.5899;
         /// <summary>
-        /// Gets or sets the baseline 8 value.
+        /// Gets or sets the baseline 8.
         /// </summary>
         const double baseline8 = 4264.0247;
         /// <summary>
-        /// Gets or sets the baseline 16 value.
+        /// Gets or sets the baseline 16.
         /// </summary>
         const double baseline16 = 6666.1003;
 
@@ -744,7 +749,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the print GeneratorResult operation.
+    /// Implements the print GeneratorResult contract.
     /// </summary>
     private static void PrintGeneratorResult(GeneratorResult result)
     {
@@ -754,7 +759,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the print QueueResult operation.
+    /// Implements the print QueueResult contract.
     /// </summary>
     private static void PrintQueueResult(QueueResult result)
     {
@@ -767,7 +772,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the print RealPipelineResult operation.
+    /// Implements the print RealPipelineResult contract.
     /// </summary>
     private static void PrintRealPipelineResult(RealPipelineResult result)
     {
@@ -783,7 +788,8 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the format Distribution operation.
+    /// Formats Distribution.
+
     /// </summary>
     private static string FormatDistribution(Dictionary<int, int> distribution)
     {
@@ -796,7 +802,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Performs the print FinalSummary operation.
+    /// Implements the print FinalSummary contract.
     /// </summary>
     private static void PrintFinalSummary(GeneratorResult exp1, QueueResult exp2, RealPipelineResult exp3)
     {
@@ -813,37 +819,37 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Defines the cpu Sampler class for benchmark or isolated-regression execution.
+    /// Represents the cpu Sampler class used by the benchmark or regression gate.
     /// </summary>
     private sealed class CpuSampler
     {
         /// <summary>
-        /// Gets or sets the _process value.
+        /// Gets or sets the _process.
         /// </summary>
         private readonly Process _process;
         /// <summary>
-        /// Performs the _elapsed operation.
+        /// Runs the _elapsed benchmark scenario.
         /// </summary>
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
         /// <summary>
-        /// Gets or sets the _cts value.
+        /// Gets or sets the _cts.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value.
+        /// Gets or sets the _task.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _cpuStart value.
+        /// Gets or sets the _cpuStart.
         /// </summary>
         private TimeSpan _cpuStart;
         /// <summary>
-        /// Gets or sets the _peakWorkingSet value.
+        /// Gets or sets the _peakWorkingSet.
         /// </summary>
         private long _peakWorkingSet;
 
         /// <summary>
-        /// Performs the cpu Sampler operation.
+        /// Implements the cpu Sampler contract.
         /// </summary>
         internal CpuSampler(Process process)
         {
@@ -852,24 +858,24 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Gets or sets the average CpuPercent value.
+        /// Gets or sets the average CpuPercent.
         /// </summary>
         internal double AverageCpuPercent { get; private set; }
         /// <summary>
-        /// Gets or sets the equivalent BusyCores value.
+        /// Gets or sets the equivalent BusyCores.
         /// </summary>
         internal double EquivalentBusyCores => AverageCpuPercent / 100d * Environment.ProcessorCount;
         /// <summary>
-        /// Gets or sets the peak WorkingSetBytes value.
+        /// Gets or sets the peak WorkingSetBytes.
         /// </summary>
         internal long PeakWorkingSetBytes => _peakWorkingSet;
         /// <summary>
-        /// Gets or sets the total CpuTime value.
+        /// Gets or sets the total CpuTime.
         /// </summary>
         internal TimeSpan TotalCpuTime { get; private set; }
 
         /// <summary>
-        /// Performs the start operation.
+        /// Runs the start benchmark scenario.
         /// </summary>
         internal void Start()
         {
@@ -891,7 +897,7 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Performs the stop operation.
+        /// Runs the stop benchmark scenario.
         /// </summary>
         internal void Stop()
         {
@@ -918,49 +924,49 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Defines the queue Sampler class for benchmark or isolated-regression execution.
+    /// Represents the queue Sampler class used by the benchmark or regression gate.
     /// </summary>
     private sealed class QueueSampler
     {
         /// <summary>
-        /// Gets or sets the _queue value.
+        /// Gets or sets the _queue.
         /// </summary>
         private readonly TransitBenchmarkCore.BoundedArticleQueue _queue;
         /// <summary>
-        /// Gets or sets the _cts value.
+        /// Gets or sets the _cts.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value.
+        /// Gets or sets the _task.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _depthSum value.
+        /// Gets or sets the _depthSum.
         /// </summary>
         private long _depthSum;
         /// <summary>
-        /// Gets or sets the _byteSum value.
+        /// Gets or sets the _byteSum.
         /// </summary>
         private long _byteSum;
         /// <summary>
-        /// Gets or sets the _count value.
+        /// Gets or sets the _count.
         /// </summary>
         private long _count;
         /// <summary>
-        /// Gets or sets the _minDepth value.
+        /// Gets or sets the _minDepth.
         /// </summary>
         private int _minDepth = int.MaxValue;
         /// <summary>
-        /// Gets or sets the _maxDepth value.
+        /// Gets or sets the _maxDepth.
         /// </summary>
         private int _maxDepth;
         /// <summary>
-        /// Gets or sets the _maxBytes value.
+        /// Gets or sets the _maxBytes.
         /// </summary>
         private long _maxBytes;
 
         /// <summary>
-        /// Performs the queue Sampler operation.
+        /// Implements the queue Sampler contract.
         /// </summary>
         internal QueueSampler(TransitBenchmarkCore.BoundedArticleQueue queue)
         {
@@ -968,28 +974,28 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Gets or sets the min Depth value.
+        /// Gets or sets the min Depth.
         /// </summary>
         internal int MinDepth => _minDepth == int.MaxValue ? 0 : _minDepth;
         /// <summary>
-        /// Gets or sets the max Depth value.
+        /// Gets or sets the max Depth.
         /// </summary>
         internal int MaxDepth => _maxDepth;
         /// <summary>
-        /// Performs the average Depth operation.
+        /// Implements the average Depth contract.
         /// </summary>
         internal double AverageDepth => _count == 0 ? 0 : (double)_depthSum / _count;
         /// <summary>
-        /// Performs the average Bytes operation.
+        /// Implements the average Bytes contract.
         /// </summary>
         internal double AverageBytes => _count == 0 ? 0 : (double)_byteSum / _count;
         /// <summary>
-        /// Gets or sets the max Bytes value.
+        /// Gets or sets the max Bytes.
         /// </summary>
         internal long MaxBytes => _maxBytes;
 
         /// <summary>
-        /// Performs the start operation.
+        /// Runs the start benchmark scenario.
         /// </summary>
         internal void Start()
         {
@@ -1012,7 +1018,7 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Performs the stop operation.
+        /// Runs the stop benchmark scenario.
         /// </summary>
         internal void Stop()
         {
@@ -1036,16 +1042,16 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Defines the runtime Config record struct for benchmark or isolated-regression execution.
+    /// Represents the runtime Config record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct RuntimeConfig(string Host, int Port, bool UseSsl);
     /// <summary>
-    /// Defines the article StageStamp record struct for benchmark or isolated-regression execution.
+    /// Represents the article StageStamp record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct ArticleStageStamp(long GenerationTicks, long EnqueueEndTick, long DequeueTick);
 
     /// <summary>
-    /// Defines the generator Result record struct for benchmark or isolated-regression execution.
+    /// Represents the generator Result record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct GeneratorResult(
         string Label,
@@ -1066,21 +1072,21 @@ internal static class Transit32WorkerExperimentRunner
         double P99Us)
     {
         /// <summary>
-        /// Gets or sets the articles PerSecond value.
+        /// Gets or sets the articles PerSecond.
         /// </summary>
         internal double ArticlesPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Articles / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value.
+        /// Gets or sets the gbps.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Performs the allocated BytesPerArticle operation.
+        /// Implements the allocated BytesPerArticle contract.
         /// </summary>
         internal double AllocatedBytesPerArticle => Articles == 0 ? 0 : (double)AllocatedBytes / Articles;
     }
 
     /// <summary>
-    /// Defines the queue Result record struct for benchmark or isolated-regression execution.
+    /// Represents the queue Result record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct QueueResult(
         string Label,
@@ -1107,29 +1113,29 @@ internal static class Transit32WorkerExperimentRunner
         int PeakActualPending)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value.
+        /// Gets or sets the generated PerSecond.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the dispatched PerSecond value.
+        /// Gets or sets the dispatched PerSecond.
         /// </summary>
         internal double DispatchedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Dispatched / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value.
+        /// Gets or sets the completed PerSecond.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value.
+        /// Gets or sets the gbps.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Performs the allocated BytesPerArticle operation.
+        /// Implements the allocated BytesPerArticle contract.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
 
     /// <summary>
-    /// Defines the real PipelineResult record struct for benchmark or isolated-regression execution.
+    /// Represents the real PipelineResult record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct RealPipelineResult(
         string Label,
@@ -1167,23 +1173,23 @@ internal static class Transit32WorkerExperimentRunner
         Dictionary<int, int> MaxInFlightDistribution)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value.
+        /// Gets or sets the generated PerSecond.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value.
+        /// Gets or sets the completed PerSecond.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the accepted PerSecond value.
+        /// Gets or sets the accepted PerSecond.
         /// </summary>
         internal double AcceptedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Accepted / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value.
+        /// Gets or sets the gbps.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Performs the allocated BytesPerArticle operation.
+        /// Implements the allocated BytesPerArticle contract.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }

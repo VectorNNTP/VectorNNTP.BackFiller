@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for shutdown coordinator dispose semantics, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the shutdown coordinator dispose semantics test suite.
 
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using Xunit;
@@ -16,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ShutdownCoordinatorDisposeSemanticsTests
     {
         /// <summary>
-        /// Exercises dispose  during graceful shutdown  completes without forced escalation signal behavior, including the expected result and failure semantics.
+        /// Confirms the dispose during graceful shutdown completes without forced escalation signal behavior.
         /// </summary>
         [Fact]
         public void Dispose_DuringGracefulShutdown_CompletesWithoutForcedEscalationSignal()
@@ -29,7 +30,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
         }
         /// <summary>
-        /// Exercises dispose  during graceful shutdown  forced shutdown token becomes unusable behavior, including the expected result and failure semantics.
+        /// Confirms the dispose during graceful shutdown forced shutdown token becomes unusable behavior.
         /// </summary>
         [Fact]
         public void Dispose_DuringGracefulShutdown_ForcedShutdownTokenBecomesUnusable()
@@ -43,7 +44,7 @@ namespace VectorNNTP.Backfiller.Tests
                 _ = coordinator.ForcedShutdownToken.IsCancellationRequested);
         }
         /// <summary>
-        /// Exercises dispose  during graceful shutdown  prevents later timer driven forced escalation behavior, including the expected result and failure semantics.
+        /// Confirms the dispose during graceful shutdown prevents later timer driven forced escalation behavior.
         /// </summary>
         [Fact]
         public async Task Dispose_DuringGracefulShutdown_PreventsLaterTimerDrivenForcedEscalation()
@@ -60,7 +61,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);
         }
         /// <summary>
-        /// Exercises signal graceful shutdown  after dispose  is ignored behavior, including the expected result and failure semantics.
+        /// Confirms the signal graceful shutdown after dispose is ignored behavior.
         /// </summary>
         [Fact]
         public void SignalGracefulShutdown_AfterDispose_IsIgnored()
@@ -75,7 +76,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);
         }
         /// <summary>
-        /// Exercises signal forced shutdown  after dispose  is ignored behavior, including the expected result and failure semantics.
+        /// Confirms the signal forced shutdown after dispose is ignored behavior.
         /// </summary>
         [Fact]
         public void SignalForcedShutdown_AfterDispose_IsIgnored()

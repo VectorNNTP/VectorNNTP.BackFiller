@@ -25,7 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class CloudflareTxtRecordClient : ICloudflareTxtRecordClient, IAsyncDisposable
     {
         /// <summary>
-        /// Tracks client for cloudflare txt record client.
+        /// Stores client used by cloudflare txt record client.
         /// </summary>
         private readonly CloudFlareClient _client;
 
@@ -88,7 +88,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates create txt record async for cloudflare txt record client.
+        /// Handles create txt record async for cloudflare txt record client.
         /// </summary>
         public async Task<string> CreateTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
         {
@@ -177,7 +177,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build create failure message for cloudflare txt record client.
+        /// Handles build create failure message for cloudflare txt record client.
         /// </summary>
         private static string BuildCreateFailureMessage(
             string recordName,
@@ -194,7 +194,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build query failure message for cloudflare txt record client.
+        /// Handles build query failure message for cloudflare txt record client.
         /// </summary>
         private static string BuildQueryFailureMessage(
             string zoneId,
@@ -213,7 +213,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build delete failure message for cloudflare txt record client.
+        /// Handles build delete failure message for cloudflare txt record client.
         /// </summary>
         private static string BuildDeleteFailureMessage(
             string recordId,
@@ -237,7 +237,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates append cloudflare details for cloudflare txt record client.
+        /// Handles append cloudflare details for cloudflare txt record client.
         /// </summary>
         private static void AppendCloudflareDetails(
             StringBuilder message,
@@ -262,7 +262,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates append cloudflare collections for cloudflare txt record client.
+        /// Handles append cloudflare collections for cloudflare txt record client.
         /// </summary>
         private static void AppendCloudflareCollections(
             StringBuilder message,

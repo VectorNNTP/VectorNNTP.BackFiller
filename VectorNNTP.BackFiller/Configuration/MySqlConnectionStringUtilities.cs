@@ -6,7 +6,7 @@
 
 // MySqlConnectionStringUtilities.cs -- Canonical interpretation of MySQL connection strings.
 //
-// Provides application-level parsing of MySQL connection strings with dual-path architecture
+// Describes application-level parsing of MySQL connection strings with dual-path architecture
 // to enforce ambiguity detection while maintaining provider-correct typed validation.
 //
 // Architecture (dual-path):
@@ -93,7 +93,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// Utilities for canonical interpretation of MySQL connection strings.
     /// </summary>
     /// <remarks>
-    /// <para>Provides application-level parsing of MySQL connection strings using a dual-path architecture:</para>
+    /// <para>Describes application-level parsing of MySQL connection strings using a dual-path architecture:</para>
     /// <list type="bullet">
     /// <item><description>Path 1: Raw key/value parsing via <see cref="ParseRawKeyValuePairs"/> for ambiguity detection</description></item>
     /// <item><description>Path 2: Provider canonicalization via <see cref="MySqlConnectionStringBuilder"/> for typed validation</description></item>
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Configuration
     {
         // MySqlConnector aliases for server/host (official documentation)
         /// <summary>
-        /// Tracks server aliases for my sql connection string utilities.
+        /// Stores server aliases used by my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> ServerAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -124,7 +124,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for database name
         /// <summary>
-        /// Tracks database aliases for my sql connection string utilities.
+        /// Stores database aliases used by my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> DatabaseAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -135,7 +135,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for username
         /// <summary>
-        /// Tracks username aliases for my sql connection string utilities.
+        /// Stores username aliases used by my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> UsernameAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -149,7 +149,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for password
         /// <summary>
-        /// Tracks password aliases for my sql connection string utilities.
+        /// Stores password aliases used by my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> PasswordAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -509,28 +509,31 @@ namespace VectorNNTP.Backfiller.Configuration
                    HasConflictingAliases(rawPairs, MaxPoolSizeAliases);
         }
 
-        /// <summary>
-        /// Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
-        /// </summary>
-        /// <param name="connectionString">The connection string to parse.</param>
-        /// <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
-        /// <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
-        /// <remarks>
-        /// <para>This parser respects connection string syntax:</para>
-        /// <list type="bullet">
-        /// <item><description>Semicolon (;) as delimiter</description></item>
-        /// <item><description>Equals (=) as key-value separator</description></item>
-        /// <item><description>Single or double quotes for values containing special characters</description></item>
-        /// <item><description>Escaped quotes ("" or '') within quoted values</description></item>
-        /// <item><description>Whitespace trimming around keys and values</description></item>
-        /// </list>
-        /// <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
-        /// <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
-        /// <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
-        /// </remarks>
+        // <summary>
+        // Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
+        // </summary>
+        // <param name="connectionString">The connection string to parse.</param>
+        // <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
+        // <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
+        // <remarks>
+        // <para>This parser respects connection string syntax:</para>
+        // <list type="bullet">
+        // <item><description>Semicolon (;) as delimiter</description></item>
+        // <item><description>Equals (=) as key-value separator</description></item>
+        // <item><description>Single or double quotes for values containing special characters</description></item>
+        // <item><description>Escaped quotes ("" or '') within quoted values</description></item>
+        // <item><description>Whitespace trimming around keys and values</description></item>
+        // </list>
+        // <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
+        // <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
+        // <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
+        // </remarks>
 #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
         /// <summary>
-        /// Coordinates parse raw key value pairs for my sql connection string utilities.
+        /// <param name="connectionString">The connection string to parse.</param>
+        /// <returns>Key-value pairs preserving duplicate entries for ambiguity detection.</returns>
+        /// <exception cref="ArgumentException">Thrown when the connection string syntax is malformed.</exception>
+        /// <remarks>Parsing occurs before provider canonicalization so conflicting aliases remain observable.</remarks>
         /// </summary>
         private static IReadOnlyList<(string Key, string Value)> ParseRawKeyValuePairs(string connectionString)
 #pragma warning restore CA1859

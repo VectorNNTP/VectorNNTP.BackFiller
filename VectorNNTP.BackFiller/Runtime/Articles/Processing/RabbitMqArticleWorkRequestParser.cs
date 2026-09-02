@@ -27,16 +27,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed class RabbitMqArticleWorkRequestParser : IRabbitMqArticleWorkRequestParser
     {
         /// <summary>
-        /// Tracks supported version for rabbit mq article work request parser.
+        /// Stores supported version used by rabbit mq article work request parser.
         /// </summary>
         private const int SupportedVersion = 1;
 
         /// <summary>
-        /// Provides logging for rabbit mq article work request parser.
+        /// Supplies the logger used by rabbit mq article work request parser.
         /// </summary>
         private readonly ILogger<RabbitMqArticleWorkRequestParser> _logger;
         /// <summary>
-        /// Tracks diagnostic correlation id for rabbit mq article work request parser.
+        /// Stores diagnostic correlation id used by rabbit mq article work request parser.
         /// </summary>
         private readonly string? _diagnosticCorrelationId;
 
@@ -168,7 +168,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates should log diagnostic payload for rabbit mq article work request parser.
+        /// Handles should log diagnostic payload for rabbit mq article work request parser.
         /// </summary>
         private bool ShouldLogDiagnosticPayload(string? correlationId)
         {
@@ -178,7 +178,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates log payload diagnostic at parser entry for rabbit mq article work request parser.
+        /// Emits the payload diagnostic at parser entry log event for rabbit mq article work request parser.
         /// </summary>
         private static void LogPayloadDiagnosticAtParserEntry(
             ILogger logger,
@@ -209,7 +209,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates log payload diagnostic json exception for rabbit mq article work request parser.
+        /// Emits the payload diagnostic json exception log event for rabbit mq article work request parser.
         /// </summary>
         private static void LogPayloadDiagnosticJsonException(
             ILogger logger,
@@ -231,7 +231,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates failed for rabbit mq article work request parser.
+        /// Handles failed for rabbit mq article work request parser.
         /// </summary>
         private RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
         {
@@ -267,7 +267,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates try read required int32 for rabbit mq article work request parser.
+        /// Handles try read required int32 for rabbit mq article work request parser.
         /// </summary>
         private static bool TryReadRequiredInt32(JsonElement root, string propertyName, out int value)
         {
@@ -281,7 +281,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates try read required guid for rabbit mq article work request parser.
+        /// Handles try read required guid for rabbit mq article work request parser.
         /// </summary>
         private static bool TryReadRequiredGuid(JsonElement root, string propertyName, out Guid value)
         {
@@ -295,7 +295,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Coordinates try read required string for rabbit mq article work request parser.
+        /// Handles try read required string for rabbit mq article work request parser.
         /// </summary>
         private static bool TryReadRequiredString(JsonElement root, string propertyName, out string? value)
         {

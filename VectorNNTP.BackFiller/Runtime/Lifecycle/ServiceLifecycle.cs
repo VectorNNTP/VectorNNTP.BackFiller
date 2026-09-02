@@ -6,7 +6,7 @@
 
 // ServiceLifecycle.cs -- Explicit application readiness state machine.
 //
-// Tracks the application lifecycle through distinct phases, enabling systemd, load balancers,
+// Defines the application lifecycle through distinct phases, enabling systemd, load balancers,
 // and health checks to distinguish "process running" from "service ready to accept work".
 //
 // State machine:
@@ -266,27 +266,27 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         }
 
         /// <summary>
-        /// Tracks sync for service lifecycle.
+        /// Stores sync used by service lifecycle.
         /// </summary>
         private readonly object _sync = new();
         /// <summary>
-        /// Tracks time provider for service lifecycle.
+        /// Stores time provider used by service lifecycle.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Provides logging for service lifecycle.
+        /// Supplies the logger used by service lifecycle.
         /// </summary>
         private readonly ILogger<ServiceLifecycle> _logger;
         /// <summary>
-        /// Tracks current state for service lifecycle.
+        /// Stores current state used by service lifecycle.
         /// </summary>
         private LifecycleState _currentState = LifecycleState.Starting;
         /// <summary>
-        /// Tracks state entered timestamp for service lifecycle.
+        /// Stores state entered timestamp used by service lifecycle.
         /// </summary>
         private long _stateEnteredTimestamp; // Monotonic timestamp from TimeProvider.GetTimestamp()
         /// <summary>
-        /// Tracks transition history for service lifecycle.
+        /// Stores transition history used by service lifecycle.
         /// </summary>
         private readonly List<StateTransition> _transitionHistory = [];
         /// <summary>
@@ -294,11 +294,11 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// </summary>
         private const int MaxHistorySize = 50;
         /// <summary>
-        /// Tracks is notifying observers for service lifecycle.
+        /// Stores is notifying observers used by service lifecycle.
         /// </summary>
         private bool _isNotifyingObservers; // Prevents transitions during observer notification (reentrancy + concurrency)
         /// <summary>
-        /// Tracks slow phase warning logged for service lifecycle.
+        /// Stores slow phase warning logged used by service lifecycle.
         /// </summary>
         private bool _slowPhaseWarningLogged; // One warning per phase
 
@@ -563,9 +563,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1100,
             Level = LogLevel.Error,
             Message = "TransitionTo({NewState}) cannot be called while observers are being notified. Observers MUST NOT call TransitionTo() from StateTransitioned handlers (reentrancy forbidden). Concurrent transitions from other threads are also blocked during notification.")]
-        /// <summary>
-        /// Coordinates log transition during observer notification rejected for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Emits the transition during observer notification rejected log event for service lifecycle.
+        // </summary>
         private static partial void LogTransitionDuringObserverNotificationRejected(
             ILogger logger,
             LifecycleState newState);
@@ -574,9 +574,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1101,
             Level = LogLevel.Warning,
             Message = "State transition ignored: already in {State}")]
-        /// <summary>
-        /// Coordinates log state transition ignored already in state for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Emits the state transition ignored already in state log event for service lifecycle.
+        // </summary>
         private static partial void LogStateTransitionIgnoredAlreadyInState(
             ILogger logger,
             LifecycleState state);
@@ -585,9 +585,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1102,
             Level = LogLevel.Error,
             Message = "Invalid state transition: {CurrentState} -> {TargetState} (allowed: {AllowedTransitions})")]
-        /// <summary>
-        /// Coordinates log invalid state transition for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Emits the invalid state transition log event for service lifecycle.
+        // </summary>
         private static partial void LogInvalidStateTransition(
             ILogger logger,
             LifecycleState currentState,
@@ -598,9 +598,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1103,
             Level = LogLevel.Information,
             Message = "State transition: {From} -> {To} (reason: {Reason}; elapsed={Elapsed:F2}s)")]
-        /// <summary>
-        /// Coordinates log state transition for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Emits the state transition log event for service lifecycle.
+        // </summary>
         private static partial void LogStateTransition(
             ILogger logger,
             LifecycleState from,
@@ -612,9 +612,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1104,
             Level = LogLevel.Error,
             Message = "Lifecycle transition subscriber failed for {From} -> {To} (transition completed successfully)")]
-        /// <summary>
-        /// Coordinates log lifecycle transition subscriber failed for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Emits the lifecycle transition subscriber failed log event for service lifecycle.
+        // </summary>
         private static partial void LogLifecycleTransitionSubscriberFailed(
             ILogger logger,
             Exception exception,
@@ -625,9 +625,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1105,
             Level = LogLevel.Warning,
             Message = "Slow phase warning: {Phase} has taken {Elapsed:F2}s (threshold: {Threshold:F2}s)")]
-        /// <summary>
-        /// Coordinates log slow phase warning exceeded for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Emits the slow phase warning exceeded log event for service lifecycle.
+        // </summary>
         private static partial void LogSlowPhaseWarningExceeded(
             ILogger logger,
             string phase,

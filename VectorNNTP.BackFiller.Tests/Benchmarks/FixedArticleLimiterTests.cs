@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for fixed article limiter, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the fixed article limiter test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;

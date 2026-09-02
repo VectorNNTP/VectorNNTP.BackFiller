@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// AsyncSinkStressRunner: defines the benchmark entry point or scenario for controlled performance validation.
+// AsyncSinkStressRunner: exercises asynchronous logging sinks under burst, sustained-rate, and shutdown workloads.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -14,29 +14,30 @@ using Serilog.Sinks.Async;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the async SinkStressRunner class for benchmark or isolated-regression execution.
+/// Represents the async SinkStressRunner class used by the benchmark or regression gate.
 /// </summary>
 internal static class AsyncSinkStressRunner
 {
     /// <summary>
-    /// Gets or sets the default BufferSize value.
+    /// Gets or sets the default BufferSize.
     /// </summary>
     private const int DefaultBufferSize = 10_000;
     /// <summary>
-    /// Gets or sets the producer Counts value.
+    /// Gets or sets the producer Counts.
     /// </summary>
     private static readonly int[] ProducerCounts = [1, 2, 4, 8, 16, 32];
     /// <summary>
-    /// Gets or sets the sustained RatesPerSecond value.
+    /// Gets or sets the sustained RatesPerSecond.
     /// </summary>
     private static readonly int[] SustainedRatesPerSecond = [1_000, 10_000, 50_000, 100_000];
     /// <summary>
-    /// Performs the sustained Duration operation.
+    /// Implements the sustained Duration contract.
     /// </summary>
     private static readonly TimeSpan SustainedDuration = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Performs the run AllAsync operation.
+    /// Runs AllAsync.
+
     /// </summary>
     public static async Task RunAllAsync()
     {
@@ -53,7 +54,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the run BurstMatrixAsync operation.
+    /// Runs BurstMatrixAsync.
+
     /// </summary>
     private static async Task RunBurstMatrixAsync()
     {
@@ -63,7 +65,7 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
         /// <summary>
-        /// Gets or sets the events PerProducer value.
+        /// Gets or sets the events PerProducer.
         /// </summary>
         const int eventsPerProducer = 50_000;
 
@@ -75,7 +77,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the run SustainedMatrixAsync operation.
+    /// Runs SustainedMatrixAsync.
+
     /// </summary>
     private static async Task RunSustainedMatrixAsync()
     {
@@ -95,7 +98,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the run ShutdownFlushScenarioAsync operation.
+    /// Runs ShutdownFlushScenarioAsync.
+
     /// </summary>
     private static async Task RunShutdownFlushScenarioAsync()
     {
@@ -103,11 +107,11 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("=== Shutdown Flush Scenario ===");
 
         /// <summary>
-        /// Gets or sets the producer Count value.
+        /// Gets or sets the producer Count.
         /// </summary>
         const int producerCount = 8;
         /// <summary>
-        /// Gets or sets the events PerProducer value.
+        /// Gets or sets the events PerProducer.
         /// </summary>
         const int eventsPerProducer = 75_000;
 
@@ -122,7 +126,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the run BurstScenarioAsync operation.
+    /// Runs BurstScenarioAsync.
+
     /// </summary>
     private static async Task<StressScenarioResult> RunBurstScenarioAsync(int producerCount, int eventsPerProducer)
     {
@@ -189,7 +194,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the run SustainedScenarioAsync operation.
+    /// Runs SustainedScenarioAsync.
+
     /// </summary>
     private static async Task<StressScenarioResult> RunSustainedScenarioAsync(int producerCount, int targetRatePerSecond, TimeSpan duration)
     {
@@ -268,7 +274,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the build ProductionLikeLogger operation.
+    /// Builds ProductionLikeLogger.
+
     /// </summary>
     private static Serilog.ILogger BuildProductionLikeLogger(string outputDirectory, SequenceCountingSink countingSink)
     {
@@ -301,7 +308,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the build Result operation.
+    /// Builds Result.
+
     /// </summary>
     private static StressScenarioResult BuildResult(
         int producerCount,
@@ -333,7 +341,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the create TempOutputDirectory operation.
+    /// Creates TempOutputDirectory.
+
     /// </summary>
     private static string CreateTempOutputDirectory(string scenario)
     {
@@ -343,7 +352,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the try DeleteDirectory operation.
+    /// Implements the try DeleteDirectory contract.
     /// </summary>
     private static void TryDeleteDirectory(string path)
     {
@@ -361,7 +370,8 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Performs the to Microseconds operation.
+    /// Converts to Microseconds.
+
     /// </summary>
     private static double ToMicroseconds(long ticks)
     {
@@ -369,22 +379,22 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Defines the sequence CountingSink class for benchmark or isolated-regression execution.
+    /// Represents the sequence CountingSink class used by the benchmark or regression gate.
     /// </summary>
     private sealed class SequenceCountingSink : Serilog.Core.ILogEventSink
     {
         /// <summary>
-        /// Gets or sets the _writtenCount value.
+        /// Gets or sets the _writtenCount.
         /// </summary>
         private long _writtenCount;
 
         /// <summary>
-        /// Performs the written Count operation.
+        /// Implements the written Count contract.
         /// </summary>
         public long WrittenCount => Interlocked.Read(ref _writtenCount);
 
         /// <summary>
-        /// Performs the emit operation.
+        /// Runs the emit benchmark scenario.
         /// </summary>
         public void Emit(LogEvent logEvent)
         {
@@ -394,12 +404,12 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Defines the percentile Set record struct for benchmark or isolated-regression execution.
+    /// Represents the percentile Set record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct PercentileSet(double P50Microseconds, double P95Microseconds, double P99Microseconds, double MaxMicroseconds)
     {
         /// <summary>
-        /// Performs the from operation.
+        /// Runs the from benchmark scenario.
         /// </summary>
         public static PercentileSet From(IEnumerable<double> values)
         {
@@ -417,7 +427,7 @@ internal static class AsyncSinkStressRunner
         }
 
         /// <summary>
-        /// Performs the percentile operation.
+        /// Runs the percentile benchmark scenario.
         /// </summary>
         private static double Percentile(double[] ordered, double percentile)
         {
@@ -440,7 +450,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Defines the stress ScenarioResult record struct for benchmark or isolated-regression execution.
+    /// Represents the stress ScenarioResult record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct StressScenarioResult(
         int ProducerCount,

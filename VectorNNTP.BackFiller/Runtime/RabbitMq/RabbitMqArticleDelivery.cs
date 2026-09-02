@@ -8,7 +8,7 @@
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Tracks admission lifecycle for one RabbitMQ delivery accepted by a logical consumer session.
+    /// Stores admission lifecycle used by one RabbitMQ delivery accepted by a logical consumer session.
     /// </summary>
     internal interface IRabbitMqAdmittedDeliveryTracker
     {
@@ -35,6 +35,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// <param name="ReplyTo">Optional RabbitMQ BasicProperties ReplyTo value set by the publisher.</param>
     /// <param name="Payload">Raw RabbitMQ payload bytes.</param>
     /// <param name="CancellationToken">Delivery cancellation token associated with delivery lifecycle semantics.</param>
+    /// <param name="Settlement">Settlement implementation used to acknowledge or reject the delivery.</param>
     /// <param name="AdmissionTracker">Optional admitted-delivery tracker used by session drain accounting.</param>
     internal sealed record RabbitMqArticleDelivery(
         string Backbone,

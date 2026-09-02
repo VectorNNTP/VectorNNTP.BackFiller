@@ -22,7 +22,7 @@ using VectorNNTP.Backfiller.Startup.Commands;
 namespace VectorNNTP.Backfiller
 {
     /// <summary>
-    /// Provides the process entry point for the backfiller host.
+    /// Supplies the process entry point for the backfiller host.
     /// </summary>
     /// <remarks>
     /// <para><b>Execution model:</b> This partial class now serves primarily as the entry point while startup responsibilities

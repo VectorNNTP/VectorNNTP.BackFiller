@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for transit benchmark cli options, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the transit benchmark cli options test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -16,7 +17,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     public sealed class TransitBenchmarkCliOptionsTests
     {
         /// <summary>
-        /// Exercises parse  when article count provided  parses expected value behavior, including the expected result and failure semantics.
+        /// Confirms the parse when article count provided parses expected value behavior.
         /// </summary>
         [Fact]
         public void Parse_WhenArticleCountProvided_ParsesExpectedValue()

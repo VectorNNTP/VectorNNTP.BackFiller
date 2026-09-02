@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for measurement execution engine drain lifecycle, covering service lifecycle and shutdown contracts; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the measurement execution engine drain lifecycle test suite.
 
 using System.Diagnostics;
 using System.Net;
@@ -154,6 +155,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// <summary>
         /// Creates a TransitPublisher configured for loopback fake-server lifecycle tests.
         /// </summary>
+        /// <returns>The value returned by the create publisher helper.</returns>
+        /// <summary>
+        /// Confirms the create publisher behavior.
+        /// </summary>
+        /// <param name="port">The port used by this test scenario.</param>
+        /// <param name="connectionPoolSize">The connection pool size used by this test scenario.</param>
+        /// <param name="perConnectionPipelineDepth">The per connection pipeline depth used by this test scenario.</param>
+        /// <returns>The value returned by the create publisher helper.</returns>
         private static TransitPublisher CreatePublisher(int port, int connectionPoolSize, int perConnectionPipelineDepth)
         {
             BackFillerRuntimeOptions options = new(
@@ -191,7 +200,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// </summary>
             private readonly Func<NetworkStream, CancellationToken, Task> _session;
             /// <summary>
-            /// Exercises  cts behavior, including the expected result and failure semantics.
+            /// Confirms  cts behavior.
             /// </summary>
             private readonly CancellationTokenSource _cts = new();
             /// <summary>
@@ -200,7 +209,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             private readonly Task _acceptLoop;
 
             /// <summary>
-            /// Exercises drain lifecycle fake server behavior, including the expected result and failure semantics.
+        /// Confirms the drain lifecycle fake server behavior.
             /// </summary>
             private DrainLifecycleFakeServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {
@@ -212,6 +221,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Starts the fake server on an ephemeral loopback port.
             /// </summary>
+        /// <returns>The value returned by the start async helper.</returns>
+        /// <summary>
+        /// Confirms the start async behavior.
+        /// </summary>
+        /// <param name="NetworkStream">The network stream used by this test scenario.</param>
+        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
+        /// <param name="session">The session used by this test scenario.</param>
+        /// <returns>The value returned by the start async helper.</returns>
             internal static Task<DrainLifecycleFakeServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)
             {
                 TcpListener listener = new(IPAddress.Loopback, 0);
@@ -227,6 +244,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Reads one CRLF-delimited ASCII line.
             /// </summary>
+        /// <returns>The value returned by the read line async helper.</returns>
+        /// <summary>
+        /// Confirms the read line async behavior.
+        /// </summary>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the read line async helper.</returns>
             internal static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> buffer = [];
@@ -252,6 +276,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Reads one dot-terminated TAKETHIS payload body.
             /// </summary>
+        /// <returns>The value returned by the read takethis payload async helper.</returns>
+        /// <summary>
+        /// Confirms the read takethis payload async behavior.
+        /// </summary>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the read takethis payload async helper.</returns>
             internal static async Task<byte[]> ReadTakethisPayloadAsync(Stream stream, CancellationToken cancellationToken)
             {
                 using MemoryStream payload = new();
@@ -300,6 +331,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Verifies that the next command line matches the expected value.
             /// </summary>
+        /// <returns>The value returned by the expect command async helper.</returns>
+        /// <summary>
+        /// Confirms the expect command async behavior.
+        /// </summary>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="expected">The expected used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the expect command async helper.</returns>
             internal static async Task ExpectCommandAsync(Stream stream, string expected, CancellationToken cancellationToken)
             {
                 string line = await ReadLineAsync(stream, cancellationToken);
@@ -309,6 +348,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Writes one CRLF-delimited ASCII line.
             /// </summary>
+        /// <returns>The value returned by the write line async helper.</returns>
+        /// <summary>
+        /// Confirms the write line async behavior.
+        /// </summary>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="line">The line used by this test scenario.</param>
+        /// <returns>The value returned by the write line async helper.</returns>
             internal static Task WriteLineAsync(Stream stream, string line)
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
@@ -316,6 +362,10 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <inheritdoc />
+        /// <summary>
+        /// Confirms the dispose async behavior.
+        /// </summary>
+        /// <returns>The value returned by the dispose async helper.</returns>
             public async ValueTask DisposeAsync()
             {
                 _cts.Cancel();
@@ -335,6 +385,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Accepts one or more sessions until cancellation.
             /// </summary>
+        /// <returns>The value returned by the accept loop async helper.</returns>
+        /// <summary>
+        /// Confirms the accept loop async behavior.
+        /// </summary>
+        /// <returns>The value returned by the accept loop async helper.</returns>
             private async Task AcceptLoopAsync()
             {
                 while (!_cts.IsCancellationRequested)
@@ -351,6 +406,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Reads exactly one byte from the stream.
             /// </summary>
+        /// <returns>The value returned by the read byte async helper.</returns>
+        /// <summary>
+        /// Confirms the read byte async behavior.
+        /// </summary>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the read byte async helper.</returns>
             private static async ValueTask<byte> ReadByteAsync(Stream stream, CancellationToken cancellationToken)
             {
                 byte[] single = new byte[1];

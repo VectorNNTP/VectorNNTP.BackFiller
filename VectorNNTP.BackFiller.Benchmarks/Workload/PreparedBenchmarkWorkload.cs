@@ -9,21 +9,21 @@ using System.Diagnostics.CodeAnalysis;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the prepared BenchmarkWorkload class for benchmark or isolated-regression execution.
+/// Represents the prepared BenchmarkWorkload class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class PreparedBenchmarkWorkload : IDisposable
 {
     /// <summary>
-    /// Gets or sets the _messageIds value.
+    /// Gets or sets the _messageIds.
     /// </summary>
     private readonly string[] _messageIds;
     /// <summary>
-    /// Gets or sets the _nextMessageIndex value.
+    /// Gets or sets the _nextMessageIndex.
     /// </summary>
     private int _nextMessageIndex;
 
     /// <summary>
-    /// Performs the prepared BenchmarkWorkload operation.
+    /// Implements the prepared BenchmarkWorkload contract.
     /// </summary>
     internal PreparedBenchmarkWorkload(string[] messageIds, byte[] reusablePayloadBytes, WorkloadPreparationSummary summary)
     {
@@ -33,22 +33,22 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
     }
 
     /// <summary>
-    /// Gets or sets the reusable ArticlePayload value.
+    /// Gets or sets the reusable ArticlePayload.
     /// </summary>
     internal ReadOnlyMemory<byte> ReusableArticlePayload { get; }
 
     /// <summary>
-    /// Gets or sets the payload Length value.
+    /// Gets or sets the payload Length.
     /// </summary>
     internal int PayloadLength => ReusableArticlePayload.Length;
 
     /// <summary>
-    /// Gets or sets the preparation Summary value.
+    /// Gets or sets the preparation Summary.
     /// </summary>
     internal WorkloadPreparationSummary PreparationSummary { get; }
 
     /// <summary>
-    /// Performs the try TakeNextMessageId operation.
+    /// Implements the try TakeNextMessageId contract.
     /// </summary>
     internal bool TryTakeNextMessageId([NotNullWhen(true)] out string? messageId)
     {
@@ -64,7 +64,7 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
     }
 
     /// <summary>
-    /// Performs the dispose operation.
+    /// Releases resources held by this instance.
     /// </summary>
     public void Dispose()
     {

@@ -14,19 +14,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed class RabbitMqArticleResultSink : IArticleWorkResultSink
     {
         /// <summary>
-        /// Tracks planner for rabbit mq article result sink.
+        /// Stores planner used by rabbit mq article result sink.
         /// </summary>
         private readonly IArticleWorkDispositionPlanner _planner;
         /// <summary>
-        /// Tracks response factory for rabbit mq article result sink.
+        /// Stores response factory used by rabbit mq article result sink.
         /// </summary>
         private readonly IArticleWorkResponseFactory _responseFactory;
         /// <summary>
-        /// Tracks response publisher for rabbit mq article result sink.
+        /// Stores response publisher used by rabbit mq article result sink.
         /// </summary>
         private readonly IRabbitMqArticleResponsePublisher _responsePublisher;
         /// <summary>
-        /// Provides logging for rabbit mq article result sink.
+        /// Supplies the logger used by rabbit mq article result sink.
         /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
 

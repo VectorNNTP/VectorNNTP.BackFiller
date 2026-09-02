@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for my sql nntp account snapshot provider cancellation, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the my sql nntp account snapshot provider cancellation test suite.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -17,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class MySqlNntpAccountSnapshotProviderCancellationTests
     {
         /// <summary>
-        /// Exercises load initial snapshot async  does not apply provider owned timeout and preserves snapshot until caller cancels behavior, including the expected result and failure semantics.
+        /// Confirms the load initial snapshot async does not apply provider owned timeout and preserves snapshot until caller cancels behavior.
         /// </summary>
         [Fact]
         public async Task LoadInitialSnapshotAsync_DoesNotApplyProviderOwnedTimeoutAndPreservesSnapshotUntilCallerCancels()
@@ -60,8 +61,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build account behavior, including the expected result and failure semantics.
+        /// Confirms the build account behavior.
         /// </summary>
+        /// <returns>The value returned by the build account helper.</returns>
+        /// <summary>
+        /// Confirms the build account behavior.
+        /// </summary>
+        /// <param name="entryId">The entry id used by this test scenario.</param>
+        /// <returns>The value returned by the build account helper.</returns>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {
             return new NntpAccountSnapshot(

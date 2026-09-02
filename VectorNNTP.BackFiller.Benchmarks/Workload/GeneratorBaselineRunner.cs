@@ -9,25 +9,26 @@ using System.Diagnostics;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the generator BaselineRunner class for benchmark or isolated-regression execution.
+/// Represents the generator BaselineRunner class used by the benchmark or regression gate.
 /// </summary>
 internal static class GeneratorBaselineRunner
 {
     /// <summary>
-    /// Gets or sets the default ArticleTargetBytes value.
+    /// Gets or sets the default ArticleTargetBytes.
     /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
     /// <summary>
-    /// Gets or sets the default WarmupSeconds value.
+    /// Gets or sets the default WarmupSeconds.
     /// </summary>
     private const int DefaultWarmupSeconds = 10;
     /// <summary>
-    /// Gets or sets the default GeneratorMeasurementSeconds value.
+    /// Gets or sets the default GeneratorMeasurementSeconds.
     /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;
 
     /// <summary>
-    /// Performs the run Async operation.
+    /// Runs Async.
+
     /// </summary>
     internal static async Task RunAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {

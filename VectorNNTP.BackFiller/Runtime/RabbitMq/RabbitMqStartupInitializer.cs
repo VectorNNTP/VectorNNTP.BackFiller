@@ -24,11 +24,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         ILogger<RabbitMqStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Tracks connection manager for rabbit mq startup initializer.
+        /// Stores connection manager used by rabbit mq startup initializer.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         /// <summary>
-        /// Tracks topology initializer for rabbit mq startup initializer.
+        /// Stores topology initializer used by rabbit mq startup initializer.
         /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
         /// <summary>
@@ -36,11 +36,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider = accountSnapshotProvider ?? throw new ArgumentNullException(nameof(accountSnapshotProvider));
         /// <summary>
-        /// Tracks runtime options for rabbit mq startup initializer.
+        /// Stores runtime options used by rabbit mq startup initializer.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
-        /// Provides logging for rabbit mq startup initializer.
+        /// Supplies the logger used by rabbit mq startup initializer.
         /// </summary>
         private readonly ILogger<RabbitMqStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -77,16 +77,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _connectionManager.DisposeAsync().ConfigureAwait(false);
         }
 
-        [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
-        /// <summary>
-        /// Coordinates log startup initialization beginning for rabbit mq startup initializer.
+                /// <summary>
+        /// Emits the startup initialization beginning log event for rabbit mq startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
         private static partial void LogStartupInitializationBeginning(ILogger logger);
 
-        [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
-        /// <summary>
-        /// Coordinates log startup initialization completed for rabbit mq startup initializer.
+                /// <summary>
+        /// Emits the startup initialization completed log event for rabbit mq startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
         private static partial void LogStartupInitializationCompleted(ILogger logger, RabbitMqInfrastructureState state, int backboneCount);
     }
 }

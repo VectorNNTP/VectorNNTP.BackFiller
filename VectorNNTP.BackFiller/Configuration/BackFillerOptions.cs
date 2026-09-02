@@ -6,7 +6,7 @@
 
 // BackFillerOptions.cs -- Strongly-typed configuration for BackFiller service settings.
 //
-// Provides validation for BackFiller configuration section including network binding configuration.
+// Supplies validation for BackFiller configuration section including network binding configuration.
 //
 // Validation rules for BindAddress:
 //   - May be omitted; omitted means bind to all interfaces
@@ -560,7 +560,7 @@ namespace VectorNNTP.Backfiller.Configuration
     internal sealed class ShutdownOptions : IValidatableObject
     {
         /// <summary>
-        /// Tracks minimum grace period seconds for back filler options.
+        /// Stores minimum grace period seconds used by back filler options.
         /// </summary>
         internal const int MinimumGracePeriodSeconds = 5;
         /// <summary>
@@ -2004,7 +2004,7 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class LetsEncryptValidator
     {
         /// <summary>
-        /// Tracks email validator for back filler options.
+        /// Stores email validator used by back filler options.
         /// </summary>
         private static readonly EmailAddressAttribute EmailValidator = new();
 

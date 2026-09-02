@@ -2,20 +2,23 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Metrics/MetricMathHelpers: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+// Metrics/MetricMathHelpers: supplies numerically stable conversions and summary calculations for measurements.
 
 using System.Diagnostics;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the metric MathHelpers class for benchmark or isolated-regression execution.
+/// Represents the metric MathHelpers class used by the benchmark or regression gate.
 /// </summary>
 internal static class MetricMathHelpers
 {
     /// <summary>
-    /// Performs the compute PercentileMicroseconds operation.
+    /// Computes a nearest-rank latency percentile in microseconds from sorted stopwatch ticks.
     /// </summary>
+    /// <param name="sortedLatencyTicks">Latency ticks sorted in ascending order.</param>
+    /// <param name="percentile">Percentile in the range 0 through 1; values outside the range are clamped.</param>
+    /// <returns>The selected latency in microseconds, or zero when no samples are present.</returns>
     internal static double ComputePercentileMicroseconds(List<long> sortedLatencyTicks, double percentile)
     {
         ArgumentNullException.ThrowIfNull(sortedLatencyTicks);
@@ -32,7 +35,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the classify DepthBucket operation.
+    /// Implements the classify DepthBucket contract.
     /// </summary>
     internal static int ClassifyDepthBucket(int pending)
     {
@@ -44,7 +47,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the percentile Us operation.
+    /// Implements the percentile Us contract.
     /// </summary>
     internal static double PercentileUs(List<long> samples, double percentile)
     {
@@ -60,7 +63,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the ticks ToUs operation.
+    /// Implements the ticks ToUs contract.
     /// </summary>
     internal static double TicksToUs(double ticks)
     {
@@ -73,7 +76,8 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the normalize Min operation.
+    /// Normalizes Min.
+
     /// </summary>
     internal static long NormalizeMin(long value)
     {
@@ -81,7 +85,8 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the compute Average operation.
+    /// Computes Average.
+
     /// </summary>
     internal static double ComputeAverage(long sum, long count)
     {

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for rabbit mq configuration binding, covering configuration and validation contracts; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the rabbit mq configuration binding test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Configuration;
@@ -17,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqConfigurationBindingTests
     {
         /// <summary>
-        /// Exercises back filler rabbit mq section  binds all current settings behavior, including the expected result and failure semantics.
+        /// Confirms the back filler rabbit mq section binds all current settings behavior.
         /// </summary>
         [Fact]
         public void BackFillerRabbitMqSection_BindsAllCurrentSettings()

@@ -12,13 +12,16 @@ using System.Text;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the runtime IdentityGuard class for benchmark or isolated-regression execution.
+/// Verifies that benchmark execution uses the expected benchmark and production assembly identities.
 /// </summary>
 internal static class RuntimeIdentityGuard
 {
     /// <summary>
-    /// Performs the ensure Matches operation.
+    /// Compares expected build provenance with loaded assemblies and throws on hard-identity mismatches.
     /// </summary>
+    /// <param name="expected">Expected paths, versions, framework, and architecture.</param>
+    /// <param name="runtimeIdentity">Identity captured from the current process.</param>
+    /// <exception cref="InvalidOperationException">Thrown when required expectations are missing or identities differ.</exception>
     internal static void EnsureMatches(RuntimeIdentityExpectation expected, RuntimeExecutionIdentity runtimeIdentity)
     {
         if (string.IsNullOrWhiteSpace(expected.ExpectedAssemblyPath) ||
@@ -238,7 +241,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the resolve LoadedProductionAssembly operation.
+    /// Resolves LoadedProductionAssembly.
+
     /// </summary>
     private static Assembly? ResolveLoadedProductionAssembly()
     {
@@ -247,7 +251,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the resolve ActualProductionAssemblyPath operation.
+    /// Resolves ActualProductionAssemblyPath.
+
     /// </summary>
     private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
     {
@@ -262,7 +267,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the compute Sha256 operation.
+    /// Computes Sha256.
+
     /// </summary>
     private static string ComputeSha256(string filePath)
     {
@@ -272,7 +278,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the is UnknownIdentityValue operation.
+    /// Implements the is UnknownIdentityValue contract.
     /// </summary>
     private static bool IsUnknownIdentityValue(string? value)
     {
@@ -280,7 +286,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the normalize TargetFramework operation.
+    /// Normalizes TargetFramework.
+
     /// </summary>
     private static string NormalizeTargetFramework(string? value)
     {

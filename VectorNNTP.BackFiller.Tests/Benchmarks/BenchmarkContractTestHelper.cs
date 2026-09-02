@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for benchmark contract test helper, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the benchmark contract test helper test suite.
 
 using System.Diagnostics;
 using System.Reflection;
@@ -15,12 +16,12 @@ using VectorNNTP.BackFiller.Benchmarks;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Covers benchmark contract test helper behavior and invariants exercised by this test suite.
+        /// Confirms the benchmark contract test helper behavior.
     /// </summary>
     internal static class BenchmarkContractTestHelper
     {
         /// <summary>
-        /// Exercises runtime identity behavior, including the expected result and failure semantics.
+        /// Confirms runtime identity behavior.
         /// </summary>
         private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
         /// <summary>
@@ -29,14 +30,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
 
         /// <summary>
-        /// Exercises create benchmark result method behavior, including the expected result and failure semantics.
+        /// Confirms create benchmark result method behavior.
         /// </summary>
         private static readonly MethodInfo CreateBenchmarkResultMethod = typeof(BenchmarkResultFactory)
             .GetMethod("Create", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new InvalidOperationException("BenchmarkResultFactory.Create was not found.");
 
         /// <summary>
-        /// Exercises create config behavior, including the expected result and failure semantics.
+        /// Confirms the create config behavior.
         /// </summary>
         internal static TransitBenchmarkConfig CreateConfig(
             double measurementSeconds = 10,
@@ -70,8 +71,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create workload preparation behavior, including the expected result and failure semantics.
+        /// Confirms the create workload preparation behavior.
         /// </summary>
+        /// <returns>The value returned by the create workload preparation helper.</returns>
+        /// <summary>
+        /// Confirms the create workload preparation behavior.
+        /// </summary>
+        /// <returns>The value returned by the create workload preparation helper.</returns>
         internal static WorkloadPreparationSummary CreateWorkloadPreparation()
         {
             return new WorkloadPreparationSummary(
@@ -84,7 +90,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create measurement snapshot behavior, including the expected result and failure semantics.
+        /// Confirms the create measurement snapshot behavior.
         /// </summary>
         internal static MeasurementSnapshot CreateMeasurementSnapshot(
             long generatedCount = 100,
@@ -131,8 +137,16 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create runtime metrics with snapshot values behavior, including the expected result and failure semantics.
+        /// Confirms the create runtime metrics with snapshot values behavior.
         /// </summary>
+        /// <returns>The value returned by the create runtime metrics with snapshot values helper.</returns>
+        /// <summary>
+        /// Confirms the create runtime metrics with snapshot values behavior.
+        /// </summary>
+        /// <param name="workingSetBytes">The working set bytes used by this test scenario.</param>
+        /// <param name="gcHeapBytes">The gc heap bytes used by this test scenario.</param>
+        /// <param name="allocatedBytes">The allocated bytes used by this test scenario.</param>
+        /// <returns>The value returned by the create runtime metrics with snapshot values helper.</returns>
         internal static RuntimeMetrics CreateRuntimeMetricsWithSnapshotValues(long workingSetBytes, long gcHeapBytes, long allocatedBytes)
         {
             RuntimeMetrics runtime = new();
@@ -147,8 +161,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create measurement metrics with forensic sample behavior, including the expected result and failure semantics.
+        /// Confirms the create measurement metrics with forensic sample behavior.
         /// </summary>
+        /// <returns>The value returned by the create measurement metrics with forensic sample helper.</returns>
+        /// <summary>
+        /// Confirms the create measurement metrics with forensic sample behavior.
+        /// </summary>
+        /// <returns>The value returned by the create measurement metrics with forensic sample helper.</returns>
         internal static MeasurementMetrics CreateMeasurementMetricsWithForensicSample()
         {
             MeasurementMetrics metrics = new(articleBytes: 1_000_000);
@@ -180,7 +199,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises invoke create benchmark result behavior, including the expected result and failure semantics.
+        /// Confirms the invoke create benchmark result behavior.
         /// </summary>
         internal static BenchmarkResult InvokeCreateBenchmarkResult(
             TransitBenchmarkConfig config,
@@ -226,8 +245,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create publisher for contracts behavior, including the expected result and failure semantics.
+        /// Confirms the create publisher for contracts behavior.
         /// </summary>
+        /// <returns>The value returned by the create publisher for contracts helper.</returns>
+        /// <summary>
+        /// Confirms the create publisher for contracts behavior.
+        /// </summary>
+        /// <returns>The value returned by the create publisher for contracts helper.</returns>
         private static TransitPublisher CreatePublisherForContracts()
         {
             BackFillerRuntimeOptions runtimeOptions = new(

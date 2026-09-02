@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// AssemblyInfo: defines the benchmark entry point or scenario for controlled performance validation.
+// AssemblyInfo: supplies build metadata embedded in the benchmark assembly for runtime identity checks.
 
 using System.Runtime.CompilerServices;
 

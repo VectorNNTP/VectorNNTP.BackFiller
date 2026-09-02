@@ -15,7 +15,7 @@ namespace VectorNNTP.Backfiller.Startup
     internal static class BuildInfoService
     {
         /// <summary>
-        /// Tracks build info for build info service.
+        /// Stores build info used by build info service.
         /// </summary>
         private static BuildInfo? _buildInfo;
 
@@ -59,7 +59,7 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Gets the full version string suitable for console display.
+        /// Returns the full version string suitable for console display.
         /// </summary>
         /// <returns>The full version string.</returns>
         internal static string GetFullVersionString()
@@ -68,7 +68,7 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Gets the initialized build information snapshot.
+        /// Returns the initialized build information snapshot.
         /// </summary>
         /// <returns>The current build information snapshot.</returns>
         private static BuildInfo GetBuildInfo()

@@ -31,8 +31,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal static class TransitDotStuffing
     {
         /// <summary>
-        /// Coordinates get required destination length for transit dot stuffing.
+        /// Calculates the destination size required after dot-stuffing and optional trailing-CRLF insertion.
         /// </summary>
+        /// <param name="source">Source article bytes.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">Whether a final CRLF is added when the source does not end in LF.</param>
+        /// <param name="stuffedDotCount">Receives the number of leading line dots that require escaping.</param>
+        /// <returns>The required destination length in bytes.</returns>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
             stuffedDotCount = 0;
@@ -71,7 +75,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff for transit dot stuffing.
+        /// Handles try dot stuff for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuff(
             ReadOnlySpan<byte> source,
@@ -90,7 +94,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff baseline byte loop for transit dot stuffing.
+        /// Handles try dot stuff baseline byte loop for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuffBaselineByteLoop(
             ReadOnlySpan<byte> source,
@@ -147,7 +151,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff bulk line oriented single pass for transit dot stuffing.
+        /// Handles try dot stuff bulk line oriented single pass for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuffBulkLineOrientedSinglePass(
             ReadOnlySpan<byte> source,
@@ -205,7 +209,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff bulk line oriented two pass for transit dot stuffing.
+        /// Handles try dot stuff bulk line oriented two pass for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuffBulkLineOrientedTwoPass(
             ReadOnlySpan<byte> source,

@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// TransitBenchmarkCore: defines the benchmark entry point or scenario for controlled performance validation.
+// TransitBenchmarkCore: owns shared transit benchmark setup, execution, and teardown helpers.
 
 using System.Buffers;
 using System.Text;
@@ -11,12 +11,13 @@ using System.Threading.Channels;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the transit BenchmarkCore class for benchmark or isolated-regression execution.
+/// Represents the transit BenchmarkCore class used by the benchmark or regression gate.
 /// </summary>
 internal static class TransitBenchmarkCore
 {
     /// <summary>
-    /// Performs the build MessageId operation.
+    /// Builds MessageId.
+
     /// </summary>
     internal static string BuildMessageId(long benchmarkInstanceId, int workerId, long sequence, string phase)
     {
@@ -24,7 +25,7 @@ internal static class TransitBenchmarkCore
     }
 
     /// <summary>
-    /// Performs the stopwatch TicksToMilliseconds operation.
+    /// Implements the stopwatch TicksToMilliseconds contract.
     /// </summary>
     internal static double StopwatchTicksToMilliseconds(long ticks)
     {
@@ -37,12 +38,13 @@ internal static class TransitBenchmarkCore
     }
 
     /// <summary>
-    /// Defines the producer Timing record struct for benchmark or isolated-regression execution.
+    /// Represents the producer Timing record struct used by the benchmark or regression gate.
     /// </summary>
     internal readonly record struct ProducerTiming(long LoopTicks, long GenerationTicks, long BlockedTicks, long OtherActiveTicks)
     {
         /// <summary>
-        /// Performs the from Raw operation.
+        /// Creates a value from Raw.
+
         /// </summary>
         internal static ProducerTiming FromRaw(long loopTicks, long generationTicks, long blockedTicks, long otherActiveTicks)
         {
@@ -62,35 +64,35 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Gets or sets the active Ticks value.
+        /// Gets or sets the active Ticks.
         /// </summary>
         internal long ActiveTicks => GenerationTicks + OtherActiveTicks;
     }
 
     /// <summary>
-    /// Defines the byte Budget class for benchmark or isolated-regression execution.
+    /// Represents the byte Budget class used by the benchmark or regression gate.
     /// </summary>
     internal sealed class ByteBudget : IDisposable
     {
         /// <summary>
-        /// Performs the _gate operation.
+        /// Runs the _gate benchmark scenario.
         /// </summary>
         private readonly object _gate = new();
         /// <summary>
-        /// Performs the _waiters operation.
+        /// Runs the _waiters benchmark scenario.
         /// </summary>
         private readonly Queue<BudgetWaiter> _waiters = new();
         /// <summary>
-        /// Gets or sets the _availableBytes value.
+        /// Gets or sets the _availableBytes.
         /// </summary>
         private long _availableBytes;
         /// <summary>
-        /// Gets or sets the _disposed value.
+        /// Gets or sets the _disposed.
         /// </summary>
         private bool _disposed;
 
         /// <summary>
-        /// Performs the byte Budget operation.
+        /// Implements the byte Budget contract.
         /// </summary>
         internal ByteBudget(long maxBytes)
         {
@@ -103,7 +105,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the acquire Async operation.
+        /// Implements the acquire Async contract.
         /// </summary>
         internal ValueTask AcquireAsync(int bytes, CancellationToken cancellationToken)
         {
@@ -135,7 +137,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the release operation.
+        /// Runs the release benchmark scenario.
         /// </summary>
         internal void Release(int bytes)
         {
@@ -188,7 +190,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the cancel Waiter operation.
+        /// Implements the cancel Waiter contract.
         /// </summary>
         private void CancelWaiter(BudgetWaiter waiter)
         {
@@ -199,7 +201,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the throw IfDisposed operation.
+        /// Implements the throw IfDisposed contract.
         /// </summary>
         private void ThrowIfDisposed()
         {
@@ -210,7 +212,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the dispose operation.
+        /// Releases resources held by this instance.
         /// </summary>
         public void Dispose()
         {
@@ -244,21 +246,21 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Defines the budget Waiter class for benchmark or isolated-regression execution.
+        /// Represents the budget Waiter class used by the benchmark or regression gate.
         /// </summary>
         private sealed class BudgetWaiter
         {
             /// <summary>
-            /// Gets or sets the _completion value.
+            /// Gets or sets the _completion.
             /// </summary>
             private readonly TaskCompletionSource _completion;
             /// <summary>
-            /// Gets or sets the _registration value.
+            /// Gets or sets the _registration.
             /// </summary>
             private CancellationTokenRegistration _registration;
 
             /// <summary>
-            /// Performs the budget Waiter operation.
+            /// Implements the budget Waiter contract.
             /// </summary>
             internal BudgetWaiter(int requestedBytes)
             {
@@ -267,20 +269,20 @@ internal static class TransitBenchmarkCore
             }
 
             /// <summary>
-            /// Gets or sets the requested Bytes value.
+            /// Gets or sets the requested Bytes.
             /// </summary>
             internal int RequestedBytes { get; }
             /// <summary>
-            /// Gets or sets the task value.
+            /// Gets or sets the task.
             /// </summary>
             internal Task Task => _completion.Task;
             /// <summary>
-            /// Gets or sets the is Canceled value.
+            /// Gets or sets the is Canceled.
             /// </summary>
             internal bool IsCanceled { get; private set; }
 
             /// <summary>
-            /// Performs the register Cancellation operation.
+            /// Implements the register Cancellation contract.
             /// </summary>
             internal void RegisterCancellation(CancellationToken cancellationToken, ByteBudget budget)
             {
@@ -293,7 +295,7 @@ internal static class TransitBenchmarkCore
             }
 
             /// <summary>
-            /// Performs the mark Canceled operation.
+            /// Implements the mark Canceled contract.
             /// </summary>
             internal void MarkCanceled()
             {
@@ -301,7 +303,7 @@ internal static class TransitBenchmarkCore
             }
 
             /// <summary>
-            /// Performs the try SetAcquired operation.
+            /// Implements the try SetAcquired contract.
             /// </summary>
             internal void TrySetAcquired()
             {
@@ -310,7 +312,7 @@ internal static class TransitBenchmarkCore
             }
 
             /// <summary>
-            /// Performs the try SetCanceled operation.
+            /// Implements the try SetCanceled contract.
             /// </summary>
             internal void TrySetCanceled()
             {
@@ -320,40 +322,40 @@ internal static class TransitBenchmarkCore
             }
 
             /// <summary>
-            /// Defines the cancellation State record struct for benchmark or isolated-regression execution.
+            /// Represents the cancellation State record struct used by the benchmark or regression gate.
             /// </summary>
             private readonly record struct CancellationState(ByteBudget Budget, BudgetWaiter Waiter);
         }
     }
 
     /// <summary>
-    /// Defines the bounded ArticleQueue class for benchmark or isolated-regression execution.
+    /// Represents the bounded ArticleQueue class used by the benchmark or regression gate.
     /// </summary>
     internal sealed class BoundedArticleQueue : IDisposable
     {
         /// <summary>
-        /// Gets or sets the _channel value.
+        /// Gets or sets the _channel.
         /// </summary>
         private readonly Channel<QueuedArticle> _channel;
         /// <summary>
-        /// Gets or sets the _byteBudget value.
+        /// Gets or sets the _byteBudget.
         /// </summary>
         private readonly ByteBudget _byteBudget;
         /// <summary>
-        /// Gets or sets the _queuedBytes value.
+        /// Gets or sets the _queuedBytes.
         /// </summary>
         private long _queuedBytes;
         /// <summary>
-        /// Gets or sets the _queuedCount value.
+        /// Gets or sets the _queuedCount.
         /// </summary>
         private int _queuedCount;
         /// <summary>
-        /// Gets or sets the _admissionStopped value.
+        /// Gets or sets the _admissionStopped.
         /// </summary>
         private volatile bool _admissionStopped;
 
         /// <summary>
-        /// Performs the bounded ArticleQueue operation.
+        /// Implements the bounded ArticleQueue contract.
         /// </summary>
         internal BoundedArticleQueue(int maxArticles, long maxResidentBytes)
         {
@@ -368,16 +370,16 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the current QueuedCount operation.
+        /// Implements the current QueuedCount contract.
         /// </summary>
         internal int CurrentQueuedCount => Volatile.Read(ref _queuedCount);
         /// <summary>
-        /// Performs the current QueuedBytes operation.
+        /// Implements the current QueuedBytes contract.
         /// </summary>
         internal long CurrentQueuedBytes => Volatile.Read(ref _queuedBytes);
 
         /// <summary>
-        /// Performs the try WriteAsync operation.
+        /// Implements the try WriteAsync contract.
         /// </summary>
         internal async ValueTask<bool> TryWriteAsync(QueuedArticle article, CancellationToken cancellationToken)
         {
@@ -403,7 +405,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the try Read operation.
+        /// Implements the try Read contract.
         /// </summary>
         internal bool TryRead(out QueuedArticle article)
         {
@@ -418,7 +420,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the wait ToReadAsync operation.
+        /// Implements the wait ToReadAsync contract.
         /// </summary>
         internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken)
         {
@@ -426,7 +428,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the release Reservation operation.
+        /// Implements the release Reservation contract.
         /// </summary>
         internal void ReleaseReservation(int bytes)
         {
@@ -434,7 +436,8 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the stop Admission operation.
+        /// Stops Admission.
+
         /// </summary>
         internal void StopAdmission()
         {
@@ -443,7 +446,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the dispose operation.
+        /// Releases resources held by this instance.
         /// </summary>
         public void Dispose()
         {
@@ -453,26 +456,26 @@ internal static class TransitBenchmarkCore
     }
 
     /// <summary>
-    /// Defines the queued Article record struct for benchmark or isolated-regression execution.
+    /// Represents the queued Article record struct used by the benchmark or regression gate.
     /// </summary>
     internal readonly record struct QueuedArticle(string MessageId, ArticlePayload Payload);
 
     /// <summary>
-    /// Defines the article Payload struct for benchmark or isolated-regression execution.
+    /// Represents the article Payload struct used by the benchmark or regression gate.
     /// </summary>
     internal readonly struct ArticlePayload : IDisposable
     {
         /// <summary>
-        /// Gets or sets the _buffer value.
+        /// Gets or sets the _buffer.
         /// </summary>
         private readonly byte[] _buffer;
         /// <summary>
-        /// Gets or sets the length value.
+        /// Gets or sets the length.
         /// </summary>
         internal int Length { get; }
 
         /// <summary>
-        /// Performs the article Payload operation.
+        /// Implements the article Payload contract.
         /// </summary>
         private ArticlePayload(byte[] buffer, int length)
         {
@@ -481,7 +484,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the create operation.
+        /// Runs the create benchmark scenario.
         /// </summary>
         internal static ArticlePayload Create(string messageId, int targetBytes)
         {
@@ -520,12 +523,12 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the as Memory operation.
+        /// Implements the as Memory contract.
         /// </summary>
         internal ReadOnlyMemory<byte> AsMemory() => _buffer.AsMemory(0, Length);
 
         /// <summary>
-        /// Performs the dispose operation.
+        /// Releases resources held by this instance.
         /// </summary>
         public void Dispose()
         {
@@ -533,7 +536,8 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the write Ascii operation.
+        /// Writes Ascii.
+
         /// </summary>
         private static int WriteAscii(byte[] destination, int offset, string value)
         {
@@ -543,12 +547,12 @@ internal static class TransitBenchmarkCore
     }
 
     /// <summary>
-    /// Defines the transit BenchmarkConfigValidator class for benchmark or isolated-regression execution.
+    /// Represents the transit BenchmarkConfigValidator class used by the benchmark or regression gate.
     /// </summary>
     internal static class TransitBenchmarkConfigValidator
     {
         /// <summary>
-        /// Performs the validate IntRange operation.
+        /// Implements the validate IntRange contract.
         /// </summary>
         internal static int ValidateIntRange(int value, int min, int max, string optionName)
         {
@@ -561,7 +565,7 @@ internal static class TransitBenchmarkCore
         }
 
         /// <summary>
-        /// Performs the validate LongRange operation.
+        /// Implements the validate LongRange contract.
         /// </summary>
         internal static long ValidateLongRange(long value, long min, long max, string optionName)
         {

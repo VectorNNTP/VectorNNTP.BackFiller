@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// LoggingApiBenchmarks: defines the benchmark entry point or scenario for controlled performance validation.
+// LoggingApiBenchmarks: measures the allocation and throughput characteristics of logging API call patterns.
 
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
@@ -16,75 +16,76 @@ using Serilog.Extensions.Logging;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Compares source-generated and Serilog logging paths with enabled, disabled, and exception scenarios.
+/// </summary>
+/// <remarks>Benchmark attributes are intentionally kept on the type to compare equivalent call sites.</remarks>
 [MemoryDiagnoser]
 [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
-/// <summary>
-/// Defines the logging ApiBenchmarks class for benchmark or isolated-regression execution.
-/// </summary>
 public partial class LoggingApiBenchmarks
 {
     /// <summary>
-    /// Gets or sets the demo StateValue value.
+    /// Gets or sets the demo StateValue.
     /// </summary>
     private static readonly DemoState DemoStateValue = DemoState.Ready;
     /// <summary>
-    /// Performs the demo TimeSpan operation.
+    /// Implements the demo TimeSpan contract.
     /// </summary>
     private static readonly TimeSpan DemoTimeSpan = TimeSpan.FromMilliseconds(1234);
     /// <summary>
-    /// Gets or sets the demo Int value.
+    /// Gets or sets the demo Int.
     /// </summary>
     private const int DemoInt = 42;
     /// <summary>
-    /// Gets or sets the demo Long value.
+    /// Gets or sets the demo Long.
     /// </summary>
     private const long DemoLong = 123456789L;
     /// <summary>
-    /// Gets or sets the demo Double value.
+    /// Gets or sets the demo Double.
     /// </summary>
     private const double DemoDouble = 123.456;
     /// <summary>
-    /// Gets or sets the demo String value.
+    /// Gets or sets the demo String.
     /// </summary>
     private const string DemoString = "benchmark-payload";
 
     /// <summary>
-    /// Gets or sets the _precreatedException value.
+    /// Gets or sets the _precreatedException.
     /// </summary>
     private Exception _precreatedException = null!;
 
     /// <summary>
-    /// Gets or sets the _sourceGeneratedDebugEnabled value.
+    /// Gets or sets the _sourceGeneratedDebugEnabled.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedDebugEnabled = null!;
     /// <summary>
-    /// Gets or sets the _sourceGeneratedDebugDisabled value.
+    /// Gets or sets the _sourceGeneratedDebugDisabled.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedDebugDisabled = null!;
     /// <summary>
-    /// Gets or sets the _sourceGeneratedInfoEnabled value.
+    /// Gets or sets the _sourceGeneratedInfoEnabled.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedInfoEnabled = null!;
 
     /// <summary>
-    /// Gets or sets the _serilogDebugEnabled value.
+    /// Gets or sets the _serilogDebugEnabled.
     /// </summary>
     private Serilog.ILogger _serilogDebugEnabled = null!;
     /// <summary>
-    /// Gets or sets the _serilogDebugDisabled value.
+    /// Gets or sets the _serilogDebugDisabled.
     /// </summary>
     private Serilog.ILogger _serilogDebugDisabled = null!;
     /// <summary>
-    /// Gets or sets the _serilogInfoEnabled value.
+    /// Gets or sets the _serilogInfoEnabled.
     /// </summary>
     private Serilog.ILogger _serilogInfoEnabled = null!;
 
-    [GlobalSetup]
     /// <summary>
-    /// Performs the setup operation.
+    /// Creates the reusable logger and exception state used by each benchmark iteration.
     /// </summary>
+    [GlobalSetup]
     public void Setup()
     {
         _precreatedException = new InvalidOperationException("Precreated benchmark exception");
@@ -98,10 +99,10 @@ public partial class LoggingApiBenchmarks
         _serilogInfoEnabled = CreateSerilogLogger(LogEventLevel.Information);
     }
 
-    [GlobalCleanup]
     /// <summary>
-    /// Performs the cleanup operation.
+    /// Disposes logger resources created by <see cref="Setup"/>.
     /// </summary>
+    [GlobalCleanup]
     public void Cleanup()
     {
         DisposeLogger(_sourceGeneratedDebugEnabled);
@@ -113,11 +114,11 @@ public partial class LoggingApiBenchmarks
         (_serilogInfoEnabled as IDisposable)?.Dispose();
     }
 
+    /// <summary>
+    /// Measures a disabled source-generated debug log call.
+    /// </summary>
     [BenchmarkCategory("SourceGenerated", "Disabled")]
     [Benchmark(Description = "Debug LoggerMessage disabled")]
-    /// <summary>
-    /// Performs the source Generated_Debug_Disabled operation.
-    /// </summary>
     public void SourceGenerated_Debug_Disabled()
     {
         BenchmarkLoggingMessages.LogDemoDebug(
@@ -130,11 +131,11 @@ public partial class LoggingApiBenchmarks
             DemoString);
     }
 
+    /// <summary>
+    /// Measures an enabled source-generated debug log call.
+    /// </summary>
     [BenchmarkCategory("SourceGenerated", "Enabled")]
     [Benchmark(Description = "Debug LoggerMessage enabled")]
-    /// <summary>
-    /// Performs the source Generated_Debug_Enabled operation.
-    /// </summary>
     public void SourceGenerated_Debug_Enabled()
     {
         BenchmarkLoggingMessages.LogDemoDebug(
@@ -147,11 +148,11 @@ public partial class LoggingApiBenchmarks
             DemoString);
     }
 
+    /// <summary>
+    /// Measures an enabled source-generated information log call.
+    /// </summary>
     [BenchmarkCategory("SourceGenerated", "Enabled")]
     [Benchmark(Description = "Info LoggerMessage enabled")]
-    /// <summary>
-    /// Performs the source Generated_Info_Enabled operation.
-    /// </summary>
     public void SourceGenerated_Info_Enabled()
     {
         BenchmarkLoggingMessages.LogDemoInformation(
@@ -164,11 +165,11 @@ public partial class LoggingApiBenchmarks
             DemoString);
     }
 
+    /// <summary>
+    /// Measures a disabled Serilog template-based debug call.
+    /// </summary>
     [BenchmarkCategory("SerilogStatic", "Disabled")]
     [Benchmark(Description = "Debug Serilog template disabled")]
-    /// <summary>
-    /// Performs the serilog Static_Debug_Disabled operation.
-    /// </summary>
     public void SerilogStatic_Debug_Disabled()
     {
         _serilogDebugDisabled.Debug(
@@ -181,11 +182,11 @@ public partial class LoggingApiBenchmarks
             DemoString);
     }
 
+    /// <summary>
+    /// Measures an enabled Serilog template-based debug call.
+    /// </summary>
     [BenchmarkCategory("SerilogStatic", "Enabled")]
     [Benchmark(Description = "Debug Serilog template enabled")]
-    /// <summary>
-    /// Performs the serilog Static_Debug_Enabled operation.
-    /// </summary>
     public void SerilogStatic_Debug_Enabled()
     {
         _serilogDebugEnabled.Debug(
@@ -198,11 +199,11 @@ public partial class LoggingApiBenchmarks
             DemoString);
     }
 
+    /// <summary>
+    /// Measures an enabled Serilog template-based information call.
+    /// </summary>
     [BenchmarkCategory("SerilogStatic", "Enabled")]
     [Benchmark(Description = "Info Serilog template enabled")]
-    /// <summary>
-    /// Performs the serilog Static_Info_Enabled operation.
-    /// </summary>
     public void SerilogStatic_Info_Enabled()
     {
         _serilogInfoEnabled.Information(
@@ -215,11 +216,11 @@ public partial class LoggingApiBenchmarks
             DemoString);
     }
 
+    /// <summary>
+    /// Measures a disabled source-generated exception log call.
+    /// </summary>
     [BenchmarkCategory("SourceGenerated", "Exception", "Disabled")]
     [Benchmark(Description = "LoggerMessage exception disabled")]
-    /// <summary>
-    /// Performs the source Generated_Exception_Disabled operation.
-    /// </summary>
     public void SourceGenerated_Exception_Disabled()
     {
         BenchmarkLoggingMessages.LogDemoException(
@@ -228,11 +229,11 @@ public partial class LoggingApiBenchmarks
             "disabled-path");
     }
 
+    /// <summary>
+    /// Measures an enabled source-generated exception log call.
+    /// </summary>
     [BenchmarkCategory("SourceGenerated", "Exception", "Enabled")]
     [Benchmark(Description = "LoggerMessage exception enabled")]
-    /// <summary>
-    /// Performs the source Generated_Exception_Enabled operation.
-    /// </summary>
     public void SourceGenerated_Exception_Enabled()
     {
         BenchmarkLoggingMessages.LogDemoException(
@@ -241,38 +242,40 @@ public partial class LoggingApiBenchmarks
             "enabled-path");
     }
 
+    /// <summary>
+    /// Measures a disabled Serilog exception log call.
+    /// </summary>
     [BenchmarkCategory("SerilogStatic", "Exception", "Disabled")]
     [Benchmark(Description = "Serilog exception disabled")]
-    /// <summary>
-    /// Performs the serilog _Exception_Disabled operation.
-    /// </summary>
     public void Serilog_Exception_Disabled()
     {
         _serilogDebugDisabled.Debug(_precreatedException, "Exception in benchmark path {Path}", "disabled-path");
     }
 
+    /// <summary>
+    /// Measures an enabled Serilog exception log call.
+    /// </summary>
     [BenchmarkCategory("SerilogStatic", "Exception", "Enabled")]
     [Benchmark(Description = "Serilog exception enabled")]
-    /// <summary>
-    /// Performs the serilog _Exception_Enabled operation.
-    /// </summary>
     public void Serilog_Exception_Enabled()
     {
         _serilogDebugEnabled.Debug(_precreatedException, "Exception in benchmark path {Path}", "enabled-path");
     }
 
+    /// <summary>
+    /// Measures exception construction without logging.
+    /// <returns>A newly constructed benchmark exception.</returns>
+    /// </summary>
     [BenchmarkCategory("Exception", "Construction")]
     [Benchmark(Description = "Exception construction only")]
-    /// <summary>
-    /// Performs the exception _Construction_Only operation.
-    /// </summary>
     public Exception Exception_Construction_Only()
     {
         return new InvalidOperationException("Constructed in benchmark iteration");
     }
 
     /// <summary>
-    /// Performs the create MelLogger operation.
+    /// Creates MelLogger.
+
     /// </summary>
     private static Microsoft.Extensions.Logging.ILogger CreateMelLogger(LogLevel minimumLevel)
     {
@@ -292,7 +295,8 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the create SerilogLogger operation.
+    /// Creates SerilogLogger.
+
     /// </summary>
     private static Serilog.ILogger CreateSerilogLogger(LogEventLevel minimumLevel)
     {
@@ -303,7 +307,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the dispose Logger operation.
+    /// Implements the dispose Logger contract.
     /// </summary>
     private static void DisposeLogger(Microsoft.Extensions.Logging.ILogger logger)
     {
@@ -314,7 +318,8 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the to SerilogLevel operation.
+    /// Converts to SerilogLevel.
+
     /// </summary>
     private static LogEventLevel ToSerilogLevel(LogLevel level)
     {
@@ -331,7 +336,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Defines the demo State enum for benchmark or isolated-regression execution.
+    /// Represents the demo State enum used by the benchmark or regression gate.
     /// </summary>
     private enum DemoState
     {
@@ -341,12 +346,12 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Defines the null SerilogSink class for benchmark or isolated-regression execution.
+    /// Represents the null SerilogSink class used by the benchmark or regression gate.
     /// </summary>
     private sealed class NullSerilogSink : Serilog.Core.ILogEventSink
     {
         /// <summary>
-        /// Performs the emit operation.
+        /// Runs the emit benchmark scenario.
         /// </summary>
         public void Emit(LogEvent logEvent)
         {
@@ -355,7 +360,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Defines the benchmark LoggingMessages class for benchmark or isolated-regression execution.
+    /// Represents the benchmark LoggingMessages class used by the benchmark or regression gate.
     /// </summary>
     private static partial class BenchmarkLoggingMessages
     {
@@ -364,7 +369,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Debug,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
         /// <summary>
-        /// Performs the log DemoDebug operation.
+        /// Implements the log DemoDebug contract.
         /// </summary>
         public static partial void LogDemoDebug(
             Microsoft.Extensions.Logging.ILogger logger,
@@ -380,7 +385,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Information,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
         /// <summary>
-        /// Performs the log DemoInformation operation.
+        /// Implements the log DemoInformation contract.
         /// </summary>
         public static partial void LogDemoInformation(
             Microsoft.Extensions.Logging.ILogger logger,
@@ -396,7 +401,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Debug,
             Message = "Exception in benchmark path {Path}")]
         /// <summary>
-        /// Performs the log DemoException operation.
+        /// Implements the log DemoException contract.
         /// </summary>
         public static partial void LogDemoException(
             Microsoft.Extensions.Logging.ILogger logger,

@@ -70,12 +70,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private bool _disposed;
 
         /// <summary>
-        /// Tracks whether the authenticated session reached protocol-ready state where lifecycle commands (for example QUIT) are valid.
+        /// Indicates whether authentication completed and lifecycle commands such as QUIT are valid.
         /// </summary>
         private bool _protocolReadyForCommands;
 
         /// <summary>
-        /// Tracks whether transport/protocol failures make further command writes unsafe for graceful lifecycle shutdown.
+        /// Stores whether transport/protocol failures make further command writes unsafe used by graceful lifecycle shutdown.
         /// </summary>
         private bool _transportFailed;
 
@@ -92,6 +92,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="logger">Logger.</param>
         /// <param name="tcpClient">Connected client.</param>
         /// <param name="stream">Transport stream.</param>
+        /// <param name="connectionLoggingScope">Optional disposable scope that owns connection log properties.</param>
+        /// <param name="connectionLoggingContext">Optional connection metadata used to create the logging scope.</param>
         private NntpArticleAcquisitionSession(
             NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionOptions options,
@@ -119,6 +121,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="logger">Logger.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <param name="serverCertificateValidationCallback">Optional per-session TLS server-certificate validation callback. When <see langword="null"/>, platform default certificate validation semantics remain in effect.</param>
+        /// <param name="connectionLoggingContext">Optional connection metadata used to enrich session logging.</param>
         /// <returns>Connected session or deterministic failure result.</returns>
         internal static async ValueTask<(NntpArticleAcquisitionSession? Session, NntpArticleAcquisitionResult Result)> ConnectAsync(
             NntpArticleAcquisitionEndpoint endpoint,
@@ -151,9 +154,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     options.ConnectTimeout,
                     cancellationToken,
-                    /// <summary>
-                    /// Tracks token for nntp article acquisition session.
-                    /// </summary>
+                    // <summary>
+                    // Stores token used by nntp article acquisition session.
+                    // </summary>
                     async token =>
                     {
                         await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
@@ -181,9 +184,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
                         cancellationToken,
-                        /// <summary>
-                        /// Tracks token for nntp article acquisition session.
-                        /// </summary>
+                        // <summary>
+                        // Stores token used by nntp article acquisition session.
+                        // </summary>
                         async token =>
                         {
                             await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
@@ -523,9 +526,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     timeout,
                     cancellationToken,
-                    /// <summary>
-                    /// Tracks token for nntp article acquisition session.
-                    /// </summary>
+                    // <summary>
+                    // Stores token used by nntp article acquisition session.
+                    // </summary>
                     async token =>
                     {
                         await _stream.WriteAsync(bytes, token).ConfigureAwait(false);

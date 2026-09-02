@@ -23,7 +23,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
     /// <summary>
-    /// Defines the nntp ArticleParserBenchmarks class for benchmark or isolated-regression execution.
+    /// Represents the nntp ArticleParserBenchmarks class used by the benchmark or regression gate.
     /// </summary>
     public class NntpArticleParserBenchmarks
     {
@@ -87,7 +87,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalSetup]
         /// <summary>
-        /// Performs the setup operation.
+        /// Initializes the reusable benchmark state.
         /// </summary>
         public void Setup()
         {
@@ -184,7 +184,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Baseline = true, Description = "TinyText")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse TinyText operation.
+        /// Parses ext.
+
         /// </summary>
         public bool ParseTinyText()
         {
@@ -198,7 +199,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "TypicalText")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse TypicalText operation.
+        /// Parses alText.
+
         /// </summary>
         public bool ParseTypicalText()
         {
@@ -212,7 +214,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "LargeText")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse LargeText operation.
+        /// Parses Text.
+
         /// </summary>
         public bool ParseLargeText()
         {
@@ -226,7 +229,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "YEncSinglePart")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse y EncSinglePart operation.
+        /// Parses SinglePart.
+
         /// </summary>
         public bool ParseYEncSinglePart()
         {
@@ -240,7 +244,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "YEncMultiPart")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse y EncMultiPart operation.
+        /// Parses MultiPart.
+
         /// </summary>
         public bool ParseYEncMultiPart()
         {
@@ -254,7 +259,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "MalformedArticle")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse MalformedArticle operation.
+        /// Parses rmedArticle.
+
         /// </summary>
         public bool ParseMalformedArticle()
         {
@@ -268,7 +274,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "InvalidDate")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse InvalidDate operation.
+        /// Parses idDate.
+
         /// </summary>
         public bool ParseInvalidDate()
         {
@@ -282,7 +289,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "LargeHeaderSet")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse LargeHeaderSet operation.
+        /// Parses HeaderSet.
+
         /// </summary>
         public bool ParseLargeHeaderSet()
         {
@@ -296,7 +304,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "LargeBinary")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Performs the parse LargeBinary operation.
+        /// Parses Binary.
+
         /// </summary>
         public bool ParseLargeBinary()
         {

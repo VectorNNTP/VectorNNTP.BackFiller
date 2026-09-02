@@ -13,7 +13,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed class ArticleWorkResponseFactory : IArticleWorkResponseFactory
     {
         /// <summary>
-        /// Tracks response version for article work response factory.
+        /// Stores response version used by article work response factory.
         /// </summary>
         private const int ResponseVersion = 1;
 

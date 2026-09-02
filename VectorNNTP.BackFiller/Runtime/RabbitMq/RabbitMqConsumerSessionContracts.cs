@@ -15,7 +15,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqConsumerSession : IAsyncDisposable
     {
         /// <summary>
-        /// Gets the immutable logical identity for this consumer session.
+        /// Returns the immutable logical identity for this consumer session.
         /// </summary>
         public RabbitMqConsumerSessionIdentity Identity { get; }
 
@@ -25,7 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public bool IsRunning { get; }
 
         /// <summary>
-        /// Gets the connection generation currently bound to this consumer session, or zero when not running.
+        /// Returns the connection generation currently bound to this consumer session, or zero when not running.
         /// </summary>
         public long ActiveConnectionGeneration { get; }
 
@@ -44,7 +44,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Coordinates account-capacity retirement boundaries for RabbitMQ consumer sessions.
+    /// Handles account-capacity retirement boundaries for RabbitMQ consumer sessions.
     /// </summary>
     internal interface IRabbitMqCapacityRetirementCoordinator
     {
@@ -96,12 +96,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
         /// <summary>
-        /// Tracks writer for rabbit mq consumer session contracts.
+        /// Stores writer used by rabbit mq consumer session contracts.
         /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
         /// <summary>
-        /// Coordinates rabbit mq delivery channel sink for rabbit mq consumer session contracts.
+        /// Handles rabbit mq delivery channel sink for rabbit mq consumer session contracts.
         /// </summary>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Coordinates on delivery async for rabbit mq consumer session contracts.
+        /// Handles on delivery async for rabbit mq consumer session contracts.
         /// </summary>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {

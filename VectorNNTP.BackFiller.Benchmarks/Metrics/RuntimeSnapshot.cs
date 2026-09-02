@@ -7,7 +7,7 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the runtime Snapshot record struct for benchmark or isolated-regression execution.
+/// Represents the runtime Snapshot record struct used by the benchmark or regression gate.
 /// </summary>
 internal readonly record struct RuntimeSnapshot(
     double AverageCpuPercent,

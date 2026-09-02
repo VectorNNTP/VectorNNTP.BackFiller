@@ -18,12 +18,12 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
     internal static class ConfigurationFingerprintService
     {
         /// <summary>
-        /// Tracks fingerprint algorithm version for configuration fingerprint service.
+        /// Stores fingerprint algorithm version used by configuration fingerprint service.
         /// </summary>
         private const string FingerprintAlgorithmVersion = "v1";
 
         /// <summary>
-        /// Tracks sensitive segment patterns for configuration fingerprint service.
+        /// Stores sensitive segment patterns used by configuration fingerprint service.
         /// </summary>
         private static readonly string[] SensitiveSegmentPatterns =
         [
@@ -49,8 +49,10 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         ];
 
         /// <summary>
-        /// Coordinates is sensitive configuration key for configuration fingerprint service.
+        /// Determines whether any colon-delimited configuration-key segment matches a sensitive exact or suffix pattern.
         /// </summary>
+        /// <param name="configurationKey">Configuration key to inspect.</param>
+        /// <returns><see langword="true"/> when a segment is considered sensitive; otherwise <see langword="false"/>.</returns>
         internal static bool IsSensitiveConfigurationKey(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -71,7 +73,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Coordinates is connection string for configuration fingerprint service.
+        /// Handles is connection string for configuration fingerprint service.
         /// </summary>
         internal static bool IsConnectionString(string configurationKey)
         {
@@ -101,7 +103,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Coordinates sanitize connection string for configuration fingerprint service.
+        /// Handles sanitize connection string for configuration fingerprint service.
         /// </summary>
         internal static string? SanitizeConnectionString(string connectionString)
         {
@@ -188,7 +190,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Coordinates canonicalize non secret value for configuration fingerprint service.
+        /// Handles canonicalize non secret value for configuration fingerprint service.
         /// </summary>
         private static string CanonicalizeNonSecretValue(string configurationKey, string value)
         {
@@ -208,7 +210,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Coordinates calculate configuration fingerprint for configuration fingerprint service.
+        /// Handles calculate configuration fingerprint for configuration fingerprint service.
         /// </summary>
         internal static string CalculateConfigurationFingerprint(IConfiguration configuration)
         {

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit benchmark core, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the transit benchmark core test suite.
 
 using System.Text;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -12,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers transit benchmark core behavior and invariants exercised by this test suite.
+        /// Confirms the transit benchmark core tests behavior.
     /// </summary>
     public sealed class TransitBenchmarkCoreTests
     {
         /// <summary>
-        /// Exercises producer timing  from raw  produces reconcilable active and blocked buckets behavior, including the expected result and failure semantics.
+        /// Confirms the producer timing from raw produces reconcilable active and blocked buckets behavior.
         /// </summary>
         [Fact]
         public void ProducerTiming_FromRaw_ProducesReconcilableActiveAndBlockedBuckets()
@@ -36,7 +37,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(timing.LoopTicks, timing.ActiveTicks + timing.BlockedTicks);
         }
         /// <summary>
-        /// Exercises bounded article queue  enforces byte budget behavior, including the expected result and failure semantics.
+        /// Confirms the bounded article queue enforces byte budget behavior.
         /// </summary>
         [Fact]
         public async Task BoundedArticleQueue_EnforcesByteBudget()
@@ -90,7 +91,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Exercises byte budget  acquire canceled  throws operation canceled behavior, including the expected result and failure semantics.
+        /// Confirms the byte budget acquire canceled throws operation canceled behavior.
         /// </summary>
         [Fact]
         public async Task ByteBudget_AcquireCanceled_ThrowsOperationCanceled()
@@ -105,7 +106,7 @@ namespace VectorNNTP.Backfiller.Tests
             });
         }
         /// <summary>
-        /// Exercises byte budget  dispose  cancels pending acquire behavior, including the expected result and failure semantics.
+        /// Confirms the byte budget dispose cancels pending acquire behavior.
         /// </summary>
         [Fact]
         public async Task ByteBudget_Dispose_CancelsPendingAcquire()
@@ -119,7 +120,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending.ConfigureAwait(false));
         }
         /// <summary>
-        /// Exercises build message id  produces unique valid message id across worker and sequence behavior, including the expected result and failure semantics.
+        /// Confirms the build message id produces unique valid message id across worker and sequence behavior.
         /// </summary>
         [Fact]
         public void BuildMessageId_ProducesUniqueValidMessageIdAcrossWorkerAndSequence()
@@ -140,7 +141,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Exercises article payload  create  produces expected headers and cr lf terminated payload behavior, including the expected result and failure semantics.
+        /// Confirms the article payload create produces expected headers and cr lf terminated payload behavior.
         /// </summary>
         [Fact]
         public void ArticlePayload_Create_ProducesExpectedHeadersAndCrLfTerminatedPayload()
@@ -167,7 +168,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Exercises validate int range  when within range  returns value behavior, including the expected result and failure semantics.
+        /// Confirms the validate int range when within range returns value behavior.
         /// </summary>
         [Theory]
         [InlineData(1, 1, 64, "connections")]
@@ -179,7 +180,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(value, actual);
         }
         /// <summary>
-        /// Exercises validate int range  when out of range  throws behavior, including the expected result and failure semantics.
+        /// Confirms the validate int range when out of range throws behavior.
         /// </summary>
         [Theory]
         [InlineData(0, 1, 64, "connections")]
@@ -189,7 +190,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Throws<InvalidOperationException>(() => TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(value, min, max, option));
         }
         /// <summary>
-        /// Exercises validate long range  when within range  returns value behavior, including the expected result and failure semantics.
+        /// Confirms the validate long range when within range returns value behavior.
         /// </summary>
         [Theory]
         [InlineData(64L * 1024 * 1024, 64L * 1024 * 1024, 2L * 1024 * 1024 * 1024, "queue-mib")]

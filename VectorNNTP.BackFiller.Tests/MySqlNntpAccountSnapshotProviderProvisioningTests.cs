@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for my sql nntp account snapshot provider provisioning, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the my sql nntp account snapshot provider provisioning test suite.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -17,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class MySqlNntpAccountSnapshotProviderProvisioningTests
     {
         /// <summary>
-        /// Exercises ensure startup dependencies async  uses configured database and table and authoritative schema behavior, including the expected result and failure semantics.
+        /// Confirms the ensure startup dependencies async uses configured database and table and authoritative schema behavior.
         /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_UsesConfiguredDatabaseAndTableAndAuthoritativeSchema()
@@ -54,7 +55,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;", call.createTableSql, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises ensure startup dependencies async  when repeated  remains idempotent at provider boundary behavior, including the expected result and failure semantics.
+        /// Confirms the ensure startup dependencies async when repeated remains idempotent at provider boundary behavior.
         /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_WhenRepeated_RemainsIdempotentAtProviderBoundary()
@@ -78,7 +79,7 @@ namespace VectorNNTP.Backfiller.Tests
             });
         }
         /// <summary>
-        /// Exercises ensure startup dependencies async  when provisioning fails  propagates failure behavior, including the expected result and failure semantics.
+        /// Confirms the ensure startup dependencies async when provisioning fails propagates failure behavior.
         /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_WhenProvisioningFails_PropagatesFailure()
@@ -95,7 +96,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
         }
         /// <summary>
-        /// Exercises accounts table create sql  uses new backfiller table name and not legacy name behavior, including the expected result and failure semantics.
+        /// Confirms the accounts table create sql uses new backfiller table name and not legacy name behavior.
         /// </summary>
         [Fact]
         public void AccountsTableCreateSql_UsesNewBackfillerTableNameAndNotLegacyName()
@@ -105,15 +106,24 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers capturing provisioning store behavior and invariants exercised by this test suite.
+        /// Confirms the capturing provisioning store behavior.
         /// </summary>
         private sealed class CapturingProvisioningStore : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             internal List<(string databaseName, string tableName, string createTableSql)> Calls { get; } = [];
 
             /// <summary>
-            /// Exercises ensure database and table async behavior, including the expected result and failure semantics.
+        /// Confirms the ensure database and table async behavior.
             /// </summary>
+        /// <returns>The value returned by the ensure database and table async helper.</returns>
+        /// <summary>
+        /// Confirms the ensure database and table async behavior.
+        /// </summary>
+        /// <param name="databaseName">The database name used by this test scenario.</param>
+        /// <param name="tableName">The table name used by this test scenario.</param>
+        /// <param name="createTableSql">The create table sql used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the ensure database and table async helper.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 Calls.Add((databaseName, tableName, createTableSql));
@@ -122,13 +132,29 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers delegate provisioning store behavior and invariants exercised by this test suite.
+        /// Confirms the delegate provisioning store behavior.
         /// </summary>
+        /// <returns>The value returned by the delegate provisioning store helper.</returns>
+        /// <summary>
+        /// Confirms the delegate provisioning store behavior.
+        /// </summary>
+        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
+        /// <param name="callback">The callback used by this test scenario.</param>
+        /// <returns>The value returned by the delegate provisioning store helper.</returns>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             /// <summary>
-            /// Exercises ensure database and table async behavior, including the expected result and failure semantics.
+        /// Confirms the ensure database and table async behavior.
             /// </summary>
+        /// <returns>The value returned by the ensure database and table async helper.</returns>
+        /// <summary>
+        /// Confirms the ensure database and table async behavior.
+        /// </summary>
+        /// <param name="databaseName">The database name used by this test scenario.</param>
+        /// <param name="tableName">The table name used by this test scenario.</param>
+        /// <param name="createTableSql">The create table sql used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the ensure database and table async helper.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return callback(cancellationToken);

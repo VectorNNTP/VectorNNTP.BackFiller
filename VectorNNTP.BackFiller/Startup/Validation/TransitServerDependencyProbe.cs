@@ -181,7 +181,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Coordinates read capabilities async for transit server dependency probe.
+        /// Handles read capabilities async for transit server dependency probe.
         /// </summary>
         private static async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(
             StreamReader reader,
@@ -206,7 +206,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Coordinates write nntp command async for transit server dependency probe.
+        /// Handles write nntp command async for transit server dependency probe.
         /// </summary>
         private static async Task WriteNntpCommandAsync(
             StreamWriter writer,
@@ -223,7 +223,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Coordinates create reader for transit server dependency probe.
+        /// Handles create reader for transit server dependency probe.
         /// </summary>
         private static StreamReader CreateReader(Stream stream)
         {
@@ -231,7 +231,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Coordinates create writer for transit server dependency probe.
+        /// Handles create writer for transit server dependency probe.
         /// </summary>
         private static StreamWriter CreateWriter(Stream stream)
         {
@@ -243,7 +243,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Coordinates create strict tls stream for transit server dependency probe.
+        /// Handles create strict tls stream for transit server dependency probe.
         /// </summary>
         private static SslStream CreateStrictTlsStream(Stream innerStream, bool leaveInnerStreamOpen)
         {
@@ -258,7 +258,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Coordinates authenticate tls async for transit server dependency probe.
+        /// Handles authenticate tls async for transit server dependency probe.
         /// </summary>
         private static async Task AuthenticateTlsAsync(SslStream sslStream, string host, CancellationToken cancellationToken)
         {

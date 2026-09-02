@@ -7,7 +7,7 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the forensic Snapshot record struct for benchmark or isolated-regression execution.
+/// Represents the forensic Snapshot record struct used by the benchmark or regression gate.
 /// </summary>
 internal readonly record struct ForensicSnapshot(
     double AverageDispatchQueueWaitUs,
@@ -54,7 +54,7 @@ internal readonly record struct ForensicSnapshot(
     string ObservabilityNotes)
 {
     /// <summary>
-    /// Performs the empty operation.
+    /// Runs the empty benchmark scenario.
     /// </summary>
     internal static ForensicSnapshot Empty => new(
         AverageDispatchQueueWaitUs: 0,

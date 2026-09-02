@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for connection string validation, covering configuration and validation contracts; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the connection string validation test suite.
 
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
@@ -11,13 +12,13 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers connection string validation behavior and invariants exercised by this test suite.
+        /// Confirms the connection string validation tests behavior.
     /// </summary>
     public sealed class ConnectionStringValidationTests
     {
         #region Parameter Validation Tests
         /// <summary>
-        /// Exercises validate  null setting name  throws behavior, including the expected result and failure semantics.
+        /// Confirms the validate null setting name throws behavior.
         /// </summary>
         [Fact]
         public void Validate_NullSettingName_Throws()
@@ -34,7 +35,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("settingName", ex.ParamName);
         }
         /// <summary>
-        /// Exercises validate  empty setting name  throws behavior, including the expected result and failure semantics.
+        /// Confirms the validate empty setting name throws behavior.
         /// </summary>
         [Fact]
         public void Validate_EmptySettingName_Throws()
@@ -51,7 +52,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("settingName", ex.ParamName);
         }
         /// <summary>
-        /// Exercises validate  whitespace setting name  throws behavior, including the expected result and failure semantics.
+        /// Confirms the validate whitespace setting name throws behavior.
         /// </summary>
         [Fact]
         public void Validate_WhitespaceSettingName_Throws()
@@ -72,7 +73,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Basic Validation Tests
         /// <summary>
-        /// Exercises validate  null connection string  returns required error behavior, including the expected result and failure semantics.
+        /// Confirms the validate null connection string returns required error behavior.
         /// </summary>
         [Fact]
         public void Validate_NullConnectionString_ReturnsRequiredError()
@@ -90,7 +91,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("required", diagnostics[0].Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Exercises validate  empty connection string  returns required error behavior, including the expected result and failure semantics.
+        /// Confirms the validate empty connection string returns required error behavior.
         /// </summary>
         [Fact]
         public void Validate_EmptyConnectionString_ReturnsRequiredError()
@@ -108,7 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("required", diagnostics[0].Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Exercises validate  whitespace connection string  returns required error behavior, including the expected result and failure semantics.
+        /// Confirms the validate whitespace connection string returns required error behavior.
         /// </summary>
         [Fact]
         public void Validate_WhitespaceConnectionString_ReturnsRequiredError()
@@ -130,7 +131,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Syntax Validation Tests
         /// <summary>
-        /// Exercises validate  malformed connection string  returns syntax error behavior, including the expected result and failure semantics.
+        /// Confirms the validate malformed connection string returns syntax error behavior.
         /// </summary>
         [Fact]
         public void Validate_MalformedConnectionString_ReturnsSyntaxError()
@@ -147,7 +148,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(diagnostics, e => e.Message.Contains("syntax", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  invalid key value pairs  returns syntax error behavior, including the expected result and failure semantics.
+        /// Confirms the validate invalid key value pairs returns syntax error behavior.
         /// </summary>
         [Fact]
         public void Validate_InvalidKeyValuePairs_ReturnsSyntaxError()
@@ -168,7 +169,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Required Components Tests - Server/Host
         /// <summary>
-        /// Exercises validate  missing server  returns server required error behavior, including the expected result and failure semantics.
+        /// Confirms the validate missing server returns server required error behavior.
         /// </summary>
         [Fact]
         public void Validate_MissingServer_ReturnsServerRequiredError()
@@ -186,7 +187,7 @@ namespace VectorNNTP.Backfiller.Tests
                                          && e.Message.Contains("host", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  empty server  returns server error behavior, including the expected result and failure semantics.
+        /// Confirms the validate empty server returns server error behavior.
         /// </summary>
         [Fact]
         public void Validate_EmptyServer_ReturnsServerError()
@@ -206,7 +207,7 @@ namespace VectorNNTP.Backfiller.Tests
                                          || e.Message.Contains("host", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  valid server key variations  accepts server value behavior, including the expected result and failure semantics.
+        /// Confirms the validate valid server key variations accepts server value behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass")]
@@ -232,7 +233,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Required Components Tests - Database
         /// <summary>
-        /// Exercises validate  missing database  returns database required error behavior, including the expected result and failure semantics.
+        /// Confirms the validate missing database returns database required error behavior.
         /// </summary>
         [Fact]
         public void Validate_MissingDatabase_ReturnsDatabaseRequiredError()
@@ -249,7 +250,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(diagnostics, e => e.Message.Contains("database", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  empty database  returns database error behavior, including the expected result and failure semantics.
+        /// Confirms the validate empty database returns database error behavior.
         /// </summary>
         [Fact]
         public void Validate_EmptyDatabase_ReturnsDatabaseError()
@@ -268,7 +269,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(diagnostics, e => e.Message.Contains("database", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  valid database key variations  accepts database value behavior, including the expected result and failure semantics.
+        /// Confirms the validate valid database key variations accepts database value behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass")]
@@ -289,7 +290,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Authentication Validation Tests
         /// <summary>
-        /// Exercises validate  missing authentication  returns authentication required error behavior, including the expected result and failure semantics.
+        /// Confirms the validate missing authentication returns authentication required error behavior.
         /// </summary>
         [Fact]
         public void Validate_MissingAuthentication_ReturnsAuthenticationRequiredError()
@@ -306,7 +307,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(diagnostics, e => e.Message.Contains("user ID", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  username password variations  accepts authentication behavior, including the expected result and failure semantics.
+        /// Confirms the validate username password variations accepts authentication behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=sa;Password=P@ssw0rd")]
@@ -326,7 +327,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Message.Contains("user ID", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  username without password  accepts authentication behavior, including the expected result and failure semantics.
+        /// Confirms the validate username without password accepts authentication behavior.
         /// </summary>
         [Fact]
         public void Validate_UsernameWithoutPassword_AcceptsAuthentication()
@@ -352,7 +353,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Connection Pooling Validation Tests
         /// <summary>
-        /// Exercises validate  excessive min pool size  returns pooling warning behavior, including the expected result and failure semantics.
+        /// Confirms the validate excessive min pool size returns pooling warning behavior.
         /// </summary>
         [Fact]
         public void Validate_ExcessiveMinPoolSize_ReturnsPoolingWarning()
@@ -375,7 +376,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ValidationSeverity.Warning, poolWarning.Severity);
         }
         /// <summary>
-        /// Exercises validate  excessive max pool size  returns pooling warning behavior, including the expected result and failure semantics.
+        /// Confirms the validate excessive max pool size returns pooling warning behavior.
         /// </summary>
         [Fact]
         public void Validate_ExcessiveMaxPoolSize_ReturnsPoolingWarning()
@@ -398,7 +399,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ValidationSeverity.Warning, poolWarning.Severity);
         }
         /// <summary>
-        /// Exercises validate  appropriate pool size  accepts configuration behavior, including the expected result and failure semantics.
+        /// Confirms the validate appropriate pool size accepts configuration behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;Min Pool Size=0")]
@@ -416,7 +417,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Message.Contains("Pool Size", StringComparison.Ordinal));
         }
         /// <summary>
-        /// Exercises validate  no pooling configuration  accepts connection string behavior, including the expected result and failure semantics.
+        /// Confirms the validate no pooling configuration accepts connection string behavior.
         /// </summary>
         [Fact]
         public void Validate_NoPoolingConfiguration_AcceptsConnectionString()
@@ -434,7 +435,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Message.Contains("Pool Size", StringComparison.Ordinal));
         }
         /// <summary>
-        /// Exercises validate  invalid min pool size single alias  returns invalid value error behavior, including the expected result and failure semantics.
+        /// Confirms the validate invalid min pool size single alias returns invalid value error behavior.
         /// </summary>
         [Fact]
         public void Validate_InvalidMinPoolSizeSingleAlias_ReturnsInvalidValueError()
@@ -455,7 +456,7 @@ namespace VectorNNTP.Backfiller.Tests
                 d.Message.Contains("conflicting minimum pool size aliases", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  invalid max pool size single alias  returns invalid value error behavior, including the expected result and failure semantics.
+        /// Confirms the validate invalid max pool size single alias returns invalid value error behavior.
         /// </summary>
         [Fact]
         public void Validate_InvalidMaxPoolSizeSingleAlias_ReturnsInvalidValueError()
@@ -476,7 +477,7 @@ namespace VectorNNTP.Backfiller.Tests
                 d.Message.Contains("conflicting maximum pool size aliases", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  excessive min pool size  alternative aliases  returns pooling warning behavior, including the expected result and failure semantics.
+        /// Confirms the validate excessive min pool size alternative aliases returns pooling warning behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;MinimumPoolSize=5")]
@@ -500,7 +501,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ValidationSeverity.Warning, poolWarning.Severity);
         }
         /// <summary>
-        /// Exercises validate  excessive max pool size  alternative aliases  returns pooling warning behavior, including the expected result and failure semantics.
+        /// Confirms the validate excessive max pool size alternative aliases returns pooling warning behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;MaximumPoolSize=100")]
@@ -528,7 +529,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region MySQL-Specific Connection String Options Tests
         /// <summary>
-        /// Exercises validate  my sql accepts syntactically valid custom port behavior, including the expected result and failure semantics.
+        /// Confirms the validate my sql accepts syntactically valid custom port behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Port=3306")]
@@ -552,7 +553,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  my sql with ssl mode  accepts configuration behavior, including the expected result and failure semantics.
+        /// Confirms the validate my sql with ssl mode accepts configuration behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;SslMode=Required")]
@@ -569,7 +570,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  my sql with char set  accepts configuration behavior, including the expected result and failure semantics.
+        /// Confirms the validate my sql with char set accepts configuration behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;CharSet=utf8mb4")]
@@ -585,7 +586,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  my sql with timeouts  accepts configuration behavior, including the expected result and failure semantics.
+        /// Confirms the validate my sql with timeouts accepts configuration behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Connection Timeout=30")]
@@ -602,7 +603,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  my sql with allow user variables  accepts configuration behavior, including the expected result and failure semantics.
+        /// Confirms the validate my sql with allow user variables accepts configuration behavior.
         /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Allow User Variables=true")]
@@ -618,7 +619,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, e => e.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Exercises validate  my sql with multiple options  accepts comprehensive configuration behavior, including the expected result and failure semantics.
+        /// Confirms the validate my sql with multiple options accepts comprehensive configuration behavior.
         /// </summary>
         [Fact]
         public void Validate_MySqlWithMultipleOptions_AcceptsComprehensiveConfiguration()
@@ -758,7 +759,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Multiple diagnostics Tests
         /// <summary>
-        /// Exercises validate  multiple issues  returns all errors behavior, including the expected result and failure semantics.
+        /// Confirms the validate multiple issues returns all errors behavior.
         /// </summary>
         [Fact]
         public void Validate_MultipleIssues_ReturnsAllErrors()
@@ -778,7 +779,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(diagnostics, e => e.Message.Contains("user ID", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Exercises validate  all pooling issues  reports all warnings behavior, including the expected result and failure semantics.
+        /// Confirms the validate all pooling issues reports all warnings behavior.
         /// </summary>
         [Fact]
         public void Validate_AllPoolingIssues_ReportsAllWarnings()
@@ -800,7 +801,7 @@ namespace VectorNNTP.Backfiller.Tests
 
         #region Setting Name Tests
         /// <summary>
-        /// Exercises validate  custom setting name  uses provided name behavior, including the expected result and failure semantics.
+        /// Confirms the validate custom setting name uses provided name behavior.
         /// </summary>
         [Fact]
         public void Validate_CustomSettingName_UsesProvidedName()

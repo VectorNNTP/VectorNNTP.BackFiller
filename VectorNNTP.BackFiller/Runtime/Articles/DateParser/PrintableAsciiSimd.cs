@@ -13,7 +13,7 @@ using System.Runtime.Intrinsics;
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Provides SIMD-aware validation for printable ASCII ranges.
+    /// Supplies SIMD-aware validation for printable ASCII ranges.
     /// </summary>
     internal static class PrintableAsciiSimd
     {

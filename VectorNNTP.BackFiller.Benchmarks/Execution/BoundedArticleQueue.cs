@@ -2,40 +2,40 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Execution/BoundedArticleQueue: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+// Execution/BoundedArticleQueue: bounds queued articles by both item count and payload bytes.
 
 using System.Threading.Channels;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the bounded ArticleQueue class for benchmark or isolated-regression execution.
+/// Represents the bounded ArticleQueue class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class BoundedArticleQueue : IDisposable
 {
     /// <summary>
-    /// Gets or sets the _channel value.
+    /// Holds the bounded channel that enforces queued-article capacity.
     /// </summary>
     private readonly Channel<QueuedArticle> _channel;
     /// <summary>
-    /// Gets or sets the _byteBudget value.
+    /// Enforces the queue's resident-byte limit so queued articles cannot exceed the configured payload budget.
     /// </summary>
     private readonly ByteBudget _byteBudget;
     /// <summary>
-    /// Gets or sets the _queuedBytes value.
+    /// Gets or sets the _queuedBytes.
     /// </summary>
     private long _queuedBytes;
     /// <summary>
-    /// Gets or sets the _queuedCount value.
+    /// Gets or sets the _queuedCount.
     /// </summary>
     private int _queuedCount;
     /// <summary>
-    /// Gets or sets the _admissionStopped value.
+    /// Gets or sets the _admissionStopped.
     /// </summary>
     private volatile bool _admissionStopped;
 
     /// <summary>
-    /// Performs the bounded ArticleQueue operation.
+    /// Implements the bounded ArticleQueue contract.
     /// </summary>
     internal BoundedArticleQueue(int maxArticles, long maxResidentBytes)
     {
@@ -50,16 +50,16 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Performs the current QueuedCount operation.
+    /// Implements the current QueuedCount contract.
     /// </summary>
     internal int CurrentQueuedCount => Volatile.Read(ref _queuedCount);
     /// <summary>
-    /// Performs the current QueuedBytes operation.
+    /// Implements the current QueuedBytes contract.
     /// </summary>
     internal long CurrentQueuedBytes => Volatile.Read(ref _queuedBytes);
 
     /// <summary>
-    /// Performs the try WriteAsync operation.
+    /// Implements the try WriteAsync contract.
     /// </summary>
     internal async ValueTask<bool> TryWriteAsync(QueuedArticle article, CancellationToken cancellationToken)
     {
@@ -85,7 +85,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Performs the try Read operation.
+    /// Implements the try Read contract.
     /// </summary>
     internal bool TryRead(out QueuedArticle article)
     {
@@ -100,7 +100,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Performs the wait ToReadAsync operation.
+    /// Implements the wait ToReadAsync contract.
     /// </summary>
     internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken)
     {
@@ -108,7 +108,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Performs the release Reservation operation.
+    /// Implements the release Reservation contract.
     /// </summary>
     internal void ReleaseReservation(int bytes)
     {
@@ -116,7 +116,8 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Performs the stop Admission operation.
+    /// Stops Admission.
+
     /// </summary>
     internal void StopAdmission()
     {
@@ -125,7 +126,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Performs the dispose operation.
+    /// Releases resources held by this instance.
     /// </summary>
     public void Dispose()
     {
