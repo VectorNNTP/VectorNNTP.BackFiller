@@ -201,6 +201,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("\"LineA\nLineB\"", row, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Splits a CSV payload into records while preserving embedded quotes and escaped CSV content.
+        /// </summary>
+        /// <param name="csv">
+        /// The serialized CSV content to parse into individual records for contract validation.
+        /// </param>
+        /// <returns>
+        /// An array of CSV records with quoted fields preserved as written by the artifact serializer.
+        /// </returns>
         private static string[] SplitCsvRecords(string csv)
         {
             List<string> records = [];
