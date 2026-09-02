@@ -113,17 +113,17 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<(string databaseName, string tableName, string createTableSql)> Calls { get; } = [];
 
             /// <summary>
-        /// Confirms the ensure database and table async behavior.
+            /// Confirms the ensure database and table async behavior.
             /// </summary>
-        /// <returns>The value returned by the ensure database and table async helper.</returns>
-        /// <summary>
-        /// Confirms the ensure database and table async behavior.
-        /// </summary>
-        /// <param name="databaseName">The database name used by this test scenario.</param>
-        /// <param name="tableName">The table name used by this test scenario.</param>
-        /// <param name="createTableSql">The create table sql used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the ensure database and table async helper.</returns>
+            /// <returns>The value returned by the ensure database and table async helper.</returns>
+            /// <summary>
+            /// Confirms the ensure database and table async behavior.
+            /// </summary>
+            /// <param name="databaseName">The database name used by this test scenario.</param>
+            /// <param name="tableName">The table name used by this test scenario.</param>
+            /// <param name="createTableSql">The create table sql used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the ensure database and table async helper.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 Calls.Add((databaseName, tableName, createTableSql));
@@ -144,17 +144,17 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             /// <summary>
-        /// Confirms the ensure database and table async behavior.
+            /// Confirms the ensure database and table async behavior.
             /// </summary>
-        /// <returns>The value returned by the ensure database and table async helper.</returns>
-        /// <summary>
-        /// Confirms the ensure database and table async behavior.
-        /// </summary>
-        /// <param name="databaseName">The database name used by this test scenario.</param>
-        /// <param name="tableName">The table name used by this test scenario.</param>
-        /// <param name="createTableSql">The create table sql used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the ensure database and table async helper.</returns>
+            /// <returns>The value returned by the ensure database and table async helper.</returns>
+            /// <summary>
+            /// Confirms the ensure database and table async behavior.
+            /// </summary>
+            /// <param name="databaseName">The database name used by this test scenario.</param>
+            /// <param name="tableName">The table name used by this test scenario.</param>
+            /// <param name="createTableSql">The create table sql used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the ensure database and table async helper.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return callback(cancellationToken);

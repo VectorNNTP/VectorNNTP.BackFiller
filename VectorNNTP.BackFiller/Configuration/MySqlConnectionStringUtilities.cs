@@ -66,8 +66,8 @@
 // Both paths use the same alias lists (ServerAliases, DatabaseAliases, etc.) derived from
 // MySqlConnector documentation to ensure consistent interpretation.
 
-using MySqlConnector;
 using System.Data.Common;
+using MySqlConnector;
 
 namespace VectorNNTP.Backfiller.Configuration
 {

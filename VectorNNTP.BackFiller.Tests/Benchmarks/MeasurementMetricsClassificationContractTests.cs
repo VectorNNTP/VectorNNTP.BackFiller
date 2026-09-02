@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Confirms the measurement metrics classification contract tests behavior.
+    /// Confirms the measurement metrics classification contract tests behavior.
     /// </summary>
     public sealed class MeasurementMetricsClassificationContractTests
     {

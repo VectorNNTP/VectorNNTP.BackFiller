@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the logging async sink correctness tests behavior.
+    /// Confirms the logging async sink correctness tests behavior.
     /// </summary>
     public sealed class LoggingAsyncSinkCorrectnessTests
     {
@@ -160,7 +160,7 @@ namespace VectorNNTP.Backfiller.Tests
             public long Count => Interlocked.Read(ref _count);
 
             /// <summary>
-        /// Confirms the emit behavior.
+            /// Confirms the emit behavior.
             /// </summary>
             public void Emit(LogEvent logEvent)
             {

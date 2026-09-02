@@ -58,19 +58,19 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return Task.CompletedTask;
         }
 
-                /// <summary>
+        /// <summary>
         /// Emits the certificate startup initializer beginning log event for back filler certificate startup initializer.
         /// </summary>
         [LoggerMessage(EventId = 2600, Level = LogLevel.Information, Message = "Certificate startup initializer beginning certificate availability verification")]
         private static partial void LogCertificateStartupInitializerBeginning(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the certificate startup initializer completed log event for back filler certificate startup initializer.
         /// </summary>
         [LoggerMessage(EventId = 2601, Level = LogLevel.Information, Message = "Certificate startup initializer completed certificate state activation")]
         private static partial void LogCertificateStartupInitializerCompleted(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the certificate startup initializer disabled log event for back filler certificate startup initializer.
         /// </summary>
         [LoggerMessage(EventId = 2602, Level = LogLevel.Information, Message = "Certificate startup initializer skipped because Let's Encrypt is disabled")]

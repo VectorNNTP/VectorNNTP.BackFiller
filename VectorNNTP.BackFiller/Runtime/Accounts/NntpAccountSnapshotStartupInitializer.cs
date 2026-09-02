@@ -46,13 +46,13 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             return Task.CompletedTask;
         }
 
-                /// <summary>
+        /// <summary>
         /// Emits the startup initializer beginning log event for nntp account snapshot startup initializer.
         /// </summary>
         [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "NNTP account startup initializer beginning initial snapshot load")]
         private static partial void LogStartupInitializerBeginning(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the startup initializer completed log event for nntp account snapshot startup initializer.
         /// </summary>
         [LoggerMessage(EventId = 2003, Level = LogLevel.Information, Message = "NNTP account startup initializer completed; AccountsLoaded={AccountCount}")]

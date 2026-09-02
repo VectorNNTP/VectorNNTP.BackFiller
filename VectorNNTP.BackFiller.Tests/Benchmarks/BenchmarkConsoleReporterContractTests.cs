@@ -12,7 +12,7 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Confirms the benchmark console reporter contract tests behavior.
+    /// Confirms the benchmark console reporter contract tests behavior.
     /// </summary>
     public sealed class BenchmarkConsoleReporterContractTests
     {

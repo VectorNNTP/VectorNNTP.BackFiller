@@ -16,7 +16,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the back filler certificate provisioning service tests behavior.
+    /// Confirms the back filler certificate provisioning service tests behavior.
     /// </summary>
     public sealed class BackFillerCertificateProvisioningServiceTests
     {
@@ -236,15 +236,15 @@ namespace VectorNNTP.Backfiller.Tests
             internal int IssueCallCount { get; private set; }
 
             /// <summary>
-        /// Confirms the issue certificate async behavior.
+            /// Confirms the issue certificate async behavior.
             /// </summary>
-        /// <returns>The value returned by the issue certificate async helper.</returns>
-        /// <summary>
-        /// Confirms the issue certificate async behavior.
-        /// </summary>
-        /// <param name="letsEncryptOptions">The lets encrypt options used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the issue certificate async helper.</returns>
+            /// <returns>The value returned by the issue certificate async helper.</returns>
+            /// <summary>
+            /// Confirms the issue certificate async behavior.
+            /// </summary>
+            /// <param name="letsEncryptOptions">The lets encrypt options used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the issue certificate async helper.</returns>
             public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
             {
                 IssueCallCount++;

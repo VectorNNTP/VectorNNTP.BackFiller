@@ -276,4 +276,4 @@ internal static class TransitServerStressRunner
             static artifact => artifact.ToCsv());
     }
 
-    }
+}

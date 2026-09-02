@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Confirms the benchmark artifact contract tests behavior.
+    /// Confirms the benchmark artifact contract tests behavior.
     /// </summary>
     public sealed class BenchmarkArtifactContractTests
     {

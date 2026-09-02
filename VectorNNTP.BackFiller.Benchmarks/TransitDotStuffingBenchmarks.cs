@@ -4,13 +4,13 @@
 //
 // TransitDotStuffingBenchmarks: compares dot-stuffing implementations across representative payload layouts.
 
+using System.Buffers;
+using System.IO.Pipelines;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
-using System.Buffers;
-using System.IO.Pipelines;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;

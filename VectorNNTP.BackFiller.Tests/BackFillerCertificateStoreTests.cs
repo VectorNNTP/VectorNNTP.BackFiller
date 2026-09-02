@@ -15,7 +15,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the back filler certificate store tests behavior.
+    /// Confirms the back filler certificate store tests behavior.
     /// </summary>
     public sealed class BackFillerCertificateStoreTests
     {

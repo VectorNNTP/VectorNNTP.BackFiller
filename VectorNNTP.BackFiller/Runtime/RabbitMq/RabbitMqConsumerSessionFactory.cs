@@ -846,55 +846,55 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             internal TaskCompletionSource<bool> CompletionSource { get; } = completionSource;
         }
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer service starting log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4400, Level = LogLevel.Information, Message = "RabbitMQ consumer service starting. DeliveryBufferCapacity={DeliveryBufferCapacity}, Prefetch={PrefetchCount}")]
         private static partial void LogConsumerServiceStarting(ILogger logger, int deliveryBufferCapacity, ushort? prefetchCount);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer service stopped log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4401, Level = LogLevel.Information, Message = "RabbitMQ consumer service stopped")]
         private static partial void LogConsumerServiceStopped(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer service reconcile failed log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4402, Level = LogLevel.Warning, Message = "RabbitMQ consumer reconciliation cycle failed unexpectedly")]
         private static partial void LogConsumerServiceReconcileFailed(ILogger logger, Exception exception);
 
-                /// <summary>
+        /// <summary>
         /// Emits the connection replaced dispatch failed log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4403, Level = LogLevel.Warning, Message = "RabbitMQ connection replacement dispatch to consumer sessions failed")]
         private static partial void LogConnectionReplacedDispatchFailed(ILogger logger, Exception exception);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer session created log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4404, Level = LogLevel.Information, Message = "RabbitMQ consumer session created. Backbone={Backbone} Account={Account} Connection={ConnectionNumber}/{ConnectionLimit} SessionKey={SessionKey}")]
         private static partial void LogConsumerSessionCreated(ILogger logger, string backbone, string account, int connectionNumber, int connectionLimit, string sessionKey);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer session replaced log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4405, Level = LogLevel.Information, Message = "RabbitMQ consumer session replaced due to account configuration change. Backbone={Backbone} Account={Account} Connection={ConnectionNumber}/{ConnectionLimit} SessionKey={SessionKey}")]
         private static partial void LogConsumerSessionReplaced(ILogger logger, string backbone, string account, int connectionNumber, int connectionLimit, string sessionKey);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer session retired log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4406, Level = LogLevel.Information, Message = "RabbitMQ consumer session retired. Backbone={Backbone} Account={Account} Connection={ConnectionNumber}/{ConnectionLimit} SessionKey={SessionKey}")]
         private static partial void LogConsumerSessionRetired(ILogger logger, string backbone, string account, int connectionNumber, int connectionLimit, string sessionKey);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer reconcile completed log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4407, Level = LogLevel.Information, Message = "RabbitMQ consumer reconciliation completed. DesiredSessions={DesiredSessions} ActiveSessions={ActiveSessions}")]
         private static partial void LogConsumerReconcileCompleted(ILogger logger, int desiredSessions, int activeSessions);
 
-                /// <summary>
+        /// <summary>
         /// Emits the consumer session stop failed log event for rabbit mq consumer session factory.
         /// </summary>
         [LoggerMessage(EventId = 4408, Level = LogLevel.Warning, Message = "RabbitMQ consumer session stop/dispose failed during service shutdown. SessionKey={SessionKey}")]

@@ -12,7 +12,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the connection string validation tests behavior.
+    /// Confirms the connection string validation tests behavior.
     /// </summary>
     public sealed class ConnectionStringValidationTests
     {

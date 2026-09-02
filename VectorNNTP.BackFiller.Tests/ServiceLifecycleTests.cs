@@ -6,9 +6,9 @@
 // Focused tests for service lifecycle, covering service lifecycle and shutdown contracts.
 // Primary responsibility: documents the executable contracts covered by the service lifecycle test suite.
 
-using Xunit;
-using VectorNNTP.Backfiller.Runtime.Lifecycle;
 using System.Collections.Concurrent;
+using VectorNNTP.Backfiller.Runtime.Lifecycle;
+using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {

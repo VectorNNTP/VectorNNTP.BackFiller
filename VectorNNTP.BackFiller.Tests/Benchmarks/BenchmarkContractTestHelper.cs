@@ -16,7 +16,7 @@ using VectorNNTP.BackFiller.Benchmarks;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Confirms the benchmark contract test helper behavior.
+    /// Confirms the benchmark contract test helper behavior.
     /// </summary>
     internal static class BenchmarkContractTestHelper
     {

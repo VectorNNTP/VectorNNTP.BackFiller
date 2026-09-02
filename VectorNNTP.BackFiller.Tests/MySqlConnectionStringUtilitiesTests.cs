@@ -14,7 +14,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the my sql connection string utilities tests behavior.
+    /// Confirms the my sql connection string utilities tests behavior.
     /// </summary>
     public class MySqlConnectionStringUtilitiesTests
     {

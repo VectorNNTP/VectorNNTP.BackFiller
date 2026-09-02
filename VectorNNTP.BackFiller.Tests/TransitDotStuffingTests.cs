@@ -12,7 +12,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the transit dot stuffing tests behavior.
+    /// Confirms the transit dot stuffing tests behavior.
     /// </summary>
     public sealed class TransitDotStuffingTests
     {

@@ -6,11 +6,11 @@
 // BenchmarkDotNet suite for the NNTP article parser hot path across representative
 // text, binary, malformed, and yEnc article shapes.
 
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
-using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 
 namespace VectorNNTP.BackFiller.Benchmarks

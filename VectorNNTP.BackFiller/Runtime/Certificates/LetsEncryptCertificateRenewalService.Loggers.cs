@@ -9,19 +9,19 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </summary>
     internal sealed partial class LetsEncryptCertificateRenewalService
     {
-                /// <summary>
+        /// <summary>
         /// Emits the service disabled log event for lets encrypt certificate renewal service.loggers.
         /// </summary>
         [LoggerMessage(EventId = 1200, Level = LogLevel.Information, Message = "Certificate renewal service is disabled by configuration.")]
         private static partial void LogServiceDisabled(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the renewal succeeded log event for lets encrypt certificate renewal service.loggers.
         /// </summary>
         [LoggerMessage(EventId = 1201, Level = LogLevel.Information, Message = "Certificate renewal completed successfully.")]
         private static partial void LogRenewalSucceeded(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the renewal iteration failed log event for lets encrypt certificate renewal service.loggers.
         /// </summary>
         [LoggerMessage(EventId = 1202, Level = LogLevel.Warning, Message = "Certificate renewal iteration failed; will retry on next interval.")]

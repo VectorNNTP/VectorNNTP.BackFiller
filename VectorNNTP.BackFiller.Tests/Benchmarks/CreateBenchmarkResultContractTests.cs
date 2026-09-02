@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Confirms the create benchmark result contract tests behavior.
+    /// Confirms the create benchmark result contract tests behavior.
     /// </summary>
     public sealed class CreateBenchmarkResultContractTests
     {

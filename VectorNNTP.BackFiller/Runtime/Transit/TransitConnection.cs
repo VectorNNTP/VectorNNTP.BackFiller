@@ -2080,25 +2080,25 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             internal TransitConnectionLifecycleFailure Failure { get; }
         }
 
-                /// <summary>
+        /// <summary>
         /// Emits the transit state transition log event for transit connection.
         /// </summary>
         [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
         private static partial void LogTransitStateTransition(ILogger logger, string connectionId, TransitConnectionState state);
 
-                /// <summary>
+        /// <summary>
         /// Emits the transit capabilities log event for transit connection.
         /// </summary>
         [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
         private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsStreaming);
 
-                /// <summary>
+        /// <summary>
         /// Emits the transit connection ready log event for transit connection.
         /// </summary>
         [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
         private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive);
 
-                /// <summary>
+        /// <summary>
         /// Emits the transit response loop faulted log event for transit connection.
         /// </summary>
         [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]

@@ -6,10 +6,10 @@
 // Focused tests for benchmark dev null transit server, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
 // Primary responsibility: documents the executable contracts covered by the benchmark dev null transit server test suite.
 
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;

@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Confirms the transit single trace runner tests behavior.
+    /// Confirms the transit single trace runner tests behavior.
     /// </summary>
     public sealed class TransitSingleTraceRunnerTests
     {
@@ -152,16 +152,16 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             private int _startedCount;
 
             /// <summary>
-        /// Confirms the publish async behavior.
+            /// Confirms the publish async behavior.
             /// </summary>
-        /// <returns>The value returned by the publish async helper.</returns>
-        /// <summary>
-        /// Confirms the publish async behavior.
-        /// </summary>
-        /// <param name="messageId">The message id used by this test scenario.</param>
-        /// <param name="articlePayload">The article payload used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the publish async helper.</returns>
+            /// <returns>The value returned by the publish async helper.</returns>
+            /// <summary>
+            /// Confirms the publish async behavior.
+            /// </summary>
+            /// <param name="messageId">The message id used by this test scenario.</param>
+            /// <param name="articlePayload">The article payload used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the publish async helper.</returns>
             public ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(messageId);
@@ -231,14 +231,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             internal int MaxOutstandingObserved { get; private set; }
 
             /// <summary>
-        /// Confirms the wait until started async behavior.
+            /// Confirms the wait until started async behavior.
             /// </summary>
-        /// <returns>The value returned by the wait until started async helper.</returns>
-        /// <summary>
-        /// Confirms the wait until started async behavior.
-        /// </summary>
-        /// <param name="expectedCount">The expected count used by this test scenario.</param>
-        /// <returns>The value returned by the wait until started async helper.</returns>
+            /// <returns>The value returned by the wait until started async helper.</returns>
+            /// <summary>
+            /// Confirms the wait until started async behavior.
+            /// </summary>
+            /// <param name="expectedCount">The expected count used by this test scenario.</param>
+            /// <returns>The value returned by the wait until started async helper.</returns>
             internal async Task WaitUntilStartedAsync(int expectedCount)
             {
                 while (true)
@@ -256,7 +256,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-        /// Confirms the complete next behavior.
+            /// Confirms the complete next behavior.
             /// </summary>
             internal void CompleteNext()
             {
@@ -272,7 +272,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-        /// Confirms the complete by call index behavior.
+            /// Confirms the complete by call index behavior.
             /// </summary>
             internal void CompleteByCallIndex(int callIndex)
             {
@@ -286,16 +286,16 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-        /// Confirms the publish async behavior.
+            /// Confirms the publish async behavior.
             /// </summary>
-        /// <returns>The value returned by the publish async helper.</returns>
-        /// <summary>
-        /// Confirms the publish async behavior.
-        /// </summary>
-        /// <param name="messageId">The message id used by this test scenario.</param>
-        /// <param name="articlePayload">The article payload used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the publish async helper.</returns>
+            /// <returns>The value returned by the publish async helper.</returns>
+            /// <summary>
+            /// Confirms the publish async behavior.
+            /// </summary>
+            /// <param name="messageId">The message id used by this test scenario.</param>
+            /// <param name="articlePayload">The article payload used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the publish async helper.</returns>
             public async ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(messageId);

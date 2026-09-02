@@ -22,7 +22,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the back filler listener socket service tests behavior.
+    /// Confirms the back filler listener socket service tests behavior.
     /// </summary>
     public sealed class BackFillerListenerSocketServiceTests
     {

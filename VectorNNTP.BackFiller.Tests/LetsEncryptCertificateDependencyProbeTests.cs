@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the lets encrypt certificate dependency probe tests behavior.
+    /// Confirms the lets encrypt certificate dependency probe tests behavior.
     /// </summary>
     public sealed class LetsEncryptCertificateDependencyProbeTests
     {

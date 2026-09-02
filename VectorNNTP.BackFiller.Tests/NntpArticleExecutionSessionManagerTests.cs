@@ -1054,11 +1054,11 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="categoryName">Logger category name.</param>
             /// <returns>Capturing logger instance.</returns>
-        /// <summary>
-        /// Confirms the create logger behavior.
-        /// </summary>
-        /// <param name="categoryName">The category name used by this test scenario.</param>
-        /// <returns>The value returned by the create logger helper.</returns>
+            /// <summary>
+            /// Confirms the create logger behavior.
+            /// </summary>
+            /// <param name="categoryName">The category name used by this test scenario.</param>
+            /// <returns>The value returned by the create logger helper.</returns>
             public ILogger CreateLogger(string categoryName)
             {
                 return new CapturingLogger(Entries, _gate);
@@ -1108,12 +1108,12 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 /// <param name="entries">Captured-entry destination list.</param>
                 /// <param name="gate">Synchronization lock.</param>
-        /// <summary>
-        /// Confirms the r behavior.
-        /// </summary>
-        /// <param name="entries">The entries used by this test scenario.</param>
-        /// <param name="gate">The gate used by this test scenario.</param>
-        /// <returns>The value returned by the r helper.</returns>
+                /// <summary>
+                /// Confirms the r behavior.
+                /// </summary>
+                /// <param name="entries">The entries used by this test scenario.</param>
+                /// <param name="gate">The gate used by this test scenario.</param>
+                /// <returns>The value returned by the r helper.</returns>
                 internal CapturingLogger(List<CapturedLogEntry> entries, object gate)
                 {
                     _entries = entries;
@@ -1137,11 +1137,11 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 /// <param name="logLevel">Log level.</param>
                 /// <returns>Always <see langword="true"/> for test capture.</returns>
-        /// <summary>
-        /// Confirms the is enabled behavior.
-        /// </summary>
-        /// <param name="logLevel">The log level used by this test scenario.</param>
-        /// <returns>The value returned by the is enabled helper.</returns>
+                /// <summary>
+                /// Confirms the is enabled behavior.
+                /// </summary>
+                /// <param name="logLevel">The log level used by this test scenario.</param>
+                /// <returns>The value returned by the is enabled helper.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -1205,12 +1205,12 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 /// <param name="entries">Captured-entry destination list.</param>
                 /// <param name="gate">Synchronization lock.</param>
-        /// <summary>
-        /// Confirms the r behavior.
-        /// </summary>
-        /// <param name="entries">The entries used by this test scenario.</param>
-        /// <param name="gate">The gate used by this test scenario.</param>
-        /// <returns>The value returned by the r helper.</returns>
+                /// <summary>
+                /// Confirms the r behavior.
+                /// </summary>
+                /// <param name="entries">The entries used by this test scenario.</param>
+                /// <param name="gate">The gate used by this test scenario.</param>
+                /// <returns>The value returned by the r helper.</returns>
                 internal CapturingLogger(List<CapturedLogEntry> entries, object gate)
                 {
                     _entries = entries;
@@ -1234,11 +1234,11 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 /// <param name="logLevel">Log level.</param>
                 /// <returns>Always <see langword="true"/> for test capture.</returns>
-        /// <summary>
-        /// Confirms the is enabled behavior.
-        /// </summary>
-        /// <param name="logLevel">The log level used by this test scenario.</param>
-        /// <returns>The value returned by the is enabled helper.</returns>
+                /// <summary>
+                /// Confirms the is enabled behavior.
+                /// </summary>
+                /// <param name="logLevel">The log level used by this test scenario.</param>
+                /// <returns>The value returned by the is enabled helper.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -1301,14 +1301,14 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="listener">Bound listener.</param>
             /// <param name="session">Per-connection session callback.</param>
             /// <param name="acceptConnectionCount">Expected connection accept count.</param>
-        /// <summary>
-        /// Confirms the r behavior.
-        /// </summary>
-        /// <param name="listener">The listener used by this test scenario.</param>
-        /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-        /// <param name="session">The session used by this test scenario.</param>
-        /// <param name="acceptConnectionCount">The accept connection count used by this test scenario.</param>
-        /// <returns>The value returned by the r helper.</returns>
+            /// <summary>
+            /// Confirms the r behavior.
+            /// </summary>
+            /// <param name="listener">The listener used by this test scenario.</param>
+            /// <param name="NetworkStream">The network stream used by this test scenario.</param>
+            /// <param name="session">The session used by this test scenario.</param>
+            /// <param name="acceptConnectionCount">The accept connection count used by this test scenario.</param>
+            /// <returns>The value returned by the r helper.</returns>
             private FakeArticleServer(TcpListener listener, Func<NetworkStream, Task> session, int acceptConnectionCount)
             {
                 _listener = listener;
@@ -1323,13 +1323,13 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="session">Per-connection callback script.</param>
             /// <param name="acceptConnectionCount">Expected connection count before normal loop completion.</param>
             /// <returns>Started fake server.</returns>
-        /// <summary>
-        /// Confirms the start async behavior.
-        /// </summary>
-        /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-        /// <param name="session">The session used by this test scenario.</param>
-        /// <param name="acceptConnectionCount">The accept connection count used by this test scenario.</param>
-        /// <returns>The value returned by the start async helper.</returns>
+            /// <summary>
+            /// Confirms the start async behavior.
+            /// </summary>
+            /// <param name="NetworkStream">The network stream used by this test scenario.</param>
+            /// <param name="session">The session used by this test scenario.</param>
+            /// <param name="acceptConnectionCount">The accept connection count used by this test scenario.</param>
+            /// <returns>The value returned by the start async helper.</returns>
             internal static async Task<FakeArticleServer> StartAsync(Func<NetworkStream, Task> session, int acceptConnectionCount = 1)
             {
                 TcpListener listener = new(IPAddress.Loopback, 0);
@@ -1350,12 +1350,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Network stream.</param>
             /// <param name="expected">Expected line content.</param>
             /// <returns>A task that completes when the assertion passes.</returns>
-        /// <summary>
-        /// Confirms the expect ascii line async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="expected">The expected used by this test scenario.</param>
-        /// <returns>The value returned by the expect ascii line async helper.</returns>
+            /// <summary>
+            /// Confirms the expect ascii line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="expected">The expected used by this test scenario.</param>
+            /// <returns>The value returned by the expect ascii line async helper.</returns>
             internal static async Task ExpectAsciiLineAsync(Stream stream, string expected)
             {
                 string line = await ReadAsciiLineAsync(stream, CancellationToken.None).ConfigureAwait(false);
@@ -1368,12 +1368,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Network stream.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
             /// <returns>ASCII line text.</returns>
-        /// <summary>
-        /// Confirms the read ascii line async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the read ascii line async helper.</returns>
+            /// <summary>
+            /// Confirms the read ascii line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the read ascii line async helper.</returns>
             internal static async Task<string> ReadAsciiLineAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> bytes = [];
@@ -1409,12 +1409,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Network stream.</param>
             /// <param name="line">Line content.</param>
             /// <returns>A task that completes when write and flush finish.</returns>
-        /// <summary>
-        /// Confirms the write ascii line async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="line">The line used by this test scenario.</param>
-        /// <returns>The value returned by the write ascii line async helper.</returns>
+            /// <summary>
+            /// Confirms the write ascii line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="line">The line used by this test scenario.</param>
+            /// <returns>The value returned by the write ascii line async helper.</returns>
             internal static async Task WriteAsciiLineAsync(Stream stream, string line)
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
@@ -1428,12 +1428,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Network stream.</param>
             /// <param name="bytes">Bytes to write.</param>
             /// <returns>A task that completes when write and flush finish.</returns>
-        /// <summary>
-        /// Confirms the write bytes async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="bytes">The bytes used by this test scenario.</param>
-        /// <returns>The value returned by the write bytes async helper.</returns>
+            /// <summary>
+            /// Confirms the write bytes async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="bytes">The bytes used by this test scenario.</param>
+            /// <returns>The value returned by the write bytes async helper.</returns>
             internal static async Task WriteBytesAsync(Stream stream, byte[] bytes)
             {
                 await stream.WriteAsync(bytes, CancellationToken.None).ConfigureAwait(false);
@@ -1444,10 +1444,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Disposes server resources and joins accept loop.
             /// </summary>
             /// <returns>A task that completes after loop termination.</returns>
-        /// <summary>
-        /// Confirms the dispose async behavior.
-        /// </summary>
-        /// <returns>The value returned by the dispose async helper.</returns>
+            /// <summary>
+            /// Confirms the dispose async behavior.
+            /// </summary>
+            /// <returns>The value returned by the dispose async helper.</returns>
             public async ValueTask DisposeAsync()
             {
                 _shutdown.Cancel();
@@ -1468,10 +1468,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Accept loop body.
             /// </summary>
             /// <returns>A task that completes after expected connections are processed or shutdown is requested.</returns>
-        /// <summary>
-        /// Confirms the accept loop async behavior.
-        /// </summary>
-        /// <returns>The value returned by the accept loop async helper.</returns>
+            /// <summary>
+            /// Confirms the accept loop async behavior.
+            /// </summary>
+            /// <returns>The value returned by the accept loop async helper.</returns>
             private async Task AcceptLoopAsync()
             {
                 try

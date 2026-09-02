@@ -732,7 +732,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly Func<RabbitMqArticleWorkRequest, ValueTask<BackboneArticleRetrievalResult>> _implementation;
 
             /// <summary>
-        /// Confirms the fake backbone article retriever behavior.
+            /// Confirms the fake backbone article retriever behavior.
             /// </summary>
             internal FakeBackboneArticleRetriever(Func<RabbitMqArticleWorkRequest, ValueTask<BackboneArticleRetrievalResult>> implementation)
             {
@@ -740,15 +740,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the retrieve async behavior.
+            /// Confirms the retrieve async behavior.
             /// </summary>
-        /// <returns>The value returned by the retrieve async helper.</returns>
-        /// <summary>
-        /// Confirms the retrieve async behavior.
-        /// </summary>
-        /// <param name="request">The request used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the retrieve async helper.</returns>
+            /// <returns>The value returned by the retrieve async helper.</returns>
+            /// <summary>
+            /// Confirms the retrieve async behavior.
+            /// </summary>
+            /// <param name="request">The request used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the retrieve async helper.</returns>
             public ValueTask<BackboneArticleRetrievalResult> RetrieveAsync(RabbitMqArticleWorkRequest request, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -762,14 +762,14 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class NoOpDeliverySettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-        /// Confirms the ack async behavior.
+            /// Confirms the ack async behavior.
             /// </summary>
-        /// <returns>The value returned by the ack async helper.</returns>
-        /// <summary>
-        /// Confirms the ack async behavior.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the ack async helper.</returns>
+            /// <returns>The value returned by the ack async helper.</returns>
+            /// <summary>
+            /// Confirms the ack async behavior.
+            /// </summary>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the ack async helper.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -777,15 +777,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the nack async behavior.
+            /// Confirms the nack async behavior.
             /// </summary>
-        /// <returns>The value returned by the nack async helper.</returns>
-        /// <summary>
-        /// Confirms the nack async behavior.
-        /// </summary>
-        /// <param name="requeue">The requeue used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the nack async helper.</returns>
+            /// <returns>The value returned by the nack async helper.</returns>
+            /// <summary>
+            /// Confirms the nack async behavior.
+            /// </summary>
+            /// <param name="requeue">The requeue used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -823,14 +823,14 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the is enabled behavior.
+            /// Confirms the is enabled behavior.
             /// </summary>
-        /// <returns>The value returned by the is enabled helper.</returns>
-        /// <summary>
-        /// Confirms the is enabled behavior.
-        /// </summary>
-        /// <param name="logLevel">The log level used by this test scenario.</param>
-        /// <returns>The value returned by the is enabled helper.</returns>
+            /// <returns>The value returned by the is enabled helper.</returns>
+            /// <summary>
+            /// Confirms the is enabled behavior.
+            /// </summary>
+            /// <param name="logLevel">The log level used by this test scenario.</param>
+            /// <returns>The value returned by the is enabled helper.</returns>
             public bool IsEnabled(LogLevel logLevel)
             {
                 return true;
@@ -843,7 +843,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the null scope behavior.
+            /// Confirms the null scope behavior.
             /// </summary>
             private sealed class NullScope : IDisposable
             {
@@ -853,7 +853,7 @@ namespace VectorNNTP.Backfiller.Tests
                 internal static readonly NullScope Instance = new();
 
                 /// <summary>
-        /// Confirms the dispose behavior.
+                /// Confirms the dispose behavior.
                 /// </summary>
                 public void Dispose()
                 {
@@ -880,7 +880,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly Task _acceptLoop;
 
             /// <summary>
-        /// Confirms the fake lease server behavior.
+            /// Confirms the fake lease server behavior.
             /// </summary>
             private FakeLeaseServer(TcpListener listener)
             {
@@ -895,13 +895,13 @@ namespace VectorNNTP.Backfiller.Tests
             internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
             /// <summary>
-        /// Confirms the start async behavior.
+            /// Confirms the start async behavior.
             /// </summary>
-        /// <returns>The value returned by the start async helper.</returns>
-        /// <summary>
-        /// Confirms the start async behavior.
-        /// </summary>
-        /// <returns>The value returned by the start async helper.</returns>
+            /// <returns>The value returned by the start async helper.</returns>
+            /// <summary>
+            /// Confirms the start async behavior.
+            /// </summary>
+            /// <returns>The value returned by the start async helper.</returns>
             internal static Task<FakeLeaseServer> StartAsync()
             {
                 TcpListener listener = new(IPAddress.Loopback, 0);
@@ -910,13 +910,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the dispose async behavior.
+            /// Confirms the dispose async behavior.
             /// </summary>
-        /// <returns>The value returned by the dispose async helper.</returns>
-        /// <summary>
-        /// Confirms the dispose async behavior.
-        /// </summary>
-        /// <returns>The value returned by the dispose async helper.</returns>
+            /// <returns>The value returned by the dispose async helper.</returns>
+            /// <summary>
+            /// Confirms the dispose async behavior.
+            /// </summary>
+            /// <returns>The value returned by the dispose async helper.</returns>
             public async ValueTask DisposeAsync()
             {
                 _shutdown.Cancel();
@@ -934,13 +934,13 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the accept loop async behavior.
+            /// Confirms the accept loop async behavior.
             /// </summary>
-        /// <returns>The value returned by the accept loop async helper.</returns>
-        /// <summary>
-        /// Confirms the accept loop async behavior.
-        /// </summary>
-        /// <returns>The value returned by the accept loop async helper.</returns>
+            /// <returns>The value returned by the accept loop async helper.</returns>
+            /// <summary>
+            /// Confirms the accept loop async behavior.
+            /// </summary>
+            /// <returns>The value returned by the accept loop async helper.</returns>
             private async Task AcceptLoopAsync()
             {
                 while (!_shutdown.IsCancellationRequested)
@@ -972,15 +972,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the write ascii line async behavior.
+            /// Confirms the write ascii line async behavior.
             /// </summary>
-        /// <returns>The value returned by the write ascii line async helper.</returns>
-        /// <summary>
-        /// Confirms the write ascii line async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="line">The line used by this test scenario.</param>
-        /// <returns>The value returned by the write ascii line async helper.</returns>
+            /// <returns>The value returned by the write ascii line async helper.</returns>
+            /// <summary>
+            /// Confirms the write ascii line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="line">The line used by this test scenario.</param>
+            /// <returns>The value returned by the write ascii line async helper.</returns>
             private static async Task WriteAsciiLineAsync(Stream stream, string line)
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
