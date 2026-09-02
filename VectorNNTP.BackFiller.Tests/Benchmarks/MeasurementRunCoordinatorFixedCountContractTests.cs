@@ -59,11 +59,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// <summary>
         /// Reads the current coordinator source from repository to assert fixed-count control-flow contract.
         /// </summary>
-        /// <returns>The read coordinator source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read coordinator source helper.</returns>
         /// <summary>
-        /// Verifies the read coordinator source scenario and its documented contract.
+        /// Confirms the read coordinator source behavior.
         /// </summary>
-        /// <returns>The read coordinator source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read coordinator source helper.</returns>
         private static string ReadCoordinatorSource()
         {
             return ReadBenchmarkSource("Execution", "MeasurementRunCoordinator.cs");
@@ -72,11 +72,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// <summary>
         /// Reads the current orchestrator source from repository to assert fixed-count warmup contract.
         /// </summary>
-        /// <returns>The read orchestrator source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read orchestrator source helper.</returns>
         /// <summary>
-        /// Verifies the read orchestrator source scenario and its documented contract.
+        /// Confirms the read orchestrator source behavior.
         /// </summary>
-        /// <returns>The read orchestrator source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read orchestrator source helper.</returns>
         private static string ReadOrchestratorSource()
         {
             return ReadBenchmarkSource("Execution", "TransitBenchmarkOrchestrator.cs");
@@ -85,25 +85,25 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// <summary>
         /// Reads the current drain implementation source from repository to assert queue/drain ordering contract.
         /// </summary>
-        /// <returns>The read drain source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read drain source helper.</returns>
         /// <summary>
-        /// Verifies the read drain source scenario and its documented contract.
+        /// Confirms the read drain source behavior.
         /// </summary>
-        /// <returns>The read drain source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read drain source helper.</returns>
         private static string ReadDrainSource()
         {
             return ReadBenchmarkSource("Execution", "MeasurementExecutionEngine.Drain.cs");
         }
 
         /// <summary>
-        /// Verifies the read benchmark source scenario and its documented contract.
+        /// Confirms the read benchmark source behavior.
         /// </summary>
-        /// <returns>The read benchmark source value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read benchmark source helper.</returns>
         /// <summary>
-        /// Verifies the read benchmark source scenario and its documented contract.
+        /// Confirms the read benchmark source behavior.
         /// </summary>
-        /// <param name="pathSegments">The path segments supplied to the helper.</param>
-        /// <returns>The read benchmark source value produced for the requested scenario.</returns>
+        /// <param name="pathSegments">The path segments used by this test scenario.</param>
+        /// <returns>The value returned by the read benchmark source helper.</returns>
         private static string ReadBenchmarkSource(params string[] pathSegments)
         {
             string repoRoot = ResolveRepositoryRoot();
@@ -113,13 +113,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the resolve repository root scenario and its documented contract.
+        /// Confirms the resolve repository root behavior.
         /// </summary>
-        /// <returns>The resolve repository root value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the resolve repository root helper.</returns>
         /// <summary>
-        /// Verifies the resolve repository root scenario and its documented contract.
+        /// Confirms the resolve repository root behavior.
         /// </summary>
-        /// <returns>The resolve repository root value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the resolve repository root helper.</returns>
         private static string ResolveRepositoryRoot()
         {
             foreach (string startPath in EnumerateRootCandidates())
@@ -139,13 +139,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the enumerate root candidates scenario and its documented contract.
+        /// Confirms the enumerate root candidates behavior.
         /// </summary>
-        /// <returns>The enumerate root candidates value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the enumerate root candidates helper.</returns>
         /// <summary>
-        /// Verifies the enumerate root candidates scenario and its documented contract.
+        /// Confirms the enumerate root candidates behavior.
         /// </summary>
-        /// <returns>The enumerate root candidates value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the enumerate root candidates helper.</returns>
         private static IEnumerable<string> EnumerateRootCandidates()
         {
             yield return AppContext.BaseDirectory;

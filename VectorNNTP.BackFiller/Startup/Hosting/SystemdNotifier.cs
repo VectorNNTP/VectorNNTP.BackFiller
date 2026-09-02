@@ -4,7 +4,7 @@
 
 // Systemd notification integration.
 //
-// Provides the application-side notification bridge to systemd (READY/STOPPING/STATUS)
+// Implements the application-side notification bridge to systemd (READY/STOPPING/STATUS)
 // for Linux service deployments. Service policy and lifecycle configuration belong in
 // the systemd unit file, not this source module.
 //

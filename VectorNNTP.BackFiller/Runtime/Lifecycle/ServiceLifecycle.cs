@@ -6,7 +6,7 @@
 
 // ServiceLifecycle.cs -- Explicit application readiness state machine.
 //
-// Tracks the application lifecycle through distinct phases, enabling systemd, load balancers,
+// Maintains the application lifecycle through distinct phases, enabling systemd, load balancers,
 // and health checks to distinguish "process running" from "service ready to accept work".
 //
 // State machine:

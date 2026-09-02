@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class TransitGlobalWorkQueueTests
     {
         /// <summary>
-        /// Verifies the enqueue and claim when capacity available updates queue and in flight accounting scenario and its documented contract.
+        /// Confirms the enqueue and claim when capacity available updates queue and in flight accounting behavior.
         /// </summary>
         [Fact]
         public async Task EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting()
@@ -41,7 +41,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, queue.InFlightCount);
         }
         /// <summary>
-        /// Verifies the enqueue async when item capacity reached waits until claim frees capacity scenario and its documented contract.
+        /// Confirms the enqueue async when item capacity reached waits until claim frees capacity behavior.
         /// </summary>
         [Fact]
         public async Task EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity()
@@ -63,7 +63,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(64, queue.QueuedPayloadBytes);
         }
         /// <summary>
-        /// Verifies the enqueue async when payload byte capacity reached waits until claim frees bytes scenario and its documented contract.
+        /// Confirms the enqueue async when payload byte capacity reached waits until claim frees bytes behavior.
         /// </summary>
         [Fact]
         public async Task EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes()
@@ -85,7 +85,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, queue.QueuedPayloadBytes);
         }
         /// <summary>
-        /// Verifies the schedule retry async when attempt budget remaining requeues after delay scenario and its documented contract.
+        /// Confirms the schedule retry async when attempt budget remaining requeues after delay behavior.
         /// </summary>
         [Fact]
         public async Task ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay()
@@ -118,7 +118,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(2, retried!.AttemptCount);
         }
         /// <summary>
-        /// Verifies the transit work item try complete allows exactly one terminal completion scenario and its documented contract.
+        /// Confirms the transit work item try complete allows exactly one terminal completion behavior.
         /// </summary>
         [Fact]
         public void TransitWorkItem_TryComplete_AllowsExactlyOneTerminalCompletion()
@@ -147,7 +147,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitWorkItemState.CompletedAccepted, item.State);
         }
         /// <summary>
-        /// Verifies the transit work item retry attempt budget is bounded to three transmissions scenario and its documented contract.
+        /// Confirms the transit work item retry attempt budget is bounded to three transmissions behavior.
         /// </summary>
         [Fact]
         public void TransitWorkItem_RetryAttemptBudget_IsBoundedToThreeTransmissions()
@@ -182,7 +182,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(item.HasAttemptsRemaining());
         }
         /// <summary>
-        /// Verifies the mark in flight terminal when no in flight ownership throws invariant violation scenario and its documented contract.
+        /// Confirms the mark in flight terminal when no in flight ownership throws invariant violation behavior.
         /// </summary>
         [Fact]
         public void MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation()
@@ -194,16 +194,16 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create item scenario and its documented contract.
+        /// Confirms the create item behavior.
         /// </summary>
-        /// <returns>The create item value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create item helper.</returns>
         /// <summary>
-        /// Verifies the create item scenario and its documented contract.
+        /// Confirms the create item behavior.
         /// </summary>
-        /// <param name="id">The id supplied to the helper.</param>
-        /// <param name="messageId">The message id supplied to the helper.</param>
-        /// <param name="payloadSize">The payload size supplied to the helper.</param>
-        /// <returns>The create item value produced for the requested scenario.</returns>
+        /// <param name="id">The id used by this test scenario.</param>
+        /// <param name="messageId">The message id used by this test scenario.</param>
+        /// <param name="payloadSize">The payload size used by this test scenario.</param>
+        /// <returns>The value returned by the create item helper.</returns>
         private static TransitWorkItem CreateItem(long id, string messageId, int payloadSize)
         {
             byte[] payload = new byte[payloadSize];

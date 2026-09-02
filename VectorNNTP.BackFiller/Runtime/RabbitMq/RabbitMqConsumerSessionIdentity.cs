@@ -31,12 +31,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         bool UseSsl)
     {
         /// <summary>
-        /// Gets the one-based session ordinal used by existing consumer/session diagnostics.
+        /// Returns the one-based session ordinal used by existing consumer/session diagnostics.
         /// </summary>
         internal int SessionOrdinal => ConnectionNumber;
 
         /// <summary>
-        /// Gets the stable logical session key used in diagnostics and reconciliation maps.
+        /// Returns the stable logical session key used in diagnostics and reconciliation maps.
         /// </summary>
         internal string SessionKey => $"{AccountId:N}:{ConnectionNumber}";
     }

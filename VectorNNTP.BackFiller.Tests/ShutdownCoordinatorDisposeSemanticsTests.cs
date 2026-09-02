@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ShutdownCoordinatorDisposeSemanticsTests
     {
         /// <summary>
-        /// Verifies the dispose during graceful shutdown completes without forced escalation signal scenario and its documented contract.
+        /// Confirms the dispose during graceful shutdown completes without forced escalation signal behavior.
         /// </summary>
         [Fact]
         public void Dispose_DuringGracefulShutdown_CompletesWithoutForcedEscalationSignal()
@@ -30,7 +30,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
         }
         /// <summary>
-        /// Verifies the dispose during graceful shutdown forced shutdown token becomes unusable scenario and its documented contract.
+        /// Confirms the dispose during graceful shutdown forced shutdown token becomes unusable behavior.
         /// </summary>
         [Fact]
         public void Dispose_DuringGracefulShutdown_ForcedShutdownTokenBecomesUnusable()
@@ -44,7 +44,7 @@ namespace VectorNNTP.Backfiller.Tests
                 _ = coordinator.ForcedShutdownToken.IsCancellationRequested);
         }
         /// <summary>
-        /// Verifies the dispose during graceful shutdown prevents later timer driven forced escalation scenario and its documented contract.
+        /// Confirms the dispose during graceful shutdown prevents later timer driven forced escalation behavior.
         /// </summary>
         [Fact]
         public async Task Dispose_DuringGracefulShutdown_PreventsLaterTimerDrivenForcedEscalation()
@@ -61,7 +61,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);
         }
         /// <summary>
-        /// Verifies the signal graceful shutdown after dispose is ignored scenario and its documented contract.
+        /// Confirms the signal graceful shutdown after dispose is ignored behavior.
         /// </summary>
         [Fact]
         public void SignalGracefulShutdown_AfterDispose_IsIgnored()
@@ -76,7 +76,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);
         }
         /// <summary>
-        /// Verifies the signal forced shutdown after dispose is ignored scenario and its documented contract.
+        /// Confirms the signal forced shutdown after dispose is ignored behavior.
         /// </summary>
         [Fact]
         public void SignalForcedShutdown_AfterDispose_IsIgnored()

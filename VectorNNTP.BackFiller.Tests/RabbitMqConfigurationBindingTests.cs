@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqConfigurationBindingTests
     {
         /// <summary>
-        /// Verifies the back filler rabbit mq section binds all current settings scenario and its documented contract.
+        /// Confirms the back filler rabbit mq section binds all current settings behavior.
         /// </summary>
         [Fact]
         public void BackFillerRabbitMqSection_BindsAllCurrentSettings()

@@ -168,7 +168,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Gets the total configured session-slot count.
+        /// Returns the total configured session-slot count.
         /// </summary>
         internal int TotalSessionCount
         {
@@ -232,7 +232,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Gets the number of currently connected sessions owned by this manager.
+        /// Returns the number of currently connected sessions owned by this manager.
         /// </summary>
         internal int ActiveSessionCount
         {
@@ -1088,7 +1088,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             }
 
             /// <summary>
-            /// Gets the stable slot index.
+            /// Returns the stable slot index.
             /// </summary>
             internal int SlotId { get; }
 
@@ -1108,7 +1108,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             internal NntpArticleAcquisitionSession? Session { get; set; }
 
             /// <summary>
-            /// Gets the logger used by this slot's acquisition session.
+            /// Returns the logger used by this slot's acquisition session.
             /// </summary>
             internal ILogger<NntpArticleAcquisitionSession> Logger { get; }
 
@@ -1407,42 +1407,42 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Gets the leased session that may execute exactly one active ARTICLE operation at a time.
+        /// Returns the leased session that may execute exactly one active ARTICLE operation at a time.
         /// </summary>
         internal NntpArticleAcquisitionSession Session { get; }
 
         /// <summary>
-        /// Gets the stable slot identifier used by the owning session manager.
+        /// Returns the stable slot identifier used by the owning session manager.
         /// </summary>
         internal int SlotId { get; }
 
         /// <summary>
-        /// Gets the owning account identifier for this lease.
+        /// Returns the owning account identifier for this lease.
         /// </summary>
         internal Guid AccountId => _account.EntryId;
 
         /// <summary>
-        /// Gets the owning backbone namespace for this lease.
+        /// Returns the owning backbone namespace for this lease.
         /// </summary>
         internal string Backbone => _account.Backbone;
 
         /// <summary>
-        /// Gets the account username associated with this lease.
+        /// Returns the account username associated with this lease.
         /// </summary>
         internal string AccountUsername => _account.Username;
 
         /// <summary>
-        /// Gets the configured account connection limit associated with this lease.
+        /// Returns the configured account connection limit associated with this lease.
         /// </summary>
         internal int ConnectionLimit => _account.MaxConnections;
 
         /// <summary>
-        /// Gets the provider endpoint host associated with this lease.
+        /// Returns the provider endpoint host associated with this lease.
         /// </summary>
         internal string Host => _endpoint.Host;
 
         /// <summary>
-        /// Gets the provider endpoint port associated with this lease.
+        /// Returns the provider endpoint port associated with this lease.
         /// </summary>
         internal int Port => _endpoint.Port;
 

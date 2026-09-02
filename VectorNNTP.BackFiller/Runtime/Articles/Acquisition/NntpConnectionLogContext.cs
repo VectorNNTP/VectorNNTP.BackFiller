@@ -86,32 +86,32 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Gets the provider/backbone name.
+        /// Returns the provider/backbone name.
         /// </summary>
         internal string Backbone { get; }
 
         /// <summary>
-        /// Gets the configured account username.
+        /// Returns the configured account username.
         /// </summary>
         internal string AccountUsername { get; }
 
         /// <summary>
-        /// Gets the stable account identifier.
+        /// Returns the stable account identifier.
         /// </summary>
         internal Guid AccountId { get; }
 
         /// <summary>
-        /// Gets the owning server identifier.
+        /// Returns the owning server identifier.
         /// </summary>
         internal byte ServerId { get; }
 
         /// <summary>
-        /// Gets the remote NNTP host.
+        /// Returns the remote NNTP host.
         /// </summary>
         internal string Host { get; }
 
         /// <summary>
-        /// Gets the remote NNTP port.
+        /// Returns the remote NNTP port.
         /// </summary>
         internal int Port { get; }
 
@@ -121,17 +121,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         internal bool UseSsl { get; }
 
         /// <summary>
-        /// Gets the one-based connection number within the account.
+        /// Returns the one-based connection number within the account.
         /// </summary>
         internal int ConnectionNumber { get; }
 
         /// <summary>
-        /// Gets the configured maximum connection count for the account.
+        /// Returns the configured maximum connection count for the account.
         /// </summary>
         internal int ConnectionLimit { get; }
 
         /// <summary>
-        /// Gets the human-readable connection prefix rendered in logs.
+        /// Returns the human-readable connection prefix rendered in logs.
         /// </summary>
         internal string ConnectionPrefix => _connectionPrefix;
 

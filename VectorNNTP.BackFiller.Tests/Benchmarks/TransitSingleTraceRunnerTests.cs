@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Verifies the transit single trace runner tests scenario and its documented contract.
+        /// Confirms the transit single trace runner tests behavior.
     /// </summary>
     public sealed class TransitSingleTraceRunnerTests
     {
         /// <summary>
-        /// Verifies the resolve requested article count when null defaults to one scenario and its documented contract.
+        /// Confirms the resolve requested article count when null defaults to one behavior.
         /// </summary>
         [Fact]
         public void ResolveRequestedArticleCount_WhenNull_DefaultsToOne()
@@ -28,7 +28,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, count);
         }
         /// <summary>
-        /// Verifies the resolve requested article count when specified returns specified value scenario and its documented contract.
+        /// Confirms the resolve requested article count when specified returns specified value behavior.
         /// </summary>
         [Fact]
         public void ResolveRequestedArticleCount_WhenSpecified_ReturnsSpecifiedValue()
@@ -38,7 +38,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(10, count);
         }
         /// <summary>
-        /// Verifies the publish sequentially async when article count one publishes exactly once scenario and its documented contract.
+        /// Confirms the publish sequentially async when article count one publishes exactly once behavior.
         /// </summary>
         [Fact]
         public async Task PublishSequentiallyAsync_WhenArticleCountOne_PublishesExactlyOnce()
@@ -59,7 +59,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(0, result.TimeoutCount);
         }
         /// <summary>
-        /// Verifies the publish sequentially async when article count ten publishes ten sequentially scenario and its documented contract.
+        /// Confirms the publish sequentially async when article count ten publishes ten sequentially behavior.
         /// </summary>
         [Fact]
         public async Task PublishSequentiallyAsync_WhenArticleCountTen_PublishesTenSequentially()
@@ -93,7 +93,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, executor.MaxOutstandingObserved);
         }
         /// <summary>
-        /// Verifies the publish with pipeline depth async when depth two can have two outstanding concurrently scenario and its documented contract.
+        /// Confirms the publish with pipeline depth async when depth two can have two outstanding concurrently behavior.
         /// </summary>
         [Fact]
         public async Task PublishWithPipelineDepthAsync_WhenDepthTwo_CanHaveTwoOutstandingConcurrently()
@@ -137,7 +137,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the recording publish executor scenario and its documented contract.
+        /// Confirms the recording publish executor behavior.
         /// </summary>
         private sealed class RecordingPublishExecutor : TransitSingleTraceRunner.ITransitSingleTracePublishExecutor
         {
@@ -152,16 +152,16 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             private int _startedCount;
 
             /// <summary>
-        /// Verifies the publish async scenario and its documented contract.
+        /// Confirms the publish async behavior.
             /// </summary>
-        /// <returns>The publish async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the publish async helper.</returns>
         /// <summary>
-        /// Verifies the publish async scenario and its documented contract.
+        /// Confirms the publish async behavior.
         /// </summary>
-        /// <param name="messageId">The message id supplied to the helper.</param>
-        /// <param name="articlePayload">The article payload supplied to the helper.</param>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The publish async value produced for the requested scenario.</returns>
+        /// <param name="messageId">The message id used by this test scenario.</param>
+        /// <param name="articlePayload">The article payload used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the publish async helper.</returns>
             public ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(messageId);
@@ -188,7 +188,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the controlled publish executor scenario and its documented contract.
+        /// Confirms the controlled publish executor behavior.
         /// </summary>
         private sealed class ControlledPublishExecutor : TransitSingleTraceRunner.ITransitSingleTracePublishExecutor
         {
@@ -197,11 +197,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// </summary>
             private readonly Dictionary<int, TaskCompletionSource<bool>> _gatesByCallIndex = [];
             /// <summary>
-            /// Exercises  call order queue behavior, including the expected result and failure semantics.
+            /// Confirms  call order queue behavior.
             /// </summary>
             private readonly Queue<int> _callOrderQueue = new();
             /// <summary>
-            /// Exercises  sync behavior, including the expected result and failure semantics.
+            /// Confirms  sync behavior.
             /// </summary>
             private readonly object _sync = new();
 
@@ -231,14 +231,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             internal int MaxOutstandingObserved { get; private set; }
 
             /// <summary>
-        /// Verifies the wait until started async scenario and its documented contract.
+        /// Confirms the wait until started async behavior.
             /// </summary>
-        /// <returns>The wait until started async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the wait until started async helper.</returns>
         /// <summary>
-        /// Verifies the wait until started async scenario and its documented contract.
+        /// Confirms the wait until started async behavior.
         /// </summary>
-        /// <param name="expectedCount">The expected count supplied to the helper.</param>
-        /// <returns>The wait until started async value produced for the requested scenario.</returns>
+        /// <param name="expectedCount">The expected count used by this test scenario.</param>
+        /// <returns>The value returned by the wait until started async helper.</returns>
             internal async Task WaitUntilStartedAsync(int expectedCount)
             {
                 while (true)
@@ -256,7 +256,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-        /// Verifies the complete next scenario and its documented contract.
+        /// Confirms the complete next behavior.
             /// </summary>
             internal void CompleteNext()
             {
@@ -272,7 +272,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-        /// Verifies the complete by call index scenario and its documented contract.
+        /// Confirms the complete by call index behavior.
             /// </summary>
             internal void CompleteByCallIndex(int callIndex)
             {
@@ -286,16 +286,16 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-        /// Verifies the publish async scenario and its documented contract.
+        /// Confirms the publish async behavior.
             /// </summary>
-        /// <returns>The publish async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the publish async helper.</returns>
         /// <summary>
-        /// Verifies the publish async scenario and its documented contract.
+        /// Confirms the publish async behavior.
         /// </summary>
-        /// <param name="messageId">The message id supplied to the helper.</param>
-        /// <param name="articlePayload">The article payload supplied to the helper.</param>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The publish async value produced for the requested scenario.</returns>
+        /// <param name="messageId">The message id used by this test scenario.</param>
+        /// <param name="articlePayload">The article payload used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the publish async helper.</returns>
             public async ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(messageId);

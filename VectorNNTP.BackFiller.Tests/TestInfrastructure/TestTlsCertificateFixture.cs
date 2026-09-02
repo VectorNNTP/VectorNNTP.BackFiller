@@ -72,13 +72,13 @@ namespace VectorNNTP.Backfiller.Tests.TestInfrastructure
         /// <param name="sslPolicyErrors">Policy errors reported by the platform validator.</param>
         /// <returns><see langword="true"/> only when the remote certificate matches this fixture's certificate.</returns>
         /// <summary>
-        /// Verifies the validate server certificate scenario and its documented contract.
+        /// Confirms the validate server certificate behavior.
         /// </summary>
-        /// <param name="sender">The sender supplied to the helper.</param>
-        /// <param name="certificate">The certificate supplied to the helper.</param>
-        /// <param name="chain">The chain supplied to the helper.</param>
-        /// <param name="sslPolicyErrors">The ssl policy errors supplied to the helper.</param>
-        /// <returns>The validate server certificate value produced for the requested scenario.</returns>
+        /// <param name="sender">The sender used by this test scenario.</param>
+        /// <param name="certificate">The certificate used by this test scenario.</param>
+        /// <param name="chain">The chain used by this test scenario.</param>
+        /// <param name="sslPolicyErrors">The ssl policy errors used by this test scenario.</param>
+        /// <returns>The value returned by the validate server certificate helper.</returns>
         private bool ValidateServerCertificate(object? sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
         {
             if (certificate is null)

@@ -22,12 +22,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Verifies the back filler listener socket service tests scenario and its documented contract.
+        /// Confirms the back filler listener socket service tests behavior.
     /// </summary>
     public sealed class BackFillerListenerSocketServiceTests
     {
         /// <summary>
-        /// Verifies the start async with loopback bind and certificate accepts tls connection scenario and its documented contract.
+        /// Confirms the start async with loopback bind and certificate accepts tls connection behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_WithLoopbackBindAndCertificate_AcceptsTlsConnection()
@@ -75,7 +75,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdown.Dispose();
         }
         /// <summary>
-        /// Verifies the start async when certificate state replaced new connections use new certificate scenario and its documented contract.
+        /// Confirms the start async when certificate state replaced new connections use new certificate behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_WhenCertificateStateReplaced_NewConnectionsUseNewCertificate()
@@ -115,7 +115,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdown.Dispose();
         }
         /// <summary>
-        /// Verifies the start async when certificate missing handshake fails but listener stays alive scenario and its documented contract.
+        /// Confirms the start async when certificate missing handshake fails but listener stays alive behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_WhenCertificateMissing_HandshakeFailsButListenerStaysAlive()
@@ -165,7 +165,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdown.Dispose();
         }
         /// <summary>
-        /// Verifies the start async with wildcard bind listens on loopback scenario and its documented contract.
+        /// Confirms the start async with wildcard bind listens on loopback behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_WithWildcardBindListensOnLoopback()
@@ -199,15 +199,15 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the connect and get server thumbprint async scenario and its documented contract.
+        /// Confirms the connect and get server thumbprint async behavior.
         /// </summary>
-        /// <returns>The connect and get server thumbprint async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the connect and get server thumbprint async helper.</returns>
         /// <summary>
-        /// Verifies the connect and get server thumbprint async scenario and its documented contract.
+        /// Confirms the connect and get server thumbprint async behavior.
         /// </summary>
-        /// <param name="address">The address supplied to the helper.</param>
-        /// <param name="port">The port supplied to the helper.</param>
-        /// <returns>The connect and get server thumbprint async value produced for the requested scenario.</returns>
+        /// <param name="address">The address used by this test scenario.</param>
+        /// <param name="port">The port used by this test scenario.</param>
+        /// <returns>The value returned by the connect and get server thumbprint async helper.</returns>
         private static async Task<string> ConnectAndGetServerThumbprintAsync(IPAddress address, int port)
         {
             using TcpClient client = new();
@@ -231,16 +231,16 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the wait for port ready async scenario and its documented contract.
+        /// Confirms the wait for port ready async behavior.
         /// </summary>
-        /// <returns>The wait for port ready async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the wait for port ready async helper.</returns>
         /// <summary>
-        /// Verifies the wait for port ready async scenario and its documented contract.
+        /// Confirms the wait for port ready async behavior.
         /// </summary>
-        /// <param name="address">The address supplied to the helper.</param>
-        /// <param name="port">The port supplied to the helper.</param>
-        /// <param name="timeout">The timeout supplied to the helper.</param>
-        /// <returns>The wait for port ready async value produced for the requested scenario.</returns>
+        /// <param name="address">The address used by this test scenario.</param>
+        /// <param name="port">The port used by this test scenario.</param>
+        /// <param name="timeout">The timeout used by this test scenario.</param>
+        /// <returns>The value returned by the wait for port ready async helper.</returns>
         private static async Task WaitForPortReadyAsync(IPAddress address, int port, TimeSpan timeout)
         {
             DateTime deadline = DateTime.UtcNow.Add(timeout);
@@ -264,13 +264,13 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the reserve ephemeral tcp port scenario and its documented contract.
+        /// Confirms the reserve ephemeral tcp port behavior.
         /// </summary>
-        /// <returns>The reserve ephemeral tcp port value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the reserve ephemeral tcp port helper.</returns>
         /// <summary>
-        /// Verifies the reserve ephemeral tcp port scenario and its documented contract.
+        /// Confirms the reserve ephemeral tcp port behavior.
         /// </summary>
-        /// <returns>The reserve ephemeral tcp port value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the reserve ephemeral tcp port helper.</returns>
         private static int ReserveEphemeralTcpPort()
         {
             TcpListener listener = new(IPAddress.Loopback, 0);
@@ -281,14 +281,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create server certificate scenario and its documented contract.
+        /// Confirms the create server certificate behavior.
         /// </summary>
-        /// <returns>The create server certificate value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create server certificate helper.</returns>
         /// <summary>
-        /// Verifies the create server certificate scenario and its documented contract.
+        /// Confirms the create server certificate behavior.
         /// </summary>
-        /// <param name="dnsName">The dns name supplied to the helper.</param>
-        /// <returns>The create server certificate value produced for the requested scenario.</returns>
+        /// <param name="dnsName">The dns name used by this test scenario.</param>
+        /// <returns>The value returned by the create server certificate helper.</returns>
         private static X509Certificate2 CreateServerCertificate(string dnsName)
         {
             using RSA rsa = RSA.Create(2048);
@@ -312,15 +312,15 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create runtime options scenario and its documented contract.
+        /// Confirms the create runtime options behavior.
         /// </summary>
-        /// <returns>The create runtime options value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create runtime options helper.</returns>
         /// <summary>
-        /// Verifies the create runtime options scenario and its documented contract.
+        /// Confirms the create runtime options behavior.
         /// </summary>
-        /// <param name="bindPort">The bind port supplied to the helper.</param>
-        /// <param name="bindTokens">The bind tokens supplied to the helper.</param>
-        /// <returns>The create runtime options value produced for the requested scenario.</returns>
+        /// <param name="bindPort">The bind port used by this test scenario.</param>
+        /// <param name="bindTokens">The bind tokens used by this test scenario.</param>
+        /// <returns>The value returned by the create runtime options helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(

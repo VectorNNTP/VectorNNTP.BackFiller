@@ -29,7 +29,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ProgramHostingSemanticsTests
     {
         /// <summary>
-        /// Verifies the register readiness hook when application stopping transitions to draining and signals graceful shutdown scenario and its documented contract.
+        /// Confirms the register readiness hook when application stopping transitions to draining and signals graceful shutdown behavior.
         /// </summary>
         [Fact]
         public void RegisterReadinessHook_WhenApplicationStopping_TransitionsToDraining_AndSignalsGracefulShutdown()
@@ -57,7 +57,7 @@ namespace VectorNNTP.Backfiller.Tests
             shutdownCoordinator.Dispose();
         }
         /// <summary>
-        /// Verifies the concurrent reentrant shutdown race does not throw and lifecycle is draining scenario and its documented contract.
+        /// Confirms the concurrent reentrant shutdown race does not throw and lifecycle is draining behavior.
         /// </summary>
         [Fact]
         public async Task ConcurrentReentrantShutdownRace_DoesNotThrowAndLifecycleIsDraining()
@@ -138,7 +138,7 @@ namespace VectorNNTP.Backfiller.Tests
         // exercised elsewhere; therefore we avoid a duplicate test that relies on
         // multiple Cancel() invocations.
         /// <summary>
-        /// Verifies the configure host services when lifecycle provided registers same instance and required hosted services scenario and its documented contract.
+        /// Confirms the configure host services when lifecycle provided registers same instance and required hosted services behavior.
         /// </summary>
         [Fact]
         public void ConfigureHostServices_WhenLifecycleProvided_RegistersSameInstance_AndRequiredHostedServices()
@@ -217,7 +217,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Same(controlPlane, leaseProvider);
         }
         /// <summary>
-        /// Verifies the configure host services does not register shutdown options for runtime resolution scenario and its documented contract.
+        /// Confirms the configure host services does not register shutdown options for runtime resolution behavior.
         /// </summary>
         [Fact]
         public void ConfigureHostServices_DoesNotRegisterShutdownOptionsForRuntimeResolution()
@@ -260,7 +260,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(host.Services.GetService<ShutdownOptions>());
         }
         /// <summary>
-        /// Verifies the configure host services uses runtime snapshot grace period for host shutdown timeout scenario and its documented contract.
+        /// Confirms the configure host services uses runtime snapshot grace period for host shutdown timeout behavior.
         /// </summary>
         [Fact]
         public void ConfigureHostServices_UsesRuntimeSnapshotGracePeriod_ForHostShutdownTimeout()
@@ -304,7 +304,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TimeSpan.FromSeconds(runtimeOptions.ShutdownGracePeriodSeconds), hostOptions.Value.ShutdownTimeout);
         }
         /// <summary>
-        /// Verifies the configure host services rabbit mq graph resolves core services scenario and its documented contract.
+        /// Confirms the configure host services rabbit mq graph resolves core services behavior.
         /// </summary>
         [Fact]
         public void ConfigureHostServices_RabbitMqGraphResolvesCoreServices()
@@ -366,7 +366,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.IsType<RabbitMqArticleProcessingService>(processingHostedService);
         }
         /// <summary>
-        /// Verifies the should publish readiness when application stopping already signaled returns false scenario and its documented contract.
+        /// Confirms the should publish readiness when application stopping already signaled returns false behavior.
         /// </summary>
         [Fact]
         public void ShouldPublishReadiness_WhenApplicationStoppingAlreadySignaled_ReturnsFalse()
@@ -379,7 +379,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(shouldPublish);
         }
         /// <summary>
-        /// Verifies the should publish readiness when application stopping not signaled returns true scenario and its documented contract.
+        /// Confirms the should publish readiness when application stopping not signaled returns true behavior.
         /// </summary>
         [Fact]
         public void ShouldPublishReadiness_WhenApplicationStoppingNotSignaled_ReturnsTrue()
@@ -399,9 +399,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// simulating Ctrl+C while startup initialization is still running.
         /// </remarks>
         /// <summary>
-        /// Verifies the run async when shutdown requested during startup does not transition to ready and stops via draining async scenario and its documented contract.
+        /// Confirms the run async when shutdown requested during startup does not transition to ready and stops via draining async behavior.
         /// </summary>
-        /// <returns>The run async when shutdown requested during startup does not transition to ready and stops via draining async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the run async when shutdown requested during startup does not transition to ready and stops via draining async helper.</returns>
         [Fact]
         public async Task RunAsync_WhenShutdownRequestedDuringStartup_DoesNotTransitionToReady_AndStopsViaDrainingAsync()
         {
@@ -439,9 +439,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <returns>Runtime options used by <see cref="HostLifetimeCoordinator"/>.</returns>
         /// <summary>
-        /// Verifies the create runtime options for testing scenario and its documented contract.
+        /// Confirms the create runtime options for testing behavior.
         /// </summary>
-        /// <returns>The create runtime options for testing value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create runtime options for testing helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptionsForTesting()
         {
             return new BackFillerRuntimeOptions(
@@ -467,14 +467,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create rabbit mq runtime options scenario and its documented contract.
+        /// Confirms the create rabbit mq runtime options behavior.
         /// </summary>
-        /// <returns>The create rabbit mq runtime options value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create rabbit mq runtime options helper.</returns>
         /// <summary>
-        /// Verifies the create rabbit mq runtime options scenario and its documented contract.
+        /// Confirms the create rabbit mq runtime options behavior.
         /// </summary>
-        /// <param name="enableSsl">The enable ssl supplied to the helper.</param>
-        /// <returns>The create rabbit mq runtime options value produced for the requested scenario.</returns>
+        /// <param name="enableSsl">The enable ssl used by this test scenario.</param>
+        /// <returns>The value returned by the create rabbit mq runtime options helper.</returns>
         private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
         {
             return new RabbitMqRuntimeOptions(
@@ -511,12 +511,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Hosted startup probe that requests host shutdown during startup initialization.
         /// </summary>
-        /// <returns>The shutdown during startup probe hosted service value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the shutdown during startup probe hosted service helper.</returns>
         /// <summary>
-        /// Verifies the shutdown during startup probe hosted service scenario and its documented contract.
+        /// Confirms the shutdown during startup probe hosted service behavior.
         /// </summary>
-        /// <param name="hostApplicationLifetime">The host application lifetime supplied to the helper.</param>
-        /// <returns>The shutdown during startup probe hosted service value produced for the requested scenario.</returns>
+        /// <param name="hostApplicationLifetime">The host application lifetime used by this test scenario.</param>
+        /// <returns>The value returned by the shutdown during startup probe hosted service helper.</returns>
         private sealed class ShutdownDuringStartupProbeHostedService(IHostApplicationLifetime hostApplicationLifetime) : IHostedService
         {
             /// <summary>
@@ -525,10 +525,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="cancellationToken">Startup cancellation token.</param>
             /// <returns>A completed task.</returns>
         /// <summary>
-        /// Verifies the start async scenario and its documented contract.
+        /// Confirms the start async behavior.
         /// </summary>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The start async value produced for the requested scenario.</returns>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the start async helper.</returns>
             public Task StartAsync(CancellationToken cancellationToken)
             {
                 hostApplicationLifetime.StopApplication();
@@ -541,10 +541,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="cancellationToken">Stop cancellation token.</param>
             /// <returns>A completed task.</returns>
         /// <summary>
-        /// Verifies the stop async scenario and its documented contract.
+        /// Confirms the stop async behavior.
         /// </summary>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The stop async value produced for the requested scenario.</returns>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the stop async helper.</returns>
             public Task StopAsync(CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;
@@ -552,20 +552,20 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the fake host application lifetime scenario and its documented contract.
+        /// Confirms the fake host application lifetime behavior.
         /// </summary>
         private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime
         {
             /// <summary>
-            /// Exercises  application started behavior, including the expected result and failure semantics.
+            /// Confirms  application started behavior.
             /// </summary>
             private readonly CancellationTokenSource _applicationStarted = new();
             /// <summary>
-            /// Exercises  application stopping behavior, including the expected result and failure semantics.
+            /// Confirms  application stopping behavior.
             /// </summary>
             private readonly CancellationTokenSource _applicationStopping = new();
             /// <summary>
-            /// Exercises  application stopped behavior, including the expected result and failure semantics.
+            /// Confirms  application stopped behavior.
             /// </summary>
             private readonly CancellationTokenSource _applicationStopped = new();
 
@@ -585,7 +585,7 @@ namespace VectorNNTP.Backfiller.Tests
             public CancellationToken ApplicationStopped => _applicationStopped.Token;
 
             /// <summary>
-        /// Verifies the stop application scenario and its documented contract.
+        /// Confirms the stop application behavior.
             /// </summary>
             public void StopApplication()
             {
@@ -593,7 +593,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Verifies the trigger application stopping scenario and its documented contract.
+        /// Confirms the trigger application stopping behavior.
             /// </summary>
             internal void TriggerApplicationStopping()
             {

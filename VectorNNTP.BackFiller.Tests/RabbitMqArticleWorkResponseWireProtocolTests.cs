@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqArticleWorkResponseWireProtocolTests
     {
         /// <summary>
-        /// Verifies the serialize v1 when success contains canonical fields and uri null scenario and its documented contract.
+        /// Confirms the serialize v1 when success contains canonical fields and uri null behavior.
         /// </summary>
         [Fact]
         public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull()
@@ -40,7 +40,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("replyTo", json, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the serialize v1 when terminal failure contains error and no uri scenario and its documented contract.
+        /// Confirms the serialize v1 when terminal failure contains error and no uri behavior.
         /// </summary>
         [Fact]
         public void SerializeV1_WhenTerminalFailure_ContainsErrorAndNoUri()
@@ -61,7 +61,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("\"uri\"", json, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Verifies the parse v1 when payload is valid round trips canonical fields scenario and its documented contract.
+        /// Confirms the parse v1 when payload is valid round trips canonical fields behavior.
         /// </summary>
         [Fact]
         public void ParseV1_WhenPayloadIsValid_RoundTripsCanonicalFields()
@@ -86,7 +86,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(source.Error, parsed.Error);
         }
         /// <summary>
-        /// Verifies the parse v1 when version unsupported throws invalid operation exception scenario and its documented contract.
+        /// Confirms the parse v1 when version unsupported throws invalid operation exception behavior.
         /// </summary>
         [Fact]
         public void ParseV1_WhenVersionUnsupported_ThrowsInvalidOperationException()

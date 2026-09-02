@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Verifies the serilog configurator tests scenario and its documented contract.
+        /// Confirms the serilog configurator tests behavior.
     /// </summary>
     public sealed class SerilogConfiguratorTests
     {
         /// <summary>
-        /// Verifies the parse microsoft log level for testing when configured value provided returns expected level scenario and its documented contract.
+        /// Confirms the parse microsoft log level for testing when configured value provided returns expected level behavior.
         /// </summary>
         [Theory]
         [InlineData("Verbose", LogLevel.Trace)]

@@ -136,7 +136,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Gets the current RabbitMQ lifecycle state.
+        /// Returns the current RabbitMQ lifecycle state.
         /// </summary>
         internal RabbitMqInfrastructureState State => _state;
 
@@ -146,7 +146,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         internal bool IsReady => _state is RabbitMqInfrastructureState.TopologyReady or RabbitMqInfrastructureState.Connected;
 
         /// <summary>
-        /// Gets the current monotonic RabbitMQ connection generation.
+        /// Returns the current monotonic RabbitMQ connection generation.
         /// </summary>
         internal long ConnectionGeneration => Interlocked.Read(ref _connectionGeneration);
 
@@ -227,7 +227,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Gets the current connection for topology operations.
+        /// Returns the current connection for topology operations.
         /// </summary>
         /// <returns>The current connection when connected.</returns>
         internal IRabbitMqBrokerConnection GetRequiredConnection()

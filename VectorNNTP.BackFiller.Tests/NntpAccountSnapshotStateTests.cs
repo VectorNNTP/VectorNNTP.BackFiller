@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class NntpAccountSnapshotStateTests
     {
         /// <summary>
-        /// Verifies the empty returns server id and no accounts scenario and its documented contract.
+        /// Confirms the empty returns server id and no accounts behavior.
         /// </summary>
         [Fact]
         public void Empty_ReturnsServerIdAndNoAccounts()

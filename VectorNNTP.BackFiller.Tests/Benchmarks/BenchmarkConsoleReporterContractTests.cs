@@ -12,12 +12,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Verifies the benchmark console reporter contract tests scenario and its documented contract.
+        /// Confirms the benchmark console reporter contract tests behavior.
     /// </summary>
     public sealed class BenchmarkConsoleReporterContractTests
     {
         /// <summary>
-        /// Verifies the print final report contains expected sections in stable order scenario and its documented contract.
+        /// Confirms the print final report contains expected sections in stable order behavior.
         /// </summary>
         [Fact]
         public void PrintFinalReport_ContainsExpectedSectionsInStableOrder()

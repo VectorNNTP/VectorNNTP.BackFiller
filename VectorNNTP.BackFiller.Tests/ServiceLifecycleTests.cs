@@ -37,9 +37,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// No state transitions should be permitted from Stopped (including self-transitions).
         /// </remarks>
         /// <summary>
-        /// Verifies the stopped rejects all transitions scenario and its documented contract.
+        /// Confirms the stopped rejects all transitions behavior.
         /// </summary>
-        /// <param name="targetState">The target state supplied to the helper.</param>
+        /// <param name="targetState">The target state used by this test scenario.</param>
         [Theory]
         [InlineData(ServiceLifecycle.LifecycleState.Starting)]
         [InlineData(ServiceLifecycle.LifecycleState.Validating)]
@@ -82,9 +82,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// No state transitions should be permitted from Faulted (including self-transitions).
         /// </remarks>
         /// <summary>
-        /// Verifies the faulted rejects all transitions scenario and its documented contract.
+        /// Confirms the faulted rejects all transitions behavior.
         /// </summary>
-        /// <param name="targetState">The target state supplied to the helper.</param>
+        /// <param name="targetState">The target state used by this test scenario.</param>
         [Theory]
         [InlineData(ServiceLifecycle.LifecycleState.Starting)]
         [InlineData(ServiceLifecycle.LifecycleState.Validating)]
@@ -203,7 +203,7 @@ namespace VectorNNTP.Backfiller.Tests
         /// systemd SIGTERM shutdown, which is one-way.
         /// </remarks>
         /// <summary>
-        /// Verifies the drain cancellation allows ready to draining to ready scenario and its documented contract.
+        /// Confirms the drain cancellation allows ready to draining to ready behavior.
         /// </summary>
         [Fact]
         public void DrainCancellation_AllowsReadyToDrainingToReady()
@@ -403,9 +403,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// Ensures no exceptions, no corrupted history, and consistent final state.
         /// </remarks>
         /// <summary>
-        /// Verifies the concurrent readers with single writer no corruption scenario and its documented contract.
+        /// Confirms the concurrent readers with single writer no corruption behavior.
         /// </summary>
-        /// <returns>The concurrent readers with single writer no corruption value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the concurrent readers with single writer no corruption helper.</returns>
         [Fact]
         public async Task ConcurrentReaders_WithSingleWriter_NoCorruption()
         {
@@ -499,7 +499,7 @@ namespace VectorNNTP.Backfiller.Tests
         /// Ensures concurrent transitions don't affect previously-retrieved history snapshots.
         /// </remarks>
         /// <summary>
-        /// Verifies the transition history returns snapshot not live collection scenario and its documented contract.
+        /// Confirms the transition history returns snapshot not live collection behavior.
         /// </summary>
         [Fact]
         public void TransitionHistory_ReturnsSnapshot_NotLiveCollection()
@@ -546,7 +546,7 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>This validates the exception isolation design documented in ServiceLifecycle.</para>
         /// </remarks>
         /// <summary>
-        /// Verifies the subscriber exceptions are isolated transition completes scenario and its documented contract.
+        /// Confirms the subscriber exceptions are isolated transition completes behavior.
         /// </summary>
         [Fact]
         public void SubscriberExceptions_AreIsolated_TransitionCompletes()
@@ -711,7 +711,7 @@ namespace VectorNNTP.Backfiller.Tests
         /// not from ordinary transition validation.</para>
         /// </remarks>
         /// <summary>
-        /// Verifies the reentrant transition from subscriber throws invalid operation exception scenario and its documented contract.
+        /// Confirms the reentrant transition from subscriber throws invalid operation exception behavior.
         /// </summary>
         [Fact]
         public void ReentrantTransition_FromSubscriber_ThrowsInvalidOperationException()

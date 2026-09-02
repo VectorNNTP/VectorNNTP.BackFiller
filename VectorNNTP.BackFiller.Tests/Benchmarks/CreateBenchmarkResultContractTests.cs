@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-        /// Verifies the create benchmark result contract tests scenario and its documented contract.
+        /// Confirms the create benchmark result contract tests behavior.
     /// </summary>
     public sealed class CreateBenchmarkResultContractTests
     {
         /// <summary>
-        /// Verifies the create benchmark result maps deterministic inputs to expected contract values scenario and its documented contract.
+        /// Confirms the create benchmark result maps deterministic inputs to expected contract values behavior.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_MapsDeterministicInputsToExpectedContractValues()
@@ -160,7 +160,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(expectedForensic.ObservabilityNotes, result.ObservabilityNotes);
         }
         /// <summary>
-        /// Verifies the create benchmark result uses expected throughput and backpressure formulas scenario and its documented contract.
+        /// Confirms the create benchmark result uses expected throughput and backpressure formulas behavior.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_UsesExpectedThroughputAndBackpressureFormulas()
@@ -207,7 +207,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(config.MaxResidentBytes / snapshot.ArticleBytes, result.EffectiveQueueArticleCapacityFromBytes);
         }
         /// <summary>
-        /// Verifies the create benchmark result handles zero observation inputs as defined scenario and its documented contract.
+        /// Confirms the create benchmark result handles zero observation inputs as defined behavior.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_HandlesZeroObservationInputsAsDefined()
@@ -243,7 +243,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(9, result.DrainedAfterMeasurement);
         }
         /// <summary>
-        /// Verifies the create benchmark result uses process and gc fallbacks when runtime snapshot memory values unavailable scenario and its documented contract.
+        /// Confirms the create benchmark result uses process and gc fallbacks when runtime snapshot memory values unavailable behavior.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_UsesProcessAndGcFallbacksWhenRuntimeSnapshotMemoryValuesUnavailable()
@@ -282,7 +282,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(result.AllocatedMb >= 0);
         }
         /// <summary>
-        /// Verifies the create benchmark result uses current gc collection counts at result creation time scenario and its documented contract.
+        /// Confirms the create benchmark result uses current gc collection counts at result creation time behavior.
         /// </summary>
         [Fact]
         public void CreateBenchmarkResult_UsesCurrentGcCollectionCountsAtResultCreationTime()

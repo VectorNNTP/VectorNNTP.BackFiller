@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Verifies the transit benchmark core tests scenario and its documented contract.
+        /// Confirms the transit benchmark core tests behavior.
     /// </summary>
     public sealed class TransitBenchmarkCoreTests
     {
         /// <summary>
-        /// Verifies the producer timing from raw produces reconcilable active and blocked buckets scenario and its documented contract.
+        /// Confirms the producer timing from raw produces reconcilable active and blocked buckets behavior.
         /// </summary>
         [Fact]
         public void ProducerTiming_FromRaw_ProducesReconcilableActiveAndBlockedBuckets()
@@ -37,7 +37,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(timing.LoopTicks, timing.ActiveTicks + timing.BlockedTicks);
         }
         /// <summary>
-        /// Verifies the bounded article queue enforces byte budget scenario and its documented contract.
+        /// Confirms the bounded article queue enforces byte budget behavior.
         /// </summary>
         [Fact]
         public async Task BoundedArticleQueue_EnforcesByteBudget()
@@ -91,7 +91,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the byte budget acquire canceled throws operation canceled scenario and its documented contract.
+        /// Confirms the byte budget acquire canceled throws operation canceled behavior.
         /// </summary>
         [Fact]
         public async Task ByteBudget_AcquireCanceled_ThrowsOperationCanceled()
@@ -106,7 +106,7 @@ namespace VectorNNTP.Backfiller.Tests
             });
         }
         /// <summary>
-        /// Verifies the byte budget dispose cancels pending acquire scenario and its documented contract.
+        /// Confirms the byte budget dispose cancels pending acquire behavior.
         /// </summary>
         [Fact]
         public async Task ByteBudget_Dispose_CancelsPendingAcquire()
@@ -120,7 +120,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending.ConfigureAwait(false));
         }
         /// <summary>
-        /// Verifies the build message id produces unique valid message id across worker and sequence scenario and its documented contract.
+        /// Confirms the build message id produces unique valid message id across worker and sequence behavior.
         /// </summary>
         [Fact]
         public void BuildMessageId_ProducesUniqueValidMessageIdAcrossWorkerAndSequence()
@@ -141,7 +141,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the article payload create produces expected headers and cr lf terminated payload scenario and its documented contract.
+        /// Confirms the article payload create produces expected headers and cr lf terminated payload behavior.
         /// </summary>
         [Fact]
         public void ArticlePayload_Create_ProducesExpectedHeadersAndCrLfTerminatedPayload()
@@ -168,7 +168,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the validate int range when within range returns value scenario and its documented contract.
+        /// Confirms the validate int range when within range returns value behavior.
         /// </summary>
         [Theory]
         [InlineData(1, 1, 64, "connections")]
@@ -180,7 +180,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(value, actual);
         }
         /// <summary>
-        /// Verifies the validate int range when out of range throws scenario and its documented contract.
+        /// Confirms the validate int range when out of range throws behavior.
         /// </summary>
         [Theory]
         [InlineData(0, 1, 64, "connections")]
@@ -190,7 +190,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Throws<InvalidOperationException>(() => TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(value, min, max, option));
         }
         /// <summary>
-        /// Verifies the validate long range when within range returns value scenario and its documented contract.
+        /// Confirms the validate long range when within range returns value behavior.
         /// </summary>
         [Theory]
         [InlineData(64L * 1024 * 1024, 64L * 1024 * 1024, 2L * 1024 * 1024 * 1024, "queue-mib")]

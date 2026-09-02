@@ -21,7 +21,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class RabbitMqArticleResultSinkPhase4Tests
     {
         /// <summary>
-        /// Verifies the on processed async when success publishes then confirms then acknowledges delivery tag async scenario and its documented contract.
+        /// Confirms the on processed async when success publishes then confirms then acknowledges delivery tag async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenSuccess_PublishesThenConfirmsThenAcknowledgesDeliveryTagAsync()
@@ -67,7 +67,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(successResponse.Error);
         }
         /// <summary>
-        /// Verifies the on processed async when publish fails does not ack and nacks requeue true async scenario and its documented contract.
+        /// Confirms the on processed async when publish fails does not ack and nacks requeue true async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenPublishFails_DoesNotAckAndNacksRequeueTrueAsync()
@@ -98,7 +98,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the on processed async when publish times out does not ack and nacks requeue true async scenario and its documented contract.
+        /// Confirms the on processed async when publish times out does not ack and nacks requeue true async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenPublishTimesOut_DoesNotAckAndNacksRequeueTrueAsync()
@@ -129,7 +129,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the on processed async when article not found nacks without requeue async scenario and its documented contract.
+        /// Confirms the on processed async when article not found nacks without requeue async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenArticleNotFound_NacksWithoutRequeueAsync()
@@ -164,7 +164,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
         /// <summary>
-        /// Verifies the on processed async when invalid article nacks without requeue async scenario and its documented contract.
+        /// Confirms the on processed async when invalid article nacks without requeue async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenInvalidArticle_NacksWithoutRequeueAsync()
@@ -199,7 +199,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
         /// <summary>
-        /// Verifies the on processed async when invalid request nacks without requeue async scenario and its documented contract.
+        /// Confirms the on processed async when invalid request nacks without requeue async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenInvalidRequest_NacksWithoutRequeueAsync()
@@ -234,7 +234,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
         /// <summary>
-        /// Verifies the on processed async when provider failure nacks with requeue async scenario and its documented contract.
+        /// Confirms the on processed async when provider failure nacks with requeue async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenProviderFailure_NacksWithRequeueAsync()
@@ -265,7 +265,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0, publisher.PublishCallCount);
         }
         /// <summary>
-        /// Verifies the on processed async when cancelled nacks with requeue and does not ack async scenario and its documented contract.
+        /// Confirms the on processed async when cancelled nacks with requeue and does not ack async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenCancelled_NacksWithRequeueAndDoesNotAckAsync()
@@ -295,7 +295,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the on processed async when unexpected failure nacks with requeue and does not ack async scenario and its documented contract.
+        /// Confirms the on processed async when unexpected failure nacks with requeue and does not ack async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenUnexpectedFailure_NacksWithRequeueAndDoesNotAckAsync()
@@ -325,7 +325,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(settlement.NackRequeue);
         }
         /// <summary>
-        /// Verifies the on processed async when settlement already acked throws on second settlement async scenario and its documented contract.
+        /// Confirms the on processed async when settlement already acked throws on second settlement async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenSettlementAlreadyAcked_ThrowsOnSecondSettlementAsync()
@@ -351,7 +351,7 @@ namespace VectorNNTP.Backfiller.Tests
                 async () => await sink.OnProcessedAsync(secondResult, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
         }
         /// <summary>
-        /// Verifies the on processed async when success and shutdown occurs before publish does not ack and nacks with requeue async scenario and its documented contract.
+        /// Confirms the on processed async when success and shutdown occurs before publish does not ack and nacks with requeue async behavior.
         /// </summary>
         [Fact]
         public async Task OnProcessedAsync_WhenSuccessAndShutdownOccursBeforePublish_DoesNotAckAndNacksWithRequeueAsync()
@@ -383,14 +383,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create sink scenario and its documented contract.
+        /// Confirms the create sink behavior.
         /// </summary>
-        /// <returns>The create sink value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create sink helper.</returns>
         /// <summary>
-        /// Verifies the create sink scenario and its documented contract.
+        /// Confirms the create sink behavior.
         /// </summary>
-        /// <param name="responsePublisher">The response publisher supplied to the helper.</param>
-        /// <returns>The create sink value produced for the requested scenario.</returns>
+        /// <param name="responsePublisher">The response publisher used by this test scenario.</param>
+        /// <returns>The value returned by the create sink helper.</returns>
         private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher)
         {
             return new RabbitMqArticleResultSink(
@@ -401,7 +401,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create result scenario and its documented contract.
+        /// Confirms the create result behavior.
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             RabbitMqArticleDelivery delivery,
@@ -424,7 +424,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create delivery scenario and its documented contract.
+        /// Confirms the create delivery behavior.
         /// </summary>
         private static RabbitMqArticleDelivery CreateDelivery(
             string payloadText,
@@ -463,23 +463,23 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create valid json payload scenario and its documented contract.
+        /// Confirms the create valid json payload behavior.
         /// </summary>
-        /// <returns>The create valid json payload value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create valid json payload helper.</returns>
         /// <summary>
-        /// Verifies the create valid json payload scenario and its documented contract.
+        /// Confirms the create valid json payload behavior.
         /// </summary>
-        /// <param name="requestId">The request id supplied to the helper.</param>
-        /// <param name="messageId">The message id supplied to the helper.</param>
-        /// <param name="backbone">The backbone supplied to the helper.</param>
-        /// <returns>The create valid json payload value produced for the requested scenario.</returns>
+        /// <param name="requestId">The request id used by this test scenario.</param>
+        /// <param name="messageId">The message id used by this test scenario.</param>
+        /// <param name="backbone">The backbone used by this test scenario.</param>
+        /// <returns>The value returned by the create valid json payload helper.</returns>
         private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
         {
             return $"{{\"version\":1,\"requestId\":\"{requestId}\",\"messageId\":\"{messageId}\",\"backbone\":\"{backbone}\"}}";
         }
 
         /// <summary>
-        /// Verifies the tracking response publisher scenario and its documented contract.
+        /// Confirms the tracking response publisher behavior.
         /// </summary>
         private sealed class TrackingResponsePublisher : IRabbitMqArticleResponsePublisher
         {
@@ -493,7 +493,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly List<string>? _sharedOperationLog;
 
             /// <summary>
-        /// Verifies the tracking response publisher scenario and its documented contract.
+        /// Confirms the tracking response publisher behavior.
             /// </summary>
             internal TrackingResponsePublisher(RabbitMqResponsePublishStatus status, List<string>? sharedOperationLog = null)
             {
@@ -532,7 +532,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-        /// Verifies the publish and confirm async scenario and its documented contract.
+        /// Confirms the publish and confirm async behavior.
             /// </summary>
             public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
                 ArticleWorkProcessingResult result,
@@ -559,7 +559,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the tracking delivery settlement scenario and its documented contract.
+        /// Confirms the tracking delivery settlement behavior.
         /// </summary>
         private sealed class TrackingDeliverySettlement : IRabbitMqDeliverySettlement
         {
@@ -577,7 +577,7 @@ namespace VectorNNTP.Backfiller.Tests
             private ulong _deliveryTag;
 
             /// <summary>
-        /// Verifies the tracking delivery settlement scenario and its documented contract.
+        /// Confirms the tracking delivery settlement behavior.
             /// </summary>
             internal TrackingDeliverySettlement(List<string>? sharedOperationLog = null)
             {
@@ -605,14 +605,14 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-        /// Verifies the ack async scenario and its documented contract.
+        /// Confirms the ack async behavior.
             /// </summary>
-        /// <returns>The ack async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the ack async helper.</returns>
         /// <summary>
-        /// Verifies the ack async scenario and its documented contract.
+        /// Confirms the ack async behavior.
         /// </summary>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The ack async value produced for the requested scenario.</returns>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the ack async helper.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -628,15 +628,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Verifies the nack async scenario and its documented contract.
+        /// Confirms the nack async behavior.
             /// </summary>
-        /// <returns>The nack async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the nack async helper.</returns>
         /// <summary>
-        /// Verifies the nack async scenario and its documented contract.
+        /// Confirms the nack async behavior.
         /// </summary>
-        /// <param name="requeue">The requeue supplied to the helper.</param>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The nack async value produced for the requested scenario.</returns>
+        /// <param name="requeue">The requeue used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -653,7 +653,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Verifies the bind delivery tag scenario and its documented contract.
+        /// Confirms the bind delivery tag behavior.
             /// </summary>
             internal void BindDeliveryTag(ulong deliveryTag)
             {

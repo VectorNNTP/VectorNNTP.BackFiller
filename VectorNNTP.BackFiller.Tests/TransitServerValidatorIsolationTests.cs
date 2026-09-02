@@ -14,14 +14,14 @@ using Xunit.Abstractions;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Verifies the transit server validator isolation tests scenario and its documented contract.
+        /// Confirms the transit server validator isolation tests behavior.
     /// </summary>
-        /// <returns>The transit server validator isolation tests value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
         /// <summary>
-        /// Verifies the transit server validator isolation tests scenario and its documented contract.
+        /// Confirms the transit server validator isolation tests behavior.
         /// </summary>
-        /// <param name="output">The output supplied to the helper.</param>
-        /// <returns>The transit server validator isolation tests value produced for the requested scenario.</returns>
+        /// <param name="output">The output used by this test scenario.</param>
+        /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
         /// <summary>
@@ -30,21 +30,21 @@ namespace VectorNNTP.Backfiller.Tests
         private readonly ITestOutputHelper _out = output;
 
         /// <summary>
-        /// Verifies the build scenario and its documented contract.
+        /// Confirms the build behavior.
         /// </summary>
-        /// <returns>The build value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the build helper.</returns>
         /// <summary>
-        /// Verifies the build scenario and its documented contract.
+        /// Confirms the build behavior.
         /// </summary>
-        /// <param name="string">The string supplied to the helper.</param>
-        /// <param name="values">The values supplied to the helper.</param>
-        /// <returns>The build value produced for the requested scenario.</returns>
+        /// <param name="string">The string used by this test scenario.</param>
+        /// <param name="values">The values used by this test scenario.</param>
+        /// <returns>The value returned by the build helper.</returns>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {
             return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         }
         /// <summary>
-        /// Verifies the transit server use ssl missing default false direct and full pipeline scenario and its documented contract.
+        /// Confirms the transit server use ssl missing default false direct and full pipeline behavior.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline()
@@ -100,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(configResult.Errors, static e => e.Setting == "BackFiller:TransitServer:UseSsl");
         }
         /// <summary>
-        /// Verifies the transit server use ssl true port119 scenario and its documented contract.
+        /// Confirms the transit server use ssl true port119 behavior.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port119()
@@ -142,7 +142,7 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally non-TLS", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the transit server use ssl false port563 scenario and its documented contract.
+        /// Confirms the transit server use ssl false port563 behavior.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslFalse_Port563()
@@ -181,7 +181,7 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally TLS", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the transit server use ssl true port563 scenario and its documented contract.
+        /// Confirms the transit server use ssl true port563 behavior.
         /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port563()

@@ -22,7 +22,7 @@ namespace VectorNNTP.Backfiller.Tests
     public class LetsEncryptValidatorTests
     {
         /// <summary>
-        /// Verifies the validate acme account email when valid email returns no errors scenario and its documented contract.
+        /// Confirms the validate acme account email when valid email returns no errors behavior.
         /// </summary>
         [Fact]
         public void ValidateAcmeAccountEmail_WhenValidEmail_ReturnsNoErrors()
@@ -34,7 +34,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate acme account email when missing returns required error scenario and its documented contract.
+        /// Confirms the validate acme account email when missing returns required error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -52,7 +52,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("required", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the validate acme account email when contains whitespace or control characters returns error scenario and its documented contract.
+        /// Confirms the validate acme account email when contains whitespace or control characters returns error behavior.
         /// </summary>
         [Theory]
         [InlineData("security @usenet.ninja")]
@@ -71,7 +71,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("whitespace", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the validate acme account email when email syntax invalid returns error scenario and its documented contract.
+        /// Confirms the validate acme account email when email syntax invalid returns error behavior.
         /// </summary>
         [Theory]
         [InlineData("not-an-email")]
@@ -89,7 +89,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("valid email", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the validate acme account key pem when valid relative pem file returns no errors scenario and its documented contract.
+        /// Confirms the validate acme account key pem when valid relative pem file returns no errors behavior.
         /// </summary>
         [Fact]
         public void ValidateAcmeAccountKeyPem_WhenValidRelativePemFile_ReturnsNoErrors()
@@ -116,7 +116,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the validate acme account key pem when absolute path provided returns error scenario and its documented contract.
+        /// Confirms the validate acme account key pem when absolute path provided returns error behavior.
         /// </summary>
         [Fact]
         public void ValidateAcmeAccountKeyPem_WhenAbsolutePathProvided_ReturnsError()
@@ -141,7 +141,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the validate acme account key pem when file missing returns error scenario and its documented contract.
+        /// Confirms the validate acme account key pem when file missing returns error behavior.
         /// </summary>
         [Fact]
         public void ValidateAcmeAccountKeyPem_WhenFileMissing_ReturnsError()
@@ -165,7 +165,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the validate acme account key pem when pem content invalid returns error scenario and its documented contract.
+        /// Confirms the validate acme account key pem when pem content invalid returns error behavior.
         /// </summary>
         [Fact]
         public void ValidateAcmeAccountKeyPem_WhenPemContentInvalid_ReturnsError()
@@ -192,7 +192,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults acme account email to security at usenet ninja scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults acme account email to security at usenet ninja behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsAcmeAccountEmailToSecurityAtUsenetNinja()
@@ -202,7 +202,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("security@usenet.ninja", options.AcmeAccountEmail);
         }
         /// <summary>
-        /// Verifies the validate acme transient retry max attempts when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate acme transient retry max attempts when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -217,7 +217,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate acme transient retry max attempts when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate acme transient retry max attempts when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -234,7 +234,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults acme account key pem to account key scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults acme account key pem to account key behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsAcmeAccountKeyPemToAccountKey()
@@ -244,7 +244,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("account.key", options.AcmeAccountKeyPem);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults acme transient retry max attempts to five scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults acme transient retry max attempts to five behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsAcmeTransientRetryMaxAttemptsToFive()
@@ -254,7 +254,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(5, options.AcmeTransientRetryMaxAttempts);
         }
         /// <summary>
-        /// Verifies the validate clock skew check ttl minutes when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate clock skew check ttl minutes when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -269,7 +269,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate clock skew check ttl minutes when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate clock skew check ttl minutes when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -286,7 +286,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults clock skew check ttl minutes to five scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults clock skew check ttl minutes to five behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsClockSkewCheckTtlMinutesToFive()
@@ -296,7 +296,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(5, options.ClockSkewCheckTtlMinutes);
         }
         /// <summary>
-        /// Verifies the validate clock skew max minutes when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate clock skew max minutes when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -311,7 +311,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate clock skew max minutes when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate clock skew max minutes when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -328,7 +328,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:ClockSkewMaxMinutes", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults clock skew max minutes to ten scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults clock skew max minutes to ten behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsClockSkewMaxMinutesToTen()
@@ -338,7 +338,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(10, options.ClockSkewMaxMinutes);
         }
         /// <summary>
-        /// Verifies the validate cloud flare api token when valid returns no errors scenario and its documented contract.
+        /// Confirms the validate cloud flare api token when valid returns no errors behavior.
         /// </summary>
         [Fact]
         public void ValidateCloudFlareApiToken_WhenValid_ReturnsNoErrors()
@@ -350,7 +350,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate cloud flare api token when missing or invalid returns error scenario and its documented contract.
+        /// Confirms the validate cloud flare api token when missing or invalid returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -368,7 +368,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:CloudFlareApiToken", error.Setting);
         }
         /// <summary>
-        /// Verifies the validate cloud flare api token when template placeholder used returns error scenario and its documented contract.
+        /// Confirms the validate cloud flare api token when template placeholder used returns error behavior.
         /// </summary>
         [Fact]
         public void ValidateCloudFlareApiToken_WhenTemplatePlaceholderUsed_ReturnsError()
@@ -382,7 +382,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("placeholder", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the validate cloud flare zone id when valid returns no errors scenario and its documented contract.
+        /// Confirms the validate cloud flare zone id when valid returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData("5811a29d39a0732afb5f160c9b137c3d")]
@@ -396,7 +396,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate cloud flare zone id when missing or invalid returns error scenario and its documented contract.
+        /// Confirms the validate cloud flare zone id when missing or invalid returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -416,7 +416,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:CloudFlareZoneId", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults cloud flare api token to placeholder scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults cloud flare api token to placeholder behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsCloudFlareApiTokenToPlaceholder()
@@ -426,7 +426,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("YOUR_CLOUDFLARE_API_TOKEN", options.CloudFlareApiToken);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults cloud flare zone id to usenet ninja zone scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults cloud flare zone id to usenet ninja zone behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsCloudFlareZoneIdToUsenetNinjaZone()
@@ -436,7 +436,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("5811a29d39a0732afb5f160c9b137c3d", options.CloudFlareZoneId);
         }
         /// <summary>
-        /// Verifies the validate dns authoritative ns cache minutes when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate dns authoritative ns cache minutes when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -451,7 +451,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate dns authoritative ns cache minutes when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate dns authoritative ns cache minutes when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -468,7 +468,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults dns authoritative ns cache minutes to five scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults dns authoritative ns cache minutes to five behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsDnsAuthoritativeNsCacheMinutesToFive()
@@ -478,7 +478,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(5, options.DnsAuthoritativeNsCacheMinutes);
         }
         /// <summary>
-        /// Verifies the validate dns authoritative quorum ratio when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate dns authoritative quorum ratio when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(0.1)]
@@ -493,7 +493,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate dns authoritative quorum ratio when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate dns authoritative quorum ratio when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -513,7 +513,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults dns authoritative quorum ratio to point seven scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults dns authoritative quorum ratio to point seven behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsDnsAuthoritativeQuorumRatioToPointSeven()
@@ -523,7 +523,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0.7, options.DnsAuthoritativeQuorumRatio);
         }
         /// <summary>
-        /// Verifies the validate dns propagation delay seconds when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate dns propagation delay seconds when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(0)]
@@ -538,7 +538,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate dns propagation delay seconds when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate dns propagation delay seconds when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -554,7 +554,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DnsPropagationDelaySeconds", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults dns propagation delay seconds to fifteen scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults dns propagation delay seconds to fifteen behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsDnsPropagationDelaySecondsToFifteen()
@@ -564,7 +564,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(15, options.DnsPropagationDelaySeconds);
         }
         /// <summary>
-        /// Verifies the validate dns txt poll interval seconds when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate dns txt poll interval seconds when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -579,7 +579,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate dns txt poll interval seconds when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate dns txt poll interval seconds when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -596,7 +596,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults dns txt poll interval seconds to three scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults dns txt poll interval seconds to three behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsDnsTxtPollIntervalSecondsToThree()
@@ -606,7 +606,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(3, options.DnsTxtPollIntervalSeconds);
         }
         /// <summary>
-        /// Verifies the validate dns txt poll timeout seconds when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate dns txt poll timeout seconds when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -621,7 +621,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate dns txt poll timeout seconds when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate dns txt poll timeout seconds when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -638,7 +638,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults dns txt poll timeout seconds to six hundred scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults dns txt poll timeout seconds to six hundred behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsDnsTxtPollTimeoutSecondsToSixHundred()
@@ -648,7 +648,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(600, options.DnsTxtPollTimeoutSeconds);
         }
         /// <summary>
-        /// Verifies the validate dns txt polling coherence when timeout greater than interval returns no errors scenario and its documented contract.
+        /// Confirms the validate dns txt polling coherence when timeout greater than interval returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1, 2)]
@@ -664,7 +664,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate dns txt polling coherence when timeout not greater than interval returns error scenario and its documented contract.
+        /// Confirms the validate dns txt polling coherence when timeout not greater than interval returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(3, 3)]
@@ -680,7 +680,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds", error.Setting);
         }
         /// <summary>
-        /// Verifies the validate domain names syntax when null returns no errors scenario and its documented contract.
+        /// Confirms the validate domain names syntax when null returns no errors behavior.
         /// </summary>
         [Fact]
         public void ValidateDomainNamesSyntax_WhenNull_ReturnsNoErrors()
@@ -692,7 +692,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Empty(diagnostics);
         }
         /// <summary>
-        /// Verifies the validate domain names syntax when empty array returns error scenario and its documented contract.
+        /// Confirms the validate domain names syntax when empty array returns error behavior.
         /// </summary>
         [Fact]
         public void ValidateDomainNamesSyntax_WhenEmptyArray_ReturnsError()
@@ -705,7 +705,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:DomainNames", error.Setting);
         }
         /// <summary>
-        /// Verifies the validate domain names syntax when entries are valid returns no errors scenario and its documented contract.
+        /// Confirms the validate domain names syntax when entries are valid returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData("nntp.example.com")]
@@ -720,7 +720,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate domain names syntax when entry is invalid returns error scenario and its documented contract.
+        /// Confirms the validate domain names syntax when entry is invalid returns error behavior.
         /// </summary>
         [Theory]
         [InlineData("")]
@@ -738,7 +738,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(diagnostics, d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults domain names to null scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults domain names to null behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsDomainNamesToNull()
@@ -748,7 +748,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(options.DomainNames);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults enabled to true scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults enabled to true behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsEnabledToTrue()
@@ -758,7 +758,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(options.Enabled);
         }
         /// <summary>
-        /// Verifies the validate pfx export password when valid returns no errors scenario and its documented contract.
+        /// Confirms the validate pfx export password when valid returns no errors behavior.
         /// </summary>
         [Fact]
         public void ValidatePfxExportPassword_WhenValid_ReturnsNoErrors()
@@ -770,7 +770,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate pfx export password when missing weak or whitespace returns error scenario and its documented contract.
+        /// Confirms the validate pfx export password when missing weak or whitespace returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -788,7 +788,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:PfxExportPassword", error.Setting);
         }
         /// <summary>
-        /// Verifies the validate pfx export password when template placeholder used returns error scenario and its documented contract.
+        /// Confirms the validate pfx export password when template placeholder used returns error behavior.
         /// </summary>
         [Fact]
         public void ValidatePfxExportPassword_WhenTemplatePlaceholderUsed_ReturnsError()
@@ -802,7 +802,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("placeholder", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults pfx export password to placeholder scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults pfx export password to placeholder behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsPfxExportPasswordToPlaceholder()
@@ -812,7 +812,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("YOUR_PFX_PASSWORD", options.PfxExportPassword);
         }
         /// <summary>
-        /// Verifies the validate renewal check interval hours when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate renewal check interval hours when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -827,7 +827,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate renewal check interval hours when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate renewal check interval hours when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -844,7 +844,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:RenewalCheckIntervalHours", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults renewal check interval hours to six scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults renewal check interval hours to six behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsRenewalCheckIntervalHoursToSix()
@@ -854,7 +854,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(6, options.RenewalCheckIntervalHours);
         }
         /// <summary>
-        /// Verifies the validate renewal jitter ratio when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate renewal jitter ratio when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(0.0)]
@@ -869,7 +869,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate renewal jitter ratio when out of range or invalid returns error scenario and its documented contract.
+        /// Confirms the validate renewal jitter ratio when out of range or invalid returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -889,7 +889,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:RenewalJitterRatio", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults renewal jitter ratio to point one scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults renewal jitter ratio to point one behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsRenewalJitterRatioToPointOne()
@@ -899,7 +899,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0.1, options.RenewalJitterRatio);
         }
         /// <summary>
-        /// Verifies the validate renew before expiry days when within range returns no errors scenario and its documented contract.
+        /// Confirms the validate renew before expiry days when within range returns no errors behavior.
         /// </summary>
         [Theory]
         [InlineData(1)]
@@ -914,7 +914,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
         }
         /// <summary>
-        /// Verifies the validate renew before expiry days when out of range or missing returns error scenario and its documented contract.
+        /// Confirms the validate renew before expiry days when out of range or missing returns error behavior.
         /// </summary>
         [Theory]
         [InlineData(null)]
@@ -931,7 +931,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("BackFiller:LetsEncrypt:RenewBeforeExpiryDays", error.Setting);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults renew before expiry days to seven scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults renew before expiry days to seven behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsRenewBeforeExpiryDaysToSeven()
@@ -941,7 +941,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(7, options.RenewBeforeExpiryDays);
         }
         /// <summary>
-        /// Verifies the lets encrypt options defaults use staging directory to false scenario and its documented contract.
+        /// Confirms the lets encrypt options defaults use staging directory to false behavior.
         /// </summary>
         [Fact]
         public void LetsEncryptOptions_DefaultsUseStagingDirectoryToFalse()
@@ -952,13 +952,13 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create unique temp directory scenario and its documented contract.
+        /// Confirms the create unique temp directory behavior.
         /// </summary>
-        /// <returns>The create unique temp directory value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create unique temp directory helper.</returns>
         /// <summary>
-        /// Verifies the create unique temp directory scenario and its documented contract.
+        /// Confirms the create unique temp directory behavior.
         /// </summary>
-        /// <returns>The create unique temp directory value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the create unique temp directory helper.</returns>
         private static string CreateUniqueTempDirectory()
         {
             string path = Path.Combine(Path.GetTempPath(), $"vectornntp-letsencrypt-test-{Guid.NewGuid():N}");
@@ -967,7 +967,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the delete directory if exists scenario and its documented contract.
+        /// Confirms the delete directory if exists behavior.
         /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {

@@ -228,7 +228,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Gets the bounded infrastructure delivery stream for the next processing layer.
+        /// Returns the bounded infrastructure delivery stream for the next processing layer.
         /// </summary>
         internal ChannelReader<RabbitMqArticleDelivery> DeliveryReader => _deliveryChannel.Reader;
 
@@ -305,7 +305,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Gets the currently active consumer session count.
+        /// Returns the currently active consumer session count.
         /// </summary>
         internal int ActiveSessionCount
         {

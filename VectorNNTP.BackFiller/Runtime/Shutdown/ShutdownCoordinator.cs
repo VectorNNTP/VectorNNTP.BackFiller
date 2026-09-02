@@ -6,7 +6,7 @@
 
 // ShutdownCoordinator.cs -- Graceful/forced shutdown coordination state machine.
 //
-// Coordinates domain-specific shutdown escalation across worker components using two cancellation tokens:
+// Owns domain-specific shutdown escalation across worker components using two cancellation tokens:
 //   - GracefulShutdownStartedToken: indicates cooperative shutdown should begin
 //   - ForcedShutdownToken: indicates graceful budget expired or immediate forced shutdown
 //
@@ -202,7 +202,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         internal CancellationToken ForcedShutdownToken => _forcedShutdownCts.Token;
 
         /// <summary>
-        /// Gets the current shutdown coordinator state.
+        /// Returns the current shutdown coordinator state.
         /// </summary>
         internal ShutdownState State
         {
@@ -230,7 +230,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the UTC timestamp when graceful shutdown started.
+        /// Returns the UTC timestamp when graceful shutdown started.
         /// </summary>
         internal DateTimeOffset? GracefulShutdownStartedAtUtc
         {
@@ -244,7 +244,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the UTC timestamp when forced shutdown was signaled.
+        /// Returns the UTC timestamp when forced shutdown was signaled.
         /// </summary>
         internal DateTimeOffset? ForcedShutdownAtUtc
         {
@@ -258,7 +258,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the monotonic timestamp when graceful shutdown started.
+        /// Returns the monotonic timestamp when graceful shutdown started.
         /// </summary>
         internal long? GracefulShutdownStartedTimestamp
         {
@@ -272,7 +272,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the monotonic timestamp when forced shutdown was signaled.
+        /// Returns the monotonic timestamp when forced shutdown was signaled.
         /// </summary>
         internal long? ForcedShutdownTimestamp
         {
@@ -286,7 +286,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the reason that initiated graceful shutdown.
+        /// Returns the reason that initiated graceful shutdown.
         /// </summary>
         internal ShutdownReason GracefulShutdownReason
         {
@@ -300,7 +300,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the reason that initiated forced shutdown.
+        /// Returns the reason that initiated forced shutdown.
         /// </summary>
         internal ShutdownReason ForcedShutdownReason
         {
@@ -314,7 +314,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the elapsed graceful-shutdown duration when both monotonic timestamps are available.
+        /// Returns the elapsed graceful-shutdown duration when both monotonic timestamps are available.
         /// </summary>
         internal TimeSpan? GracefulShutdownElapsed
         {

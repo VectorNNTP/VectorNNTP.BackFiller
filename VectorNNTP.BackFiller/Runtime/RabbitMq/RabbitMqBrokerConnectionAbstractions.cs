@@ -51,17 +51,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public int EndpointPort { get; }
 
         /// <summary>
-        /// Gets the broker virtual host used for this connection.
+        /// Returns the broker virtual host used for this connection.
         /// </summary>
         public string VirtualHost { get; }
 
         /// <summary>
-        /// Gets the configured client-provided connection name.
+        /// Returns the configured client-provided connection name.
         /// </summary>
         public string ClientProvidedName { get; }
 
         /// <summary>
-        /// Gets the underlying RabbitMQ connection instance.
+        /// Returns the underlying RabbitMQ connection instance.
         /// </summary>
         public IConnection UnderlyingConnection { get; }
 
@@ -110,7 +110,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqChannel : IAsyncDisposable
     {
         /// <summary>
-        /// Gets the underlying RabbitMQ channel.
+        /// Returns the underlying RabbitMQ channel.
         /// </summary>
         public IChannel UnderlyingChannel { get; }
 

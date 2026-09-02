@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller.Runtime.Certificates
-// Coordinates listener certificate discovery, issuance, activation, and renewal.
+// Owns listener certificate discovery, issuance, activation, and renewal.
 
 using VectorNNTP.Backfiller.Configuration;
 

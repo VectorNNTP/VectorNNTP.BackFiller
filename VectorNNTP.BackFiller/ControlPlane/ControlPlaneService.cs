@@ -35,7 +35,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
     /// <param name="logger">The logger used for control-plane diagnostics.</param>
     /// <param name="timeProvider">The unified time provider used for control-plane timestamps.</param>
     /// <param name="snapshotProvider">The runtime NNTP account snapshot provider.</param>
-    /// <param name="rabbitMqCapacityRetirementCoordinator">Coordinates RabbitMQ capacity retirement during account reconciliation.</param>
+    /// <param name="rabbitMqCapacityRetirementCoordinator">Manages retirement of RabbitMQ capacity during account reconciliation.</param>
     /// <param name="backboneUsableCapacityStateWriter">Optional writer for publishing usable backbone capacity state.</param>
     /// <param name="loggerFactory">The logger factory used to create account session-manager loggers.</param>
     /// <param name="serverCertificateValidationCallback">Optional per-acquisition-session TLS server-certificate validation callback. When <see langword="null"/>, acquisition sessions retain platform default certificate validation behavior.</param>
@@ -108,7 +108,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         internal bool IsStartupInitializationComplete { get; private set; }
 
         /// <summary>
-        /// Gets the number of currently managed account runtimes.
+        /// Returns the number of currently managed account runtimes.
         /// </summary>
         internal int ManagedAccountCount
         {
@@ -122,7 +122,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Gets the number of currently active sessions for one managed account runtime.
+        /// Returns the number of currently active sessions for one managed account runtime.
         /// </summary>
         /// <param name="accountId">Stable account identifier.</param>
         /// <returns>Active session count, or zero when the account is not currently managed.</returns>
@@ -542,7 +542,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
             internal NntpAccountSnapshot LastAppliedAccount { get; set; } = LastAppliedAccount;
 
             /// <summary>
-            /// Gets the persistent session manager owned for this account runtime.
+            /// Returns the persistent session manager owned for this account runtime.
             /// </summary>
             internal NntpArticleExecutionSessionManager Manager { get; } = Manager;
         }

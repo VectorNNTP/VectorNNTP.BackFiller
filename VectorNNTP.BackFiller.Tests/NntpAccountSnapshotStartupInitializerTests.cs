@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class NntpAccountSnapshotStartupInitializerTests
     {
         /// <summary>
-        /// Verifies the start async when entry id provided as string encoded guid publishes snapshot scenario and its documented contract.
+        /// Confirms the start async when entry id provided as string encoded guid publishes snapshot behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_WhenEntryIdProvidedAsStringEncodedGuid_PublishesSnapshot()
@@ -52,7 +52,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(expectedEntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
         /// <summary>
-        /// Verifies the start async provisions before initial snapshot load scenario and its documented contract.
+        /// Confirms the start async provisions before initial snapshot load behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_ProvisionsBeforeInitialSnapshotLoad()
@@ -85,7 +85,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(["provision", "load"], operations);
         }
         /// <summary>
-        /// Verifies the start async when provisioning fails throws and does not load snapshot scenario and its documented contract.
+        /// Confirms the start async when provisioning fails throws and does not load snapshot behavior.
         /// </summary>
         [Fact]
         public async Task StartAsync_WhenProvisioningFails_ThrowsAndDoesNotLoadSnapshot()
@@ -118,29 +118,29 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the delegate provisioning store scenario and its documented contract.
+        /// Confirms the delegate provisioning store behavior.
         /// </summary>
-        /// <returns>The delegate provisioning store value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the delegate provisioning store helper.</returns>
         /// <summary>
-        /// Verifies the delegate provisioning store scenario and its documented contract.
+        /// Confirms the delegate provisioning store behavior.
         /// </summary>
-        /// <param name="CancellationToken">The cancellation token supplied to the helper.</param>
-        /// <param name="callback">The callback supplied to the helper.</param>
-        /// <returns>The delegate provisioning store value produced for the requested scenario.</returns>
+        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
+        /// <param name="callback">The callback used by this test scenario.</param>
+        /// <returns>The value returned by the delegate provisioning store helper.</returns>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             /// <summary>
-        /// Verifies the ensure database and table async scenario and its documented contract.
+        /// Confirms the ensure database and table async behavior.
             /// </summary>
-        /// <returns>The ensure database and table async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the ensure database and table async helper.</returns>
         /// <summary>
-        /// Verifies the ensure database and table async scenario and its documented contract.
+        /// Confirms the ensure database and table async behavior.
         /// </summary>
-        /// <param name="databaseName">The database name supplied to the helper.</param>
-        /// <param name="tableName">The table name supplied to the helper.</param>
-        /// <param name="createTableSql">The create table sql supplied to the helper.</param>
-        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
-        /// <returns>The ensure database and table async value produced for the requested scenario.</returns>
+        /// <param name="databaseName">The database name used by this test scenario.</param>
+        /// <param name="tableName">The table name used by this test scenario.</param>
+        /// <param name="createTableSql">The create table sql used by this test scenario.</param>
+        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+        /// <returns>The value returned by the ensure database and table async helper.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return callback(cancellationToken);

@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public class LetsEncryptEnabledValidationFlowTests
     {
         /// <summary>
-        /// Verifies the validate back filler options when bind address is omitted does not return bind address errors scenario and its documented contract.
+        /// Confirms the validate back filler options when bind address is omitted does not return bind address errors behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenBindAddressIsOmitted_DoesNotReturnBindAddressErrors()
@@ -29,7 +29,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:BindAddress", StringComparison.Ordinal));
         }
         /// <summary>
-        /// Verifies the validate back filler options when bind address is wildcard does not return local assignment error scenario and its documented contract.
+        /// Confirms the validate back filler options when bind address is wildcard does not return local assignment error behavior.
         /// </summary>
         [Theory]
         [InlineData("0.0.0.0")]
@@ -45,7 +45,7 @@ namespace VectorNNTP.Backfiller.Tests
                 && e.Error.Contains("not assigned to any local network interface", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the validate back filler options when bind address contains duplicate returns duplicate bind address error scenario and its documented contract.
+        /// Confirms the validate back filler options when bind address contains duplicate returns duplicate bind address error behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenBindAddressContainsDuplicate_ReturnsDuplicateBindAddressError()
@@ -59,7 +59,7 @@ namespace VectorNNTP.Backfiller.Tests
                 && e.Error.Contains("Duplicate bind address", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the validate back filler options when bind port is out of range returns bind port range error scenario and its documented contract.
+        /// Confirms the validate back filler options when bind port is out of range returns bind port range error behavior.
         /// </summary>
         [Theory]
         [InlineData("0")]
@@ -80,7 +80,7 @@ namespace VectorNNTP.Backfiller.Tests
                 && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
         }
         /// <summary>
-        /// Verifies the validate back filler options when lets encrypt disabled does not require acme settings scenario and its documented contract.
+        /// Confirms the validate back filler options when lets encrypt disabled does not require acme settings behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabled_DoesNotRequireAcmeSettings()
@@ -98,7 +98,7 @@ namespace VectorNNTP.Backfiller.Tests
                 or "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
         }
         /// <summary>
-        /// Verifies the validate back filler options when lets encrypt disabled ignores invalid acme and renewal settings scenario and its documented contract.
+        /// Confirms the validate back filler options when lets encrypt disabled ignores invalid acme and renewal settings behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabled_IgnoresInvalidAcmeAndRenewalSettings()
@@ -126,7 +126,7 @@ namespace VectorNNTP.Backfiller.Tests
                 or "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
         }
         /// <summary>
-        /// Verifies the validate back filler options when lets encrypt disabled requires cloudflare settings scenario and its documented contract.
+        /// Confirms the validate back filler options when lets encrypt disabled requires cloudflare settings behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabled_RequiresCloudflareSettings()
@@ -139,7 +139,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:CloudFlareZoneId");
         }
         /// <summary>
-        /// Verifies the validate back filler options when lets encrypt disabled and cloudflare configured is valid with invalid acme settings scenario and its documented contract.
+        /// Confirms the validate back filler options when lets encrypt disabled and cloudflare configured is valid with invalid acme settings behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabledAndCloudflareConfigured_IsValidWithInvalidAcmeSettings()
@@ -187,7 +187,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Empty(errors);
         }
         /// <summary>
-        /// Verifies the validate back filler options when lets encrypt enabled requires acme and cloudflare settings scenario and its documented contract.
+        /// Confirms the validate back filler options when lets encrypt enabled requires acme and cloudflare settings behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptEnabled_RequiresAcmeAndCloudflareSettings()
@@ -206,7 +206,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
         }
         /// <summary>
-        /// Verifies the validate back filler options when lets encrypt enabled and configured domain names invalid does not use configured domain names scenario and its documented contract.
+        /// Confirms the validate back filler options when lets encrypt enabled and configured domain names invalid does not use configured domain names behavior.
         /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptEnabledAndConfiguredDomainNamesInvalid_DoesNotUseConfiguredDomainNames()
@@ -224,7 +224,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises invoke validate back filler options behavior, including the expected result and failure semantics.
+        /// Confirms invoke validate back filler options behavior.
         /// </summary>
         private static List<(string Setting, string Error)> InvokeValidateBackFillerOptions(IConfiguration configuration)
         {
@@ -232,22 +232,22 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the build back filler configuration scenario and its documented contract.
+        /// Confirms the build back filler configuration behavior.
         /// </summary>
-        /// <returns>The build back filler configuration value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the build back filler configuration helper.</returns>
         /// <summary>
-        /// Verifies the build back filler configuration scenario and its documented contract.
+        /// Confirms the build back filler configuration behavior.
         /// </summary>
-        /// <param name="enabled">The enabled supplied to the helper.</param>
-        /// <param name="bindAddresses">The bind addresses supplied to the helper.</param>
-        /// <returns>The build back filler configuration value produced for the requested scenario.</returns>
+        /// <param name="enabled">The enabled used by this test scenario.</param>
+        /// <param name="bindAddresses">The bind addresses used by this test scenario.</param>
+        /// <returns>The value returned by the build back filler configuration helper.</returns>
         private static IConfiguration BuildBackFillerConfiguration(bool enabled, params string[]? bindAddresses)
         {
             return BuildBackFillerConfigurationWithRawBindPort(enabled, "119", bindAddresses, domainNames: null);
         }
 
         /// <summary>
-        /// Verifies the build back filler configuration with raw bind port scenario and its documented contract.
+        /// Confirms the build back filler configuration with raw bind port behavior.
         /// </summary>
         private static IConfiguration BuildBackFillerConfigurationWithRawBindPort(
             bool enabled,

@@ -117,12 +117,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         Exception? UnexpectedException) : IDisposable
     {
         /// <summary>
-        /// Gets the AMQP correlation identifier from the authoritative delivery metadata.
+        /// Returns the AMQP correlation identifier from the authoritative delivery metadata.
         /// </summary>
         internal string? CorrelationId => Delivery.CorrelationId;
 
         /// <summary>
-        /// Gets the AMQP reply destination from the authoritative delivery metadata.
+        /// Returns the AMQP reply destination from the authoritative delivery metadata.
         /// </summary>
         internal string? ReplyTo => Delivery.ReplyTo;
 

@@ -1082,12 +1082,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="bodyBytes">Raw body bytes.</param>
         /// <returns>Article bytes with CRLF separator.</returns>
         /// <summary>
-        /// Verifies the build article scenario and its documented contract.
+        /// Confirms the build article behavior.
         /// </summary>
-        /// <param name="headers">The headers supplied to the helper.</param>
-        /// <param name="body">The body supplied to the helper.</param>
-        /// <param name="bodyBytes">The body bytes supplied to the helper.</param>
-        /// <returns>The build article value produced for the requested scenario.</returns>
+        /// <param name="headers">The headers used by this test scenario.</param>
+        /// <param name="body">The body used by this test scenario.</param>
+        /// <param name="bodyBytes">The body bytes used by this test scenario.</param>
+        /// <returns>The value returned by the build article helper.</returns>
         private static byte[] BuildArticle(IEnumerable<string> headers, string? body = null, byte[]? bodyBytes = null)
         {
             StringBuilder sb = new();
@@ -1115,12 +1115,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="body">Body text.</param>
         /// <returns>Article bytes.</returns>
         /// <summary>
-        /// Verifies the build article raw scenario and its documented contract.
+        /// Confirms the build article raw behavior.
         /// </summary>
-        /// <param name="headers">The headers supplied to the helper.</param>
-        /// <param name="rawPath">The raw path supplied to the helper.</param>
-        /// <param name="body">The body supplied to the helper.</param>
-        /// <returns>The build article raw value produced for the requested scenario.</returns>
+        /// <param name="headers">The headers used by this test scenario.</param>
+        /// <param name="rawPath">The raw path used by this test scenario.</param>
+        /// <param name="body">The body used by this test scenario.</param>
+        /// <returns>The value returned by the build article raw helper.</returns>
         private static byte[] BuildArticleRaw(IEnumerable<string> headers, string rawPath, string body)
         {
             StringBuilder sb = new();
@@ -1140,11 +1140,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="name">Payload name metadata.</param>
         /// <returns>Valid yEnc body bytes.</returns>
         /// <summary>
-        /// Verifies the build synthetic single part yenc body scenario and its documented contract.
+        /// Confirms the build synthetic single part yenc body behavior.
         /// </summary>
-        /// <param name="payloadLength">The payload length supplied to the helper.</param>
-        /// <param name="name">The name supplied to the helper.</param>
-        /// <returns>The build synthetic single part yenc body value produced for the requested scenario.</returns>
+        /// <param name="payloadLength">The payload length used by this test scenario.</param>
+        /// <param name="name">The name used by this test scenario.</param>
+        /// <returns>The value returned by the build synthetic single part yenc body helper.</returns>
         private static byte[] BuildSyntheticSinglePartYEncBody(int payloadLength, string name)
         {
             byte[] payload = new byte[payloadLength];
@@ -1170,10 +1170,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="decoded">Decoded payload bytes.</param>
         /// <returns>yEnc-encoded payload bytes with CRLF line wrapping.</returns>
         /// <summary>
-        /// Verifies the encode yenc payload scenario and its documented contract.
+        /// Confirms the encode yenc payload behavior.
         /// </summary>
-        /// <param name="decoded">The decoded supplied to the helper.</param>
-        /// <returns>The encode yenc payload value produced for the requested scenario.</returns>
+        /// <param name="decoded">The decoded used by this test scenario.</param>
+        /// <returns>The value returned by the encode yenc payload helper.</returns>
         private static byte[] EncodeYEncPayload(byte[] decoded)
         {
             List<byte> output = new(decoded.Length + (decoded.Length / 32));
@@ -1219,10 +1219,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="data">Decoded payload bytes.</param>
         /// <returns>CRC32 checksum.</returns>
         /// <summary>
-        /// Verifies the compute crc32 scenario and its documented contract.
+        /// Confirms the compute crc32 behavior.
         /// </summary>
-        /// <param name="data">The data supplied to the helper.</param>
-        /// <returns>The compute crc32 value produced for the requested scenario.</returns>
+        /// <param name="data">The data used by this test scenario.</param>
+        /// <returns>The value returned by the compute crc32 helper.</returns>
         private static uint ComputeCrc32(byte[] data)
         {
             uint crc = 0xFFFFFFFFu;
@@ -1244,9 +1244,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <returns>Absolute fixture directory path.</returns>
         /// <summary>
-        /// Verifies the resolve fixture root scenario and its documented contract.
+        /// Confirms the resolve fixture root behavior.
         /// </summary>
-        /// <returns>The resolve fixture root value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the resolve fixture root helper.</returns>
         private static string ResolveFixtureRoot()
         {
             string current = AppContext.BaseDirectory;

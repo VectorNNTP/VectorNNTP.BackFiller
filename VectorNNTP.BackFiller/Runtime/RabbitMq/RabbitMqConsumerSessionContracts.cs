@@ -15,7 +15,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqConsumerSession : IAsyncDisposable
     {
         /// <summary>
-        /// Gets the immutable logical identity for this consumer session.
+        /// Returns the immutable logical identity for this consumer session.
         /// </summary>
         public RabbitMqConsumerSessionIdentity Identity { get; }
 
@@ -25,7 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public bool IsRunning { get; }
 
         /// <summary>
-        /// Gets the connection generation currently bound to this consumer session, or zero when not running.
+        /// Returns the connection generation currently bound to this consumer session, or zero when not running.
         /// </summary>
         public long ActiveConnectionGeneration { get; }
 

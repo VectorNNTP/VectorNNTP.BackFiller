@@ -143,7 +143,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Gets the currently published immutable NNTP account snapshot.
+        /// Returns the currently published immutable NNTP account snapshot.
         /// </summary>
         internal NntpAccountSnapshotState CurrentSnapshot => _currentSnapshot;
 

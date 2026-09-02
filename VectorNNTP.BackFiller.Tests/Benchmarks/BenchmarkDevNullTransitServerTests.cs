@@ -134,7 +134,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
         /// <summary>
-        /// Verifies the fake server when terminator is immediately followed by next takethis keeps next command readable scenario and its documented contract.
+        /// Confirms the fake server when terminator is immediately followed by next takethis keeps next command readable behavior.
         /// </summary>
         [Fact]
         public async Task FakeServer_WhenTerminatorIsImmediatelyFollowedByNextTakethis_KeepsNextCommandReadable()
@@ -175,7 +175,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
         /// <summary>
-        /// Verifies the fake server when terminator and next command arrive in partial chunks parses without overflow or disconnect scenario and its documented contract.
+        /// Confirms the fake server when terminator and next command arrive in partial chunks parses without overflow or disconnect behavior.
         /// </summary>
         [Fact]
         public async Task FakeServer_WhenTerminatorAndNextCommandArriveInPartialChunks_ParsesWithoutOverflowOrDisconnect()
@@ -219,7 +219,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
         /// <summary>
-        /// Verifies the fake server when commands are pipelined with mixed case and check parses and responds by command kind scenario and its documented contract.
+        /// Confirms the fake server when commands are pipelined with mixed case and check parses and responds by command kind behavior.
         /// </summary>
         [Fact]
         public async Task FakeServer_WhenCommandsArePipelinedWithMixedCaseAndCheck_ParsesAndRespondsByCommandKind()
@@ -257,7 +257,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(payload.Length, server.ConsumedArticleBytes);
         }
         /// <summary>
-        /// Verifies the fake server when command is fragmented across many writes parses takethis and payload scenario and its documented contract.
+        /// Confirms the fake server when command is fragmented across many writes parses takethis and payload behavior.
         /// </summary>
         [Fact]
         public async Task FakeServer_WhenCommandIsFragmentedAcrossManyWrites_ParsesTakethisAndPayload()
@@ -295,7 +295,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(payload.Length, server.ConsumedArticleBytes);
         }
         /// <summary>
-        /// Verifies the fake server when quit sent after takethis completion returns closing response scenario and its documented contract.
+        /// Confirms the fake server when quit sent after takethis completion returns closing response behavior.
         /// </summary>
         [Fact]
         public async Task FakeServer_WhenQuitSentAfterTakethisCompletion_ReturnsClosingResponse()
@@ -324,7 +324,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, server.AcceptedArticles);
         }
         /// <summary>
-        /// Verifies the fake server when quit arrives with pending takethis responds with closing and stops without drain scenario and its documented contract.
+        /// Confirms the fake server when quit arrives with pending takethis responds with closing and stops without drain behavior.
         /// </summary>
         [Fact]
         public async Task FakeServer_WhenQuitArrivesWithPendingTakethis_RespondsWithClosingAndStopsWithoutDrain()
@@ -373,7 +373,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(server.AcceptedArticles >= 1);
         }
         /// <summary>
-        /// Verifies the transit benchmark config load when fake server overrides provided applies endpoint identity and overrides scenario and its documented contract.
+        /// Confirms the transit benchmark config load when fake server overrides provided applies endpoint identity and overrides behavior.
         /// </summary>
         [Fact]
         public void TransitBenchmarkConfigLoad_WhenFakeServerOverridesProvided_AppliesEndpointIdentityAndOverrides()
@@ -411,14 +411,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the perform streaming handshake async scenario and its documented contract.
+        /// Confirms the perform streaming handshake async behavior.
         /// </summary>
-        /// <returns>The perform streaming handshake async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the perform streaming handshake async helper.</returns>
         /// <summary>
-        /// Verifies the perform streaming handshake async scenario and its documented contract.
+        /// Confirms the perform streaming handshake async behavior.
         /// </summary>
-        /// <param name="stream">The stream supplied to the helper.</param>
-        /// <returns>The perform streaming handshake async value produced for the requested scenario.</returns>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <returns>The value returned by the perform streaming handshake async helper.</returns>
         private static async Task PerformStreamingHandshakeAsync(NetworkStream stream)
         {
             string greeting = await ReadAsciiLineAsync(stream);
@@ -434,15 +434,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the build takethis command scenario and its documented contract.
+        /// Confirms the build takethis command behavior.
         /// </summary>
-        /// <returns>The build takethis command value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the build takethis command helper.</returns>
         /// <summary>
-        /// Verifies the build takethis command scenario and its documented contract.
+        /// Confirms the build takethis command behavior.
         /// </summary>
-        /// <param name="messageId">The message id supplied to the helper.</param>
-        /// <param name="payload">The payload supplied to the helper.</param>
-        /// <returns>The build takethis command value produced for the requested scenario.</returns>
+        /// <param name="messageId">The message id used by this test scenario.</param>
+        /// <param name="payload">The payload used by this test scenario.</param>
+        /// <returns>The value returned by the build takethis command helper.</returns>
         private static string BuildTakethisCommand(string messageId, byte[] payload)
         {
             string body = Encoding.ASCII.GetString(payload);
@@ -450,30 +450,30 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the write ascii line async scenario and its documented contract.
+        /// Confirms the write ascii line async behavior.
         /// </summary>
-        /// <returns>The write ascii line async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the write ascii line async helper.</returns>
         /// <summary>
-        /// Verifies the write ascii line async scenario and its documented contract.
+        /// Confirms the write ascii line async behavior.
         /// </summary>
-        /// <param name="stream">The stream supplied to the helper.</param>
-        /// <param name="line">The line supplied to the helper.</param>
-        /// <returns>The write ascii line async value produced for the requested scenario.</returns>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="line">The line used by this test scenario.</param>
+        /// <returns>The value returned by the write ascii line async helper.</returns>
         private static async Task WriteAsciiLineAsync(NetworkStream stream, string line)
         {
             await WriteAsciiAsync(stream, line + "\r\n");
         }
 
         /// <summary>
-        /// Verifies the write ascii async scenario and its documented contract.
+        /// Confirms the write ascii async behavior.
         /// </summary>
-        /// <returns>The write ascii async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the write ascii async helper.</returns>
         /// <summary>
-        /// Verifies the write ascii async scenario and its documented contract.
+        /// Confirms the write ascii async behavior.
         /// </summary>
-        /// <param name="stream">The stream supplied to the helper.</param>
-        /// <param name="value">The value supplied to the helper.</param>
-        /// <returns>The write ascii async value produced for the requested scenario.</returns>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <param name="value">The value used by this test scenario.</param>
+        /// <returns>The value returned by the write ascii async helper.</returns>
         private static async Task WriteAsciiAsync(NetworkStream stream, string value)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(value);
@@ -482,14 +482,14 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the read ascii line async scenario and its documented contract.
+        /// Confirms the read ascii line async behavior.
         /// </summary>
-        /// <returns>The read ascii line async value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the read ascii line async helper.</returns>
         /// <summary>
-        /// Verifies the read ascii line async scenario and its documented contract.
+        /// Confirms the read ascii line async behavior.
         /// </summary>
-        /// <param name="stream">The stream supplied to the helper.</param>
-        /// <returns>The read ascii line async value produced for the requested scenario.</returns>
+        /// <param name="stream">The stream used by this test scenario.</param>
+        /// <returns>The value returned by the read ascii line async helper.</returns>
         private static async Task<string> ReadAsciiLineAsync(NetworkStream stream)
         {
             List<byte> buffer = [];

@@ -6,7 +6,7 @@
 
 // MySqlConnectionStringUtilities.cs -- Canonical interpretation of MySQL connection strings.
 //
-// Provides application-level parsing of MySQL connection strings with dual-path architecture
+// Describes application-level parsing of MySQL connection strings with dual-path architecture
 // to enforce ambiguity detection while maintaining provider-correct typed validation.
 //
 // Architecture (dual-path):
@@ -93,7 +93,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// Utilities for canonical interpretation of MySQL connection strings.
     /// </summary>
     /// <remarks>
-    /// <para>Provides application-level parsing of MySQL connection strings using a dual-path architecture:</para>
+    /// <para>Describes application-level parsing of MySQL connection strings using a dual-path architecture:</para>
     /// <list type="bullet">
     /// <item><description>Path 1: Raw key/value parsing via <see cref="ParseRawKeyValuePairs"/> for ambiguity detection</description></item>
     /// <item><description>Path 2: Provider canonicalization via <see cref="MySqlConnectionStringBuilder"/> for typed validation</description></item>

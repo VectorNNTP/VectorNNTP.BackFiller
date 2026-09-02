@@ -70,7 +70,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private bool _disposed;
 
         /// <summary>
-        /// Tracks whether the authenticated session reached protocol-ready state where lifecycle commands (for example QUIT) are valid.
+        /// Maintains whether the authenticated session reached protocol-ready state where lifecycle commands (for example QUIT) are valid.
         /// </summary>
         private bool _protocolReadyForCommands;
 

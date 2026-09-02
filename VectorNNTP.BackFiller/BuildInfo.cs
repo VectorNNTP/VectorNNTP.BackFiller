@@ -46,7 +46,7 @@ namespace VectorNNTP.Backfiller
         private static readonly char[] MetadataTokenSeparators = ['.', '-', '_'];
 
         /// <summary>
-        /// Gets the canonical service name.
+        /// Returns the canonical service name.
         /// </summary>
         public const string ServiceName = "VectorNNTP.BackFiller";
 
@@ -64,12 +64,12 @@ namespace VectorNNTP.Backfiller
         }
 
         /// <summary>
-        /// Gets the service name associated with this metadata snapshot.
+        /// Returns the service name associated with this metadata snapshot.
         /// </summary>
         public string Service { get; init; } = ServiceName;
 
         /// <summary>
-        /// Gets the semantic version component derived from assembly metadata.
+        /// Returns the semantic version component derived from assembly metadata.
         /// </summary>
         /// <remarks>
         /// This value is derived from the portion of <see cref="InformationalVersion"/> before build metadata
@@ -79,7 +79,7 @@ namespace VectorNNTP.Backfiller
         public string Version { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the assembly informational version.
+        /// Returns the assembly informational version.
         /// </summary>
         /// <remarks>
         /// Usually contains semantic version plus optional build metadata.
@@ -88,7 +88,7 @@ namespace VectorNNTP.Backfiller
         public string InformationalVersion { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the assembly version.
+        /// Returns the assembly version.
         /// </summary>
         /// <remarks>
         /// Often kept stable for binding compatibility (for example, major-only versioning).
@@ -96,7 +96,7 @@ namespace VectorNNTP.Backfiller
         public string AssemblyVersion { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the file version.
+        /// Returns the file version.
         /// </summary>
         /// <remarks>
         /// Commonly aligned to release versioning for deployment diagnostics.
@@ -104,7 +104,7 @@ namespace VectorNNTP.Backfiller
         public string FileVersion { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the repository commit SHA for the build.
+        /// Returns the repository commit SHA for the build.
         /// </summary>
         /// <remarks>
         /// Prefer full 40-character SHA values for uniqueness.
@@ -112,7 +112,7 @@ namespace VectorNNTP.Backfiller
         public string Commit { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the repository dirty state for the build.
+        /// Returns the repository dirty state for the build.
         /// </summary>
         /// <remarks>
         /// <see langword="true"/> indicates a dirty build, <see langword="false"/> indicates a clean build,
@@ -121,7 +121,7 @@ namespace VectorNNTP.Backfiller
         public bool? IsDirty { get; init; }
 
         /// <summary>
-        /// Gets the build timestamp supplied by the build pipeline.
+        /// Returns the build timestamp supplied by the build pipeline.
         /// </summary>
         /// <remarks>
         /// This value is read from assembly metadata and is never synthesized from process startup time.
@@ -131,17 +131,17 @@ namespace VectorNNTP.Backfiller
         public string BuildTimestamp { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the process start timestamp (UTC).
+        /// Returns the process start timestamp (UTC).
         /// </summary>
         public DateTimeOffset StartedAt { get; init; }
 
         /// <summary>
-        /// Gets the build configuration (Debug, Release, or custom).
+        /// Returns the build configuration (Debug, Release, or custom).
         /// </summary>
         public string BuildConfiguration { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets the target framework moniker this assembly was built against.
+        /// Returns the target framework moniker this assembly was built against.
         /// </summary>
         public string TargetFramework { get; init; } = UnknownValue;
 
@@ -151,7 +151,7 @@ namespace VectorNNTP.Backfiller
         public RuntimeDetails Runtime { get; init; } = RuntimeDetails.CreateCurrent();
 
         /// <summary>
-        /// Gets the .NET runtime description.
+        /// Returns the .NET runtime description.
         /// </summary>
         /// <remarks>
         /// Kept for compatibility with existing call sites that expect <c>DotNetVersion</c>.
@@ -654,22 +654,22 @@ namespace VectorNNTP.Backfiller
     public sealed class RuntimeDetails
     {
         /// <summary>
-        /// Gets the .NET runtime description.
+        /// Returns the .NET runtime description.
         /// </summary>
         public string Framework { get; init; } = "unknown";
 
         /// <summary>
-        /// Gets the operating system description.
+        /// Returns the operating system description.
         /// </summary>
         public string OS { get; init; } = "unknown";
 
         /// <summary>
-        /// Gets the operating system architecture.
+        /// Returns the operating system architecture.
         /// </summary>
         public string OSArchitecture { get; init; } = "unknown";
 
         /// <summary>
-        /// Gets the current process architecture.
+        /// Returns the current process architecture.
         /// </summary>
         public string ProcessArchitecture { get; init; } = "unknown";
 

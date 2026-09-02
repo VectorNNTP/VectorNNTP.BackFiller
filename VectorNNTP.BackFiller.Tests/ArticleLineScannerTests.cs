@@ -131,11 +131,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="startOffset">Scan start offset.</param>
         /// <returns>Detected terminator index or -1 when no terminator is found.</returns>
         /// <summary>
-        /// Verifies the index of cr lf scalar reference scenario and its documented contract.
+        /// Confirms the index of cr lf scalar reference behavior.
         /// </summary>
-        /// <param name="buffer">The buffer supplied to the helper.</param>
-        /// <param name="startOffset">The start offset supplied to the helper.</param>
-        /// <returns>The index of cr lf scalar reference value produced for the requested scenario.</returns>
+        /// <param name="buffer">The buffer used by this test scenario.</param>
+        /// <param name="startOffset">The start offset used by this test scenario.</param>
+        /// <returns>The value returned by the index of cr lf scalar reference helper.</returns>
         private static int IndexOfCrLfScalarReference(ReadOnlySpan<byte> buffer, int startOffset)
         {
             if ((uint)startOffset >= (uint)buffer.Length)
@@ -164,9 +164,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <returns>Boundary-focused test buffer.</returns>
         /// <summary>
-        /// Verifies the build boundary heavy buffer scenario and its documented contract.
+        /// Confirms the build boundary heavy buffer behavior.
         /// </summary>
-        /// <returns>The build boundary heavy buffer value produced for the requested scenario.</returns>
+        /// <returns>The value returned by the build boundary heavy buffer helper.</returns>
         private static byte[] BuildBoundaryHeavyBuffer()
         {
             List<byte> data = new(768);
