@@ -92,8 +92,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles static for transit protocol parser.
+        /// Parses an NNTP status line into its numeric code, response text, and whitespace-delimited response tokens.
         /// </summary>
+        /// <param name="line">NNTP status line to parse.</param>
+        /// <returns>The status code, response text, and response-text tokens.</returns>
         internal static (int Code, string ResponseText, string[] Tokens) ParseStatusLine(string line)
         {
             (int code, string responseText) = ParseStatusCodeAndText(line);
