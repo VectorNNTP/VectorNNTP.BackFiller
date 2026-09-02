@@ -105,9 +105,6 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 OperationalCommand.ValidateStartup => "--validate-startup",
                 OperationalCommand.Diagnostics => "--diagnostics",
                 OperationalCommand.DumpConfig => "--dump-config",
-                /// <summary>
-                /// Defines value and its operational command parser contract.
-                /// </summary>
                 _ => throw new System.Diagnostics.UnreachableException($"Unsupported command enum value: {command}")
             };
         }
