@@ -16,6 +16,7 @@ internal static class MeasurementRunCoordinator
 {
     /// <summary>
     /// Runs the configured workload, then drains outstanding work before returning its result.
+    /// </summary>
     /// <param name="publisher">Transit publisher used by dispatch workers.</param>
     /// <param name="config">Validated benchmark configuration.</param>
     /// <param name="workload">Prepared workload supplied to the measurement engine.</param>
@@ -24,7 +25,6 @@ internal static class MeasurementRunCoordinator
     /// <param name="cancellationToken">Token that requests cancellation of the measurement.</param>
     /// <param name="enableForensicDiagnostics">Whether to collect additional diagnostic snapshots.</param>
     /// <returns>The completed measurement result.</returns>
-    /// </summary>
     internal static async Task<BenchmarkResult> RunAsync(
         TransitPublisher publisher,
         TransitBenchmarkConfig config,
