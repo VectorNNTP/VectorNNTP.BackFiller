@@ -71,6 +71,47 @@ internal readonly record struct TransitBenchmarkConfig(
             string endpointType = "TRANSITSERVER",
             string endpointIdentity = "appsettings:BackFiller:TransitServer")
     {
+        string appSettingsPath = FindBackFillerAppSettingsPath();
+
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
+            .Build();
+
+        return LoadFromConfiguration(
+            measurementDuration,
+            mode,
+            cliOptions,
+            configuration,
+            appSettingsPath,
+            endpointHostOverride,
+            endpointPortOverride,
+            endpointUseSslOverride,
+            endpointType,
+            endpointIdentity);
+    }
+
+    /// <summary>
+    /// Runs the load benchmark scenario from provided configuration.
+    /// </summary>
+    internal static TransitBenchmarkConfig LoadFromConfiguration(
+            TimeSpan measurementDuration,
+            BenchmarkMode mode,
+            TransitBenchmarkCliOptions cliOptions,
+            IConfiguration configuration,
+            string appSettingsPath,
+            string? endpointHostOverride = null,
+            int? endpointPortOverride = null,
+            bool? endpointUseSslOverride = null,
+            string endpointType = "TRANSITSERVER",
+            string endpointIdentity = "appsettings:BackFiller:TransitServer")
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(appSettingsPath))
+        {
+            throw new ArgumentException("App settings path must be provided.", nameof(appSettingsPath));
+        }
+
         if (cliOptions.ArticleCount is not null && cliOptions.DurationSeconds is not null)
         {
             throw new InvalidOperationException("Options '--article-count' and '--duration-seconds' are mutually exclusive for measurement execution.");
@@ -85,12 +126,6 @@ internal readonly record struct TransitBenchmarkConfig(
         {
             throw new ArgumentException("Endpoint identity must be provided.", nameof(endpointIdentity));
         }
-
-        string appSettingsPath = FindBackFillerAppSettingsPath();
-
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-            .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
-            .Build();
 
         string configuredHost = configuration["BackFiller:TransitServer:Host"]
             ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is missing in existing application configuration.");

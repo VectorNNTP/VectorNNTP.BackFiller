@@ -9,6 +9,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -354,10 +355,21 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 ExpectedAssemblyVersion: "1.0.0",
                 ExpectedFileVersion: "1.0.0");
 
-            TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["BackFiller:TransitServer:Host"] = "incoming.usenet.ninja",
+                    ["BackFiller:TransitServer:Port"] = "563",
+                    ["BackFiller:TransitServer:UseSsl"] = "true",
+                })
+                .Build();
+
+            TransitBenchmarkConfig config = TransitBenchmarkConfig.LoadFromConfiguration(
                 TimeSpan.FromSeconds(5),
                 BenchmarkMode.Validation,
                 options,
+                configuration,
+                appSettingsPath: "in-memory:test",
                 endpointHostOverride: IPAddress.Loopback.ToString(),
                 endpointPortOverride: 43210,
                 endpointUseSslOverride: false,
