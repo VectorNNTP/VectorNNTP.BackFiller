@@ -49,8 +49,10 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         ];
 
         /// <summary>
-        /// Handles is sensitive configuration key for configuration fingerprint service.
+        /// Determines whether any colon-delimited configuration-key segment matches a sensitive exact or suffix pattern.
         /// </summary>
+        /// <param name="configurationKey">Configuration key to inspect.</param>
+        /// <returns><see langword="true"/> when a segment is considered sensitive; otherwise <see langword="false"/>.</returns>
         internal static bool IsSensitiveConfigurationKey(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
