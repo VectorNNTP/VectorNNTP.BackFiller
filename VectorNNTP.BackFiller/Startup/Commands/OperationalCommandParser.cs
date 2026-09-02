@@ -10,12 +10,17 @@ using System.Collections.Frozen;
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns command-line parsing for operational commands.
+    /// Parses command-line tokens into at most one <see cref="OperationalCommand"/> and emits fail-closed parse
+    /// diagnostics for invalid invocations.
     /// </summary>
+    /// <remarks>
+    /// Parsing failures are reported to standard error and surfaced as explicit exit codes rather than exceptions.
+    /// This parser does not participate in startup validation logging; it only validates command-line shape.
+    /// </remarks>
     internal static class OperationalCommandParser
     {
         /// <summary>
-        /// Stores command map used by operational command parser.
+        /// Canonical mapping from accepted command-line tokens to operational command values.
         /// </summary>
         private static readonly FrozenDictionary<string, OperationalCommand> CommandMap =
             new Dictionary<string, OperationalCommand>(StringComparer.OrdinalIgnoreCase)
@@ -84,8 +89,12 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Attempts to map a raw argument token to an operational command.
+        /// Attempts to map a raw argument token to a known operational command token.
         /// </summary>
+        /// <param name="token">Raw argument token to classify.</param>
+        /// <param name="command">When this method returns, contains the mapped command when mapping succeeds.</param>
+        /// <returns><see langword="true"/> when the token is a supported command; otherwise <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentException"><paramref name="token"/> is <see langword="null"/>, empty, or whitespace.</exception>
         private static bool TryMapCommand(string token, out OperationalCommand command)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(token);
@@ -95,6 +104,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Converts an operational command value to its canonical command-line token.
         /// </summary>
+        /// <param name="command">Operational command value to format.</param>
+        /// <returns>The canonical token (for example <c>--validate-config</c>) for <paramref name="command"/>.</returns>
+        /// <exception cref="System.Diagnostics.UnreachableException">The <paramref name="command"/> value is not a supported enum member.</exception>
         private static string ToCommandToken(OperationalCommand command)
         {
             return command switch
@@ -110,9 +122,11 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Handles an unknown command-line option and returns a parsing error code.
+        /// Emits parser diagnostics for an unknown <c>--option</c> token and returns the parse-failure exit code.
         /// </summary>
-        /// <param name="option">The unknown option value.</param>
+        /// <param name="option">Unknown option token as provided on the command line.</param>
+        /// <returns><see cref="ExitCodePolicy.ExitCodeConfigurationFailure"/>.</returns>
+        /// <exception cref="ArgumentException"><paramref name="option"/> is <see langword="null"/>, empty, or whitespace.</exception>
         private static int HandleUnknownOption(string option)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(option);
@@ -123,10 +137,12 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Handles multiple commands specified in one invocation.
+        /// Emits parser diagnostics when multiple command tokens are supplied in a single invocation.
         /// </summary>
-        /// <param name="firstCommand">The first command detected.</param>
-        /// <param name="secondCommand">The second command detected.</param>
+        /// <param name="firstCommand">First recognized command token.</param>
+        /// <param name="secondCommand">Second recognized command token that violates single-command parsing rules.</param>
+        /// <returns><see cref="ExitCodePolicy.ExitCodeConfigurationFailure"/>.</returns>
+        /// <exception cref="ArgumentException"><paramref name="firstCommand"/> or <paramref name="secondCommand"/> is <see langword="null"/>, empty, or whitespace.</exception>
         private static int HandleMultipleCommands(string firstCommand, string secondCommand)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(firstCommand);
@@ -138,9 +154,11 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Handles unexpected positional arguments.
+        /// Emits parser diagnostics for an unexpected positional argument and returns the parse-failure exit code.
         /// </summary>
-        /// <param name="argument">The positional argument value.</param>
+        /// <param name="argument">Unexpected non-command token to report.</param>
+        /// <returns><see cref="ExitCodePolicy.ExitCodeConfigurationFailure"/>.</returns>
+        /// <exception cref="ArgumentException"><paramref name="argument"/> is <see langword="null"/> or empty.</exception>
         private static int HandleUnexpectedPositionalArgument(string argument)
         {
             ArgumentException.ThrowIfNullOrEmpty(argument);
@@ -151,8 +169,10 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Formats invalid argument values for diagnostic output.
+        /// Formats null/empty/whitespace argument values into explicit sentinel text for parse diagnostics.
         /// </summary>
+        /// <param name="argument">Raw argument value to normalize for error output.</param>
+        /// <returns>A printable sentinel token such as <c>&lt;null&gt;</c>, <c>&lt;empty&gt;</c>, or <c>&lt;whitespace&gt;</c>.</returns>
         private static string FormatInvalidArgument(string? argument)
         {
             return argument switch

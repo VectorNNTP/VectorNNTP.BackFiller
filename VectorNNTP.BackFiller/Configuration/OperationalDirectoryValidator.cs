@@ -20,12 +20,13 @@
 namespace VectorNNTP.Backfiller.Configuration
 {
     /// <summary>
-    /// Validates operational filesystem directories required at startup.
+    /// Resolves and validates startup-critical operational directories before runtime snapshot composition proceeds.
     /// </summary>
     /// <remarks>
-    /// <para>This validator enforces startup readiness checks for log and certificate directories.</para>
-    /// <para>It performs real filesystem operations to verify effective process permissions and required
-    /// file-replacement behavior rather than inferring capability from metadata alone.</para>
+    /// <para>This validator is invoked during startup configuration projection to hard-fail when log or certificate
+    /// directory requirements are not satisfiable for the current process identity.</para>
+    /// <para>Validation uses concrete filesystem operations (create/read/write/replace/delete) so permission and
+    /// platform-behavior failures are detected deterministically before host startup continues.</para>
     /// </remarks>
     internal static class OperationalDirectoryValidator
     {
@@ -66,7 +67,7 @@ namespace VectorNNTP.Backfiller.Configuration
         }
 
         /// <summary>
-        /// Resolves a configured directory path and validates filesystem capabilities required by startup.
+        /// Resolves one configured operational directory to an absolute path and enforces startup capability checks.
         /// </summary>
         /// <param name="configuration">Application configuration source.</param>
         /// <param name="primarySetting">Configuration key containing the directory path.</param>
@@ -148,13 +149,13 @@ namespace VectorNNTP.Backfiller.Configuration
         }
 
         /// <summary>
-        /// Validates required file operations by creating, writing, reading, replacing, and deleting probe files.
+        /// Verifies that a directory supports the file operations required by runtime ownership semantics.
         /// </summary>
         /// <param name="directoryPath">Absolute directory path under validation.</param>
         /// <param name="configuredProperty">Configuration key used for diagnostics.</param>
         /// <param name="logicalName">Logical directory name used in diagnostic messages.</param>
         /// <param name="probePrefix">Prefix for temporary validation probe files.</param>
-        /// <exception cref="InvalidOperationException">Thrown when any required filesystem operation fails.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when create/read/write/replace/delete probing fails for the target directory.</exception>
         private static void ValidateCreateReadWriteReplaceDelete(
             string directoryPath,
             string configuredProperty,
@@ -198,9 +199,13 @@ namespace VectorNNTP.Backfiller.Configuration
         }
 
         /// <summary>
-        /// Attempts to delete a file if it exists.
+        /// Performs best-effort probe-file cleanup without surfacing cleanup failures.
         /// </summary>
-        /// <param name="path">File path to delete.</param>
+        /// <param name="path">File path to delete when present.</param>
+        /// <remarks>
+        /// Cleanup exceptions are intentionally suppressed because probe failures are already reported through the
+        /// primary validation exception path.
+        /// </remarks>
         private static void TryDelete(string path)
         {
             try

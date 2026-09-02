@@ -13,12 +13,16 @@ using VectorNNTP.Backfiller.Runtime.Shutdown;
 namespace VectorNNTP.Backfiller.Startup.Hosting
 {
     /// <summary>
-    /// Owns host runtime execution, hosting-environment detection, readiness signaling, lifecycle transitions, systemd signaling, and shutdown coordination.
+    /// Coordinates host start/run/stop lifecycle flow, environment-aware readiness publication, and shutdown transition signaling.
     /// </summary>
+    /// <remarks>
+    /// This coordinator bridges Generic Host lifecycle callbacks with <see cref="ServiceLifecycle"/>, structured hosting
+    /// diagnostics, and optional systemd readiness/stopping notifications.
+    /// </remarks>
     internal partial class HostLifetimeCoordinator
     {
         /// <summary>
-        /// Supported hosting environments.
+        /// Host execution environments recognized by runtime detection logic.
         /// </summary>
         internal enum HostingEnvironment
         {
@@ -29,14 +33,14 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Stores current environment used by host lifetime coordinator.
+        /// Cached hosting-environment detection result for the current process lifetime.
         /// </summary>
         private static HostingEnvironment? _currentEnvironment;
 
         /// <summary>
-        /// Detects the current hosting environment.
+        /// Detects and caches the active hosting environment using systemd, container, and Windows-service probes.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns>The detected hosting environment for the current process.</returns>
         internal static HostingEnvironment DetectHostingEnvironment()
         {
             if (_currentEnvironment.HasValue)
@@ -67,8 +71,12 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers host lifetime callbacks for startup/shutdown coordination.
+        /// Registers startup and stopping callbacks that coordinate lifecycle transitions and graceful shutdown signaling.
         /// </summary>
+        /// <param name="hostLifetime">Host lifecycle event source used to attach start/stop callbacks.</param>
+        /// <param name="gracefulShutdownTimeout">Configured shutdown grace period used when signaling coordinated shutdown.</param>
+        /// <param name="shutdownCoordinator">Coordinator that propagates graceful-shutdown intent to runtime components.</param>
+        /// <param name="lifecycle">Optional authoritative lifecycle state machine used for transition updates.</param>
         internal static void RegisterReadinessHook(
             IHostApplicationLifetime hostLifetime,
             TimeSpan gracefulShutdownTimeout,
@@ -85,8 +93,15 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Handles register readiness hook for host lifetime coordinator.
+        /// Internal readiness-hook registration that accepts explicit loggers for production and testing callers.
         /// </summary>
+        /// <param name="hostLifetime">Host lifecycle event source.</param>
+        /// <param name="gracefulShutdownTimeout">Configured shutdown grace period.</param>
+        /// <param name="shutdownCoordinator">Runtime shutdown coordinator.</param>
+        /// <param name="lifecycle">Optional lifecycle state tracker.</param>
+        /// <param name="logger">Primary coordinator logger for lifecycle diagnostics.</param>
+        /// <param name="systemdNotifierLogger">Logger routed to systemd notification helper diagnostics.</param>
+        /// <exception cref="ArgumentNullException">Thrown when required dependencies/loggers are <see langword="null"/>.</exception>
         private static void RegisterReadinessHook(
             IHostApplicationLifetime hostLifetime,
             TimeSpan gracefulShutdownTimeout,
@@ -115,8 +130,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Handles signal readiness after startup metrics for host lifetime coordinator.
+        /// Publishes external readiness notification for environments that require explicit readiness signaling.
         /// </summary>
+        /// <param name="systemdNotifierLogger">Logger passed to systemd notifier diagnostics.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="systemdNotifierLogger"/> is <see langword="null"/>.</exception>
         private static void SignalReadinessAfterStartupMetrics(ILogger systemdNotifierLogger)
         {
             ArgumentNullException.ThrowIfNull(systemdNotifierLogger);
@@ -136,8 +153,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Emits the hosting environment log event for host lifetime coordinator.
+        /// Emits environment-detection diagnostics and environment-specific operational guidance logs.
         /// </summary>
+        /// <param name="logger">Coordinator logger used for hosting-environment diagnostics.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="logger"/> is <see langword="null"/>.</exception>
         private static void LogHostingEnvironment(ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(logger);
@@ -169,8 +188,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Emits the shutdown policy log event for host lifetime coordinator.
+        /// Emits structured shutdown-policy diagnostics from validated shutdown options.
         /// </summary>
+        /// <param name="shutdownOptions">Validated shutdown policy options.</param>
+        /// <param name="logger">Coordinator logger receiving shutdown-policy diagnostics.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="shutdownOptions"/> or <paramref name="logger"/> is <see langword="null"/>.</exception>
         private static void LogShutdownPolicy(ShutdownOptions shutdownOptions, ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(shutdownOptions);
@@ -194,8 +216,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Emits the shutdown policy log event for host lifetime coordinator.
+        /// Emits structured shutdown-policy diagnostics from the immutable runtime options snapshot.
         /// </summary>
+        /// <param name="runtimeOptions">Validated runtime options snapshot containing shutdown settings.</param>
+        /// <param name="logger">Coordinator logger receiving shutdown-policy diagnostics.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="runtimeOptions"/> or <paramref name="logger"/> is <see langword="null"/>.</exception>
         private static void LogShutdownPolicy(BackFillerRuntimeOptions runtimeOptions, ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -210,12 +235,17 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Executes the built host through startup, steady-state waiting, disposal, and final stopped transition.
+        /// Runs the built host, coordinates readiness publication, waits for shutdown, and finalizes lifecycle terminal transitions.
         /// </summary>
-        /// <param name="host">The built host instance.</param>
-        /// <param name="serviceLifecycle">The authoritative service lifecycle instance.</param>
-        /// <param name="markHostStarted">Callback invoked immediately before entering steady-state shutdown wait.</param>
-        /// <returns>A task that completes when the host shuts down cleanly.</returns>
+        /// <param name="host">Built host instance to start, monitor, and dispose.</param>
+        /// <param name="serviceLifecycle">Authoritative lifecycle state machine updated across startup and shutdown milestones.</param>
+        /// <param name="markHostStarted">Callback invoked after readiness decision and immediately before shutdown wait begins.</param>
+        /// <returns>A task that completes after host shutdown and post-run lifecycle reconciliation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="host"/>, <paramref name="serviceLifecycle"/>, or <paramref name="markHostStarted"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// Readiness publication is suppressed if shutdown has already been requested. In that case the lifecycle transitions
+        /// directly toward draining semantics instead of advertising ready state.
+        /// </remarks>
         internal static async Task RunAsync(IHost host, ServiceLifecycle serviceLifecycle, Action markHostStarted)
         {
             ArgumentNullException.ThrowIfNull(host);
@@ -316,10 +346,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Determines whether readiness should be published for the current test host.
+        /// Exposes readiness-publication gating logic for tests.
         /// </summary>
-        /// <param name="hostLifetime">The hostLifetime value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <param name="hostLifetime">Host lifecycle instance whose stopping token determines readiness eligibility.</param>
+        /// <returns><see langword="true"/> when readiness publication is still allowed; otherwise <see langword="false"/>.</returns>
         internal static bool ShouldPublishReadinessForTesting(IHostApplicationLifetime hostLifetime)
         {
             return ShouldPublishReadiness(hostLifetime);
@@ -375,8 +405,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Handles on application started for host lifetime coordinator.
+        /// Handles ApplicationStarted by emitting startup milestone diagnostics with environment and shutdown-budget context.
         /// </summary>
+        /// <param name="gracefulShutdownTimeout">Configured graceful shutdown timeout used for operational context logging.</param>
+        /// <param name="logger">Coordinator logger receiving startup milestone diagnostics.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="logger"/> is <see langword="null"/>.</exception>
         private static void OnApplicationStarted(TimeSpan gracefulShutdownTimeout, ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(logger);
@@ -389,8 +422,14 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Handles on application stopping for host lifetime coordinator.
+        /// Handles ApplicationStopping by transitioning lifecycle state, issuing optional systemd STOPPING notification, and signaling coordinated shutdown.
         /// </summary>
+        /// <param name="gracefulShutdownTimeout">Configured shutdown grace period used when signaling runtime shutdown.</param>
+        /// <param name="shutdownCoordinator">Coordinator responsible for broadcasting graceful-shutdown intent.</param>
+        /// <param name="lifecycle">Optional lifecycle state machine updated for shutdown transition visibility.</param>
+        /// <param name="logger">Coordinator logger receiving shutdown transition diagnostics.</param>
+        /// <param name="systemdNotifierLogger">Logger used by systemd notifier diagnostics.</param>
+        /// <exception cref="ArgumentNullException">Thrown when required shutdown/logging dependencies are <see langword="null"/>.</exception>
         private static void OnApplicationStopping(
             TimeSpan gracefulShutdownTimeout,
             ShutdownCoordinator shutdownCoordinator,
@@ -454,7 +493,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Emits the hosting environment detected log event for host lifetime coordinator.
+        /// Emits informational hosting-environment classification with structured <c>Environment</c> value.
         /// </summary>
         [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Hosting environment: {Environment}")]
         private static partial void LogHostingEnvironmentDetected(ILogger logger, HostingEnvironment environment);
@@ -478,7 +517,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         private static partial void LogWindowsServiceDetected(ILogger logger);
 
         /// <summary>
-        /// Emits the shutdown policy core log event for host lifetime coordinator.
+        /// Emits structured informational shutdown-policy diagnostics consumed during startup environment reporting.
         /// </summary>
         [LoggerMessage(EventId = 1005, Level = LogLevel.Information, Message = "Shutdown policy: GracePeriodSeconds={GracePeriodSeconds}, StopNewWorkAdmission={StopNewWorkAdmission}, FinishActiveArticles={FinishActiveArticles}, DrainQueuedWork={DrainQueuedWork}")]
         private static partial void LogShutdownPolicyCore(

@@ -11,11 +11,12 @@ using System.Net.Sockets;
 namespace VectorNNTP.Backfiller.Configuration
 {
     /// <summary>
-    /// Derives canonical DNS address sets from BackFiller bind-address configuration.
+    /// Derives canonical DNS-advertised address sets from BackFiller bind-address configuration semantics.
     /// </summary>
     /// <remarks>
-    /// <para>Explicit bind-address configuration yields an exact parsed IP-address set.</para>
-    /// <para>Wildcard configuration markers (<c>*</c>, <c>Any</c>, <c>0.0.0.0</c>, and <c>::</c>) derive DNS addresses from eligible local interface addresses.</para>
+    /// <para>Explicit bind-address entries are parsed and filtered to eligible unicast addresses.</para>
+    /// <para>Wildcard listener markers (<c>*</c>, <c>Any</c>, <c>0.0.0.0</c>, and <c>::</c>) trigger local interface
+    /// enumeration so DNS advertisement reflects operational host addresses for the requested IP families.</para>
     /// </remarks>
     internal static class BindAddressDnsAddressDeriver
     {
@@ -24,9 +25,8 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         /// <param name="bindAddresses">Configured bind-address values.</param>
         /// <param name="interfaceAddressProvider">Optional provider that returns local interface addresses for wildcard derivation.</param>
-        /// <returns>Canonical deduplicated DNS address set.</returns>
+        /// <returns>Canonical deduplicated DNS address set ordered deterministically by address family and byte sequence.</returns>
         /// <exception cref="InvalidOperationException">Thrown when configured bind-address values contain unparseable entries or wildcard interface enumeration fails.</exception>
-        /// <typeparam name="IPAddress">The IPAddress type parameter.</typeparam>
         internal static IReadOnlyList<IPAddress> DeriveCanonicalDnsAddresses(
             string[]? bindAddresses,
             Func<IReadOnlyList<IPAddress>>? interfaceAddressProvider = null)
@@ -120,11 +120,11 @@ namespace VectorNNTP.Backfiller.Configuration
         }
 
         /// <summary>
-        /// Enumerates local unicast interface addresses from operational interfaces.
+        /// Enumerates local unicast interface addresses from network interfaces that are currently operational.
         /// </summary>
-        /// <returns>Collected local interface addresses.</returns>
+        /// <returns>Collected local interface addresses before eligibility filtering.</returns>
         /// <exception cref="InvalidOperationException">Thrown when interface enumeration fails.</exception>
-        private static IReadOnlyList<IPAddress> EnumerateInterfaceAddresses()
+        private static List<IPAddress> EnumerateInterfaceAddresses()
         {
             List<IPAddress> interfaceAddresses = [];
 
@@ -156,7 +156,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Determines whether an address is eligible for DNS advertisement.
         /// </summary>
         /// <param name="address">Address to evaluate.</param>
-        /// <returns><see langword="true"/> when address is eligible for DNS advertisement.</returns>
+        /// <returns><see langword="true"/> when the address is a non-loopback IPv4/IPv6 unicast address and not a wildcard, link-local, or multicast endpoint.</returns>
         private static bool IsEligibleDnsAddress(IPAddress address)
         {
             ArgumentNullException.ThrowIfNull(address);
@@ -202,14 +202,14 @@ namespace VectorNNTP.Backfiller.Configuration
         }
 
         /// <summary>
-        /// Lexicographically compares byte sequences for deterministic address ordering.
+        /// Lexicographically compares byte sequences to enforce deterministic canonical address ordering.
         /// </summary>
         private sealed class ByteSequenceComparer : IComparer<byte[]>
         {
             /// <summary>
-            /// Singleton comparer instance.
+            /// Gets the singleton comparer instance.
             /// </summary>
-            /// <returns>The operation result.</returns>
+            /// <value>Shared comparer used by canonical-address ordering.</value>
             internal static ByteSequenceComparer Instance { get; } = new();
 
             /// <summary>

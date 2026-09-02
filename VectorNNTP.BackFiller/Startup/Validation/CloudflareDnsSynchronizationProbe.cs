@@ -18,29 +18,39 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Performs startup-time Cloudflare DNS synchronization for the authoritative generated BackFiller FQDN.
+    /// Executes startup-time reconciliation of Cloudflare address records for the generated canonical BackFiller FQDN.
     /// </summary>
     /// <remarks>
-    /// <para>Reconciles Cloudflare A/AAAA records for one FQDN to match the validated canonical bind-address set exactly.</para>
-    /// <para>This operation is idempotent: if desired and existing records already match, no mutation calls are issued.</para>
+    /// <para>Compares desired canonical bind addresses with existing Cloudflare A/AAAA records and applies only the required add/delete operations.</para>
+    /// <para>This probe contributes dependency diagnostics through <see cref="DependencyValidationResult"/> and does not decide startup exit behavior directly.</para>
+    /// <para>The reconciliation path is idempotent: when desired and existing address records already match, no mutation calls are issued.</para>
     /// </remarks>
     internal static class CloudflareDnsSynchronizationProbe
     {
         /// <summary>
-        /// Stores dependency name used by cloudflare dns synchronization probe.
+        /// Dependency category name used when reporting synchronization failures.
         /// </summary>
         private const string DependencyName = "CloudflareDnsSynchronization";
 
         /// <summary>
-        /// Synchronizes Cloudflare DNS A/AAAA records for the generated BackFiller FQDN.
+        /// Synchronizes Cloudflare A/AAAA records for the generated canonical BackFiller FQDN.
         /// </summary>
-        /// <param name="backFiller">Validated BackFiller configuration model.</param>
-        /// <param name="runtimeOptions">Validated immutable runtime options snapshot containing canonical FQDN and bind addresses.</param>
-        /// <param name="timeout">Maximum duration for the synchronization operation.</param>
-        /// <param name="cancellationToken">Startup cancellation token.</param>
-        /// <param name="dnsFacadeFactory">Optional test hook for supplying a custom Cloudflare DNS facade.</param>
-        /// <returns>A dependency validation result representing synchronization success or failure.</returns>
-        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
+        /// <param name="backFiller">Validated BackFiller configuration model containing optional Cloudflare zone/token settings.</param>
+        /// <param name="runtimeOptions">Validated immutable runtime snapshot containing the canonical FQDN and canonical bind-address set.</param>
+        /// <param name="timeout">Maximum wall-clock budget for the full synchronization operation.</param>
+        /// <param name="cancellationToken">Startup cancellation token propagated to all Cloudflare API calls.</param>
+        /// <param name="dnsFacadeFactory">Optional factory used by tests to inject a custom DNS facade implementation.</param>
+        /// <returns>
+        /// A task that completes with a <see cref="DependencyValidationResult"/> describing synchronization success/failure.
+        /// Missing Cloudflare zone/token configuration returns <see cref="DependencyValidationResult.Success()"/> and skips API calls.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="runtimeOptions"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is less than or equal to <see cref="TimeSpan.Zero"/>.</exception>
+        /// <exception cref="OperationCanceledException">The outer <paramref name="cancellationToken"/> is canceled.</exception>
+        /// <remarks>
+        /// Emits structured informational logs for start, evaluated state, per-record add/delete operations, and completion counts;
+        /// unexpected synchronization exceptions are logged as errors and converted into dependency-failure entries.
+        /// </remarks>
         internal static async Task<DependencyValidationResult> SynchronizeGeneratedBackFillerDnsAsync(
             BackFillerOptions? backFiller,
             BackFillerRuntimeOptions runtimeOptions,
@@ -81,70 +91,72 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(timeout);
 
-                await using ICloudflareDnsFacade dnsFacade = dnsFacadeFactory is null
+                ICloudflareDnsFacade dnsFacade = dnsFacadeFactory is null
                     ? new CloudflareDnsFacade(apiToken.Trim())
                     : dnsFacadeFactory(apiToken.Trim());
-
-                CloudflareZoneInfo zone = await dnsFacade.GetZoneDetailsAsync(trimmedZoneId, cts.Token).ConfigureAwait(false);
-                if (zone.Status != ZoneStatus.Active)
+                await using (dnsFacade.ConfigureAwait(false))
                 {
-                    throw new InvalidOperationException($"Cloudflare zone '{zone.Name}' is not active (status: {zone.Status}).");
+                    CloudflareZoneInfo zone = await dnsFacade.GetZoneDetailsAsync(trimmedZoneId, cts.Token).ConfigureAwait(false);
+                    if (zone.Status != ZoneStatus.Active)
+                    {
+                        throw new InvalidOperationException($"Cloudflare zone '{zone.Name}' is not active (status: {zone.Status}).");
+                    }
+
+                    string zoneName = NormalizeDnsName(zone.Name);
+                    IReadOnlyList<CloudflareDnsRecordInfo> allFqdnRecords = await dnsFacade.GetDnsRecordsAsync(trimmedZoneId, canonicalFqdn, cts.Token).ConfigureAwait(false);
+
+                    List<CloudflareDnsRecordInfo> existingAddressRecords = [.. allFqdnRecords
+                        .Where(record => IsDnsAddressRecordType(record.RecordType) && string.Equals(NormalizeDnsName(record.Name), canonicalFqdn, StringComparison.Ordinal))];
+
+                    int existingIpv4Count = existingAddressRecords.Count(static record => record.RecordType == DnsRecordType.A);
+                    int existingIpv6Count = existingAddressRecords.Count(static record => record.RecordType == DnsRecordType.Aaaa);
+
+                    Log.Information(
+                        "CloudFlare DNS synchronization evaluated generated FQDN {Fqdn} in zone {ZoneName}; ExistingA={ExistingA}; ExistingAAAA={ExistingAAAA}",
+                        canonicalFqdn,
+                        zoneName,
+                        existingIpv4Count,
+                        existingIpv6Count);
+
+                    Dictionary<DnsAddressKey, List<CloudflareDnsRecordInfo>> existingRecordsByAddress = BuildExistingRecordMap(existingAddressRecords);
+                    Dictionary<DnsRecordType, CloudflareDnsRecordTemplate> recordTemplates = BuildRecordTemplates(existingAddressRecords);
+
+                    List<CloudflareDnsRecordInfo> recordsToDelete = BuildDeletionList(existingRecordsByAddress, desiredAddresses);
+                    List<DnsAddressKey> recordsToAdd = BuildAdditionList(existingRecordsByAddress, desiredAddresses);
+
+                    if (recordsToDelete.Count > 0)
+                    {
+                        Task[] deleteTasks = [.. recordsToDelete
+                            .OrderBy(static record => record.RecordType)
+                            .ThenBy(static record => NormalizeAddressText(record.Content), StringComparer.Ordinal)
+                            .ThenBy(static record => record.Id, StringComparer.Ordinal)
+                            .Select(record => DeleteDnsRecordAsync(dnsFacade, trimmedZoneId, canonicalFqdn, record, cts.Token))];
+
+                        await Task.WhenAll(deleteTasks).ConfigureAwait(false);
+                    }
+
+                    if (recordsToAdd.Count > 0)
+                    {
+                        Task[] addTasks = [.. recordsToAdd
+                            .OrderBy(static key => key.RecordType)
+                            .ThenBy(static key => NormalizeAddressText(key.Address.ToString()), StringComparer.Ordinal)
+                            .Select(key => AddDnsRecordAsync(
+                                dnsFacade,
+                                trimmedZoneId,
+                                canonicalFqdn,
+                                key,
+                                recordTemplates,
+                                cts.Token))];
+
+                        await Task.WhenAll(addTasks).ConfigureAwait(false);
+                    }
+
+                    Log.Information(
+                        "CloudFlare DNS synchronization completed for generated FQDN {Fqdn}; AddedRecords={AddedRecords}; RemovedRecords={RemovedRecords}",
+                        canonicalFqdn,
+                        recordsToAdd.Count,
+                        recordsToDelete.Count);
                 }
-
-                string zoneName = NormalizeDnsName(zone.Name);
-                IReadOnlyList<CloudflareDnsRecordInfo> allFqdnRecords = await dnsFacade.GetDnsRecordsAsync(trimmedZoneId, canonicalFqdn, cts.Token).ConfigureAwait(false);
-
-                List<CloudflareDnsRecordInfo> existingAddressRecords = [.. allFqdnRecords
-                    .Where(record => IsDnsAddressRecordType(record.RecordType) && string.Equals(NormalizeDnsName(record.Name), canonicalFqdn, StringComparison.Ordinal))];
-
-                int existingIpv4Count = existingAddressRecords.Count(static record => record.RecordType == DnsRecordType.A);
-                int existingIpv6Count = existingAddressRecords.Count(static record => record.RecordType == DnsRecordType.Aaaa);
-
-                Log.Information(
-                    "CloudFlare DNS synchronization evaluated generated FQDN {Fqdn} in zone {ZoneName}; ExistingA={ExistingA}; ExistingAAAA={ExistingAAAA}",
-                    canonicalFqdn,
-                    zoneName,
-                    existingIpv4Count,
-                    existingIpv6Count);
-
-                Dictionary<DnsAddressKey, List<CloudflareDnsRecordInfo>> existingRecordsByAddress = BuildExistingRecordMap(existingAddressRecords);
-                Dictionary<DnsRecordType, CloudflareDnsRecordTemplate> recordTemplates = BuildRecordTemplates(existingAddressRecords);
-
-                List<CloudflareDnsRecordInfo> recordsToDelete = BuildDeletionList(existingRecordsByAddress, desiredAddresses);
-                List<DnsAddressKey> recordsToAdd = BuildAdditionList(existingRecordsByAddress, desiredAddresses);
-
-                if (recordsToDelete.Count > 0)
-                {
-                    Task[] deleteTasks = [.. recordsToDelete
-                        .OrderBy(static record => record.RecordType)
-                        .ThenBy(static record => NormalizeAddressText(record.Content), StringComparer.Ordinal)
-                        .ThenBy(static record => record.Id, StringComparer.Ordinal)
-                        .Select(record => DeleteDnsRecordAsync(dnsFacade, trimmedZoneId, canonicalFqdn, record, cts.Token))];
-
-                    await Task.WhenAll(deleteTasks).ConfigureAwait(false);
-                }
-
-                if (recordsToAdd.Count > 0)
-                {
-                    Task[] addTasks = [.. recordsToAdd
-                        .OrderBy(static key => key.RecordType)
-                        .ThenBy(static key => NormalizeAddressText(key.Address.ToString()), StringComparer.Ordinal)
-                        .Select(key => AddDnsRecordAsync(
-                            dnsFacade,
-                            trimmedZoneId,
-                            canonicalFqdn,
-                            key,
-                            recordTemplates,
-                            cts.Token))];
-
-                    await Task.WhenAll(addTasks).ConfigureAwait(false);
-                }
-
-                Log.Information(
-                    "CloudFlare DNS synchronization completed for generated FQDN {Fqdn}; AddedRecords={AddedRecords}; RemovedRecords={RemovedRecords}",
-                    canonicalFqdn,
-                    recordsToAdd.Count,
-                    recordsToDelete.Count);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -177,7 +189,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             string zoneId,
             string fqdn,
             DnsAddressKey addressKey,
-            IReadOnlyDictionary<DnsRecordType, CloudflareDnsRecordTemplate> recordTemplates,
+            Dictionary<DnsRecordType, CloudflareDnsRecordTemplate> recordTemplates,
             CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(dnsFacade);
@@ -274,15 +286,15 @@ namespace VectorNNTP.Backfiller.Startup.Validation
 
             foreach (CloudflareDnsRecordInfo record in existingAddressRecords)
             {
-                if (!TryBuildAddressKey(record.RecordType, record.Content, out DnsAddressKey? key))
+                if (!TryBuildAddressKey(record.RecordType, record.Content, out DnsAddressKey key))
                 {
                     continue;
                 }
 
-                if (!recordsByAddress.TryGetValue(key.Value, out List<CloudflareDnsRecordInfo>? records))
+                if (!recordsByAddress.TryGetValue(key, out List<CloudflareDnsRecordInfo>? records))
                 {
                     records = [];
-                    recordsByAddress[key.Value] = records;
+                    recordsByAddress[key] = records;
                 }
 
                 records.Add(record);
@@ -388,9 +400,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         private static bool TryBuildAddressKey(
             DnsRecordType recordType,
             string content,
-            out DnsAddressKey? key)
+            out DnsAddressKey key)
         {
-            key = null;
+            key = default;
 
             if (!IsDnsAddressRecordType(recordType) ||
                 string.IsNullOrWhiteSpace(content) ||
@@ -486,17 +498,19 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     internal sealed record CloudflareDnsRecordTemplate(bool? Proxied, int? Ttl);
 
     /// <summary>
-    /// Abstracts Cloudflare zone and DNS-record API calls required by startup synchronization.
+    /// Abstraction over Cloudflare zone and DNS-record operations required by startup synchronization.
     /// </summary>
+    /// <remarks>
+    /// Enables deterministic tests for reconciliation logic by decoupling API transport details from synchronization policy.
+    /// </remarks>
     internal interface ICloudflareDnsFacade : IAsyncDisposable
     {
         /// <summary>
-        /// Resolves one Cloudflare zone.
+        /// Retrieves Cloudflare zone details for a specific zone identifier.
         /// </summary>
-        /// <param name="zoneId">Zone identifier.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Resolved zone details.</returns>
-        /// <typeparam name="CloudflareZoneInfo">The CloudflareZoneInfo type parameter.</typeparam>
+        /// <param name="zoneId">Cloudflare zone identifier.</param>
+        /// <param name="cancellationToken">Cancellation token for the API request.</param>
+        /// <returns>A task that completes with resolved zone details used by synchronization.</returns>
         public Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken);
 
         /// <summary>
@@ -539,12 +553,15 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     }
 
     /// <summary>
-    /// Production Cloudflare DNS facade backed by <see cref="CloudFlareClient"/>.
+    /// Production implementation of <see cref="ICloudflareDnsFacade"/> backed by <see cref="CloudFlareClient"/>.
     /// </summary>
+    /// <remarks>
+    /// Maps Cloudflare API responses to synchronization models and converts provider error payloads to sanitized failure text.
+    /// </remarks>
     internal sealed class CloudflareDnsFacade : ICloudflareDnsFacade
     {
         /// <summary>
-        /// Stores client used by cloudflare dns synchronization probe.
+        /// Cloudflare API client used for zone and DNS-record operations.
         /// </summary>
         private readonly CloudFlareClient _client;
 
@@ -559,12 +576,13 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Resolves one Cloudflare zone.
+        /// Resolves Cloudflare zone details for the supplied zone identifier.
         /// </summary>
-        /// <param name="zoneId">Zone identifier.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Resolved zone details.</returns>
-        /// <typeparam name="CloudflareZoneInfo">The CloudflareZoneInfo type parameter.</typeparam>
+        /// <param name="zoneId">Cloudflare zone identifier.</param>
+        /// <param name="cancellationToken">Cancellation token for the Cloudflare API call.</param>
+        /// <returns>A task that completes with normalized zone information used by synchronization.</returns>
+        /// <exception cref="ArgumentException"><paramref name="zoneId"/> is <see langword="null"/>, empty, or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">Cloudflare returns an unsuccessful or structurally invalid zone response.</exception>
         public async Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
@@ -689,10 +707,14 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Maps provider error messages to sanitized, controlled diagnostics.
+        /// Maps provider-reported Cloudflare error text to a bounded sanitized failure reason.
         /// </summary>
-        /// <param name="providerMessages">Provider-reported error messages.</param>
-        /// <returns>Sanitized failure reason.</returns>
+        /// <param name="providerMessages">Cloudflare provider error messages.</param>
+        /// <returns>A controlled diagnostic reason suitable for startup failure output.</returns>
+        /// <remarks>
+        /// Keyword matching intentionally collapses broad provider payloads into stable categories
+        /// (authentication, access denied, zone not found, or generic API failure).
+        /// </remarks>
         private static string SanitizeCloudflareApiFailureReason(IEnumerable<string> providerMessages)
         {
             ArgumentNullException.ThrowIfNull(providerMessages);

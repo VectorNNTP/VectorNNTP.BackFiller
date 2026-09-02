@@ -10,39 +10,41 @@ using System.Collections.Immutable;
 namespace VectorNNTP.Backfiller.ControlPlane
 {
     /// <summary>
-    /// Read-only backbone usable-capacity view for admission-control consumers.
+    /// Exposes the current read-only backbone usable-capacity view consumed by admission-control paths.
     /// </summary>
     internal interface IBackboneUsableCapacityProvider
     {
         /// <summary>
-        /// Gets whether the specified backbone currently has at least one usable NNTP session.
+        /// Returns whether a backbone currently has at least one usable NNTP session slot.
         /// </summary>
         /// <param name="backbone">Backbone namespace to evaluate.</param>
-        /// <returns><see langword="true"/> when at least one usable session is currently available for the backbone.</returns>
+        /// <returns><see langword="true"/> when the latest published snapshot contains a positive usable capacity for <paramref name="backbone"/>.</returns>
         public bool HasUsableCapacityForBackbone(string backbone);
     }
 
     /// <summary>
-    /// Writer contract for publishing authoritative backbone usable-capacity state.
+    /// Publishes authoritative backbone usable-capacity snapshots produced by the control plane.
     /// </summary>
     internal interface IBackboneUsableCapacityStateWriter
     {
         /// <summary>
-        /// Replaces the entire authoritative backbone usable-capacity snapshot.
+        /// Replaces the current snapshot with a new authoritative backbone-to-usable-capacity map.
         /// </summary>
-        /// <param name="capacityByBackbone">Backbone capacity map where values represent currently usable session counts.</param>
-        /// <typeparam name="string">The string type parameter.</typeparam>
-        /// <typeparam name="int">The int type parameter.</typeparam>
+        /// <param name="capacityByBackbone">Backbone capacity map where each value is the currently usable session count.</param>
         public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone);
     }
 
     /// <summary>
-    /// Singleton state holder for backbone usable-capacity snapshots.
+    /// Holds the latest authoritative backbone usable-capacity snapshot for both publication and admission checks.
     /// </summary>
+    /// <remarks>
+    /// The state is updated by atomically swapping an immutable dictionary built from the latest control-plane snapshot.
+    /// Invalid entries (blank backbone names or non-positive capacity) are intentionally excluded from published state.
+    /// </remarks>
     internal sealed class BackboneUsableCapacityState : IBackboneUsableCapacityProvider, IBackboneUsableCapacityStateWriter
     {
         /// <summary>
-        /// Limits capacity by backbone for backbone usable capacity state.
+        /// Most recently published usable-capacity snapshot keyed by backbone name.
         /// </summary>
         private ImmutableDictionary<string, int> _capacityByBackbone = ImmutableDictionary<string, int>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
 

@@ -12,16 +12,28 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Configuration
 {
     /// <summary>
-    /// Owns structural configuration validation only and performs no network access.
+    /// Performs startup-time structural validation for configuration sections and maps validator diagnostics into
+    /// blocking error and non-blocking warning collections.
     /// </summary>
+    /// <remarks>
+    /// This validator does not emit startup-validation logs directly; callers translate returned tuples into
+    /// validation output. The only direct log emission in this type is an informational message when a canonical
+    /// BackFiller FQDN is successfully derived for certificate identity validation.
+    /// </remarks>
     internal class ConfigurationValidator
     {
         /// <summary>
-        /// Validates an options object using the DataAnnotations validation pipeline.
+        /// Runs DataAnnotations validation for an options instance and projects each validation result into
+        /// <c>(Setting, Error)</c> tuples.
         /// </summary>
-        /// <param name="string">The string value.</param>
-        /// <param name="prefix">The prefix value.</param>
-        /// <returns>The operation result.</returns>
+        /// <typeparam name="TOptions">The options type validated through <see cref="Validator.TryValidateObject(object, ValidationContext, ICollection{ValidationResult}, bool)"/>.</typeparam>
+        /// <param name="options">The bound options instance to validate.</param>
+        /// <param name="prefix">The configuration path prefix used to build returned setting keys.</param>
+        /// <returns>
+        /// A list of validation errors where each tuple contains the derived setting path and the corresponding
+        /// DataAnnotations error message.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="options"/> or <paramref name="prefix"/> is <see langword="null"/>.</exception>
         internal static List<(string, string)> ValidateAnnotatedObject<TOptions>(TOptions options, string prefix)
             where TOptions : class
         {
@@ -54,11 +66,13 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Validates ConnectionStrings configuration section.
+        /// Validates the <c>ConnectionStrings</c> section and returns only blocking diagnostics.
         /// </summary>
-        /// <param name="Setting">The Setting value.</param>
-        /// <param name="configuration">The configuration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">The application configuration root.</param>
+        /// <returns>
+        /// A list of <c>(Setting, Error)</c> tuples describing invalid <c>ConnectionStrings</c> values.
+        /// Non-blocking warnings are evaluated but not returned by this overload.
+        /// </returns>
         internal static List<(string Setting, string Error)> ValidateConnectionStrings(IConfiguration configuration)
         {
             List<(string Setting, string Message)> warnings = [];
@@ -66,11 +80,13 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Validates ConnectionStrings configuration section.
+        /// Validates the <c>ConnectionStrings</c> section using DataAnnotations and connection-string-specific validators.
         /// </summary>
-        /// <param name="Setting">The Setting value.</param>
-        /// <param name="Error">The Error value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">The application configuration root used to bind <c>ConnectionStrings</c>.</param>
+        /// <param name="warnings">Collector that receives non-blocking connection-string diagnostics.</param>
+        /// <returns>
+        /// A list of blocking connection-string diagnostics represented as <c>(Setting, Error)</c> tuples.
+        /// </returns>
         internal static List<(string Setting, string Error)> ValidateConnectionStrings(
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
@@ -102,11 +118,13 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Validates BackFiller configuration section.
+        /// Validates the <c>BackFiller</c> section and returns only blocking diagnostics.
         /// </summary>
-        /// <param name="Setting">The Setting value.</param>
-        /// <param name="configuration">The configuration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">The application configuration root.</param>
+        /// <returns>
+        /// A list of blocking <c>(Setting, Error)</c> tuples for <c>BackFiller</c> configuration.
+        /// Non-blocking warnings are evaluated but not returned by this overload.
+        /// </returns>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(IConfiguration configuration)
         {
             List<(string Setting, string Message)> warnings = [];
@@ -114,11 +132,11 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Validates BackFiller configuration section.
+        /// Binds and validates the <c>BackFiller</c> section, appending non-blocking diagnostics to the supplied warning collector.
         /// </summary>
-        /// <param name="Setting">The Setting value.</param>
-        /// <param name="Error">The Error value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
+        /// <param name="warnings">Collector that receives non-blocking configuration diagnostics.</param>
+        /// <returns>A list of blocking <c>(Setting, Error)</c> tuples produced during BackFiller validation.</returns>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
@@ -131,13 +149,19 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Validates the bound BackFiller options instance and emits configuration diagnostics.
+        /// Validates a bound <see cref="BackFillerOptions"/> instance across identity, transport, shutdown, and Let's Encrypt policy rules.
         /// </summary>
-        /// <param name="backFiller">Bound BackFiller options instance.</param>
-        /// <param name="warnings">Warning collection to append non-blocking diagnostics to.</param>
-        /// <returns>Collection of blocking configuration errors.</returns>
-        /// <param name="Setting">The Setting value.</param>
-        /// <param name="Error">The Error value.</param>
+        /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
+        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode and TLS-disabled notices.</param>
+        /// <returns>
+        /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
+        /// Severity mapping from validator diagnostics is handled by <c>AddDiagnostics</c> helpers.
+        /// </returns>
+        /// <remarks>
+        /// This method converts validation findings into data collections for the startup validation pipeline rather than
+        /// throwing on ordinary invalid user configuration. It logs one informational message when canonical FQDN
+        /// generation succeeds and captures FQDN generation failures as returned validation errors.
+        /// </remarks>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings)
@@ -397,11 +421,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Adds bind-address validation diagnostics to error and warning collections.
+        /// Projects bind-address diagnostics into the shared startup-validation error and warning collections.
         /// </summary>
-        /// <param name="errors">Error collection to receive blocking diagnostics.</param>
-        /// <param name="warnings">Warning collection to receive non-blocking diagnostics.</param>
-        /// <param name="diagnostics">Bind-address diagnostics to project into output collections.</param>
+        /// <param name="errors">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Error"/>.</param>
+        /// <param name="warnings">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Warning"/>.</param>
+        /// <param name="diagnostics">Bind-address diagnostics to classify by severity.</param>
+        /// <remarks>
+        /// Diagnostics with severities other than <see cref="ValidationSeverity.Error"/> or <see cref="ValidationSeverity.Warning"/>
+        /// are intentionally ignored by this mapper.
+        /// </remarks>
         private static void AddDiagnostics(
             List<(string Setting, string Error)> errors,
             List<(string Setting, string Message)> warnings,
@@ -421,11 +449,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Adds BackFiller identity validation diagnostics to error and warning collections.
+        /// Projects BackFiller identity diagnostics into the shared startup-validation error and warning collections.
         /// </summary>
-        /// <param name="errors">Error collection to receive blocking diagnostics.</param>
-        /// <param name="warnings">Warning collection to receive non-blocking diagnostics.</param>
-        /// <param name="diagnostics">Identity diagnostics to project into output collections.</param>
+        /// <param name="errors">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Error"/>.</param>
+        /// <param name="warnings">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Warning"/>.</param>
+        /// <param name="diagnostics">Identity diagnostics to classify by severity.</param>
+        /// <remarks>
+        /// Diagnostics with severities other than <see cref="ValidationSeverity.Error"/> or <see cref="ValidationSeverity.Warning"/>
+        /// are intentionally ignored by this mapper.
+        /// </remarks>
         private static void AddDiagnostics(
             List<(string Setting, string Error)> errors,
             List<(string Setting, string Message)> warnings,
@@ -445,11 +477,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Adds RabbitMQ validation diagnostics to error and warning collections.
+        /// Projects RabbitMQ diagnostics into the shared startup-validation error and warning collections.
         /// </summary>
-        /// <param name="errors">Error collection to receive blocking diagnostics.</param>
-        /// <param name="warnings">Warning collection to receive non-blocking diagnostics.</param>
-        /// <param name="diagnostics">RabbitMQ diagnostics to project into output collections.</param>
+        /// <param name="errors">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Error"/>.</param>
+        /// <param name="warnings">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Warning"/>.</param>
+        /// <param name="diagnostics">RabbitMQ diagnostics to classify by severity.</param>
+        /// <remarks>
+        /// Diagnostics with severities other than <see cref="ValidationSeverity.Error"/> or <see cref="ValidationSeverity.Warning"/>
+        /// are intentionally ignored by this mapper.
+        /// </remarks>
         private static void AddDiagnostics(
             List<(string Setting, string Error)> errors,
             List<(string Setting, string Message)> warnings,
@@ -469,11 +505,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Adds TransitServer validation diagnostics to error and warning collections.
+        /// Projects transit-server diagnostics into the shared startup-validation error and warning collections.
         /// </summary>
-        /// <param name="errors">Error collection to receive blocking diagnostics.</param>
-        /// <param name="warnings">Warning collection to receive non-blocking diagnostics.</param>
-        /// <param name="diagnostics">TransitServer diagnostics to project into output collections.</param>
+        /// <param name="errors">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Error"/>.</param>
+        /// <param name="warnings">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Warning"/>.</param>
+        /// <param name="diagnostics">Transit-server diagnostics to classify by severity.</param>
+        /// <remarks>
+        /// Diagnostics with severities other than <see cref="ValidationSeverity.Error"/> or <see cref="ValidationSeverity.Warning"/>
+        /// are intentionally ignored by this mapper.
+        /// </remarks>
         private static void AddDiagnostics(
             List<(string Setting, string Error)> errors,
             List<(string Setting, string Message)> warnings,
@@ -493,11 +533,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Adds Let's Encrypt validation diagnostics to error and warning collections.
+        /// Projects Let's Encrypt diagnostics into the shared startup-validation error and warning collections.
         /// </summary>
-        /// <param name="errors">Error collection to receive blocking diagnostics.</param>
-        /// <param name="warnings">Warning collection to receive non-blocking diagnostics.</param>
-        /// <param name="diagnostics">Let's Encrypt diagnostics to project into output collections.</param>
+        /// <param name="errors">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Error"/>.</param>
+        /// <param name="warnings">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Warning"/>.</param>
+        /// <param name="diagnostics">Let's Encrypt diagnostics to classify by severity.</param>
+        /// <remarks>
+        /// Diagnostics with severities other than <see cref="ValidationSeverity.Error"/> or <see cref="ValidationSeverity.Warning"/>
+        /// are intentionally ignored by this mapper.
+        /// </remarks>
         private static void AddDiagnostics(
             List<(string Setting, string Error)> errors,
             List<(string Setting, string Message)> warnings,
@@ -517,11 +561,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Adds connection string validation diagnostics to error and warning collections.
+        /// Projects connection-string diagnostics into the shared startup-validation error and warning collections.
         /// </summary>
-        /// <param name="errors">Error collection to receive blocking diagnostics.</param>
-        /// <param name="warnings">Warning collection to receive non-blocking diagnostics.</param>
-        /// <param name="diagnostics">Connection string diagnostics to project into output collections.</param>
+        /// <param name="errors">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Error"/>.</param>
+        /// <param name="warnings">Collector for diagnostics whose severity is <see cref="ValidationSeverity.Warning"/>.</param>
+        /// <param name="diagnostics">Connection-string diagnostics to classify by severity.</param>
+        /// <remarks>
+        /// Diagnostics with severities other than <see cref="ValidationSeverity.Error"/> or <see cref="ValidationSeverity.Warning"/>
+        /// are intentionally ignored by this mapper.
+        /// </remarks>
         private static void AddDiagnostics(
             List<(string Setting, string Error)> errors,
             List<(string Setting, string Message)> warnings,

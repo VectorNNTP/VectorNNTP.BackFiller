@@ -13,17 +13,24 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Configuration
 {
     /// <summary>
-    /// Owns configuration fingerprint calculation, sensitive-value detection and sanitization, and fingerprint logging.
+    /// Builds a deterministic, non-secret configuration fingerprint by filtering sensitive keys, sanitizing
+    /// connection-string values, and hashing canonicalized key/value material.
     /// </summary>
+    /// <remarks>
+    /// This type supports startup diagnostics rather than configuration validity decisions. It emits warning/error
+    /// log entries only when fingerprint extraction fails for specific values or for the full calculation path.
+    /// Validation errors and warnings remain owned by the startup validation pipeline and
+    /// <see cref="ConfigurationValidationResult"/>.
+    /// </remarks>
     internal static class ConfigurationFingerprintService
     {
         /// <summary>
-        /// Stores fingerprint algorithm version used by configuration fingerprint service.
+        /// Prefix embedded in emitted fingerprint strings to identify the canonicalization/hash format version.
         /// </summary>
         private const string FingerprintAlgorithmVersion = "v1";
 
         /// <summary>
-        /// Stores sensitive segment patterns used by configuration fingerprint service.
+        /// Case-insensitive key-segment patterns treated as secret-bearing and excluded from direct fingerprint input.
         /// </summary>
         private static readonly string[] SensitiveSegmentPatterns =
         [
@@ -73,10 +80,13 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Handles is connection string for configuration fingerprint service.
+        /// Identifies configuration keys that should be treated as connection strings for sanitization.
         /// </summary>
-        /// <param name="configurationKey">The configurationKey value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <param name="configurationKey">Configuration key path to classify.</param>
+        /// <returns>
+        /// <see langword="true"/> when any key segment matches the connection-string naming patterns;
+        /// otherwise <see langword="false"/>.
+        /// </returns>
         internal static bool IsConnectionString(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -105,10 +115,17 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Handles sanitize connection string for configuration fingerprint service.
+        /// Produces a canonical, non-secret representation of a connection string for fingerprint input.
         /// </summary>
-        /// <param name="connectionString">The connectionString value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="connectionString">Raw connection-string value from configuration.</param>
+        /// <returns>
+        /// A normalized connection string containing only selected non-secret properties when parsing succeeds;
+        /// otherwise <see langword="null"/>.
+        /// </returns>
+        /// <remarks>
+        /// Parsing/sanitization failures are intentionally downgraded to a <see langword="null"/> result so callers
+        /// can exclude the value and emit a warning instead of failing startup.
+        /// </remarks>
         internal static string? SanitizeConnectionString(string connectionString)
         {
             try
@@ -194,8 +211,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Handles canonicalize non secret value for configuration fingerprint service.
+        /// Applies key-specific canonicalization rules to non-secret configuration values before hashing.
         /// </summary>
+        /// <param name="configurationKey">Configuration key that controls whether canonicalization is applied.</param>
+        /// <param name="value">Raw non-secret configuration value.</param>
+        /// <returns>The canonicalized value when a key-specific rule applies; otherwise the original value.</returns>
+        /// <remarks>
+        /// Canonicalization failures for supported keys are intentionally non-fatal and fall back to the original value
+        /// to keep fingerprint generation best-effort.
+        /// </remarks>
         private static string CanonicalizeNonSecretValue(string configurationKey, string value)
         {
             if (configurationKey.Equals("BackFiller:DnsSuffix", StringComparison.OrdinalIgnoreCase))
@@ -214,10 +238,20 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Handles calculate configuration fingerprint for configuration fingerprint service.
+        /// Calculates the configuration fingerprint used by startup diagnostics to detect non-secret configuration drift.
         /// </summary>
-        /// <param name="configuration">The configuration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">Merged application configuration to fingerprint.</param>
+        /// <returns>
+        /// A fingerprint formatted as <c>&lt;version&gt;:&lt;hash-prefix&gt;</c> (for example <c>v1:...</c>) when successful;
+        /// otherwise the sentinel value <c>UNAVAILABLE</c>.
+        /// </returns>
+        /// <remarks>
+        /// Sensitive keys are excluded, connection strings are sanitized before inclusion, and only non-null values are hashed.
+        /// When connection-string sanitization fails, a warning is logged with structured field <c>ConfigKey</c> and that
+        /// key is excluded from the fingerprint. Unexpected top-level failures are logged as errors with the exception attached
+        /// and return <c>UNAVAILABLE</c>.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="configuration"/> is <see langword="null"/>.</exception>
         internal static string CalculateConfigurationFingerprint(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

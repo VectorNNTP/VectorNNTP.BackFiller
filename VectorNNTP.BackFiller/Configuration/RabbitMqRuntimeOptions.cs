@@ -10,6 +10,10 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <summary>
     /// Immutable RabbitMQ runtime options projected from validated startup configuration.
     /// </summary>
+    /// <remarks>
+    /// Instances are created by startup runtime-snapshot projection and consumed by RabbitMQ runtime components for
+    /// connection policy, pooling boundaries, health thresholds, and optional targeted diagnostics.
+    /// </remarks>
     /// <param name="Hosts">Canonical RabbitMQ broker hosts used for connection establishment.</param>
     /// <param name="Port">RabbitMQ broker port.</param>
     /// <param name="Username">RabbitMQ username used for credential-based authentication.</param>
@@ -71,10 +75,11 @@ namespace VectorNNTP.Backfiller.Configuration
         string? DiagnosticPayloadCorrelationId = null)
     {
         /// <summary>
-        /// Gets a sanitized connection name used when no explicit RabbitMQ client-provided name exists in configuration.
+        /// Builds the default RabbitMQ client-provided connection name when configuration does not specify one.
         /// </summary>
-        /// <param name="backFillerFqdn">Canonical BackFiller FQDN.</param>
-        /// <returns>RabbitMQ connection client-provided name.</returns>
+        /// <param name="backFillerFqdn">Canonical BackFiller FQDN segment appended to the fixed product prefix.</param>
+        /// <returns>Deterministic connection name in the form <c>VectorNNTP.BackFiller:{FQDN}</c>.</returns>
+        /// <exception cref="ArgumentException"><paramref name="backFillerFqdn"/> is <see langword="null"/>, empty, or whitespace.</exception>
         internal static string GetDefaultConnectionName(string backFillerFqdn)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backFillerFqdn);

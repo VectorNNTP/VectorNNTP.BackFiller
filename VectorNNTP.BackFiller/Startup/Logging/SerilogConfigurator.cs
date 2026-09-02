@@ -11,22 +11,33 @@ using Serilog.Events;
 namespace VectorNNTP.Backfiller.Startup.Logging
 {
     /// <summary>
-    /// Owns production Serilog pipeline configuration and bootstrap-to-production logger transition.
+    /// Builds the production Serilog pipeline, registers it with Microsoft logging, and swaps it in for the bootstrap logger.
     /// </summary>
+    /// <remarks>
+    /// Host composition calls this once after runtime validation succeeds. The method is responsible for configuring
+    /// sink templates/properties and for disposing the previous bootstrap logger after a successful transition.
+    /// </remarks>
     internal static class SerilogConfigurator
     {
         /// <summary>
-        /// Stores log file prefix used by serilog configurator.
+        /// Rolling file-name prefix used by the production file sink.
         /// </summary>
         private const string LogFilePrefix = "vectornntp.backfiller-.log";
 
         /// <summary>
-        /// Configures and registers the production Serilog pipeline.
+        /// Configures the production Serilog logger, wires it into <see cref="ILoggingBuilder"/>, and replaces the bootstrap logger.
         /// </summary>
-        /// <param name="services">The service collection to register Serilog against.</param>
-        /// <param name="configuration">The application configuration root.</param>
-        /// <param name="serviceName">The service identity property value.</param>
-        /// <param name="validatedLogDirectory">Validated absolute log directory path.</param>
+        /// <param name="services">Service collection that receives the Serilog-backed Microsoft logging registration.</param>
+        /// <param name="configuration">Application configuration root used to resolve minimum logging levels.</param>
+        /// <param name="serviceName">Application identity emitted as the structured <c>Application</c> property.</param>
+        /// <param name="validatedLogDirectory">Pre-validated absolute directory used for rolling file sink output.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> or <paramref name="configuration"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException"><paramref name="serviceName"/> or <paramref name="validatedLogDirectory"/> is null/empty/whitespace.</exception>
+        /// <remarks>
+        /// On configuration failure, the method logs a fatal startup event, disposes any partially created production logger,
+        /// and rethrows. On success, it disposes the prior bootstrap logger best-effort and keeps startup running even if that
+        /// disposal emits a warning.
+        /// </remarks>
         internal static void ConfigureSerilogLogging(
             IServiceCollection services,
             IConfiguration configuration,
@@ -106,28 +117,30 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
 
         /// <summary>
-        /// Parses the minimum log level used by test configuration.
+        /// Exposes Serilog minimum-level parsing for tests that verify level mapping behavior.
         /// </summary>
-        /// <param name="configuredLevel">The configuredLevel value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuredLevel">Configured Serilog level text (for example, <c>Information</c> or <c>Warning</c>).</param>
+        /// <returns>The parsed <see cref="LogEventLevel"/>, defaulting to <see cref="LogEventLevel.Information"/> when parsing fails.</returns>
         internal static LogEventLevel ParseMinimumLevelForTesting(string? configuredLevel)
         {
             return ParseMinimumLevel(configuredLevel);
         }
 
         /// <summary>
-        /// Parses the Microsoft logging level used by test configuration.
+        /// Exposes Microsoft logging-level parsing for tests that verify Serilog-to-LogLevel mapping behavior.
         /// </summary>
-        /// <param name="configuredLevel">The configuredLevel value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuredLevel">Configured level text from Serilog settings.</param>
+        /// <returns>The mapped <see cref="LogLevel"/>, defaulting to <see cref="LogLevel.Information"/> when input is blank or unrecognized.</returns>
         internal static LogLevel ParseMicrosoftLogLevelForTesting(string? configuredLevel)
         {
             return ParseMicrosoftLogLevel(configuredLevel);
         }
 
         /// <summary>
-        /// Handles parse minimum level for serilog configurator.
+        /// Parses configured Serilog minimum level text into a <see cref="LogEventLevel"/> value.
         /// </summary>
+        /// <param name="configuredLevel">Configured level text.</param>
+        /// <returns>The parsed level, or <see cref="LogEventLevel.Information"/> when parsing fails.</returns>
         private static LogEventLevel ParseMinimumLevel(string? configuredLevel)
         {
             return Enum.TryParse(configuredLevel, ignoreCase: true, out LogEventLevel level)
@@ -136,8 +149,13 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
 
         /// <summary>
-        /// Handles parse microsoft log level for serilog configurator.
+        /// Maps configured level text into the corresponding Microsoft.Extensions.Logging <see cref="LogLevel"/>.
         /// </summary>
+        /// <param name="configuredLevel">Configured level text.</param>
+        /// <returns>
+        /// The parsed <see cref="LogLevel"/> when recognized; otherwise <see cref="LogLevel.Information"/> with special
+        /// aliases <c>verbose</c> => <see cref="LogLevel.Trace"/> and <c>fatal</c> => <see cref="LogLevel.Critical"/>.
+        /// </returns>
         private static LogLevel ParseMicrosoftLogLevel(string? configuredLevel)
         {
             return string.IsNullOrWhiteSpace(configuredLevel)

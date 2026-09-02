@@ -11,23 +11,30 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Configuration
 {
     /// <summary>
-    /// Canonicalizes validated configuration into the immutable BackFiller runtime snapshot.
+    /// Builds the immutable runtime configuration snapshot consumed by host composition and dependency/runtime services.
     /// </summary>
     /// <remarks>
-    /// This factory turns validated settings into the startup-time source of truth for listener binding, shutdown
-    /// policy, transit parameters, and the nested ACME configuration used by the certificate pipeline.
-    /// The generated FQDN, certificate directory, and ACME policy values are all resolved here before hosted
-    /// services start.
+    /// This factory is the canonicalization boundary between startup validation and runtime execution.
+    /// It resolves normalized identity values, operational directories, transport settings, shutdown policy,
+    /// and nested RabbitMQ/ACME option snapshots before hosted services begin running.
     /// </remarks>
     internal class RuntimeSnapshotFactory
     {
         /// <summary>
-        /// Builds an immutable runtime options snapshot from validated/canonicalized startup configuration.
+        /// Attempts to build the immutable runtime-options snapshot from validated startup configuration inputs.
         /// </summary>
-        /// <param name="configuration">The configuration value.</param>
-        /// <param name="backFiller">The backFiller value.</param>
-        /// <param name="configErrors">The configErrors value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">Configuration root used to resolve operational directories and related settings.</param>
+        /// <param name="backFiller">Validated BackFiller options section used to construct runtime identity and service settings.</param>
+        /// <param name="configErrors">Mutable validation-error accumulator that receives snapshot-construction failures.</param>
+        /// <returns>
+        /// A fully populated <see cref="BackFillerRuntimeOptions"/> snapshot when construction succeeds; otherwise
+        /// <see langword="null"/> after appending an explanatory error to <paramref name="configErrors"/>.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="configuration"/> or <paramref name="configErrors"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// This method does not surface configuration-construction exceptions to callers. It converts failures into
+        /// a single startup validation error entry so the caller can continue unified validation reporting.
+        /// </remarks>
         internal static BackFillerRuntimeOptions? BuildRuntimeOptionsSnapshot(
             IConfiguration configuration,
             BackFillerOptions? backFiller,
@@ -102,11 +109,14 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Builds immutable RabbitMQ runtime settings from validated BackFiller configuration.
+        /// Builds immutable RabbitMQ runtime settings from validated BackFiller options.
         /// </summary>
-        /// <param name="backFiller">Validated BackFiller options.</param>
-        /// <param name="canonicalBackFillerFqdn">Authoritative generated BackFiller FQDN.</param>
-        /// <returns>Immutable RabbitMQ runtime options.</returns>
+        /// <param name="backFiller">Validated BackFiller options containing the RabbitMQ section.</param>
+        /// <param name="canonicalBackFillerFqdn">Canonical BackFiller FQDN used for diagnostic payload identity settings.</param>
+        /// <returns>A <see cref="RabbitMqRuntimeOptions"/> snapshot used by RabbitMQ runtime infrastructure.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="backFiller"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException"><paramref name="canonicalBackFillerFqdn"/> is null/empty/whitespace.</exception>
+        /// <exception cref="InvalidOperationException">BackFiller RabbitMQ settings are missing from validated input.</exception>
         private static RabbitMqRuntimeOptions BuildRabbitMqRuntimeOptions(
             BackFillerOptions backFiller,
             string canonicalBackFillerFqdn)
@@ -165,12 +175,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Builds immutable Let's Encrypt runtime settings from validated BackFiller configuration.
+        /// Builds immutable Let’s Encrypt runtime settings, including canonical certificate paths and ACME policy values.
         /// </summary>
-        /// <param name="backFiller">Validated BackFiller options.</param>
-        /// <param name="validatedCertificateDirectory">Canonical validated certificate directory path.</param>
-        /// <param name="canonicalBackFillerFqdn">Authoritative generated BackFiller FQDN.</param>
-        /// <returns>Immutable ACME runtime options.</returns>
+        /// <param name="backFiller">Validated BackFiller options containing Let’s Encrypt settings.</param>
+        /// <param name="validatedCertificateDirectory">Canonical validated certificate directory used to compose runtime file paths.</param>
+        /// <param name="canonicalBackFillerFqdn">Authoritative generated BackFiller FQDN used as certificate subject identity.</param>
+        /// <returns>A <see cref="BackFillerLetsEncryptRuntimeOptions"/> snapshot consumed by certificate provisioning/renewal services.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="backFiller"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException"><paramref name="validatedCertificateDirectory"/> or <paramref name="canonicalBackFillerFqdn"/> is null/empty/whitespace.</exception>
+        /// <exception cref="InvalidOperationException">Required Let’s Encrypt settings are missing from validated input.</exception>
         private static BackFillerLetsEncryptRuntimeOptions BuildLetsEncryptRuntimeOptions(
             BackFillerOptions backFiller,
             string validatedCertificateDirectory,

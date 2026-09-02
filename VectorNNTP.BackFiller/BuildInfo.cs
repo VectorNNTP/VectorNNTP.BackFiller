@@ -25,12 +25,21 @@ using System.Runtime.Versioning;
 namespace VectorNNTP.Backfiller
 {
     /// <summary>
-    /// Immutable application identity and runtime metadata.
+    /// Immutable metadata snapshot describing the running BackFiller artifact and its startup runtime environment.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Build metadata is resolved from assembly attributes so the executable is its own source of truth.
-    /// Runtime metadata is collected at startup and describes the current host environment.
+    /// Build-facing values (for example <see cref="Version"/>, <see cref="InformationalVersion"/>,
+    /// <see cref="Commit"/>, <see cref="BuildTimestamp"/>, and <see cref="BuildConfiguration"/>) are resolved from
+    /// assembly identity and assembly-metadata attributes emitted at build time.
+    /// </para>
+    /// <para>
+    /// Runtime-facing values (for example <see cref="StartedAt"/> and <see cref="Runtime"/>) are captured for the
+    /// current process at startup and remain stable for the lifetime of this snapshot instance.
+    /// </para>
+    /// <para>
+    /// This type is intended for diagnostics, startup logging, and telemetry-style reporting rather than mutable
+    /// runtime configuration.
     /// </para>
     /// </remarks>
     public sealed class BuildInfo
@@ -46,16 +55,19 @@ namespace VectorNNTP.Backfiller
         private static readonly char[] MetadataTokenSeparators = ['.', '-', '_'];
 
         /// <summary>
-        /// Returns the canonical service name.
+        /// Canonical service identifier used in build metadata formatting and diagnostics output.
         /// </summary>
         public const string ServiceName = "VectorNNTP.BackFiller";
 
         /// <summary>
-        /// Creates a build information snapshot using an explicit process start timestamp.
+        /// Creates a build metadata snapshot for the current executable and runtime process.
         /// </summary>
-        /// <param name="processStartedAt">The process start timestamp.</param>
-        /// <returns>A populated <see cref="BuildInfo"/> instance.</returns>
+        /// <param name="processStartedAt">Process start timestamp supplied by the caller.</param>
+        /// <returns>A populated <see cref="BuildInfo"/> instance for the currently executing assembly.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="processStartedAt"/> is the default value.</exception>
+        /// <remarks>
+        /// The supplied timestamp is normalized to UTC before being stored in <see cref="StartedAt"/>.
+        /// </remarks>
         public static BuildInfo Create(DateTimeOffset processStartedAt)
         {
             return processStartedAt == default
@@ -64,8 +76,9 @@ namespace VectorNNTP.Backfiller
         }
 
         /// <summary>
-        /// Returns the service name associated with this metadata snapshot.
+        /// Gets the service identifier associated with this snapshot.
         /// </summary>
+        /// <value>Defaults to <see cref="ServiceName"/> for snapshots created by <see cref="Create(DateTimeOffset)"/>.</value>
         public string Service { get; init; } = ServiceName;
 
         /// <summary>
@@ -131,24 +144,31 @@ namespace VectorNNTP.Backfiller
         public string BuildTimestamp { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Returns the process start timestamp (UTC).
+        /// Gets the startup timestamp associated with this metadata snapshot in UTC.
         /// </summary>
+        /// <value>Caller-provided process start time normalized via <see cref="DateTimeOffset.ToUniversalTime"/>.</value>
         public DateTimeOffset StartedAt { get; init; }
 
         /// <summary>
-        /// Returns the build configuration (Debug, Release, or custom).
+        /// Gets the assembly build configuration value.
         /// </summary>
+        /// <value>Configuration text from <see cref="AssemblyConfigurationAttribute"/>, or <c>unknown</c> when unavailable.</value>
         public string BuildConfiguration { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Returns the target framework moniker this assembly was built against.
+        /// Gets the target framework moniker resolved from assembly metadata.
         /// </summary>
+        /// <value>
+        /// Normalized target framework value (for example <c>net8.0</c>) when available; otherwise <c>unknown</c>.
+        /// </value>
         public string TargetFramework { get; init; } = UnknownValue;
 
         /// <summary>
-        /// Gets runtime details for the current process.
+        /// Gets runtime environment details captured for the hosting process.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>
+        /// Runtime characteristics captured at snapshot creation time, including framework and platform architecture details.
+        /// </value>
         public RuntimeDetails Runtime { get; init; } = RuntimeDetails.CreateCurrent();
 
         /// <summary>
@@ -160,10 +180,10 @@ namespace VectorNNTP.Backfiller
         public string DotNetVersion => Runtime.Framework;
 
         /// <summary>
-        /// Loads current build information from assembly and runtime.
+        /// Loads build and runtime metadata from the currently executing BackFiller assembly.
         /// </summary>
-        /// <param name="processStartedAt">The process start timestamp (UTC).</param>
-        /// <returns>A populated <see cref="BuildInfo"/> instance.</returns>
+        /// <param name="processStartedAt">UTC process start timestamp to embed in the snapshot.</param>
+        /// <returns>A populated <see cref="BuildInfo"/> instance containing resolved assembly and runtime metadata.</returns>
         private static BuildInfo LoadCurrent(DateTimeOffset processStartedAt)
         {
             Assembly assembly = typeof(BuildInfo).Assembly;
@@ -340,26 +360,26 @@ namespace VectorNNTP.Backfiller
         }
 
         /// <summary>
-        /// Resolves the dirty repository state, preferring explicit metadata.
+        /// Resolves repository dirty-state metadata, preferring explicit assembly metadata keys.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <c>RepositoryDirty</c> (or equivalent metadata keys) is the authoritative signal and should be
-        /// stamped by the build pipeline.
+        /// <c>RepositoryDirty</c> (or equivalent metadata keys) is treated as the authoritative signal when present.
         /// </para>
         /// <para>
-        /// Informational version parsing is a compatibility fallback and only recognizes explicit
-        /// metadata tokens such as <c>+...dirty</c> or <c>+...dirty=true</c>.
+        /// Informational-version parsing is a compatibility fallback and only recognizes explicit tokens such as
+        /// <c>+...dirty</c>, <c>+...clean</c>, or <c>+...dirty=true</c>.
         /// </para>
         /// </remarks>
-        /// <param name="metadata">The assembly metadata map.</param>
-        /// <param name="informationalVersion">The resolved informational version.</param>
+        /// <param name="metadata">Assembly metadata map used to locate dirty-state keys.</param>
+        /// <param name="informationalVersion">Informational version text used only for fallback token parsing.</param>
         /// <returns>
         /// <see langword="true"/> when the build is marked dirty, <see langword="false"/> when explicitly clean,
-        /// and <see langword="null"/> when dirty state information is unavailable.
+        /// and <see langword="null"/> when dirty-state information is unavailable.
         /// </returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when <paramref name="metadata"/> or <paramref name="informationalVersion"/> is <see langword="null"/>.
+        /// </exception>
         internal static bool? ResolveDirtyState(IReadOnlyDictionary<string, string> metadata, string informationalVersion)
         {
             ArgumentNullException.ThrowIfNull(metadata);
@@ -503,11 +523,13 @@ namespace VectorNNTP.Backfiller
         }
 
         /// <summary>
-        /// Attempts to read an assembly metadata value by key.
+        /// Attempts to read a non-empty assembly metadata value by key.
         /// </summary>
-        /// <param name="metadata">The cached assembly metadata map.</param>
-        /// <param name="key">The metadata key to locate.</param>
-        /// <returns>The metadata value if found; otherwise <see langword="null"/>.</returns>
+        /// <param name="metadata">Cached assembly metadata map.</param>
+        /// <param name="key">Metadata key to locate.</param>
+        /// <returns>The metadata value when present and non-whitespace; otherwise <see langword="null"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="metadata"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="key"/> is null, empty, or whitespace.</exception>
         private static string? TryGetAssemblyMetadataValue(IReadOnlyDictionary<string, string> metadata, string key)
         {
             ArgumentNullException.ThrowIfNull(metadata);
@@ -652,8 +674,12 @@ namespace VectorNNTP.Backfiller
     }
 
     /// <summary>
-    /// Runtime metadata captured at process startup.
+    /// Immutable runtime-environment snapshot captured for the current process.
     /// </summary>
+    /// <remarks>
+    /// Values are sourced from <see cref="RuntimeInformation"/> at capture time and represent the
+    /// active runtime/OS/process environment used by the executing service instance.
+    /// </remarks>
     public sealed class RuntimeDetails
     {
         /// <summary>
@@ -677,7 +703,7 @@ namespace VectorNNTP.Backfiller
         public string ProcessArchitecture { get; init; } = "unknown";
 
         /// <summary>
-        /// Captures runtime metadata for the current process.
+        /// Captures runtime metadata for the currently executing process.
         /// </summary>
         /// <returns>A populated <see cref="RuntimeDetails"/> instance.</returns>
         public static RuntimeDetails CreateCurrent()

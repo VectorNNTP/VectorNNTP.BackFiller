@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Configuration
     {
         // MySqlConnector aliases for server/host (official documentation)
         /// <summary>
-        /// Stores server aliases used by my sql connection string utilities.
+        /// Canonical alias keys accepted for MySQL server/host resolution.
         /// </summary>
         private static readonly HashSet<string> ServerAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -159,7 +159,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for minimum pool size
         /// <summary>
-        /// Limits min pool size aliases for my sql connection string utilities.
+        /// Canonical alias keys accepted for minimum pool-size resolution.
         /// </summary>
         private static readonly HashSet<string> MinPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -171,7 +171,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for maximum pool size
         /// <summary>
-        /// Limits max pool size aliases for my sql connection string utilities.
+        /// Canonical alias keys accepted for maximum pool-size resolution.
         /// </summary>
         private static readonly HashSet<string> MaxPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -509,32 +509,17 @@ namespace VectorNNTP.Backfiller.Configuration
                    HasConflictingAliases(rawPairs, MaxPoolSizeAliases);
         }
 
-        // <summary>
-        // Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
-        // </summary>
-        // <param name="connectionString">The connection string to parse.</param>
-        // <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
-        // <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
-        // <remarks>
-        // <para>This parser respects connection string syntax:</para>
-        // <list type="bullet">
-        // <item><description>Semicolon (;) as delimiter</description></item>
-        // <item><description>Equals (=) as key-value separator</description></item>
-        // <item><description>Single or double quotes for values containing special characters</description></item>
-        // <item><description>Escaped quotes ("" or '') within quoted values</description></item>
-        // <item><description>Whitespace trimming around keys and values</description></item>
-        // </list>
-        // <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
-        // <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
-        // <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
-        // </remarks>
-#pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
+        #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
         /// <summary>
-        /// <param name="connectionString">The connection string to parse.</param>
-        /// <returns>Key-value pairs preserving duplicate entries for ambiguity detection.</returns>
-        /// <exception cref="ArgumentException">Thrown when the connection string syntax is malformed.</exception>
-        /// <remarks>Parsing occurs before provider canonicalization so conflicting aliases remain observable.</remarks>
+        /// Parses a connection string into raw key/value pairs before provider canonicalization.
         /// </summary>
+        /// <param name="connectionString">Connection string text to parse.</param>
+        /// <returns>Ordered key/value pairs preserving duplicate keys for downstream ambiguity detection.</returns>
+        /// <exception cref="ArgumentException">Thrown when connection-string syntax is malformed.</exception>
+        /// <remarks>
+        /// This parser preserves duplicate aliases and validates quoting/terminator rules so ambiguity checks can be
+        /// performed before last-write-wins canonicalization by <see cref="DbConnectionStringBuilder"/> semantics.
+        /// </remarks>
         private static IReadOnlyList<(string Key, string Value)> ParseRawKeyValuePairs(string connectionString)
 #pragma warning restore CA1859
         {

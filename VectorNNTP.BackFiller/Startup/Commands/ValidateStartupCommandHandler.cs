@@ -10,15 +10,32 @@ using Serilog;
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns the validate-startup operational command behavior.
+    /// Executes the <c>validate-startup</c> operational command by running startup validation and rendering the
+    /// aggregated configuration/dependency outcomes to console output.
     /// </summary>
+    /// <remarks>
+    /// This handler translates <see cref="ConfigurationValidationResult"/> and <see cref="DependencyValidationResult"/>
+    /// into operator-facing <c>[WARN]</c>/<c>[ERROR]</c> lines and maps each outcome to an <see cref="ExitCodePolicy"/>
+    /// process result. Unexpected command-path failures are logged as fatal application errors through Serilog.
+    /// </remarks>
     internal static class ValidateStartupCommandHandler
     {
         /// <summary>
-        /// Validates startup readiness (configuration and dependencies) and returns an appropriate exit code.
+        /// Runs startup configuration and dependency validation, prints collected warnings/errors, and returns the
+        /// command exit code representing the validation outcome.
         /// </summary>
-        /// <param name="configuration">The configuration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">The configuration root used by the startup validation pipeline.</param>
+        /// <returns>
+        /// <see cref="ExitCodePolicy.ExitCodeNormalShutdown"/> when both validation phases are valid;
+        /// <see cref="ExitCodePolicy.ExitCodeConfigurationFailure"/> when configuration validation fails;
+        /// <see cref="ExitCodePolicy.ExitCodeDependencyFailure"/> when dependency validation fails;
+        /// otherwise <see cref="ExitCodePolicy.ExitCodeUnexpectedFailure"/>.
+        /// </returns>
+        /// <remarks>
+        /// Validation diagnostics are emitted to standard output/error as plain text and are not source-generated logs.
+        /// The only Serilog call in this method is a fatal log for unexpected exceptions, where <paramref name="configuration"/>
+        /// data is not attached as structured fields.
+        /// </remarks>
         internal static int Handle(IConfiguration? configuration)
         {
             Console.WriteLine("Validating startup readiness...");

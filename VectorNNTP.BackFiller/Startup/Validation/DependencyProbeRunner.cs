@@ -10,24 +10,36 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Owns live external dependency probes, startup DNS reconciliation, and certificate availability checks.
+    /// Orchestrates startup dependency probing by aggregating baseline connectivity checks, DNS synchronization, and certificate readiness validation.
     /// </summary>
     /// <remarks>
-    /// The runner first validates structural dependencies, then synchronizes the generated BackFiller A/AAAA records,
-    /// and finally ensures a usable listener certificate is available before runtime services are allowed to continue.
+    /// This runner composes probe outputs into a single <see cref="DependencyValidationResult"/> and leaves logging and
+    /// exit-code decisions to higher startup layers. Later validation phases run only when earlier phases are valid,
+    /// preserving deterministic fail-fast gating while still returning aggregated diagnostics for each completed phase.
     /// </remarks>
     internal class DependencyProbeRunner
     {
         /// <summary>
-        /// Validates external dependencies after structural configuration validation succeeds.
+        /// Runs the startup dependency-validation pipeline and returns an aggregated dependency outcome.
         /// </summary>
-        /// <param name="configuration">Application configuration root.</param>
-        /// <param name="backFiller">Validated BackFiller options model.</param>
-        /// <param name="runtimeOptions">Validated immutable runtime options snapshot.</param>
-        /// <param name="dependencyTimeout">Maximum timeout per dependency operation.</param>
-        /// <param name="cancellationToken">Startup cancellation token.</param>
-        /// <returns>Aggregated dependency validation outcome.</returns>
-        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
+        /// <param name="configuration">Application configuration root used by dependency probes that require configuration access.</param>
+        /// <param name="backFiller">Validated BackFiller options consumed by Cloudflare and transit-server dependency probes.</param>
+        /// <param name="runtimeOptions">Validated immutable runtime options snapshot used by RabbitMQ, DNS, and certificate probes.</param>
+        /// <param name="dependencyTimeout">Per-operation timeout passed to network dependency probes.</param>
+        /// <param name="cancellationToken">Startup cancellation token propagated to all asynchronous probe operations.</param>
+        /// <returns>
+        /// A task that completes with a <see cref="DependencyValidationResult"/> containing aggregated failures, warnings,
+        /// and errors from every executed dependency phase.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when <paramref name="configuration"/> or <paramref name="runtimeOptions"/> is <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="OperationCanceledException">The operation is canceled via <paramref name="cancellationToken"/>.</exception>
+        /// <remarks>
+        /// Baseline probes (database, Cloudflare zone, transit server, RabbitMQ) execute concurrently and are aggregated first.
+        /// DNS synchronization executes only when the baseline aggregate is valid. Certificate availability executes only when
+        /// both prior phases are valid. This method does not emit logs; it only returns structured diagnostics.
+        /// </remarks>
         internal static async Task<DependencyValidationResult> ValidateDependenciesAsync(
             IConfiguration configuration,
             BackFillerOptions? backFiller,

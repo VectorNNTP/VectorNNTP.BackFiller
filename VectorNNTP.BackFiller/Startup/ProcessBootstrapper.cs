@@ -13,13 +13,22 @@ using VectorNNTP.Backfiller.Startup.Logging;
 namespace VectorNNTP.Backfiller.Startup
 {
     /// <summary>
-    /// Owns process-wide bootstrap initialization such as culture, bootstrap logging, thread-pool diagnostics, and global exception handlers.
+    /// Provides process-level bootstrap steps that are executed before host composition begins.
     /// </summary>
+    /// <remarks>
+    /// This type is invoked from <c>Program.Main</c> during early startup to establish deterministic process context
+    /// (logging, culture, and fatal diagnostics) before configuration validation, dependency probing, and hosted-service startup.
+    /// The methods are intentionally static and side-effect oriented because they configure global runtime/process state.
+    /// </remarks>
     internal static class ProcessBootstrapper
     {
         /// <summary>
-        /// Sets the process-wide culture to <see cref="CultureInfo.InvariantCulture"/>.
+        /// Sets process-wide culture and UI culture to <see cref="CultureInfo.InvariantCulture"/> for deterministic formatting.
         /// </summary>
+        /// <remarks>
+        /// This affects subsequent culture-sensitive formatting on the current process and is executed during bootstrap
+        /// so startup diagnostics and runtime logs use invariant number/date representations.
+        /// </remarks>
         internal static void SetProcessCulture()
         {
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
@@ -31,8 +40,12 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Configures the Serilog bootstrap logger.
+        /// Initializes the Serilog bootstrap logger used before the full host logging pipeline is composed.
         /// </summary>
+        /// <remarks>
+        /// The bootstrap logger writes to console with UTC timestamp enrichment so failures that occur before DI/host
+        /// construction are still emitted with consistent startup diagnostics.
+        /// </remarks>
         internal static void ConfigureBootstrapLogger()
         {
             Log.Logger = new LoggerConfiguration()
@@ -43,8 +56,11 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Logs the current ThreadPool configuration for observability.
+        /// Emits a startup snapshot of ThreadPool limits and currently available worker/IOCP capacity.
         /// </summary>
+        /// <remarks>
+        /// This is a diagnostic capture step only; it does not mutate ThreadPool configuration.
+        /// </remarks>
         internal static void LogThreadPoolConfiguration()
         {
             int cpuCount = Environment.ProcessorCount;
@@ -65,8 +81,7 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Registers global exception handlers for <see cref="AppDomain.UnhandledException"/> and
-        /// <see cref="TaskScheduler.UnobservedTaskException"/>.
+        /// Registers process-wide terminal and last-resort exception diagnostics for unhandled and unobserved failures.
         /// </summary>
         /// <remarks>
         /// <para>Called outside the try/catch block in Program.cs to capture exceptions from all startup phases,

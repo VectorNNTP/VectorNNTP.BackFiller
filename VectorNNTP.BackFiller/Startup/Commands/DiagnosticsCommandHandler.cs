@@ -8,14 +8,20 @@
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns the diagnostics operational command behavior.
+    /// Handles the <c>--diagnostics</c> operational command by printing build, runtime, process, and selected
+    /// environment metadata.
     /// </summary>
+    /// <remarks>
+    /// This command is informational and does not run configuration/dependency validation or emit structured log
+    /// events. Output is written directly to standard output for operator inspection.
+    /// </remarks>
     internal static class DiagnosticsCommandHandler
     {
         /// <summary>
-        /// Displays startup diagnostics.
+        /// Writes a snapshot of startup-relevant diagnostics, including build info, host/runtime facts, process context,
+        /// and selected environment-variable values.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns><see cref="ExitCodePolicy.ExitCodeNormalShutdown"/> after diagnostics output is emitted.</returns>
         internal static int Handle()
         {
             Console.WriteLine("=== VectorNNTP.Backfiller Diagnostics ===\n");

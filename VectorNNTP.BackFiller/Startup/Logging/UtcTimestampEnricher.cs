@@ -11,20 +11,29 @@ using Serilog.Events;
 namespace VectorNNTP.Backfiller.Startup.Logging
 {
     /// <summary>
-    /// Adds a deterministic UTC timestamp property to each Serilog event so sink templates can render UTC consistently.
+    /// Serilog enricher that projects each event timestamp into a dedicated UTC property used by startup and production sink templates.
     /// </summary>
+    /// <remarks>
+    /// This enricher supports deterministic UTC-only formatting across bootstrap and host-configured log pipelines by
+    /// providing a stable <c>UtcTimestamp</c> field independent of sink-local timestamp rendering behavior.
+    /// </remarks>
     internal sealed class UtcTimestampEnricher : ILogEventEnricher
     {
         /// <summary>
-        /// Name of the UTC timestamp property injected into each log event.
+        /// Structured property name emitted on each enriched event for UTC timestamp rendering.
         /// </summary>
         internal const string UtcTimestampPropertyName = "UtcTimestamp";
 
         /// <summary>
-        /// Populates the <c>UtcTimestamp</c> property using the event timestamp converted to UTC.
+        /// Adds the <c>UtcTimestamp</c> property when absent, using <see cref="LogEvent.Timestamp"/> converted to UTC.
         /// </summary>
-        /// <param name="logEvent">The Serilog event being enriched.</param>
-        /// <param name="propertyFactory">Factory used to create structured event properties.</param>
+        /// <param name="logEvent">Serilog event instance to enrich.</param>
+        /// <param name="propertyFactory">Factory that creates the structured UTC timestamp property value.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="logEvent"/> or <paramref name="propertyFactory"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// Uses <see cref="LogEvent.AddPropertyIfAbsent(LogEventProperty)"/> so existing upstream
+        /// <c>UtcTimestamp</c> values are preserved rather than overwritten.
+        /// </remarks>
         public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
         {
             ArgumentNullException.ThrowIfNull(logEvent);

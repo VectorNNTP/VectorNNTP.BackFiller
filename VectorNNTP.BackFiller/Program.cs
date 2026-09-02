@@ -22,27 +22,42 @@ using VectorNNTP.Backfiller.Startup.Commands;
 namespace VectorNNTP.Backfiller
 {
     /// <summary>
-    /// Supplies the process entry point for the backfiller host.
+    /// Provides the composition-root entry surface for starting the VectorNNTP.BackFiller worker process.
     /// </summary>
     /// <remarks>
-    /// <para><b>Execution model:</b> This partial class now serves primarily as the entry point while startup responsibilities
-    /// are delegated to focused Startup components and the remaining Program partials for hosting, Serilog, command validation,
-    /// and the validation pipeline.</para>
+    /// <para>This partial type coordinates top-level startup orchestration while specialized startup components handle
+    /// command dispatch, configuration/dependency validation, host composition, and runtime host lifetime management.</para>
+    /// <para>The entry-point flow establishes process bootstrap logging first, then validates configuration and dependencies
+    /// before hosted services are constructed, so startup failures are surfaced through deterministic exit codes instead of
+    /// partially started background execution.</para>
     /// </remarks>
     internal static partial class Program
     {
         /// <summary>
-        /// Creates and runs the worker host through sequential startup phases with full exception safety.
+        /// Executes the BackFiller process startup pipeline, composes the host, and transfers control to the host lifetime coordinator.
         /// </summary>
-        /// <param name="args">Command-line arguments passed to host configuration and application startup.</param>
+        /// <param name="args">
+        /// Command-line arguments used first for pre-configuration command dispatch and then for
+        /// <see cref="Host.CreateApplicationBuilder(string[])"/> configuration source integration.
+        /// </param>
+        /// <returns>
+        /// A task that completes after startup command handling or host shutdown has finished and final shutdown logging has been flushed.
+        /// </returns>
         /// <remarks>
-        /// <para>Execution flow: parse operational command, build configuration, validate configuration and
-        /// external dependencies, create immutable runtime options, configure logging and DI services, then
-        /// start the host run loop.</para>
-        /// <para>Startup validation is cancelable via Ctrl+C and uses explicit exit codes for parse,
-        /// configuration, dependency, cancellation, and unexpected-failure outcomes.</para>
+        /// <para>Ordering is intentional: bootstrap logging/process metadata are initialized first; operational commands that do not require
+        /// host composition are dispatched before configuration build; configuration and dependency validation must pass before host composition;
+        /// then <see cref="Startup.Hosting.HostComposer.ComposeHost(HostApplicationBuilder, BackFillerRuntimeOptions, ServiceLifecycle)"/>
+        /// creates the container and <see cref="Startup.Hosting.HostLifetimeCoordinator.RunAsync(IHost, ServiceLifecycle, Action)"/> runs it.</para>
+        /// <para>Ctrl+C during startup validation cancels only the startup validation path via a linked token source. After host start,
+        /// unexpected cancellation and unhandled failures transition lifecycle state to faulted and map to explicit exit codes via
+        /// <see cref="ExitCodePolicy"/>.</para>
+        /// <para>This method owns final process-level logging flush and ensures sink failures during shutdown do not overwrite earlier
+        /// startup/runtime failure context.</para>
         /// </remarks>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="OperationCanceledException">
+        /// Propagated only when cancellation occurs during startup command/configuration/dependency validation flow before internal
+        /// catch blocks translate outcomes to exit codes.
+        /// </exception>
         public static async Task Main(string[] args)
         {
             ProcessBootstrapper.ConfigureBootstrapLogger();

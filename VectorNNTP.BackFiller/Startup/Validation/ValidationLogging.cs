@@ -9,14 +9,26 @@ using Serilog;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines validation logging and its validation logging contract.
+    /// Converts startup validation result objects into structured Serilog diagnostics without altering validation state.
     /// </summary>
+    /// <remarks>
+    /// These helpers are invoked by startup orchestration after validation completes so operators receive detailed
+    /// per-item diagnostics while startup failure decisions remain owned by the validation pipeline and caller logic.
+    /// </remarks>
     internal static class ValidationLogging
     {
         /// <summary>
-        /// Logs configuration validation errors with detail and context.
+        /// Emits configuration-validation diagnostics as structured error and warning log entries.
         /// </summary>
-        /// <param name="result">Configuration validation result.</param>
+        /// <param name="result">
+        /// Configuration validation snapshot whose aggregated <see cref="ConfigurationValidationResult.Errors"/> and
+        /// <see cref="ConfigurationValidationResult.Warnings"/> are translated into log output.
+        /// </param>
+        /// <remarks>
+        /// A summary error entry with <c>ErrorCount</c> is written when errors exist, followed by one error entry per
+        /// <c>(Setting, Error)</c> pair using structured fields <c>Setting</c> and <c>Error</c>. Warnings are emitted
+        /// similarly with <c>WarningCount</c> and per-item fields <c>Setting</c> and <c>Message</c>.
+        /// </remarks>
         internal static void LogConfigurationValidationErrors(ConfigurationValidationResult result)
         {
             if (result.Errors.Count > 0)
@@ -41,9 +53,18 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Logs dependency validation failures with detail and context.
+        /// Emits dependency-validation diagnostics as structured error and warning log entries.
         /// </summary>
-        /// <param name="result">Dependency validation result.</param>
+        /// <param name="result">
+        /// Dependency validation snapshot whose failures, warnings, and errors are translated into severity-specific
+        /// log messages.
+        /// </param>
+        /// <remarks>
+        /// Failed dependencies produce an error summary with <c>FailureCount</c> and per-item entries with
+        /// <c>Dependency</c>/<c>Reason</c>. Warning diagnostics produce warning summary/per-item entries with
+        /// <c>WarningCount</c> and <c>Category</c>/<c>Message</c>. Error diagnostics produce error summary/per-item
+        /// entries with <c>ErrorCount</c> and <c>Category</c>/<c>Message</c>.
+        /// </remarks>
         internal static void LogDependencyValidationErrors(DependencyValidationResult result)
         {
             // Log dependency failures

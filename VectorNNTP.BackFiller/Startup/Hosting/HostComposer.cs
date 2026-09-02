@@ -20,18 +20,20 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.Backfiller.Startup.Hosting
 {
     /// <summary>
-    /// Owns production logging configuration, service registration, and host construction.
+    /// Composes the validated runtime host by wiring logging, DI registrations, shutdown policy, and hosted-service startup graph.
     /// </summary>
     /// <remarks>
-    /// This type wires the startup-time lifecycle together, including account startup, certificate provisioning,
-    /// the inbound TLS listener, control-plane services, shutdown coordination, and host timeout policy.
+    /// This type is the composition boundary between startup validation output and runtime execution: it receives a
+    /// validated immutable runtime snapshot, registers runtime services, and builds the <see cref="IHost"/> instance
+    /// that <see cref="HostLifetimeCoordinator"/> later runs.
     /// </remarks>
     internal static class HostComposer
     {
         /// <summary>
-        /// Registers <see cref="TimeProvider"/> as a singleton for unified time handling across the application.
+        /// Registers <see cref="TimeProvider.System"/> as the single application time source.
         /// </summary>
-        /// <param name="services">The service collection to register TimeProvider into.</param>
+        /// <param name="services">Service collection that receives the time-provider singleton registration.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterTimeProvider(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -91,10 +93,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers the authoritative application lifecycle instance for host composition and runtime transitions.
+        /// Registers the authoritative lifecycle state machine used across startup and runtime transitions.
         /// </summary>
-        /// <param name="services">Service collection to register the lifecycle into.</param>
-        /// <param name="lifecycle">Optional authoritative lifecycle instance created before host build.</param>
+        /// <param name="services">Service collection that receives lifecycle registration.</param>
+        /// <param name="lifecycle">Optional pre-created lifecycle instance; when <see langword="null"/>, a new singleton is registered.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterServiceLifecycle(IServiceCollection services, ServiceLifecycle? lifecycle)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -105,9 +108,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers the shutdown coordination service for graceful-to-forced cancellation flow.
+        /// Registers shutdown-coordination infrastructure for graceful-to-forced cancellation flow.
         /// </summary>
-        /// <param name="services">Service collection to register the shutdown coordinator into.</param>
+        /// <param name="services">Service collection that receives the shutdown-coordinator singleton.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterShutdownCoordinator(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -115,9 +119,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers the runtime NNTP account snapshot provider and startup initializer.
+        /// Registers runtime NNTP account snapshot services and startup initialization entry point.
         /// </summary>
-        /// <param name="services">Service collection to register runtime account services into.</param>
+        /// <param name="services">Service collection that receives account snapshot runtime registrations.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterRuntimeAccountSnapshotServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -126,9 +131,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers RabbitMQ infrastructure services, startup initializer, and runtime consumer-session reconciliation.
+        /// Registers RabbitMQ connectivity, topology initialization, and hosted consumer runtime services.
         /// </summary>
-        /// <param name="services">Service collection to register RabbitMQ services into.</param>
+        /// <param name="services">Service collection that receives RabbitMQ infrastructure registrations.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterRabbitMqInfrastructureServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -142,9 +148,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers transit publishing runtime services and startup initializer.
+        /// Registers transit publishing runtime components and their startup initializer.
         /// </summary>
-        /// <param name="services">Service collection to register transit publishing services into.</param>
+        /// <param name="services">Service collection that receives transit publisher registrations.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterTransitPublisherServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -153,9 +160,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers certificate runtime services and periodic renewal hosted service.
+        /// Registers certificate provisioning state/services, listener startup dependency, and renewal hosted services.
         /// </summary>
-        /// <param name="services">Service collection to register certificate services into.</param>
+        /// <param name="services">Service collection that receives certificate and listener-related registrations.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterCertificateServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -170,9 +178,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers the control-plane hosted service and its runtime lease-provider interface.
+        /// Registers control-plane state/services and hosted runtime loop dependencies.
         /// </summary>
-        /// <param name="services">Service collection to register the control-plane hosted service into.</param>
+        /// <param name="services">Service collection that receives control-plane registrations.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterControlPlaneService(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -185,9 +194,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Registers Phase 3 article-processing services that consume RabbitMQ deliveries and classify ARTICLE outcomes.
+        /// Registers article-processing workflow services that consume RabbitMQ work and publish ARTICLE outcomes.
         /// </summary>
-        /// <param name="services">Service collection to register article processing services into.</param>
+        /// <param name="services">Service collection that receives article-processing registrations.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="services"/> is <see langword="null"/>.</exception>
         internal static void RegisterArticleProcessingServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
@@ -203,10 +213,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Gets a description of the host shutdown timeout for logging.
+        /// Formats the configured shutdown grace period into a human-readable host-timeout description string.
         /// </summary>
-        /// <param name="shutdownOptions">BackFiller shutdown configuration.</param>
-        /// <returns>Human-readable description of the host shutdown timeout.</returns>
+        /// <param name="shutdownOptions">Validated shutdown options containing the grace-period value.</param>
+        /// <returns>Formatted text describing Generic Host shutdown timeout in seconds.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="shutdownOptions"/> is <see langword="null"/>.</exception>
         internal static string GetHostShutdownTimeoutDescription(ShutdownOptions shutdownOptions)
         {
             ArgumentNullException.ThrowIfNull(shutdownOptions);
@@ -214,11 +225,16 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Configures host-level service behavior from validated BackFiller runtime settings.
+        /// Applies runtime service registrations and host options using validated startup runtime configuration.
         /// </summary>
-        /// <param name="hostBuilder">The <see cref="HostApplicationBuilder"/> to configure.</param>
-        /// <param name="runtimeOptions">The validated immutable runtime options snapshot produced by startup validation.</param>
-        /// <param name="lifecycle">Optional authoritative lifecycle instance created before host build.</param>
+        /// <param name="hostBuilder">Host application builder whose service collection is populated.</param>
+        /// <param name="runtimeOptions">Validated immutable runtime options snapshot produced by startup validation.</param>
+        /// <param name="lifecycle">Optional pre-created authoritative lifecycle instance to preserve across startup/runtime.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="hostBuilder"/> or <paramref name="runtimeOptions"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// Registration order documents intended startup dependencies, but runtime readiness ordering is enforced by
+        /// hosted-service behavior and startup orchestration rather than DI registration order alone.
+        /// </remarks>
         internal static void ConfigureHostServices(
             HostApplicationBuilder hostBuilder,
             BackFillerRuntimeOptions runtimeOptions,
@@ -271,12 +287,17 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Configures logging, runtime registrations, host services, and builds the host for execution.
+        /// Configures production logging, registers validated runtime services, and builds the executable host instance.
         /// </summary>
-        /// <param name="builder">The host application builder with validated configuration.</param>
-        /// <param name="runtimeOptions">The validated runtime options snapshot to register.</param>
-        /// <param name="serviceLifecycle">The authoritative lifecycle instance to preserve through host composition and execution.</param>
-        /// <returns>The built <see cref="IHost"/> instance ready to run.</returns>
+        /// <param name="builder">Host application builder with merged configuration sources.</param>
+        /// <param name="runtimeOptions">Validated runtime options snapshot registered for downstream service consumption.</param>
+        /// <param name="serviceLifecycle">Authoritative lifecycle instance preserved through host composition and runtime execution.</param>
+        /// <returns>The composed <see cref="IHost"/> instance ready for <see cref="HostLifetimeCoordinator.RunAsync(IHost, ServiceLifecycle, Action)"/>.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/>, <paramref name="runtimeOptions"/>, or <paramref name="serviceLifecycle"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// This method also logs a non-secret configuration fingerprint after logging pipeline configuration and before
+        /// host build to aid deployment diagnostics.
+        /// </remarks>
         internal static IHost ComposeHost(
             HostApplicationBuilder builder,
             BackFillerRuntimeOptions runtimeOptions,

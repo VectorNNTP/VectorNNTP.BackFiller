@@ -8,12 +8,17 @@
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns the dump-config operational command behavior.
+    /// Handles the <c>--dump-config</c> operational command by rendering a constrained, redacted configuration view.
     /// </summary>
+    /// <remarks>
+    /// This handler is diagnostic output for operators and does not execute startup validation probes. Secret handling
+    /// is allowlist-based: only explicitly approved keys are shown in clear text while all other included values are
+    /// redacted before output.
+    /// </remarks>
     internal static class DumpConfigCommandHandler
     {
         /// <summary>
-        /// Stores dump config included section prefixes used by dump config command handler.
+        /// Configuration section prefixes eligible for inclusion in dump output.
         /// </summary>
         private static readonly string[] DumpConfigIncludedSectionPrefixes =
         [
@@ -22,7 +27,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         ];
 
         /// <summary>
-        /// Stores dump config clear text keys used by dump config command handler.
+        /// Exact configuration keys allowed to be emitted in clear text within dump output.
         /// </summary>
         private static readonly HashSet<string> DumpConfigClearTextKeys = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -35,10 +40,13 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         };
 
         /// <summary>
-        /// Displays a constrained configuration view with conservative secret redaction.
+        /// Writes the constrained configuration dump and redaction policy banner to console output.
         /// </summary>
-        /// <param name="configuration">The configuration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="configuration">The configuration root to inspect for dump output.</param>
+        /// <returns>
+        /// <see cref="ExitCodePolicy.ExitCodeNormalShutdown"/> when dump output completes;
+        /// otherwise <see cref="ExitCodePolicy.ExitCodeUnexpectedFailure"/> when configuration is unavailable.
+        /// </returns>
         internal static int Handle(IConfiguration? configuration)
         {
             if (configuration == null)
@@ -57,8 +65,14 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Dumps selected configuration keys with allowlist-based cleartext output.
+        /// Emits included configuration keys in deterministic key order with clear-text or redacted values.
         /// </summary>
+        /// <param name="config">Configuration root to enumerate.</param>
+        /// <remarks>
+        /// Only non-null configuration entries are considered. Inclusion is restricted by
+        /// <see cref="DumpConfigIncludedSectionPrefixes"/>, and value rendering is delegated to
+        /// <see cref="GetDumpDisplayValue(string, string?)"/>.
+        /// </remarks>
         private static void DumpConfigSection(IConfiguration config)
         {
             foreach (KeyValuePair<string, string?> item in config.AsEnumerable().Where(static x => x.Value != null).OrderBy(static x => x.Key, StringComparer.OrdinalIgnoreCase))
@@ -74,8 +88,14 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Determines whether a key belongs to the constrained diagnostic dump scope.
+        /// Determines whether a key falls within the allowed dump sections.
         /// </summary>
+        /// <param name="key">Configuration key to evaluate.</param>
+        /// <returns>
+        /// <see langword="true"/> when the key exactly matches, or is nested under, an allowlisted section prefix;
+        /// otherwise <see langword="false"/>.
+        /// </returns>
+        /// <exception cref="ArgumentException"><paramref name="key"/> is <see langword="null"/>, empty, or whitespace.</exception>
         private static bool ShouldIncludeInDump(string key)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -86,8 +106,15 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Resolves a safe display value for a configuration entry.
+        /// Resolves the printed value token for an included configuration entry.
         /// </summary>
+        /// <param name="key">Included configuration key being rendered.</param>
+        /// <param name="value">Raw configuration value for <paramref name="key"/>.</param>
+        /// <returns>
+        /// <c>[EMPTY]</c> when the value is null/empty, the raw value for clear-text allowlisted keys, or
+        /// <c>[REDACTED]</c> for all other included keys.
+        /// </returns>
+        /// <exception cref="ArgumentException"><paramref name="key"/> is <see langword="null"/>, empty, or whitespace.</exception>
         private static string GetDumpDisplayValue(string key, string? value)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(key);

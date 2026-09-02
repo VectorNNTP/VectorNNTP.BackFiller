@@ -8,17 +8,33 @@
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns command-line parsing, command selection, and dispatch.
+    /// Coordinates pre-configuration command parsing/dispatch and post-configuration command execution for startup.
     /// </summary>
+    /// <remarks>
+    /// This type orchestrates command-flow decisions only. Validation diagnostics and command-specific logging are
+    /// produced by downstream command handlers and validation pipeline components.
+    /// </remarks>
     internal static class OperationalCommandDispatcher
     {
         /// <summary>
-        /// Parses command-line arguments and executes commands that do not require configuration.
+        /// Parses command-line arguments, executes immediate commands that do not require configuration, and reports
+        /// whether startup should continue to configuration loading.
         /// </summary>
-        /// <param name="args">Command-line arguments to inspect.</param>
-        /// <param name="command">When this method returns, contains a configuration-backed command that must be executed after configuration is available; otherwise <see langword="null"/>.</param>
-        /// <param name="exitCode">When this method returns, contains the exit code for a completed parse or command-dispatch path; otherwise <see langword="null"/>.</param>
-        /// <returns><see langword="true"/> when startup should continue; otherwise <see langword="false"/>.</returns>
+        /// <param name="args">Raw command-line argument tokens.</param>
+        /// <param name="command">
+        /// When this method returns, contains the parsed command that must be executed after configuration is available;
+        /// otherwise <see langword="null"/>.
+        /// </param>
+        /// <param name="exitCode">
+        /// When this method returns, contains the exit code for parse failure or completed pre-configuration command
+        /// execution; otherwise <see langword="null"/> when startup should continue.
+        /// </param>
+        /// <returns><see langword="true"/> when configuration loading and host startup should continue; otherwise <see langword="false"/>.</returns>
+        /// <remarks>
+        /// Parse failures and unsupported argument shapes are handled by <see cref="OperationalCommandParser"/>.
+        /// Commands classified by <see cref="OperationalCommandExecutor.CommandRequiresConfiguration(OperationalCommand)"/>
+        /// as non-configuration commands are executed immediately in this method.
+        /// </remarks>
         internal static bool TryDispatchPreConfigurationCommand(
             string[] args,
             out OperationalCommand? command,
@@ -42,11 +58,11 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Executes a previously parsed command that requires configuration.
+        /// Executes a previously parsed configuration-backed command after configuration has been constructed.
         /// </summary>
-        /// <param name="command">The parsed operational command.</param>
-        /// <param name="configuration">The configuration root used by configuration-backed commands.</param>
-        /// <returns>The command exit code.</returns>
+        /// <param name="command">Parsed operational command selected during pre-configuration parsing.</param>
+        /// <param name="configuration">Loaded configuration root supplied to configuration-dependent command handlers.</param>
+        /// <returns>The command exit code returned by <see cref="OperationalCommandExecutor.ExecuteCommand(OperationalCommand, IConfiguration?)"/>.</returns>
         internal static int DispatchPostConfigurationCommand(
             OperationalCommand command,
             IConfiguration configuration)

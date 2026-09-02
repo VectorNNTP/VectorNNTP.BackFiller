@@ -10,16 +10,26 @@ using System.Diagnostics;
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns command execution selection and configuration requirements.
+    /// Dispatches parsed operational commands to their handlers and exposes whether each command requires
+    /// configuration to execute.
     /// </summary>
+    /// <remarks>
+    /// This type performs routing only; validation diagnostics and logging behavior are owned by the selected command
+    /// handlers. Unsupported enum values are treated as programming errors via <see cref="UnreachableException"/>.
+    /// </remarks>
     internal static class OperationalCommandExecutor
     {
         /// <summary>
-        /// Executes the parsed operational command.
+        /// Executes a parsed operational command by delegating to its command-specific handler.
         /// </summary>
-        /// <param name="command">The parsed operational command.</param>
-        /// <param name="configuration">Configuration used by commands that require it.</param>
-        /// <returns>The operation result.</returns>
+        /// <param name="command">The parsed operational command to execute.</param>
+        /// <param name="configuration">Configuration root passed through to handlers that require configuration-backed execution.</param>
+        /// <returns>The exit code returned by the selected command handler.</returns>
+        /// <exception cref="UnreachableException">The <paramref name="command"/> value is not a supported <see cref="OperationalCommand"/> member.</exception>
+        /// <remarks>
+        /// This dispatcher does not add logging, severity, or event-id semantics; those are defined by downstream
+        /// command handlers.
+        /// </remarks>
         internal static int ExecuteCommand(OperationalCommand command, IConfiguration? configuration)
         {
             return command switch
@@ -35,10 +45,14 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Determines whether a parsed command requires configuration to execute.
+        /// Determines whether a parsed command must be executed after configuration has been loaded.
         /// </summary>
-        /// <param name="command">The command value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <param name="command">The command value to classify.</param>
+        /// <returns>
+        /// <see langword="true"/> for commands that need configuration-backed execution
+        /// (<see cref="OperationalCommand.ValidateConfig"/>, <see cref="OperationalCommand.ValidateStartup"/>, and <see cref="OperationalCommand.DumpConfig"/>);
+        /// otherwise <see langword="false"/>.
+        /// </returns>
         internal static bool CommandRequiresConfiguration(OperationalCommand command)
         {
             return command is OperationalCommand.ValidateConfig

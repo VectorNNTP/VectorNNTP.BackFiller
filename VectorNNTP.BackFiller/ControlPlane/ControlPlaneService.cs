@@ -30,8 +30,14 @@ namespace VectorNNTP.Backfiller.ControlPlane
     }
 
     /// <summary>
-    /// Runs the control-plane background loop for the service lifetime.
+    /// Reconciles authoritative NNTP account snapshots into long-lived per-account session-manager runtimes for the
+    /// process lifetime.
     /// </summary>
+    /// <remarks>
+    /// The service applies snapshot deltas (add/remove/reconcile), coordinates RabbitMQ capacity retirement boundaries,
+    /// publishes backbone usable-capacity snapshots, and emits operational lifecycle diagnostics. It is not part of
+    /// startup configuration validation; validation and startup-failure decisions are handled by startup pipeline types.
+    /// </remarks>
     /// <param name="logger">The logger used for control-plane diagnostics.</param>
     /// <param name="timeProvider">The unified time provider used for control-plane timestamps.</param>
     /// <param name="snapshotProvider">The runtime NNTP account snapshot provider.</param>
@@ -105,11 +111,16 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <summary>
         /// Gets a value indicating whether mandatory control-plane startup initialization completed.
         /// </summary>
+        /// <value>
+        /// <see langword="true"/> after <see cref="InitializeControlPlaneAsync(CancellationToken)"/> completes the
+        /// initial snapshot reconciliation and startup barrier log point; otherwise <see langword="false"/>.
+        /// </value>
         internal bool IsStartupInitializationComplete { get; private set; }
 
         /// <summary>
         /// Returns the number of currently managed account runtimes.
         /// </summary>
+        /// <value>Thread-safe count of entries currently tracked in <see cref="_accountRuntimes"/>.</value>
         internal int ManagedAccountCount
         {
             get
@@ -471,8 +482,12 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Handles publish backbone usable capacity snapshot for control plane service.
+        /// Aggregates active-session counts by backbone and publishes the resulting usable-capacity snapshot.
         /// </summary>
+        /// <remarks>
+        /// Capacity is computed from currently managed runtimes under <see cref="_accountRuntimeGate"/> and then
+        /// published through <see cref="_backboneUsableCapacityStateWriter"/>.
+        /// </remarks>
         private void PublishBackboneUsableCapacitySnapshot()
         {
             Dictionary<string, int> capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
@@ -502,8 +517,12 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Handles retire rabbit mq capacity boundary async for control plane service.
+        /// Delegates RabbitMQ capacity retirement coordination for one account before NNTP capacity changes are applied.
         /// </summary>
+        /// <param name="accountId">Authoritative account identifier whose RabbitMQ capacity boundary is being retired.</param>
+        /// <param name="retainConnectionCount">Target connection count that must remain available after retirement.</param>
+        /// <param name="cancellationToken">Cancellation token controlling boundary-retirement work.</param>
+        /// <returns>A task representing the retirement-boundary operation.</returns>
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
             return _rabbitMqCapacityRetirementCoordinator
@@ -511,19 +530,20 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Holds the runtime state for one managed account session pool.
+        /// No-op usable-capacity writer used when no concrete capacity-state publisher is supplied.
         /// </summary>
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
             /// <summary>
-            /// Stores instance used by control plane service.
+            /// Singleton no-op writer instance used as the default fallback.
             /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
             /// <summary>
-            /// Handles publish snapshot for control plane service.
+            /// Validates the published snapshot argument and intentionally performs no persistence/output.
             /// </summary>
-            /// <param name="capacityByBackbone">The capacityByBackbone value.</param>
+            /// <param name="capacityByBackbone">Backbone capacity snapshot supplied by the control plane.</param>
+            /// <exception cref="ArgumentNullException"><paramref name="capacityByBackbone"/> is <see langword="null"/>.</exception>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);
@@ -540,11 +560,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
             /// <summary>
             /// Gets or sets the latest desired account state applied to the runtime.
             /// </summary>
+            /// <value>The most recently applied authoritative snapshot state for this account runtime.</value>
             internal NntpAccountSnapshot LastAppliedAccount { get; set; } = LastAppliedAccount;
 
             /// <summary>
             /// Returns the persistent session manager owned for this account runtime.
             /// </summary>
+            /// <value>Session-manager instance that executes acquisition work for this account.</value>
             internal NntpArticleExecutionSessionManager Manager { get; } = Manager;
         }
 
@@ -553,6 +575,10 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// </summary>
         /// <param name="logger">The logger receiving the startup entry.</param>
         /// <param name="currentTime">The current timestamp captured for the startup barrier completion.</param>
+        /// <remarks>
+        /// Source-generated logger method. Emits an <see cref="LogLevel.Information"/> event with id 999 and
+        /// structured field <c>CurrentTime</c> when information logging is enabled.
+        /// </remarks>
         [LoggerMessage(EventId = 999, Level = LogLevel.Information, Message = "Control plane startup initialization completed at: {CurrentTime}")]
         private static partial void LogControlPlaneStartupInitialized(ILogger logger, DateTimeOffset currentTime);
 
@@ -561,6 +587,10 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// </summary>
         /// <param name="logger">The logger receiving the heartbeat entry.</param>
         /// <param name="currentTime">The current timestamp captured for the heartbeat.</param>
+        /// <remarks>
+        /// Source-generated logger method. Emits a <see cref="LogLevel.Debug"/> event with id 1000 and structured
+        /// field <c>CurrentTime</c> when debug logging is enabled.
+        /// </remarks>
         [LoggerMessage(EventId = 1000, Level = LogLevel.Debug, Message = "Control plane running at: {CurrentTime}")]
         private static partial void LogControlPlaneRunning(ILogger logger, DateTimeOffset currentTime);
 
@@ -568,90 +598,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// Logs a periodic snapshot refresh failure.
         /// </summary>
         /// <param name="logger">The logger receiving the refresh-failure event.</param>
-        /// <param name="exception">Exception describing the refresh failure.</param>
+        /// <param name="exception">Exception instance recorded with the warning log entry.</param>
+        /// <remarks>
+        /// Source-generated logger method. Emits a <see cref="LogLevel.Warning"/> event with id 1001 and includes
+        /// <paramref name="exception"/> for exception-aware logging.
+        /// </remarks>
         [LoggerMessage(EventId = 1001, Level = LogLevel.Warning, Message = "Periodic NNTP account snapshot refresh failed")]
         private static partial void LogNntpAccountRefreshFailed(ILogger logger, Exception exception);
-
-        /// <summary>
-        /// Precompiled delegate for account reconciliation start diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, int, int, Exception?> LogAccountReconciliationStartedMessage =
-            LoggerMessage.Define<int, int>(
-                LogLevel.Information,
-                new EventId(1010, nameof(LogAccountReconciliationStarted)),
-                "Account reconciliation started: ServerId={ServerId}, DesiredAccounts={DesiredAccountCount}");
-
-        /// <summary>
-        /// Precompiled delegate for account reconciliation completion diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, int, int, Exception?> LogAccountReconciliationCompletedMessage =
-            LoggerMessage.Define<int, int>(
-                LogLevel.Information,
-                new EventId(1011, nameof(LogAccountReconciliationCompleted)),
-                "Account reconciliation completed: ServerId={ServerId}, DesiredAccounts={DesiredAccountCount}");
-
-        /// <summary>
-        /// Precompiled delegate for account-added diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, string, int, bool, int, int, Exception?> LogAccountAddedMessage =
-            LoggerMessage.Define<Guid, string, int, bool, int, int>(
-                LogLevel.Information,
-                new EventId(1012, nameof(LogAccountAdded)),
-                "Account added: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}, DesiredConnections={DesiredConnections}, ActiveConnections={ActiveConnections}");
-
-        /// <summary>
-        /// Precompiled delegate for account-add-failed diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, string, int, bool, Exception?> LogAccountAddFailedMessage =
-            LoggerMessage.Define<Guid, string, int, bool>(
-                LogLevel.Warning,
-                new EventId(1013, nameof(LogAccountAddFailed)),
-                "Account add failed: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}");
-
-        /// <summary>
-        /// Precompiled delegate for account-removed diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, string, int, bool, Exception?> LogAccountRemovedMessage =
-            LoggerMessage.Define<Guid, string, int, bool>(
-                LogLevel.Information,
-                new EventId(1014, nameof(LogAccountRemoved)),
-                "Account removed: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}");
-
-        /// <summary>
-        /// Precompiled delegate for account-removal-failed diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, Exception?> LogAccountRemovalFailedMessage =
-            LoggerMessage.Define<Guid>(
-                LogLevel.Warning,
-                new EventId(1015, nameof(LogAccountRemovalFailed)),
-                "Account remove failed: AccountId={AccountId}");
-
-        /// <summary>
-        /// Precompiled delegate for account-reconciled capacity diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, int, int, int, int, int, Exception?> LogAccountReconciledCapacityMessage =
-            LoggerMessage.Define<Guid, int, int, int, int, int>(
-                LogLevel.Information,
-                new EventId(1016, nameof(LogAccountReconciled)),
-                "Account reconciled capacity: AccountId={AccountId}, DesiredConnections={DesiredConnections}, ActiveBefore={ActiveBefore}, ActiveAfter={ActiveAfter}, AddedSessions={AddedSessions}, RetiredSessions={RetiredSessions}");
-
-        /// <summary>
-        /// Precompiled delegate for account-reconciled configuration diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, string, int, bool, bool, bool, Exception?> LogAccountReconciledConfigurationMessage =
-            LoggerMessage.Define<Guid, string, int, bool, bool, bool>(
-                LogLevel.Information,
-                new EventId(1018, nameof(LogAccountReconciledConfigurationMessage)),
-                "Account reconciled configuration: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}, KeepAliveUpdated={KeepAliveUpdated}, ConnectionSettingsReplaced={ConnectionSettingsReplaced}");
-
-        /// <summary>
-        /// Precompiled delegate for account-reconcile-failed diagnostics.
-        /// </summary>
-        private static readonly Action<ILogger, Guid, string, int, bool, Exception?> LogAccountReconcileFailedMessage =
-            LoggerMessage.Define<Guid, string, int, bool>(
-                LogLevel.Warning,
-                new EventId(1017, nameof(LogAccountReconcileFailed)),
-                "Account reconcile failed: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}");
 
         /// <summary>
         /// Logs account reconciliation cycle start.
@@ -659,10 +612,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="logger">Logger receiving reconciliation events.</param>
         /// <param name="serverId">Authoritative server identifier of the snapshot.</param>
         /// <param name="desiredAccountCount">Number of enabled desired accounts in the snapshot.</param>
-        private static void LogAccountReconciliationStarted(ILogger logger, int serverId, int desiredAccountCount)
-        {
-            LogAccountReconciliationStartedMessage(logger, serverId, desiredAccountCount, null);
-        }
+        [LoggerMessage(EventId = 1010, Level = LogLevel.Information, Message = "Account reconciliation started: ServerId={ServerId}, DesiredAccounts={DesiredAccountCount}")]
+        private static partial void LogAccountReconciliationStarted(ILogger logger, int serverId, int desiredAccountCount);
 
         /// <summary>
         /// Logs account reconciliation cycle completion.
@@ -670,10 +621,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="logger">Logger receiving reconciliation events.</param>
         /// <param name="serverId">Authoritative server identifier of the snapshot.</param>
         /// <param name="desiredAccountCount">Number of enabled desired accounts in the snapshot.</param>
-        private static void LogAccountReconciliationCompleted(ILogger logger, int serverId, int desiredAccountCount)
-        {
-            LogAccountReconciliationCompletedMessage(logger, serverId, desiredAccountCount, null);
-        }
+        [LoggerMessage(EventId = 1011, Level = LogLevel.Information, Message = "Account reconciliation completed: ServerId={ServerId}, DesiredAccounts={DesiredAccountCount}")]
+        private static partial void LogAccountReconciliationCompleted(ILogger logger, int serverId, int desiredAccountCount);
 
         /// <summary>
         /// Logs new account runtime creation.
@@ -685,10 +634,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="useSsl">Account SSL setting.</param>
         /// <param name="desiredConnections">Desired configured connections.</param>
         /// <param name="activeConnections">Successfully active persistent sessions.</param>
-        private static void LogAccountAdded(ILogger logger, Guid accountId, string host, int port, bool useSsl, int desiredConnections, int activeConnections)
-        {
-            LogAccountAddedMessage(logger, accountId, host, port, useSsl, desiredConnections, activeConnections, null);
-        }
+        [LoggerMessage(EventId = 1012, Level = LogLevel.Information, Message = "Account added: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}, DesiredConnections={DesiredConnections}, ActiveConnections={ActiveConnections}")]
+        private static partial void LogAccountAdded(ILogger logger, Guid accountId, string host, int port, bool useSsl, int desiredConnections, int activeConnections);
 
         /// <summary>
         /// Logs account runtime add failure.
@@ -699,10 +646,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="port">Account port.</param>
         /// <param name="useSsl">Account SSL setting.</param>
         /// <param name="exception">Failure exception.</param>
-        private static void LogAccountAddFailed(ILogger logger, Guid accountId, string host, int port, bool useSsl, Exception exception)
-        {
-            LogAccountAddFailedMessage(logger, accountId, host, port, useSsl, exception);
-        }
+        [LoggerMessage(EventId = 1013, Level = LogLevel.Warning, Message = "Account add failed: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}")]
+        private static partial void LogAccountAddFailed(ILogger logger, Guid accountId, string host, int port, bool useSsl, Exception exception);
 
         /// <summary>
         /// Logs account runtime removal.
@@ -712,10 +657,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="host">Account host.</param>
         /// <param name="port">Account port.</param>
         /// <param name="useSsl">Account SSL setting.</param>
-        private static void LogAccountRemoved(ILogger logger, Guid accountId, string host, int port, bool useSsl)
-        {
-            LogAccountRemovedMessage(logger, accountId, host, port, useSsl, null);
-        }
+        [LoggerMessage(EventId = 1014, Level = LogLevel.Information, Message = "Account removed: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}")]
+        private static partial void LogAccountRemoved(ILogger logger, Guid accountId, string host, int port, bool useSsl);
 
         /// <summary>
         /// Logs account runtime removal failure.
@@ -723,10 +666,34 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="logger">Logger receiving account lifecycle events.</param>
         /// <param name="accountId">Account identifier.</param>
         /// <param name="exception">Failure exception.</param>
-        private static void LogAccountRemovalFailed(ILogger logger, Guid accountId, Exception exception)
-        {
-            LogAccountRemovalFailedMessage(logger, accountId, exception);
-        }
+        [LoggerMessage(EventId = 1015, Level = LogLevel.Warning, Message = "Account remove failed: AccountId={AccountId}")]
+        private static partial void LogAccountRemovalFailed(ILogger logger, Guid accountId, Exception exception);
+
+        /// <summary>
+        /// Logs account reconcile capacity outcome.
+        /// </summary>
+        /// <param name="logger">Logger receiving account reconcile events.</param>
+        /// <param name="accountId">Account identifier.</param>
+        /// <param name="desiredConnections">Desired session count.</param>
+        /// <param name="activeBefore">Active session count before reconcile.</param>
+        /// <param name="activeAfter">Active session count after reconcile.</param>
+        /// <param name="addedSessions">Sessions added in reconcile pass.</param>
+        /// <param name="retiredSessions">Sessions retired in reconcile pass.</param>
+        [LoggerMessage(EventId = 1016, Level = LogLevel.Information, Message = "Account reconciled capacity: AccountId={AccountId}, DesiredConnections={DesiredConnections}, ActiveBefore={ActiveBefore}, ActiveAfter={ActiveAfter}, AddedSessions={AddedSessions}, RetiredSessions={RetiredSessions}")]
+        private static partial void LogAccountReconciled(ILogger logger, Guid accountId, int desiredConnections, int activeBefore, int activeAfter, int addedSessions, int retiredSessions);
+
+        /// <summary>
+        /// Logs account reconcile configuration outcome.
+        /// </summary>
+        /// <param name="logger">Logger receiving account reconcile events.</param>
+        /// <param name="accountId">Account identifier.</param>
+        /// <param name="host">Account host.</param>
+        /// <param name="port">Account port.</param>
+        /// <param name="useSsl">Account SSL setting.</param>
+        /// <param name="keepAliveUpdated">Whether keepalive was updated in place.</param>
+        /// <param name="connectionSettingsReplaced">Whether connection settings required session replacement.</param>
+        [LoggerMessage(EventId = 1018, Level = LogLevel.Information, Message = "Account reconciled configuration: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}, KeepAliveUpdated={KeepAliveUpdated}, ConnectionSettingsReplaced={ConnectionSettingsReplaced}")]
+        private static partial void LogAccountReconciledConfigurationMessage(ILogger logger, Guid accountId, string host, int port, bool useSsl, bool keepAliveUpdated, bool connectionSettingsReplaced);
 
         /// <summary>
         /// Logs account reconcile outcome.
@@ -745,8 +712,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="connectionSettingsReplaced">Whether connection settings required session replacement.</param>
         private static void LogAccountReconciled(ILogger logger, Guid accountId, string host, int port, bool useSsl, int desiredConnections, int activeBefore, int activeAfter, int addedSessions, int retiredSessions, bool keepAliveUpdated, bool connectionSettingsReplaced)
         {
-            LogAccountReconciledCapacityMessage(logger, accountId, desiredConnections, activeBefore, activeAfter, addedSessions, retiredSessions, null);
-            LogAccountReconciledConfigurationMessage(logger, accountId, host, port, useSsl, keepAliveUpdated, connectionSettingsReplaced, null);
+            LogAccountReconciled(logger, accountId, desiredConnections, activeBefore, activeAfter, addedSessions, retiredSessions);
+            LogAccountReconciledConfigurationMessage(logger, accountId, host, port, useSsl, keepAliveUpdated, connectionSettingsReplaced);
         }
 
         /// <summary>
@@ -758,9 +725,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="port">Account port.</param>
         /// <param name="useSsl">Account SSL setting.</param>
         /// <param name="exception">Failure exception.</param>
-        private static void LogAccountReconcileFailed(ILogger logger, Guid accountId, string host, int port, bool useSsl, Exception exception)
-        {
-            LogAccountReconcileFailedMessage(logger, accountId, host, port, useSsl, exception);
-        }
+        [LoggerMessage(EventId = 1017, Level = LogLevel.Warning, Message = "Account reconcile failed: AccountId={AccountId}, Hostname={Host}, Port={Port}, SSL={UseSsl}")]
+        private static partial void LogAccountReconcileFailed(ILogger logger, Guid accountId, string host, int port, bool useSsl, Exception exception);
     }
 }

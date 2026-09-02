@@ -8,8 +8,12 @@
 namespace VectorNNTP.Backfiller.Runtime.Accounts
 {
     /// <summary>
-    /// Immutable runtime NNTP account snapshot for one configured account row.
+    /// Immutable runtime NNTP account snapshot for one authoritative provider-account entry.
     /// </summary>
+    /// <remarks>
+    /// Instances represent the normalized account view projected by the snapshot provider and consumed by
+    /// session-management reconciliation paths.
+    /// </remarks>
     /// <param name="EntryId">Stable account entry identifier.</param>
     /// <param name="Backbone">Configured backbone enum value from database.</param>
     /// <param name="Hostname">NNTP provider hostname.</param>
@@ -33,8 +37,12 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         bool UseSsl);
 
     /// <summary>
-    /// Immutable runtime account snapshot state published atomically by provider.
+    /// Immutable runtime snapshot envelope published atomically by the account snapshot provider.
     /// </summary>
+    /// <remarks>
+    /// The envelope couples server identity with the full account set used by control-plane and acquisition
+    /// components so consumers can swap to a coherent snapshot in one read.
+    /// </remarks>
     /// <param name="ServerId">Server identifier the snapshot was loaded for.</param>
     /// <param name="Accounts">Read-only account collection.</param>
     internal sealed record NntpAccountSnapshotState(
@@ -42,9 +50,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         IReadOnlyList<NntpAccountSnapshot> Accounts)
     {
         /// <summary>
-        /// Empty account snapshot for a specific server id.
+        /// Creates an empty snapshot state for one server identifier.
         /// </summary>
-        /// <param name="serverId">Server identifier.</param>
+        /// <param name="serverId">Server identifier used to stamp the empty snapshot envelope.</param>
         /// <returns>Empty immutable snapshot state.</returns>
         internal static NntpAccountSnapshotState Empty(byte serverId)
         {

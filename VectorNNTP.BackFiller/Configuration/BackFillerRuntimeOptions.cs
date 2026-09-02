@@ -12,6 +12,10 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <summary>
     /// Immutable runtime configuration snapshot produced after successful startup validation.
     /// </summary>
+    /// <remarks>
+    /// This snapshot is created once during startup projection and then consumed by hosted runtime components as the
+    /// authoritative operational configuration contract.
+    /// </remarks>
     /// <param name="CanonicalBackFillerFqdn">Canonical BackFiller FQDN derived from validated identity inputs.</param>
     /// <param name="BackFillerId">Authoritative BackFiller server identifier derived from validated configuration.</param>
     /// <param name="CanonicalDnsSuffix">Canonical DNS suffix derived from validated configuration.</param>
@@ -71,42 +75,45 @@ namespace VectorNNTP.Backfiller.Configuration
         RabbitMqRuntimeOptions? RabbitMq = null)
     {
         /// <summary>
-        /// Returns the effective reconnect initialization timeout.
+        /// Gets the effective reconnect initialization timeout.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>Configured reconnect initialization timeout, or a default of 2 seconds when not specified.</value>
         internal TimeSpan EffectiveTransitReconnectInitializationTimeout => TransitReconnectInitializationTimeout ?? TimeSpan.FromSeconds(2);
 
         /// <summary>
-        /// Returns the effective transit shutdown drain grace period.
+        /// Gets the effective transit shutdown drain grace period.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>Configured drain grace period, or a default of 5 minutes when not specified.</value>
         internal TimeSpan EffectiveTransitShutdownDrainGracePeriod => TransitShutdownDrainGracePeriod ?? TimeSpan.FromMinutes(5);
 
         /// <summary>
-        /// Returns the effective transit shutdown inactivity watchdog duration.
+        /// Gets the effective transit shutdown inactivity watchdog duration.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>Configured inactivity watchdog duration, or a default of 30 seconds when not specified.</value>
         internal TimeSpan EffectiveTransitShutdownDrainInactivityWatchdog => TransitShutdownDrainInactivityWatchdog ?? TimeSpan.FromSeconds(30);
 
         /// <summary>
-        /// Returns the effective absolute transit shutdown maximum duration.
+        /// Gets the effective absolute transit shutdown maximum duration.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>Configured absolute shutdown ceiling, or a default of 30 minutes when not specified.</value>
         internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
 
         /// <summary>
-        /// Returns the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
+        /// Gets the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
         /// </summary>
+        /// <value>Validated canonical bind addresses used by listener and DNS projection logic.</value>
         internal IReadOnlyList<IPAddress> EffectiveCanonicalBindAddresses => CanonicalBindAddresses ?? [];
 
         /// <summary>
         /// Gets configured bind-address tokens, or an empty set when omitted.
         /// </summary>
+        /// <value>Original configured bind-address tokens preserved for runtime consumers that need token-level semantics.</value>
         internal IReadOnlyList<string> EffectiveConfiguredBindAddressTokens => ConfiguredBindAddressTokens ?? [];
 
         /// <summary>
         /// Gets validated ACME runtime options when Let's Encrypt is enabled.
         /// </summary>
+        /// <value>Validated ACME runtime options required by certificate-management flows.</value>
         /// <exception cref="InvalidOperationException">Thrown when ACME runtime options are not available.</exception>
         internal BackFillerLetsEncryptRuntimeOptions EffectiveLetsEncrypt => LetsEncrypt
             ?? throw new InvalidOperationException("BackFiller runtime options do not include Let's Encrypt settings.");

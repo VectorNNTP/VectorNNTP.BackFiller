@@ -10,27 +10,41 @@ using Serilog;
 namespace VectorNNTP.Backfiller.Startup
 {
     /// <summary>
-    /// Owns immutable build and process metadata creation, exposure, logging, and DI registration.
+    /// Coordinates creation, caching, and startup-time presentation of the process <see cref="BuildInfo"/> snapshot.
     /// </summary>
+    /// <remarks>
+    /// This bootstrap helper captures one <see cref="BuildInfo"/> instance from the current executable and startup timestamp,
+    /// then reuses that cached snapshot for startup logs and command output.
+    /// The type itself is static and is called directly from startup/command flows rather than being resolved through DI.
+    /// </remarks>
     internal static class BuildInfoService
     {
         /// <summary>
-        /// Stores build info used by build info service.
+        /// Cached build-info snapshot established during startup initialization.
         /// </summary>
+        /// <remarks>
+        /// This field is populated by <see cref="InitializeBuildInfo(DateTimeOffset)"/> and reused by subsequent
+        /// logging/command helpers to avoid recomputing assembly metadata during the same process lifetime.
+        /// </remarks>
         private static BuildInfo? _buildInfo;
 
         /// <summary>
-        /// Initializes build information with an explicit process start timestamp.
+        /// Creates and caches the process build-info snapshot used by startup logs and version-reporting commands.
         /// </summary>
-        /// <param name="processStartedAt">The process start timestamp (UTC).</param>
+        /// <param name="processStartedAt">Process start timestamp passed through to <see cref="BuildInfo.Create(DateTimeOffset)"/>.</param>
+        /// <exception cref="ArgumentException">Propagated when <paramref name="processStartedAt"/> is the default timestamp.</exception>
+        /// <remarks>
+        /// The most recent invocation replaces the cached snapshot for the current process.
+        /// </remarks>
         internal static void InitializeBuildInfo(DateTimeOffset processStartedAt)
         {
             _buildInfo = BuildInfo.Create(processStartedAt);
         }
 
         /// <summary>
-        /// Logs build information at startup for operational visibility.
+        /// Emits startup log entries for compact version, commit/build provenance, and runtime framework identity.
         /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when build info has not been initialized for the process.</exception>
         internal static void LogBuildInfo()
         {
             BuildInfo currentBuildInfo = GetBuildInfo();
@@ -41,9 +55,12 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Logs effective non-secret configuration fingerprint for deployment comparison.
+        /// Logs a non-secret configuration fingerprint to support deployment/configuration drift comparison.
         /// </summary>
-        /// <param name="configuration">Fully loaded and merged configuration.</param>
+        /// <param name="configuration">Fully loaded merged configuration used to compute a redacted fingerprint.</param>
+        /// <remarks>
+        /// Fingerprint calculation failures are downgraded to a warning and do not block startup.
+        /// </remarks>
         internal static void LogConfigurationFingerprint(IConfiguration configuration)
         {
             try
@@ -59,18 +76,20 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Returns the full version string suitable for console display.
+        /// Returns the multi-line diagnostic version summary used by version/diagnostics command output.
         /// </summary>
-        /// <returns>The full version string.</returns>
+        /// <returns>The formatted version summary generated from the cached <see cref="BuildInfo"/> snapshot.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when build info has not been initialized for the process.</exception>
         internal static string GetFullVersionString()
         {
             return GetBuildInfo().GetVersionString();
         }
 
         /// <summary>
-        /// Returns the initialized build information snapshot.
+        /// Returns the cached build-info snapshot for the current process.
         /// </summary>
-        /// <returns>The current build information snapshot.</returns>
+        /// <returns>The initialized <see cref="BuildInfo"/> instance.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when startup has not initialized build info yet.</exception>
         private static BuildInfo GetBuildInfo()
         {
             return _buildInfo is null

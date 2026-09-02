@@ -10,45 +10,31 @@ using Serilog;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines database dependency probe and its database dependency probe contract.
+    /// Performs startup-time GrabberDB connectivity probing and translates provider/network failures into sanitized dependency-validation diagnostics.
     /// </summary>
+    /// <remarks>
+    /// The probe contributes one dependency-validation slice to the startup dependency pipeline. It emits structured
+    /// informational/debug logs for operator diagnostics and returns failures through <see cref="DependencyValidationResult"/>
+    /// so callers can aggregate database outcomes with other dependency checks before making startup decisions.
+    /// </remarks>
     internal static class DatabaseDependencyProbe
     {
         /// <summary>
-        /// Validates MySQL database connectivity by attempting to establish a test connection.
+        /// Probes GrabberDB by opening a MySQL connection and executing <c>SELECT 1</c> within the configured timeout budget.
         /// </summary>
+        /// <param name="configuration">Configuration root used to resolve the <c>ConnectionStrings:GrabberDB</c> value.</param>
+        /// <param name="timeout">Per-probe timeout applied to both connection open and test-query execution.</param>
+        /// <param name="cancellationToken">Startup cancellation token propagated to database I/O operations.</param>
+        /// <returns>
+        /// A task that completes with a <see cref="DependencyValidationResult"/> containing sanitized GrabberDB failure
+        /// diagnostics. Successful probes return no failures and emit an informational structured log with server/database identity.
+        /// </returns>
+        /// <exception cref="OperationCanceledException">The outer <paramref name="cancellationToken"/> is canceled.</exception>
         /// <remarks>
-        /// <para><b>Runtime MySQL Validation:</b> This method performs actual connectivity testing using
-        /// MySqlConnector to detect issues that static validation cannot catch:</para>
-        /// <list type="bullet">
-        /// <item><description>Invalid credentials (wrong username/password or expired token)</description></item>
-        /// <item><description>MySQL server unreachable (network, firewall, or server down)</description></item>
-        /// <item><description>Unsupported authentication plugin (e.g., caching_sha2_password issues)</description></item>
-        /// <item><description>Database doesn't exist or is inaccessible</description></item>
-        /// <item><description>Permission denied (user lacks necessary privileges)</description></item>
-        /// <item><description>TLS/SSL configuration failures</description></item>
-        /// <item><description>Incompatible MySQL server version or protocol mismatch</description></item>
-        /// <item><description>Wrong port or connection refused</description></item>
-        /// </list>
-        /// 
-        /// <para><b>Implementation:</b> Creates MySqlConnection, calls OpenAsync(), and executes a test query (SELECT 1)
-        /// to verify both connectivity and basic database permissions.</para>
-        /// 
-        /// <para><b>Control-Plane Only:</b> This validation runs ONCE during startup, not in the article retrieval path.
-        /// Temporary database outages after startup MUST NOT interrupt active article retrieval.</para>
-        /// 
-        /// <para>Per specification 3.15.1: "The application SHOULD establish a test connection during
-        /// startup to verify that the configured database is reachable and that the supplied credentials
-        /// are valid."</para>
-        /// 
-        /// <para>Failure to establish the initial database connection SHALL prevent startup if the database
-        /// is considered a mandatory dependency for the initial operating state.</para>
+        /// <para>Connectivity is validated at runtime (not just syntactically) by opening a real provider connection and executing a test query.</para>
+        /// <para>Known provider error numbers are mapped via <see cref="GetSanitizedMySqlConnectionFailureReason(int)"/> to avoid leaking environment details.</para>
+        /// <para>Unexpected exceptions are logged at debug level and converted to a generic dependency failure so startup can continue aggregating diagnostics.</para>
         /// </remarks>
-        /// <param name="configuration">The configuration value.</param>
-        /// <param name="timeout">The timeout value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateDatabaseConnectivityAsync(
             IConfiguration configuration,
             TimeSpan timeout,
@@ -80,47 +66,41 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(timeout);
 
-#pragma warning disable CA2007 // Do not directly await a Task - await using declarations do not support ConfigureAwait
-                await using MySqlConnection connection = new(connectionString);
-#pragma warning restore CA2007
+                MySqlConnection connection = new(connectionString);
+                await using (connection.ConfigureAwait(false))
+                {
+                    Log.Debug("Validating GrabberDB connectivity: attempting to open connection (timeout: {Timeout})", timeout);
 
-                Log.Debug("Validating GrabberDB connectivity: attempting to open connection (timeout: {Timeout})", timeout);
+                    // OpenAsync() validates:
+                    // - Network connectivity to MySQL server (host:port)
+                    // - TLS/SSL handshake (if SslMode is configured)
+                    // - MySQL protocol handshake and version compatibility
+                    // - Authentication (username/password or token via ProvidePasswordCallback)
+                    await connection.OpenAsync(cts.Token).ConfigureAwait(false);
 
-                // OpenAsync() validates:
-                // - Network connectivity to MySQL server (host:port)
-                // - TLS/SSL handshake (if SslMode is configured)
-                // - MySQL protocol handshake and version compatibility
-                // - Authentication (username/password or token via ProvidePasswordCallback)
-                await connection.OpenAsync(cts.Token).ConfigureAwait(false);
+                    // Execute test query to verify database accessibility and permissions
+                    // This catches issues like:
+                    // - Database doesn't exist (MySQL error 1049)
+                    // - User lacks SELECT permission (MySQL error 1142)
+                    // - Database is in read-only mode or otherwise inaccessible
+                    MySqlCommand cmd = connection.CreateCommand();
+                    await using (cmd.ConfigureAwait(false))
+                    {
+                        cmd.CommandText = "SELECT 1";
+                        double timeoutSeconds = timeout.TotalSeconds;
+                        int commandTimeoutSeconds = timeoutSeconds <= 0
+                            ? 1
+                            : timeoutSeconds >= int.MaxValue
+                                ? int.MaxValue
+                                : (int)Math.Ceiling(timeoutSeconds);
+                        cmd.CommandTimeout = commandTimeoutSeconds;
+                        _ = await cmd.ExecuteScalarAsync(cts.Token).ConfigureAwait(false);
+                    }
 
-                // Execute test query to verify database accessibility and permissions
-                // This catches issues like:
-                // - Database doesn't exist (MySQL error 1049)
-                // - User lacks SELECT permission (MySQL error 1142)
-                // - Database is in read-only mode or otherwise inaccessible
-#pragma warning disable CA2007 // Do not directly await a Task - await using declarations do not support ConfigureAwait
-                await using MySqlCommand cmd = connection.CreateCommand();
-#pragma warning restore CA2007
-                cmd.CommandText = "SELECT 1";
-                double timeoutSeconds = timeout.TotalSeconds;
-                int commandTimeoutSeconds = timeoutSeconds <= 0
-                    ? 1
-                    : timeoutSeconds >= int.MaxValue
-                        ? int.MaxValue
-                        : (int)Math.Ceiling(timeoutSeconds);
-                cmd.CommandTimeout = commandTimeoutSeconds;
-                _ = await cmd.ExecuteScalarAsync(cts.Token).ConfigureAwait(false);
-
-                Log.Information("GrabberDB connectivity validated successfully (Server: {Server}, Database: {Database})",
-                    connection.DataSource,
-                    connection.Database);
-
-                // Connection and query successful:
-                // ✅ MySQL server is reachable
-                // ✅ Credentials are valid
-                // ✅ Database exists and is accessible
-                // ✅ User has basic query permissions
-                // ✅ Network, TLS, and authentication are working correctly
+                    Log.Information("GrabberDB connectivity validated successfully (Server: {Server}, Database: {Database})",
+                        connection.DataSource,
+                        connection.Database);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -150,10 +130,14 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Maps MySQL provider error codes to sanitized, user-safe startup diagnostics.
+        /// Maps MySQL provider error codes to sanitized startup diagnostic text.
         /// </summary>
-        /// <param name="mySqlErrorNumber">MySQL provider error number.</param>
-        /// <returns>Sanitized failure reason without provider-supplied environment details.</returns>
+        /// <param name="mySqlErrorNumber">MySqlConnector provider error number from a failed connection/query operation.</param>
+        /// <returns>A user-safe reason string suitable for inclusion in dependency-validation failure messages.</returns>
+        /// <remarks>
+        /// Unknown error numbers intentionally collapse to a generic message to preserve diagnostic usefulness without
+        /// surfacing provider-specific environment detail in startup output.
+        /// </remarks>
         internal static string GetSanitizedMySqlConnectionFailureReason(int mySqlErrorNumber)
         {
             return mySqlErrorNumber switch

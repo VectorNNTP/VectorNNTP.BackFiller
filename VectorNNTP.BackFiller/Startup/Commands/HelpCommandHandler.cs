@@ -8,14 +8,19 @@
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Owns the help operational command behavior.
+    /// Handles the <c>--help</c> operational command by emitting usage guidance and exit-code semantics.
     /// </summary>
+    /// <remarks>
+    /// This command is informational only and does not perform configuration validation or startup dependency checks.
+    /// It writes static help text to standard output and leaves validation/error logging responsibilities to other
+    /// command paths.
+    /// </remarks>
     internal static class HelpCommandHandler
     {
         /// <summary>
-        /// Displays command-line help.
+        /// Writes the built-in command reference, examples, deployment usage notes, and exit-code table to standard output.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns><see cref="ExitCodePolicy.ExitCodeNormalShutdown"/> after the help payload is emitted.</returns>
         internal static int Handle()
         {
             Console.WriteLine(@"

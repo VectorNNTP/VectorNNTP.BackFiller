@@ -16,23 +16,31 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines cloudflare dependency probe and its cloudflare dependency probe contract.
+    /// Executes startup Cloudflare zone validation and converts API/provider outcomes into sanitized dependency diagnostics.
     /// </summary>
+    /// <remarks>
+    /// This probe validates that configured zone identity is reachable and consistent with BackFiller DNS identity settings.
+    /// It reports outcomes via <see cref="DependencyValidationResult"/> for aggregation by the dependency runner rather than
+    /// deciding startup exit behavior directly.
+    /// </remarks>
     internal static class CloudflareDependencyProbe
     {
         /// <summary>
-        /// Validates Cloudflare zone accessibility and DNS-suffix consistency.
+        /// Validates Cloudflare zone reachability, active status, and DNS-suffix consistency for startup dependency checks.
         /// </summary>
         /// <remarks>
-        /// <para>Performs a control-plane validation against Cloudflare using the configured API token and zone ID.</para>
-        /// <para>The configured <c>BackFiller:DnsSuffix</c> must match the zone name returned by Cloudflare for the configured zone ID.</para>
-        /// <para>Token values are never logged or returned in diagnostics.</para>
+        /// <para>Performs a control-plane API call using the configured Cloudflare token and zone identifier.</para>
+        /// <para>The configured <c>BackFiller:DnsSuffix</c> must canonicalize to the same name as the resolved Cloudflare zone.</para>
+        /// <para>Token values are intentionally excluded from logs and returned diagnostics.</para>
         /// </remarks>
-        /// <param name="backFiller">The backFiller value.</param>
-        /// <param name="timeout">The timeout value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
+        /// <param name="backFiller">Validated BackFiller options that carry DNS suffix and optional Cloudflare zone/token settings.</param>
+        /// <param name="timeout">Maximum duration allowed for Cloudflare zone verification.</param>
+        /// <param name="cancellationToken">Startup cancellation token propagated to Cloudflare API calls.</param>
+        /// <returns>
+        /// A task that completes with a <see cref="DependencyValidationResult"/>. Missing Cloudflare settings produce an
+        /// empty result, and verification failures are returned as sanitized <c>CloudflareZone</c> dependency failures.
+        /// </returns>
+        /// <exception cref="OperationCanceledException">The outer <paramref name="cancellationToken"/> is canceled.</exception>
         internal static async Task<DependencyValidationResult> ValidateCloudflareZoneDependencyAsync(
             BackFillerOptions? backFiller,
             TimeSpan timeout,
@@ -114,10 +122,14 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Maps Cloudflare API unsuccessful-response diagnostics to sanitized, controlled categories.
+        /// Maps Cloudflare API error payload text to bounded sanitized startup-diagnostic categories.
         /// </summary>
         /// <param name="providerMessages">Provider-reported Cloudflare error messages.</param>
-        /// <returns>Sanitized failure reason suitable for startup diagnostics.</returns>
+        /// <returns>A controlled failure reason suitable for dependency-validation output.</returns>
+        /// <remarks>
+        /// Message content is normalized and pattern-matched into authentication, authorization, zone-not-found,
+        /// or generic API-request-failed categories.
+        /// </remarks>
         private static string GetSanitizedCloudflareApiFailureReason(IEnumerable<string> providerMessages)
         {
             ArgumentNullException.ThrowIfNull(providerMessages);
@@ -142,10 +154,14 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Maps Cloudflare transport/provider exceptions to sanitized, controlled categories.
+        /// Maps Cloudflare transport/provider exceptions to bounded sanitized failure categories.
         /// </summary>
-        /// <param name="ex">Exception thrown during Cloudflare dependency validation.</param>
-        /// <returns>Sanitized failure reason suitable for startup diagnostics.</returns>
+        /// <param name="ex">Exception observed during Cloudflare dependency validation.</param>
+        /// <returns>A controlled failure reason suitable for dependency-validation output.</returns>
+        /// <remarks>
+        /// HTTP transport exceptions map directly to generic API-failure diagnostics; other exception messages are
+        /// normalized and categorized using the same authentication/authorization/zone-not-found policy.
+        /// </remarks>
         private static string GetSanitizedCloudflareExceptionFailureReason(Exception ex)
         {
             ArgumentNullException.ThrowIfNull(ex);

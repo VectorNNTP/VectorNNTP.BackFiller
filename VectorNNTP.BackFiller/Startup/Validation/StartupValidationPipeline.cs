@@ -11,27 +11,31 @@ using VectorNNTP.Backfiller.Startup.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Owns the canonical startup validation sequence and aggregates configuration validation, canonicalization, and dependency validation into one startup outcome.
+    /// Orchestrates startup validation by running configuration checks, optional runtime-option snapshot creation, and dependency probes in canonical order.
     /// </summary>
+    /// <remarks>
+    /// The pipeline returns aggregated result snapshots instead of logging or setting exit codes directly.
+    /// Startup callers use those results to decide whether to continue initialization or terminate with a failure code.
+    /// </remarks>
     internal class StartupValidationPipeline
     {
         /// <summary>
-        /// Validates configuration and dependencies.
+        /// Runs startup configuration validation and conditional dependency validation, returning both aggregated outcomes.
         /// </summary>
+        /// <param name="configuration">Application configuration root to validate.</param>
+        /// <param name="dependencyTimeout">Maximum duration allowed for each dependency probe operation.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts validation before or during dependency checks.</param>
+        /// <returns>
+        /// A task that completes with a tuple containing configuration and dependency validation snapshots.
+        /// Dependency validation is skipped when configuration is invalid.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="configuration"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="dependencyTimeout"/> is less than or equal to <see cref="TimeSpan.Zero"/>.</exception>
+        /// <exception cref="OperationCanceledException">The operation is canceled via <paramref name="cancellationToken"/>.</exception>
         /// <remarks>
-        /// <para>Validates configuration settings for correctness and completeness:</para>
-        /// <list type="bullet">
-        /// <item><description>ConnectionStrings:GrabberDB - control-plane database connection</description></item>
-        /// <item><description>BackFiller:BindAddress - optional explicit local or wildcard IP addresses for TCP listeners</description></item>
-        /// <item><description>BackFiller:BindPort - TCP port for incoming connections</description></item>
-        /// </list>
-        /// <para>All configuration validation errors are collected before reporting.</para>
-        /// <para>External dependency validation is executed only when configuration is structurally valid.</para>
-        /// <para>Configuration errors always block startup.</para>
+        /// This overload delegates to <see cref="ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(IConfiguration, TimeSpan, CancellationToken)"/>
+        /// and intentionally discards the runtime-options snapshot.
         /// </remarks>
-        /// <param name="ConfigurationValidationResult">The ConfigurationValidationResult value.</param>
-        /// <param name="DependencyValidationResult">The DependencyValidationResult value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
         internal static async Task<(ConfigurationValidationResult, DependencyValidationResult)> ValidateConfigurationAndDependenciesAsync(
             IConfiguration configuration,
             TimeSpan dependencyTimeout,
@@ -47,15 +51,25 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Validates startup configuration/dependencies and builds an immutable runtime options snapshot.
+        /// Validates startup configuration, builds a runtime-options snapshot when configuration is valid, and then runs dependency probes.
         /// </summary>
         /// <param name="configuration">Application configuration root.</param>
-        /// <param name="dependencyTimeout">Maximum timeout per dependency validation operation.</param>
+        /// <param name="dependencyTimeout">Maximum duration allowed for each dependency probe operation.</param>
         /// <param name="cancellationToken">Startup cancellation token.</param>
-        /// <returns>Validation results and immutable runtime options when configuration is valid.</returns>
-        /// <param name="ConfigurationValidationResult">The ConfigurationValidationResult value.</param>
-        /// <param name="DependencyValidationResult">The DependencyValidationResult value.</param>
-        /// <param name="RuntimeOptions">The RuntimeOptions value.</param>
+        /// <returns>
+        /// A task that completes with a tuple containing:
+        /// configuration validation results,
+        /// dependency validation results,
+        /// and a runtime-options snapshot that is non-null only when configuration validation succeeded and snapshot construction completed.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="configuration"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="dependencyTimeout"/> is less than or equal to <see cref="TimeSpan.Zero"/>.</exception>
+        /// <exception cref="OperationCanceledException">The operation is canceled via <paramref name="cancellationToken"/>.</exception>
+        /// <remarks>
+        /// Configuration errors are accumulated before result creation. Dependency validation executes only when
+        /// <see cref="ConfigurationValidationResult.IsValid"/> is <see langword="true"/> and a runtime snapshot exists;
+        /// otherwise <see cref="DependencyValidationResult.Success()"/> is returned as the dependency result.
+        /// </remarks>
         internal static async Task<(ConfigurationValidationResult ConfigurationValidationResult, DependencyValidationResult DependencyValidationResult, BackFillerRuntimeOptions? RuntimeOptions)> ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
             IConfiguration configuration,
             TimeSpan dependencyTimeout,

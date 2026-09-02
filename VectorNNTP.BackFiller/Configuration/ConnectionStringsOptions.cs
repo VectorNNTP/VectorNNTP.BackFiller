@@ -46,8 +46,11 @@ namespace VectorNNTP.Backfiller.Configuration
     }
 
     /// <summary>
-    /// Result of connection string validation.
+    /// Represents one connection-string validation diagnostic emitted by <see cref="ConnectionStringValidator"/>.
     /// </summary>
+    /// <param name="Setting">Configuration setting key associated with the diagnostic.</param>
+    /// <param name="Message">Human-readable diagnostic message for operators and startup validation output.</param>
+    /// <param name="Severity">Diagnostic severity that determines whether startup can continue.</param>
     internal record ConnectionStringValidationResult(
         string Setting,
         string Message,
@@ -71,6 +74,10 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <summary>
         /// Gets or sets the connection string for the VectorNNTP.Grabber control-plane database.
         /// </summary>
+        /// <value>
+        /// Control-plane MySQL connection string bound from <c>ConnectionStrings:GrabberDB</c> and validated by
+        /// <see cref="ConnectionStringValidator"/>.
+        /// </value>
         /// <remarks>
         /// <para>This connection is expected to have low utilization compared to Usenet provider connections.
         /// Operations should be infrequent, asynchronous, and isolated from the article retrieval pipeline.</para>
@@ -101,9 +108,8 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         /// <param name="connectionString">The connection string to validate.</param>
         /// <param name="settingName">The configuration setting name (for diagnostic messages).</param>
-        /// <returns>List of validation diagnostics (errors and warnings). Empty if valid with no warnings.</returns>
+        /// <returns>List of validation diagnostics (errors and warnings). Empty when validation succeeds without warnings.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingName"/> is null, empty, or whitespace.</exception>
-        /// <typeparam name="ConnectionStringValidationResult">The ConnectionStringValidationResult type parameter.</typeparam>
         public static List<ConnectionStringValidationResult> Validate(string? connectionString, string settingName)
         {
             // Validate settingName parameter (used in all diagnostic messages)
@@ -290,6 +296,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <summary>
         /// Validates connection pooling configuration for control-plane database usage.
         /// </summary>
+        /// <param name="connectionString">Connection string whose pool-size settings are evaluated.</param>
+        /// <param name="settingName">Setting name used when reporting warning diagnostics.</param>
+        /// <param name="diagnostics">Collector receiving emitted warning diagnostics.</param>
         /// <remarks>
         /// <para>GrabberDB is a control-plane database with low utilization. Large connection pools are inappropriate.</para>
         /// <para>Emits warnings (not errors) if Min Pool Size > 1 or Max Pool Size > 10.</para>

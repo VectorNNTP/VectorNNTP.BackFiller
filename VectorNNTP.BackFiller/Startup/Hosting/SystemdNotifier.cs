@@ -29,49 +29,46 @@ using System.Runtime.InteropServices;
 namespace VectorNNTP.Backfiller.Startup.Hosting
 {
     /// <summary>
-    /// Systemd notification helpers for service lifecycle signaling.
+    /// Provides application-side sd_notify signaling for READY, STOPPING, and throttled STATUS lifecycle updates.
     /// </summary>
     /// <remarks>
-    /// <para><b>Purpose:</b> Provide the application-side bridge for systemd notifications
-    /// (READY/STOPPING/STATUS) during Linux service operation.</para>
-    ///
-    /// <para><b>Usage:</b> Call <see cref="NotifySystemdReady"/> after hosted services have started
-    /// and are ready to accept work. Optionally call <see cref="NotifySystemdStopping"/> before
-    /// graceful shutdown.</para>
+    /// Called from host lifecycle coordination to expose coarse operational state to systemd deployments.
+    /// Notification delivery is best-effort and intentionally non-fatal: startup and shutdown behavior does not
+    /// depend on notification success.
     /// </remarks>
     internal static partial class SystemdNotifier
     {
         /// <summary>
-        /// Configures min status notify interval milliseconds for systemd notifier.
+        /// Minimum interval between successful STATUS notifications to avoid excessive sd_notify traffic.
         /// </summary>
         private const int MinStatusNotifyIntervalMilliseconds = 5000;
         /// <summary>
-        /// Limits max systemd status length for systemd notifier.
+        /// Maximum STATUS payload length sent to systemd after normalization.
         /// </summary>
         private const int MaxSystemdStatusLength = 1024;
         /// <summary>
-        /// Stores systemd library state unknown used by systemd notifier.
+        /// Cached sd_notify library availability is unknown.
         /// </summary>
         private const int SystemdLibraryStateUnknown = 0;
         /// <summary>
-        /// Stores systemd library state available used by systemd notifier.
+        /// Cached sd_notify library availability is confirmed.
         /// </summary>
         private const int SystemdLibraryStateAvailable = 1;
         /// <summary>
-        /// Stores systemd library state unavailable used by systemd notifier.
+        /// Cached sd_notify library availability is known to be unavailable.
         /// </summary>
         private const int SystemdLibraryStateUnavailable = 2;
 
         /// <summary>
-        /// Stores status notify gate used by systemd notifier.
+        /// Synchronization gate that protects STATUS throttle check/send/update as one atomic sequence.
         /// </summary>
         private static readonly object StatusNotifyGate = new();
         /// <summary>
-        /// Limits last status notify tick count for systemd notifier.
+        /// Tick count of the last successful STATUS notification, or -1 when no STATUS has been sent.
         /// </summary>
         private static long _lastStatusNotifyTickCount = -1;
         /// <summary>
-        /// Stores systemd library state used by systemd notifier.
+        /// Cached libsystemd availability state used to avoid repeated failing native-entry-point attempts.
         /// </summary>
         private static int _systemdLibraryState = SystemdLibraryStateUnknown;
 
@@ -89,7 +86,8 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <para>Safe to call multiple times or on non-systemd environments (no-op on Windows/when
         /// environment variable is not set).</para>
         /// </remarks>
-        /// <param name="logger">The logger value.</param>
+        /// <param name="logger">Logger used for source-generated debug diagnostics around notify delivery.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         public static void NotifySystemdReady(ILogger logger)
         {
             if (NotifySystemd("READY=1", "readiness", logger))
@@ -107,7 +105,8 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         ///
         /// <para>Optional; systemd will infer stopping state from process termination if not notified.</para>
         /// </remarks>
-        /// <param name="logger">The logger value.</param>
+        /// <param name="logger">Logger used for source-generated debug diagnostics around notify delivery.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         public static void NotifySystemdStopping(ILogger logger)
         {
             if (NotifySystemd("STOPPING=1", "stopping", logger))
@@ -119,17 +118,15 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <summary>
         /// Sends a custom status message to systemd (Type=notify services only).
         /// </summary>
-        /// <param name="statusMessage">Status message (e.g., "Running: 38.7 Gbps, 128k articles/s").</param>
-        /// <param name="logger">Logger used for operational diagnostics.</param>
+        /// <param name="statusMessage">Human-readable operational status text to publish through <c>STATUS=</c>.</param>
+        /// <param name="logger">Logger used for source-generated debug diagnostics around notify delivery.</param>
         /// <remarks>
-        /// <para>Sends <c>STATUS=&lt;message&gt;</c> to systemd. This appears in <c>systemctl status</c>
-        /// output and systemd logs, providing service status visibility.</para>
-        ///
-        /// <para>STATUS updates are rate-limited and intended for coarse, human-readable operational
-        /// state (for example, every few seconds). High-frequency telemetry belongs in metrics/logging.</para>
-        /// <para><b>Throttling:</b> Only successful notifications consume the throttle slot. Transient
-        /// failures do not suppress subsequent attempts.</para>
+        /// <para>Sends <c>STATUS=&lt;message&gt;</c> to systemd for visibility in <c>systemctl status</c>.</para>
+        /// <para>Status text is normalized to one bounded line before sending.</para>
+        /// <para>STATUS updates are rate-limited and intended for coarse operational state, not high-frequency telemetry.</para>
+        /// <para>Only successful sends consume the throttle slot; transient failures can be retried immediately.</para>
         /// </remarks>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="statusMessage"/> or <paramref name="logger"/> is <see langword="null"/>.</exception>
         public static void NotifySystemdStatus(string statusMessage, ILogger logger)
         {
             ArgumentNullException.ThrowIfNull(statusMessage);
@@ -357,19 +354,19 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         #endregion
 
         /// <summary>
-        /// Emits the systemd ready notified log event for systemd notifier.
+        /// Emits debug confirmation that <c>READY=1</c> was delivered to systemd.
         /// </summary>
         [LoggerMessage(EventId = 1300, Level = LogLevel.Debug, Message = "Notified systemd that service is ready")]
         private static partial void LogSystemdReadyNotified(ILogger logger);
 
         /// <summary>
-        /// Emits the systemd stopping notified log event for systemd notifier.
+        /// Emits debug confirmation that <c>STOPPING=1</c> was delivered to systemd.
         /// </summary>
         [LoggerMessage(EventId = 1301, Level = LogLevel.Debug, Message = "Notified systemd that service is stopping")]
         private static partial void LogSystemdStoppingNotified(ILogger logger);
 
         /// <summary>
-        /// Emits the systemd status notified log event for systemd notifier.
+        /// Emits debug confirmation that a normalized STATUS payload was delivered to systemd.
         /// </summary>
         [LoggerMessage(EventId = 1302, Level = LogLevel.Debug, Message = "Notified systemd with status: {Status}")]
         private static partial void LogSystemdStatusNotified(ILogger logger, string status);
