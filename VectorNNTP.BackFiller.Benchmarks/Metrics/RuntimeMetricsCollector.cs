@@ -14,7 +14,7 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal sealed class RuntimeMetrics
 {
     /// <summary>
-    /// Runs the _gate benchmark scenario.
+    /// Synchronizes metric sampling with snapshot creation.
     /// </summary>
     private readonly object _gate = new();
     /// <summary>
