@@ -384,9 +384,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
                 _gracePeriodCts = timeoutCts;
 
                 _ = timeoutCts.Token.Register(
-                    /// <summary>
-                    /// Tracks state for shutdown coordinator.
-                    /// </summary>
+                    // <summary>
+                    // Tracks state for shutdown coordinator.
+                    // </summary>
                     static state =>
                     {
                         ((ShutdownCoordinator)state!).SignalForcedShutdownFromGracePeriodTimer();
@@ -601,9 +601,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             EventId = 1200,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
-        /// <summary>
-        /// Coordinates log cancellation callback failed for shutdown coordinator.
-        /// </summary>
+        // <summary>
+        // Coordinates log cancellation callback failed for shutdown coordinator.
+        // </summary>
         private static partial void LogCancellationCallbackFailed(
             ILogger logger,
             Exception exception,
@@ -614,9 +614,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             EventId = 1201,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
-        /// <summary>
-        /// Coordinates log cancellation skipped already disposed for shutdown coordinator.
-        /// </summary>
+        // <summary>
+        // Coordinates log cancellation skipped already disposed for shutdown coordinator.
+        // </summary>
         private static partial void LogCancellationSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,
@@ -627,9 +627,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             EventId = 1202,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
-        /// <summary>
-        /// Coordinates log disposal skipped already disposed for shutdown coordinator.
-        /// </summary>
+        // <summary>
+        // Coordinates log disposal skipped already disposed for shutdown coordinator.
+        // </summary>
         private static partial void LogDisposalSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,

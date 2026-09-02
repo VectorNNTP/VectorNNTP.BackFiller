@@ -508,58 +508,58 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             }
         }
 
-        [LoggerMessage(EventId = 2000, Level = LogLevel.Information, Message = "Initial NNTP account load starting for ServerId={ServerId}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log initial account load starting for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2000, Level = LogLevel.Information, Message = "Initial NNTP account load starting for ServerId={ServerId}")]
         private static partial void LogInitialAccountLoadStarting(ILogger logger, byte serverId);
 
-        [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Initial NNTP account load succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log initial account load succeeded for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Initial NNTP account load succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}")]
         private static partial void LogInitialAccountLoadSucceeded(ILogger logger, byte serverId, int accountCount);
 
-        [LoggerMessage(EventId = 2004, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while connecting to server target={ServerTarget}. Startup cannot continue.")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log provisioning connect server failed for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2004, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while connecting to server target={ServerTarget}. Startup cannot continue.")]
         private static partial void LogProvisioningConnectServerFailed(ILogger logger, string serverTarget, Exception exception);
 
-        [LoggerMessage(EventId = 2005, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE DATABASE for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log provisioning create database failed for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2005, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE DATABASE for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
         private static partial void LogProvisioningCreateDatabaseFailed(ILogger logger, string serverTarget, string databaseName, Exception exception);
 
-        [LoggerMessage(EventId = 2006, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while selecting database for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log provisioning select database failed for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2006, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while selecting database for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
         private static partial void LogProvisioningSelectDatabaseFailed(ILogger logger, string serverTarget, string databaseName, Exception exception);
 
-        [LoggerMessage(EventId = 2007, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE TABLE for server target={ServerTarget}, database={DatabaseName}, table={TableName}. Startup cannot continue.")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log provisioning create table failed for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2007, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE TABLE for server target={ServerTarget}, database={DatabaseName}, table={TableName}. Startup cannot continue.")]
         private static partial void LogProvisioningCreateTableFailed(ILogger logger, string serverTarget, string databaseName, string tableName, Exception exception);
 
-        [LoggerMessage(EventId = 2100, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh starting for ServerId={ServerId}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log periodic refresh starting for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2100, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh starting for ServerId={ServerId}")]
         private static partial void LogPeriodicRefreshStarting(ILogger logger, byte serverId);
 
-        [LoggerMessage(EventId = 2101, Level = LogLevel.Information, Message = "Periodic NNTP account refresh succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}; DurationMs={DurationMs}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log periodic refresh succeeded for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2101, Level = LogLevel.Information, Message = "Periodic NNTP account refresh succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}; DurationMs={DurationMs}")]
         private static partial void LogPeriodicRefreshSucceeded(ILogger logger, byte serverId, int accountCount, long durationMs);
 
-        [LoggerMessage(EventId = 2102, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh skipped because a refresh is already in progress for ServerId={ServerId}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log periodic refresh skipped in progress for my sql nntp account snapshot provider.
         /// </summary>
+        [LoggerMessage(EventId = 2102, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh skipped because a refresh is already in progress for ServerId={ServerId}")]
         private static partial void LogPeriodicRefreshSkippedInProgress(ILogger logger, byte serverId);
     }
 }

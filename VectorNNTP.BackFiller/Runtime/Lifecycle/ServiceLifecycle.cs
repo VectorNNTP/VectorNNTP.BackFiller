@@ -563,9 +563,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1100,
             Level = LogLevel.Error,
             Message = "TransitionTo({NewState}) cannot be called while observers are being notified. Observers MUST NOT call TransitionTo() from StateTransitioned handlers (reentrancy forbidden). Concurrent transitions from other threads are also blocked during notification.")]
-        /// <summary>
-        /// Coordinates log transition during observer notification rejected for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Coordinates log transition during observer notification rejected for service lifecycle.
+        // </summary>
         private static partial void LogTransitionDuringObserverNotificationRejected(
             ILogger logger,
             LifecycleState newState);
@@ -574,9 +574,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1101,
             Level = LogLevel.Warning,
             Message = "State transition ignored: already in {State}")]
-        /// <summary>
-        /// Coordinates log state transition ignored already in state for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Coordinates log state transition ignored already in state for service lifecycle.
+        // </summary>
         private static partial void LogStateTransitionIgnoredAlreadyInState(
             ILogger logger,
             LifecycleState state);
@@ -585,9 +585,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1102,
             Level = LogLevel.Error,
             Message = "Invalid state transition: {CurrentState} -> {TargetState} (allowed: {AllowedTransitions})")]
-        /// <summary>
-        /// Coordinates log invalid state transition for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Coordinates log invalid state transition for service lifecycle.
+        // </summary>
         private static partial void LogInvalidStateTransition(
             ILogger logger,
             LifecycleState currentState,
@@ -598,9 +598,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1103,
             Level = LogLevel.Information,
             Message = "State transition: {From} -> {To} (reason: {Reason}; elapsed={Elapsed:F2}s)")]
-        /// <summary>
-        /// Coordinates log state transition for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Coordinates log state transition for service lifecycle.
+        // </summary>
         private static partial void LogStateTransition(
             ILogger logger,
             LifecycleState from,
@@ -612,9 +612,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1104,
             Level = LogLevel.Error,
             Message = "Lifecycle transition subscriber failed for {From} -> {To} (transition completed successfully)")]
-        /// <summary>
-        /// Coordinates log lifecycle transition subscriber failed for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Coordinates log lifecycle transition subscriber failed for service lifecycle.
+        // </summary>
         private static partial void LogLifecycleTransitionSubscriberFailed(
             ILogger logger,
             Exception exception,
@@ -625,9 +625,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1105,
             Level = LogLevel.Warning,
             Message = "Slow phase warning: {Phase} has taken {Elapsed:F2}s (threshold: {Threshold:F2}s)")]
-        /// <summary>
-        /// Coordinates log slow phase warning exceeded for service lifecycle.
-        /// </summary>
+        // <summary>
+        // Coordinates log slow phase warning exceeded for service lifecycle.
+        // </summary>
         private static partial void LogSlowPhaseWarningExceeded(
             ILogger logger,
             string phase,

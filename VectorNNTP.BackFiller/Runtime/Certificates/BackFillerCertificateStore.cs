@@ -151,6 +151,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
         /// <param name="timeProvider">Unified time provider.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="logger">Optional logger used to record certificate loading diagnostics.</param>
         /// <returns>Loaded listener certificate bundle.</returns>
         public static async Task<BackFillerCertificateBundle> LoadCertificateBundleAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
@@ -200,6 +201,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
         /// <param name="issueResult">Issued ACME certificate artifacts.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="logger">Optional logger used to record certificate persistence diagnostics.</param>
         /// <returns>A task that completes after atomic persistence succeeds.</returns>
         public static async Task PersistIssuedCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,

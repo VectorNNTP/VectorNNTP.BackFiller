@@ -354,46 +354,46 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         #endregion
 
-        [LoggerMessage(EventId = 1300, Level = LogLevel.Debug, Message = "Notified systemd that service is ready")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd ready notified for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1300, Level = LogLevel.Debug, Message = "Notified systemd that service is ready")]
         private static partial void LogSystemdReadyNotified(ILogger logger);
 
-        [LoggerMessage(EventId = 1301, Level = LogLevel.Debug, Message = "Notified systemd that service is stopping")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd stopping notified for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1301, Level = LogLevel.Debug, Message = "Notified systemd that service is stopping")]
         private static partial void LogSystemdStoppingNotified(ILogger logger);
 
-        [LoggerMessage(EventId = 1302, Level = LogLevel.Debug, Message = "Notified systemd with status: {Status}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd status notified for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1302, Level = LogLevel.Debug, Message = "Notified systemd with status: {Status}")]
         private static partial void LogSystemdStatusNotified(ILogger logger, string status);
 
-        [LoggerMessage(EventId = 1303, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification failed with result {Result}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd notification failed result for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1303, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification failed with result {Result}")]
         private static partial void LogSystemdNotificationFailedResult(ILogger logger, string notificationType, int result);
 
-        [LoggerMessage(EventId = 1304, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: libsystemd.so.0 not found")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd library not found for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1304, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: libsystemd.so.0 not found")]
         private static partial void LogSystemdLibraryNotFound(ILogger logger, string notificationType);
 
-        [LoggerMessage(EventId = 1305, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: sd_notify entry point not found")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd entry point not found for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1305, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: sd_notify entry point not found")]
         private static partial void LogSystemdEntryPointNotFound(ILogger logger, string notificationType);
 
-        [LoggerMessage(EventId = 1306, Level = LogLevel.Debug, Message = "Exception during systemd {NotificationType} notification")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log systemd notification exception for systemd notifier.
         /// </summary>
+        [LoggerMessage(EventId = 1306, Level = LogLevel.Debug, Message = "Exception during systemd {NotificationType} notification")]
         private static partial void LogSystemdNotificationException(ILogger logger, Exception exception, string notificationType);
     }
 }

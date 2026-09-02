@@ -77,16 +77,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _connectionManager.DisposeAsync().ConfigureAwait(false);
         }
 
-        [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log startup initialization beginning for rabbit mq startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
         private static partial void LogStartupInitializationBeginning(ILogger logger);
 
-        [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log startup initialization completed for rabbit mq startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
         private static partial void LogStartupInitializationCompleted(ILogger logger, RabbitMqInfrastructureState state, int backboneCount);
     }
 }

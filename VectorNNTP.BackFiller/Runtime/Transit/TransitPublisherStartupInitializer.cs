@@ -45,16 +45,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await _transitPublisher.DisposeAsync().ConfigureAwait(false);
         }
 
-        [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log transit startup initializer beginning for transit publisher startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
         private static partial void LogTransitStartupInitializerBeginning(ILogger logger);
 
-        [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log transit startup initializer completed for transit publisher startup initializer.
         /// </summary>
+        [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);
     }
 }

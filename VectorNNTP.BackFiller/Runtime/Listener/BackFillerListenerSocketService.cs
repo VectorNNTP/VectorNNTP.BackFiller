@@ -437,64 +437,64 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
         }
 
-        [LoggerMessage(EventId = 2700, Level = LogLevel.Information, Message = "Inbound BackFiller listener started; ListenerCount={ListenerCount}; Port={Port}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log listener started for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2700, Level = LogLevel.Information, Message = "Inbound BackFiller listener started; ListenerCount={ListenerCount}; Port={Port}")]
         private static partial void LogListenerStarted(ILogger logger, int listenerCount, int port);
 
-        [LoggerMessage(EventId = 2701, Level = LogLevel.Information, Message = "Inbound BackFiller listener bound endpoint {Endpoint} ({AddressFamily})")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log endpoint bound for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2701, Level = LogLevel.Information, Message = "Inbound BackFiller listener bound endpoint {Endpoint} ({AddressFamily})")]
         private static partial void LogEndpointBound(ILogger logger, string endpoint, string addressFamily);
 
-        [LoggerMessage(EventId = 2702, Level = LogLevel.Debug, Message = "Inbound BackFiller listener accepted connection from {RemoteEndpoint}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log client accepted for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2702, Level = LogLevel.Debug, Message = "Inbound BackFiller listener accepted connection from {RemoteEndpoint}")]
         private static partial void LogClientAccepted(ILogger logger, string remoteEndpoint);
 
-        [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Inbound BackFiller TLS handshake succeeded for {RemoteEndpoint}; Thumbprint={Thumbprint}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log tls handshake succeeded for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Inbound BackFiller TLS handshake succeeded for {RemoteEndpoint}; Thumbprint={Thumbprint}")]
         private static partial void LogTlsHandshakeSucceeded(ILogger logger, string remoteEndpoint, string thumbprint);
 
-        [LoggerMessage(EventId = 2704, Level = LogLevel.Warning, Message = "Inbound BackFiller TLS handshake failed")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log tls handshake failed for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2704, Level = LogLevel.Warning, Message = "Inbound BackFiller TLS handshake failed")]
         private static partial void LogTlsHandshakeFailed(ILogger logger, Exception exception);
 
-        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log client processing fault for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
         private static partial void LogClientProcessingFault(ILogger logger, Exception exception);
 
-        [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log connection closed during shutdown for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
         private static partial void LogConnectionClosedDuringShutdown(ILogger logger, Exception exception);
 
-        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log listener stopping by cancellation for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
         private static partial void LogListenerStoppingByCancellation(ILogger logger);
 
-        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log listener stopped for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
-        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log listener disabled for back filler listener socket service.
         /// </summary>
+        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
         private static partial void LogListenerDisabled(ILogger logger);
     }
 }

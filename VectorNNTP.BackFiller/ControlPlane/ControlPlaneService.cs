@@ -35,6 +35,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
     /// <param name="logger">The logger used for control-plane diagnostics.</param>
     /// <param name="timeProvider">The unified time provider used for control-plane timestamps.</param>
     /// <param name="snapshotProvider">The runtime NNTP account snapshot provider.</param>
+    /// <param name="rabbitMqCapacityRetirementCoordinator">Coordinates RabbitMQ capacity retirement during account reconciliation.</param>
+    /// <param name="backboneUsableCapacityStateWriter">Optional writer for publishing usable backbone capacity state.</param>
     /// <param name="loggerFactory">The logger factory used to create account session-manager loggers.</param>
     /// <param name="serverCertificateValidationCallback">Optional per-acquisition-session TLS server-certificate validation callback. When <see langword="null"/>, acquisition sessions retain platform default certificate validation behavior.</param>
     internal sealed partial class ControlPlaneService(
@@ -511,8 +513,6 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <summary>
         /// Holds the runtime state for one managed account session pool.
         /// </summary>
-        /// <param name="LastAppliedAccount">Most recent desired account snapshot applied to this runtime.</param>
-        /// <param name="Manager">Owned session manager implementing persistent session lifecycle for the account.</param>
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
             /// <summary>

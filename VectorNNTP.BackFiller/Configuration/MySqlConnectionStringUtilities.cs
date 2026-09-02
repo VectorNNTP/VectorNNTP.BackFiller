@@ -509,28 +509,31 @@ namespace VectorNNTP.Backfiller.Configuration
                    HasConflictingAliases(rawPairs, MaxPoolSizeAliases);
         }
 
-        /// <summary>
-        /// Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
-        /// </summary>
-        /// <param name="connectionString">The connection string to parse.</param>
-        /// <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
-        /// <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
-        /// <remarks>
-        /// <para>This parser respects connection string syntax:</para>
-        /// <list type="bullet">
-        /// <item><description>Semicolon (;) as delimiter</description></item>
-        /// <item><description>Equals (=) as key-value separator</description></item>
-        /// <item><description>Single or double quotes for values containing special characters</description></item>
-        /// <item><description>Escaped quotes ("" or '') within quoted values</description></item>
-        /// <item><description>Whitespace trimming around keys and values</description></item>
-        /// </list>
-        /// <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
-        /// <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
-        /// <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
-        /// </remarks>
+        // <summary>
+        // Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
+        // </summary>
+        // <param name="connectionString">The connection string to parse.</param>
+        // <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
+        // <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
+        // <remarks>
+        // <para>This parser respects connection string syntax:</para>
+        // <list type="bullet">
+        // <item><description>Semicolon (;) as delimiter</description></item>
+        // <item><description>Equals (=) as key-value separator</description></item>
+        // <item><description>Single or double quotes for values containing special characters</description></item>
+        // <item><description>Escaped quotes ("" or '') within quoted values</description></item>
+        // <item><description>Whitespace trimming around keys and values</description></item>
+        // </list>
+        // <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
+        // <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
+        // <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
+        // </remarks>
 #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
         /// <summary>
-        /// Coordinates parse raw key value pairs for my sql connection string utilities.
+        /// <param name="connectionString">The connection string to parse.</param>
+        /// <returns>Key-value pairs preserving duplicate entries for ambiguity detection.</returns>
+        /// <exception cref="ArgumentException">Thrown when the connection string syntax is malformed.</exception>
+        /// <remarks>Parsing occurs before provider canonicalization so conflicting aliases remain observable.</remarks>
         /// </summary>
         private static IReadOnlyList<(string Key, string Value)> ParseRawKeyValuePairs(string connectionString)
 #pragma warning restore CA1859

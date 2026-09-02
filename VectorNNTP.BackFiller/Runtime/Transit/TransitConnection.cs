@@ -2080,28 +2080,28 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             internal TransitConnectionLifecycleFailure Failure { get; }
         }
 
-        [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log transit state transition for transit connection.
         /// </summary>
+        [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
         private static partial void LogTransitStateTransition(ILogger logger, string connectionId, TransitConnectionState state);
 
-        [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log transit capabilities for transit connection.
         /// </summary>
+        [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
         private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsStreaming);
 
-        [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log transit connection ready for transit connection.
         /// </summary>
+        [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
         private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive);
 
-        [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
-        /// <summary>
+                /// <summary>
         /// Coordinates log transit response loop faulted for transit connection.
         /// </summary>
+        [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
         private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
     }
 }

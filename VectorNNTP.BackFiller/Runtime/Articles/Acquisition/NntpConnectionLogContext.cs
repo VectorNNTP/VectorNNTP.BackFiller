@@ -30,15 +30,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <summary>
         /// Initializes a new instance of the <see cref="NntpConnectionLogContext"/> class.
         /// </summary>
-        /// <param name="backbone"></param>
-        /// <param name="accountUsername"></param>
-        /// <param name="accountId"></param>
-        /// <param name="serverId"></param>
-        /// <param name="host"></param>
-        /// <param name="port"></param>
-        /// <param name="useSsl"></param>
-        /// <param name="connectionNumber"></param>
-        /// <param name="connectionLimit"></param>
+        /// <param name="backbone">Provider or backbone name used to group the connection.</param>
+        /// <param name="accountUsername">Configured account username associated with the connection.</param>
+        /// <param name="accountId">Stable identifier of the account being served.</param>
+        /// <param name="serverId">Identifier of the owning NNTP server configuration.</param>
+        /// <param name="host">Remote NNTP host name or address.</param>
+        /// <param name="port">Remote NNTP port.</param>
+        /// <param name="useSsl">Whether the connection uses SSL/TLS.</param>
+        /// <param name="connectionNumber">One-based connection number within the account.</param>
+        /// <param name="connectionLimit">Configured maximum number of account connections.</param>
+        /// <exception cref="ArgumentException">Thrown when a required text value is null, empty, or whitespace.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when a connection number or limit is not positive.</exception>
         public NntpConnectionLogContext(
             string backbone,
             string accountUsername,
