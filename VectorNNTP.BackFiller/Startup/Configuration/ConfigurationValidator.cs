@@ -1,16 +1,9 @@
 // <copyright file="ConfigurationValidator.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: configuration validator in the startup configuration subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ConfigurationValidator.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Configuration
+// Implements the configuration validator responsibilities for this subsystem boundary.
 
 using System.ComponentModel.DataAnnotations;
 using Serilog;

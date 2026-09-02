@@ -1,10 +1,4 @@
 // <copyright file="ArticleWorkResponseFactory.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: article work response factory in the articles processing subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ArticleWorkResponseFactory.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

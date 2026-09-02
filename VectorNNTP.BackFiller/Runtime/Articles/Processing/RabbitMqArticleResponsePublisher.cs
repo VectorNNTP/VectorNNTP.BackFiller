@@ -1,10 +1,4 @@
 // <copyright file="RabbitMqArticleResponsePublisher.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: rabbit mq article response publisher in the articles processing subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="RabbitMqArticleResponsePublisher.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

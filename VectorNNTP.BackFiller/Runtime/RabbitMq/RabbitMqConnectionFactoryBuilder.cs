@@ -1,16 +1,9 @@
 // <copyright file="RabbitMqConnectionFactoryBuilder.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: rabbit mq connection factory builder in the runtime rabbit mq subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="RabbitMqConnectionFactoryBuilder.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq connection factory builder responsibilities for this subsystem boundary.
 
 using System.Security.Authentication;
 using RabbitMQ.Client;

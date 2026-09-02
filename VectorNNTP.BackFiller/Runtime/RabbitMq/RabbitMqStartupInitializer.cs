@@ -1,16 +1,9 @@
 // <copyright file="RabbitMqStartupInitializer.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: rabbit mq startup initializer in the runtime rabbit mq subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="RabbitMqStartupInitializer.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq startup initializer responsibilities for this subsystem boundary.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Accounts;

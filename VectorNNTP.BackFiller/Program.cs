@@ -1,10 +1,4 @@
 // <copyright file="Program.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: program in the vector nntp.back filler subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="Program.cs" company="Usenet Ninja">
 // Copyright (c) Chris Knipe &lt;cknipe@opticnetworks.net&gt;. Licensed under the Apache License, Version 2.0 (see LICENSE).
 // </copyright>
 

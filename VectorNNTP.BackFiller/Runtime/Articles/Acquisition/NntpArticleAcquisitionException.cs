@@ -1,16 +1,9 @@
 // <copyright file="NntpArticleAcquisitionException.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: nntp article acquisition exception in the articles acquisition subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="NntpArticleAcquisitionException.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// Implements the nntp article acquisition exception responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {

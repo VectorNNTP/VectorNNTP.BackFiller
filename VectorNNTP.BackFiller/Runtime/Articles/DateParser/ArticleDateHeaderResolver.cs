@@ -1,10 +1,4 @@
 // <copyright file="ArticleDateHeaderResolver.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: article date header resolver in the articles date parser subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ArticleDateHeaderResolver.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

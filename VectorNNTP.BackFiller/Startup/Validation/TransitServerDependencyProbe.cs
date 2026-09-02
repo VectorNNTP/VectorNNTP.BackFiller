@@ -1,16 +1,9 @@
 // <copyright file="TransitServerDependencyProbe.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: transit server dependency probe in the startup validation subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="TransitServerDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Validation
+// Implements the transit server dependency probe responsibilities for this subsystem boundary.
 
 using System.Net.Security;
 using System.Net.Sockets;

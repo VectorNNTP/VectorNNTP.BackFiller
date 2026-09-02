@@ -1,16 +1,9 @@
 // <copyright file="VersionCommandHandler.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: version command handler in the startup commands subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="VersionCommandHandler.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Commands
+// Implements the version command handler responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {

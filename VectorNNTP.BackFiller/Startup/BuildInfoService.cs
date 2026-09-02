@@ -1,16 +1,9 @@
 // <copyright file="BuildInfoService.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: build info service in the vector nntp.back filler startup subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="BuildInfoService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup
+// Implements the build info service responsibilities for this subsystem boundary.
 
 using Serilog;
 

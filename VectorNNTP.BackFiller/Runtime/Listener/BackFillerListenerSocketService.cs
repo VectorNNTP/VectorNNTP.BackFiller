@@ -1,10 +1,4 @@
 // <copyright file="BackFillerListenerSocketService.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: back filler listener socket service in the runtime listener subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="BackFillerListenerSocketService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

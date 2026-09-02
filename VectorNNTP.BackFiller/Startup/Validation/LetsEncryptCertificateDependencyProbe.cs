@@ -1,10 +1,4 @@
 // <copyright file="LetsEncryptCertificateDependencyProbe.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: lets encrypt certificate dependency probe in the startup validation subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="LetsEncryptCertificateDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

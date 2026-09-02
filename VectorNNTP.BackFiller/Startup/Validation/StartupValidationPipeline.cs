@@ -1,16 +1,9 @@
 // <copyright file="StartupValidationPipeline.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: startup validation pipeline in the startup validation subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="StartupValidationPipeline.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Validation
+// Implements the startup validation pipeline responsibilities for this subsystem boundary.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;

@@ -1,10 +1,4 @@
 // <copyright file="NntpConnectionLogContext.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: nntp connection log context in the articles acquisition subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="NntpConnectionLogContext.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

@@ -1,10 +1,4 @@
 // <copyright file="NntpMessageIdCharClasses.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: nntp message id char classes in the articles validation subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="NntpMessageIdCharClasses.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

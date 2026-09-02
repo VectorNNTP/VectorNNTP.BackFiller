@@ -1,10 +1,4 @@
 // <copyright file="SerilogConfigurator.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: serilog configurator in the startup logging subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="SerilogConfigurator.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

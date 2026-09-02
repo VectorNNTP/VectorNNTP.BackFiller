@@ -1,16 +1,9 @@
 // <copyright file="TransitWorkItem.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: transit work item in the runtime transit subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="TransitWorkItem.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit work item responsibilities for this subsystem boundary.
 
 using System.Diagnostics;
 

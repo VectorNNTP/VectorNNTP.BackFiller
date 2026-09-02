@@ -1,10 +1,4 @@
 // <copyright file="AuthoritativeDnsTxtPropagationVerifier.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: authoritative dns txt propagation verifier in the runtime certificates subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="AuthoritativeDnsTxtPropagationVerifier.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

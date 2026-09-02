@@ -1,10 +1,4 @@
 // <copyright file="BackFillerCertificateStore.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: back filler certificate store in the runtime certificates subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="BackFillerCertificateStore.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

@@ -1,10 +1,4 @@
 // <copyright file="ArticleWorkProcessingContracts.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: article work processing contracts in the articles processing subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ArticleWorkProcessingContracts.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

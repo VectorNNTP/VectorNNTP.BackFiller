@@ -1,16 +1,9 @@
 // <copyright file="ValidateConfigCommandHandler.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: validate config command handler in the startup commands subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ValidateConfigCommandHandler.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Commands
+// Implements the validate config command handler responsibilities for this subsystem boundary.
 
 using Serilog;
 using VectorNNTP.Backfiller.Configuration;

@@ -1,16 +1,9 @@
 // <copyright file="NntpAccountSnapshotStartupInitializer.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: nntp account snapshot startup initializer in the runtime accounts subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="NntpAccountSnapshotStartupInitializer.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Accounts
+// Implements the nntp account snapshot startup initializer responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Runtime.Accounts
 {

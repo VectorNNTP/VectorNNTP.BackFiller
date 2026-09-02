@@ -1,10 +1,4 @@
 // <copyright file="DateParseFailureReason.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: date parse failure reason in the articles date parser subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="DateParseFailureReason.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

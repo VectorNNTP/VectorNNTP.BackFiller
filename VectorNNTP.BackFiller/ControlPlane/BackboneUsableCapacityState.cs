@@ -1,10 +1,4 @@
 // <copyright file="BackboneUsableCapacityState.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: backbone usable capacity state in the vector nntp.back filler control plane subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="BackboneUsableCapacityState.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

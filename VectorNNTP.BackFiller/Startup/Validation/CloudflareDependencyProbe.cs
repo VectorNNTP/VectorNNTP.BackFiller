@@ -1,16 +1,9 @@
 // <copyright file="CloudflareDependencyProbe.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: cloudflare dependency probe in the startup validation subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="CloudflareDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Validation
+// Implements the cloudflare dependency probe responsibilities for this subsystem boundary.
 
 using CloudFlare.Client;
 using CloudFlare.Client.Api.Result;

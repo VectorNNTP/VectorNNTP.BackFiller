@@ -1,10 +1,4 @@
 // <copyright file="YEncArticleValidationResult.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: yenc article validation result in the articles yenc subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="YEncArticleValidationResult.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

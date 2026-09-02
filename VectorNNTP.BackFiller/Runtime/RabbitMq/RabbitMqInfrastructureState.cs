@@ -1,16 +1,9 @@
 // <copyright file="RabbitMqInfrastructureState.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: rabbit mq infrastructure state in the runtime rabbit mq subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="RabbitMqInfrastructureState.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq infrastructure state responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {

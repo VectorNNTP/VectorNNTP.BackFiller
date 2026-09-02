@@ -1,10 +1,4 @@
 // <copyright file="SystemdNotifier.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: systemd notifier in the startup hosting subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="SystemdNotifier.cs" company="Usenet Ninja">
 // Copyright (c) Chris Knipe <cknipe@opticnetworks.net>. Licensed under the Apache License, Version 2.0 (see LICENSE).
 // </copyright>
 

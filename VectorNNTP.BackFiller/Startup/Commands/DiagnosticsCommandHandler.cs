@@ -1,16 +1,9 @@
 // <copyright file="DiagnosticsCommandHandler.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: diagnostics command handler in the startup commands subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="DiagnosticsCommandHandler.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Commands
+// Implements the diagnostics command handler responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {

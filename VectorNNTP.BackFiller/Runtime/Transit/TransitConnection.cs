@@ -1,16 +1,9 @@
 // <copyright file="TransitConnection.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: transit connection in the runtime transit subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="TransitConnection.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit connection responsibilities for this subsystem boundary.
 
 using System.Buffers;
 using System.Collections.Concurrent;

@@ -1,10 +1,4 @@
 // <copyright file="HostComposer.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: host composer in the startup hosting subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="HostComposer.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

@@ -1,10 +1,4 @@
 // <copyright file="PrintableAsciiSimd.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: printable ascii simd in the articles date parser subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="PrintableAsciiSimd.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

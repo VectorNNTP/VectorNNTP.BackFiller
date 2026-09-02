@@ -1,10 +1,4 @@
 // <copyright file="ICloudflareTxtRecordApi.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: icloudflare txt record api in the runtime certificates subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ICloudflareTxtRecordApi.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

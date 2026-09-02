@@ -1,16 +1,9 @@
 // <copyright file="RabbitMqConsumerSessionIdentity.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: rabbit mq consumer session identity in the runtime rabbit mq subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="RabbitMqConsumerSessionIdentity.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq consumer session identity responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {

@@ -1,16 +1,9 @@
 // <copyright file="ExitCodePolicy.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: exit code policy in the vector nntp.back filler startup subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ExitCodePolicy.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup
+// Implements the exit code policy responsibilities for this subsystem boundary.
 
 namespace VectorNNTP.Backfiller.Startup
 {

@@ -1,10 +1,4 @@
 // <copyright file="HexUInt32Parser.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: hex uint32 parser in the articles yenc subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="HexUInt32Parser.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

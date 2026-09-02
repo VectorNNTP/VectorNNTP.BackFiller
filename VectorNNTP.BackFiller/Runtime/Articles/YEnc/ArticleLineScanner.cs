@@ -1,10 +1,4 @@
 // <copyright file="ArticleLineScanner.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe cknipe@opticnetworks.net
-// </copyright>
-// Architectural responsibility: article line scanner in the articles yenc subsystem.
-// The file owns this boundary; executable behavior is intentionally unchanged.
-
-// <copyright file="ArticleLineScanner.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
