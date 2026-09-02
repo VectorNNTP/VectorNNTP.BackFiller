@@ -14,9 +14,11 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal static class MetricMathHelpers
 {
     /// <summary>
-    /// Computes PercentileMicroseconds.
-
+    /// Computes a nearest-rank latency percentile in microseconds from sorted stopwatch ticks.
     /// </summary>
+    /// <param name="sortedLatencyTicks">Latency ticks sorted in ascending order.</param>
+    /// <param name="percentile">Percentile in the range 0 through 1; values outside the range are clamped.</param>
+    /// <returns>The selected latency in microseconds, or zero when no samples are present.</returns>
     internal static double ComputePercentileMicroseconds(List<long> sortedLatencyTicks, double percentile)
     {
         ArgumentNullException.ThrowIfNull(sortedLatencyTicks);
