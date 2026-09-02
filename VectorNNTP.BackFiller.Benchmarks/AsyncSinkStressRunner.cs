@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// AsyncSinkStressRunner: defines the benchmark entry point or scenario for controlled performance validation.
+// AsyncSinkStressRunner: exercises asynchronous logging sinks under burst, sustained-rate, and shutdown workloads.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;

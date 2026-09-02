@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Execution/ByteBudget: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+// Execution/ByteBudget: provides a thread-safe byte-count budget for bounded benchmark queues.
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 

@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// TransitDotStuffingBenchmarks: defines the benchmark entry point or scenario for controlled performance validation.
+// TransitDotStuffingBenchmarks: compares dot-stuffing implementations across representative payload layouts.
 
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;

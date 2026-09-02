@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Execution/BoundedArticleQueue: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+// Execution/BoundedArticleQueue: bounds queued articles by both item count and payload bytes.
 
 using System.Threading.Channels;
 

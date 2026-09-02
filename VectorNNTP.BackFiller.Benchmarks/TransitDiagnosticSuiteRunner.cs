@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// TransitDiagnosticSuiteRunner: defines the benchmark entry point or scenario for controlled performance validation.
+// TransitDiagnosticSuiteRunner: runs focused transit diagnostics and emits evidence for lifecycle and throughput behavior.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;

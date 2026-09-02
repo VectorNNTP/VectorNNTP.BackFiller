@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Artifacts/JsonArtifactWriter: writes durable JSON and CSV representations of benchmark measurements.
+// Artifacts/JsonArtifactWriter: serializes benchmark result records as indented JSON artifacts.
 
 using System.Text.Json;
 

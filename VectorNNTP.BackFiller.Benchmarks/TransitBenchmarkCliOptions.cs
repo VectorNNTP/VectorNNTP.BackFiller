@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// TransitBenchmarkCliOptions: defines the benchmark entry point or scenario for controlled performance validation.
+// TransitBenchmarkCliOptions: represents the validated command-line controls for a transit benchmark run.
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 

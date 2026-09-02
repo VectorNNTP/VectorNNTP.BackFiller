@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// IsolatedRegressionGate/Program: runs selected tests in isolated vstest processes and emits machine-readable forensic summaries.
+// IsolatedRegressionGate/Program: runs one selected test in an isolated vstest process and emits reconciled JSON and Markdown evidence.
 
 using System.Diagnostics;
 using System.Reflection;
@@ -17,7 +17,7 @@ using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 namespace IsolatedRegressionGate;
 
 /// <summary>
-/// Defines the program class for benchmark or isolated-regression execution.
+/// Coordinates isolated test discovery, selection, execution, timeout escalation, and evidence publication.
 /// </summary>
 internal static class Program
 {
@@ -27,7 +27,13 @@ internal static class Program
     private const string UtilityVersion = "0.1.0";
 
     /// <summary>
-    /// Performs the main operation.
+    /// Runs the gate workflow and returns the documented gate exit code.
+    /// <param name="args">Command-line options controlling the repository, test scope, and timeout.</param>
+    /// <returns>The <see cref="GateExitCode"/> value describing the final classification.</returns>
+    /// <remarks>
+    /// Discovery and execution are reconciled through the test platform's <see cref="TestCase"/> and
+    /// <see cref="TestResult"/> objects so that a passing process exit cannot mask a scope or infrastructure failure.
+    /// </remarks>
     /// </summary>
     private static async Task<int> Main(string[] args)
     {
@@ -253,7 +259,11 @@ internal static class Program
     }
 
     /// <summary>
-    /// Performs the write AndReturn operation.
+    /// Writes the machine-readable and human-readable gate summaries and returns the selected exit code.
+    /// <param name="summary">Summary to serialize.</param>
+    /// <param name="summaryJsonPath">Destination for the indented JSON summary.</param>
+    /// <param name="summaryMarkdownPath">Destination for the Markdown summary.</param>
+    /// <returns>The exit code stored in <paramref name="summary"/>.</returns>
     /// </summary>
     private static async Task<int> WriteAndReturn(GateSummary summary, string summaryJsonPath, string summaryMarkdownPath)
     {
@@ -270,7 +280,9 @@ internal static class Program
     }
 
     /// <summary>
-    /// Performs the resolve VsTestConsolePath operation.
+    /// Locates the newest installed .NET SDK test-console assembly.
+    /// <returns>The full path to <c>vstest.console.dll</c>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no SDK or test-console assembly is installed.</exception>
     /// </summary>
     private static string ResolveVsTestConsolePath()
     {
@@ -295,7 +307,11 @@ internal static class Program
     }
 
     /// <summary>
-    /// Performs the resolve TestAssemblyPath operation.
+    /// Resolves the test assembly explicitly requested by the caller or selects the newest built target assembly.
+    /// <param name="repoRoot">Absolute repository root used to resolve relative paths.</param>
+    /// <param name="options">Parsed gate options.</param>
+    /// <returns>The full path to the test assembly to discover and execute.</returns>
+    /// <exception cref="FileNotFoundException">Thrown when a requested project, assembly, or build output is missing.</exception>
     /// </summary>
     private static string ResolveTestAssemblyPath(string repoRoot, GateOptions options)
     {
@@ -334,7 +350,11 @@ internal static class Program
     }
 
     /// <summary>
-    /// Performs the select Cases operation.
+    /// Filters discovered cases by the requested class or fully qualified test name and records candidates.
+    /// <param name="discovered">Cases returned by test discovery.</param>
+    /// <param name="options">Selection criteria supplied on the command line.</param>
+    /// <param name="summary">Summary receiving candidate diagnostics.</param>
+    /// <returns>All cases matching the requested scope.</returns>
     /// </summary>
     private static List<TestCase> SelectCases(IReadOnlyList<TestCase> discovered, GateOptions options, GateSummary summary)
     {
@@ -365,7 +385,9 @@ internal static class Program
     }
 
     /// <summary>
-    /// Performs the build Markdown operation.
+    /// Builds the operator-facing Markdown representation of a gate summary.
+    /// <param name="summary">Summary whose discovery, execution, and classification data is rendered.</param>
+    /// <returns>Markdown text suitable for writing as an artifact.</returns>
     /// </summary>
     private static string BuildMarkdown(GateSummary summary)
     {
@@ -448,7 +470,7 @@ internal static class Program
 }
 
 /// <summary>
-/// Defines the discovery EventsCollector class for benchmark or isolated-regression execution.
+/// Collects asynchronous test-discovery callbacks and publishes one immutable discovery snapshot.
 /// </summary>
 internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
 {
@@ -467,7 +489,8 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
     public TaskCompletionSource<DiscoverySnapshot> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
-    /// Performs the handle DiscoveredTests operation.
+    /// Adds a discovery batch to the thread-safe case collection.
+    /// <param name="discoveredTestCases">Cases reported by the test platform; <see langword="null"/> is ignored.</param>
     /// </summary>
     public void HandleDiscoveredTests(IEnumerable<TestCase>? discoveredTestCases)
     {
@@ -483,7 +506,9 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
     }
 
     /// <summary>
-    /// Performs the handle DiscoveryComplete operation.
+    /// Completes discovery and publishes the final snapshot, including the last batch.
+    /// <param name="discoveryCompleteEventArgs">Completion state reported by the test platform.</param>
+    /// <param name="lastChunk">Final cases not previously delivered through <see cref="HandleDiscoveredTests"/>.</param>
     /// </summary>
     public void HandleDiscoveryComplete(DiscoveryCompleteEventArgs discoveryCompleteEventArgs, IEnumerable<TestCase>? lastChunk)
     {
@@ -502,7 +527,8 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
     }
 
     /// <summary>
-    /// Performs the handle RawMessage operation.
+    /// Receives a raw platform message that is intentionally not retained.
+    /// <param name="rawMessage">Raw message supplied by the test platform.</param>
     /// </summary>
     public void HandleRawMessage(string rawMessage)
     {
@@ -510,7 +536,9 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
     }
 
     /// <summary>
-    /// Performs the handle LogMessage operation.
+    /// Receives a platform log message that is intentionally not retained.
+    /// <param name="level">Severity assigned by the test platform.</param>
+    /// <param name="message">Message text, if present.</param>
     /// </summary>
     public void HandleLogMessage(TestMessageLevel level, string? message)
     {
@@ -520,7 +548,7 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
 }
 
 /// <summary>
-/// Defines the run EventsCollector class for benchmark or isolated-regression execution.
+/// Collects asynchronous test-run callbacks and publishes one immutable execution snapshot.
 /// </summary>
 internal sealed class RunEventsCollector : ITestRunEventsHandler
 {
@@ -539,7 +567,8 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
     public TaskCompletionSource<RunSnapshot> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
-    /// Performs the handle TestRunStatsChange operation.
+    /// Adds newly reported test results to the thread-safe result collection.
+    /// <param name="testRunChangedArgs">Incremental result update; updates without results are ignored.</param>
     /// </summary>
     public void HandleTestRunStatsChange(TestRunChangedEventArgs? testRunChangedArgs)
     {
@@ -555,7 +584,11 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
     }
 
     /// <summary>
-    /// Performs the handle TestRunComplete operation.
+    /// Completes execution and publishes the final result snapshot.
+    /// <param name="testRunCompleteArgs">Terminal run state reported by the test platform.</param>
+    /// <param name="lastChunkArgs">Final result batch, if one was not reported earlier.</param>
+    /// <param name="runContextAttachments">Attachments produced by the run; not consumed by this gate.</param>
+    /// <param name="executorUris">Executor identifiers; not consumed by this gate.</param>
     /// </summary>
     public void HandleTestRunComplete(
         TestRunCompleteEventArgs testRunCompleteArgs,
@@ -579,7 +612,9 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
     }
 
     /// <summary>
-    /// Performs the launch ProcessWithDebuggerAttached operation.
+    /// Declines debugger-attached process launch because the gate does not support interactive debugging.
+    /// <param name="testProcessStartInfo">Process description supplied by the test platform.</param>
+    /// <returns><c>-1</c>, indicating that no process was launched.</returns>
     /// </summary>
     public int LaunchProcessWithDebuggerAttached(TestProcessStartInfo testProcessStartInfo)
     {
@@ -588,7 +623,8 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
     }
 
     /// <summary>
-    /// Performs the handle RawMessage operation.
+    /// Receives a raw platform message that is intentionally not retained.
+    /// <param name="rawMessage">Raw message supplied by the test platform.</param>
     /// </summary>
     public void HandleRawMessage(string rawMessage)
     {
@@ -596,7 +632,9 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
     }
 
     /// <summary>
-    /// Performs the handle LogMessage operation.
+    /// Receives a platform log message that is intentionally not retained.
+    /// <param name="level">Severity assigned by the test platform.</param>
+    /// <param name="message">Message text, if present.</param>
     /// </summary>
     public void HandleLogMessage(TestMessageLevel level, string? message)
     {
@@ -606,28 +644,40 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
 }
 
 /// <summary>
-/// Defines the discovery Snapshot record for benchmark or isolated-regression execution.
+/// Captures the cases and completion state reported by test discovery.
 /// </summary>
+/// <param name="Cases">All cases received from discovery, including the final chunk.</param>
+/// <param name="IsAborted">Indicates that the test platform aborted discovery.</param>
+/// <param name="IsFullyDiscovered">Indicates that discovery reached normal completion.</param>
 internal sealed record DiscoverySnapshot(IReadOnlyList<TestCase> Cases, bool IsAborted, bool IsFullyDiscovered);
 /// <summary>
-/// Defines the run Snapshot record for benchmark or isolated-regression execution.
+/// Captures test results and terminal state reported by test execution.
 /// </summary>
+/// <param name="Results">Results received for the executed test run.</param>
+/// <param name="Completed">Indicates that the platform reported run completion.</param>
+/// <param name="IsCanceled">Indicates that cancellation was requested or observed.</param>
+/// <param name="IsAborted">Indicates that the platform aborted execution.</param>
 internal sealed record RunSnapshot(IReadOnlyList<TestResult> Results, bool Completed, bool IsCanceled, bool IsAborted);
 
 /// <summary>
-/// Defines the gate ExitCode enum for benchmark or isolated-regression execution.
+/// Defines process exit codes used to distinguish test outcomes from gate infrastructure failures.
 /// </summary>
 internal enum GateExitCode
 {
+    /// <summary>Execution completed and the selected test passed.</summary>
     Pass = 0,
+    /// <summary>The selected test completed with a failing or non-passing outcome.</summary>
     TestFailure = 1,
+    /// <summary>The gate could not reconcile discovery or execution results.</summary>
     InfrastructureError = 2,
+    /// <summary>Discovery produced no unique case matching the requested scope.</summary>
     DiscoveryMismatch = 3,
+    /// <summary>The test did not complete before cancellation and abort escalation.</summary>
     Timeout = 4,
 }
 
 /// <summary>
-/// Defines the selection Exception class for benchmark or isolated-regression execution.
+/// Reports a selection failure and whether it represents an infrastructure error.
 /// </summary>
 internal sealed class SelectionException(string message, bool infrastructure) : Exception(message)
 {
@@ -638,37 +688,40 @@ internal sealed class SelectionException(string message, bool infrastructure) : 
 }
 
 /// <summary>
-/// Defines the gate Options class for benchmark or isolated-regression execution.
+/// Stores validated command-line options for one isolated regression-gate invocation.
 /// </summary>
 internal sealed class GateOptions
 {
     /// <summary>
-    /// Gets or sets the repo Root value.
+    /// Gets the repository root used to resolve relative paths.
     /// </summary>
     public string RepoRoot { get; private set; } = ".";
     /// <summary>
-    /// Gets or sets the project Path value.
+    /// Gets the test project path used when an assembly path is not supplied.
     /// </summary>
     public string ProjectPath { get; private set; } = "VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj";
     /// <summary>
-    /// Gets or sets the test AssemblyPath value.
+    /// Gets the optional test assembly path, relative to <see cref="RepoRoot"/>.
     /// </summary>
     public string? TestAssemblyPath { get; private set; }
     /// <summary>
-    /// Gets or sets the requested Class value.
+    /// Gets the optional fully qualified test-class prefix to select.
     /// </summary>
     public string? RequestedClass { get; private set; }
     /// <summary>
-    /// Gets or sets the requested Test value.
+    /// Gets the optional fully qualified test or display name to select.
     /// </summary>
     public string? RequestedTest { get; private set; }
     /// <summary>
-    /// Gets or sets the timeout Seconds value.
+    /// Gets the execution timeout in seconds before cancellation escalation.
     /// </summary>
     public int TimeoutSeconds { get; private set; } = 45;
 
     /// <summary>
-    /// Performs the parse operation.
+    /// Parses command-line options and enforces the requirement for a requested class or test.
+    /// <param name="args">Raw command-line arguments.</param>
+    /// <returns>Options controlling the gate invocation.</returns>
+    /// <exception cref="ArgumentException">Thrown for unknown options, missing values, or an empty selection.</exception>
     /// </summary>
     public static GateOptions Parse(string[] args)
     {
@@ -714,7 +767,7 @@ internal sealed class GateOptions
 }
 
 /// <summary>
-/// Defines the gate Summary class for benchmark or isolated-regression execution.
+/// Accumulates discovery, execution, reconciliation, and artifact metadata for one gate invocation.
 /// </summary>
 internal sealed class GateSummary
 {

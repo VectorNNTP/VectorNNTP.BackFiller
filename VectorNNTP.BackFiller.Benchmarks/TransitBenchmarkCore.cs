@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// TransitBenchmarkCore: defines the benchmark entry point or scenario for controlled performance validation.
+// TransitBenchmarkCore: owns shared transit benchmark setup, execution, and teardown helpers.
 
 using System.Buffers;
 using System.Text;

@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Metrics/MetricMathHelpers: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+// Metrics/MetricMathHelpers: supplies numerically stable conversions and summary calculations for measurements.
 
 using System.Diagnostics;
 

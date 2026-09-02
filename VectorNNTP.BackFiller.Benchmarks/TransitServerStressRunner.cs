@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// TransitServerStressRunner: defines the benchmark entry point or scenario for controlled performance validation.
+// TransitServerStressRunner: drives bounded transit-server stress scenarios and reports their measurements.
 
 using System.Buffers;
 using System.Globalization;

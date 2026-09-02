@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Execution/FixedArticleLimiter: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+// Execution/FixedArticleLimiter: admits exactly a configured number of benchmark articles.
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 

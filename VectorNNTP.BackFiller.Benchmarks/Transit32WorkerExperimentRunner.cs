@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Transit32WorkerExperimentRunner: defines the benchmark entry point or scenario for controlled performance validation.
+// Transit32WorkerExperimentRunner: compares generator, queue, and full-pipeline scaling at thirty-two workers.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;

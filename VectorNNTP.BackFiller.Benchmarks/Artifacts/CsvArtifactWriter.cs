@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Artifacts/CsvArtifactWriter: writes durable JSON and CSV representations of benchmark measurements.
+// Artifacts/CsvArtifactWriter: serializes benchmark result rows as deterministic CSV artifacts.
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 

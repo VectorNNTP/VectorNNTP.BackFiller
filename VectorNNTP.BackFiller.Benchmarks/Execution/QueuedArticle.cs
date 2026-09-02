@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Execution/QueuedArticle: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+// Execution/QueuedArticle: carries an article identifier and payload size through the benchmark queue.
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 

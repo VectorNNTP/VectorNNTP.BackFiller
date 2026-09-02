@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// LoggingApiBenchmarks: defines the benchmark entry point or scenario for controlled performance validation.
+// LoggingApiBenchmarks: measures the allocation and throughput characteristics of logging API call patterns.
 
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;

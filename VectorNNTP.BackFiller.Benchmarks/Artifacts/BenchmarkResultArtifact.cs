@@ -2,7 +2,7 @@
 // Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// Artifacts/BenchmarkResultArtifact: writes durable JSON and CSV representations of benchmark measurements.
+// Artifacts/BenchmarkResultArtifact: models the complete, culture-invariant row written to benchmark artifacts.
 
 using System.Globalization;
 
