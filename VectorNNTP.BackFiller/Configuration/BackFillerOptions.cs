@@ -52,9 +52,6 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </remarks>
     internal sealed class BackFillerOptions
     {
-        /// <summary>
-        /// Gets or sets the list of IP addresses on which the service accepts incoming TCP connections.
-        /// </summary>
         /// <remarks>
         /// <para>When omitted, BackFiller listens on all interfaces (IPv4 and IPv6 wildcard binding).</para>
         /// <para>Each configured address must be:</para>
@@ -68,10 +65,6 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <para>Example: ["198.18.0.66", "2c0f:f030:1280:101:198:18:0:66"]</para>
         /// </remarks>
         public string[]? BindAddress { get; set; }
-
-        /// <summary>
-        /// Gets or sets the TCP port on which the service accepts incoming connections.
-        /// </summary>
         /// <remarks>
         /// <para>Must be a valid port number (1-65535).</para>
         /// <para>Ports 1-1023 are privileged and may require elevated permissions.</para>
@@ -80,31 +73,15 @@ namespace VectorNNTP.Backfiller.Configuration
         [Required(ErrorMessage = "BackFiller:BindPort is required")]
         [Range(1, 65535, ErrorMessage = "BackFiller:BindPort must be between 1 and 65535")]
         public int? BindPort { get; set; }
-
-        /// <summary>
-        /// Gets or sets the BackFiller instance name used to construct the TLS/ACME hostname.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:Name is required")]
         [MinLength(1, ErrorMessage = "BackFiller:Name cannot be empty")]
         public string? Name { get; set; }
-
-        /// <summary>
-        /// Gets or sets the BackFiller numeric instance identifier used to construct the TLS/ACME hostname.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:Id is required")]
         [Range(0, 99, ErrorMessage = "BackFiller:Id must be between 0 and 99")]
         public int? Id { get; set; }
-
-        /// <summary>
-        /// Gets or sets the DNS domain suffix used for BackFiller FQDN construction.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:DnsSuffix is required")]
         [MinLength(1, ErrorMessage = "BackFiller:DnsSuffix cannot be empty")]
         public string DnsSuffix { get; set; } = "usenet.ninja";
-
-        /// <summary>
-        /// Gets or sets the certificate directory used for ACME and TLS certificate artifacts.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:DirCerts is required")]
         [MinLength(1, ErrorMessage = "BackFiller:DirCerts cannot be empty")]
         public string? DirCerts { get; set; }
@@ -150,111 +127,51 @@ namespace VectorNNTP.Backfiller.Configuration
         /// When disabled, ACME and certificate-renewal settings are not required, but Cloudflare DNS settings remain required.
         /// </remarks>
         public bool Enabled { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets the ACME account contact email address.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:AcmeAccountEmail is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:AcmeAccountEmail cannot be empty")]
         [EmailAddress(ErrorMessage = "BackFiller:LetsEncrypt:AcmeAccountEmail must be a valid email address")]
         public string AcmeAccountEmail { get; set; } = "security@usenet.ninja";
-
-        /// <summary>
-        /// Gets or sets the filename of the PEM-encoded ACME account private key.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:AcmeAccountKeyPem is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:AcmeAccountKeyPem cannot be empty")]
         public string AcmeAccountKeyPem { get; set; } = "account.key";
-
-        /// <summary>
-        /// Gets or sets the maximum number of retry attempts for transient ACME operation failures.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts is required")]
         [Range(1, 10, ErrorMessage = "BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts must be between 1 and 10")]
         public int? AcmeTransientRetryMaxAttempts { get; set; } = 5;
-
-        /// <summary>
-        /// Gets or sets the TTL, in minutes, for reusing a successful clock-skew validation result.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes is required")]
         [Range(1, 60, ErrorMessage = "BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes must be between 1 and 60")]
         public int? ClockSkewCheckTtlMinutes { get; set; } = 5;
-
-        /// <summary>
-        /// Gets or sets the maximum permitted clock-skew, in minutes, for ACME operations.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:ClockSkewMaxMinutes is required")]
         [Range(1, 60, ErrorMessage = "BackFiller:LetsEncrypt:ClockSkewMaxMinutes must be between 1 and 60")]
         public int? ClockSkewMaxMinutes { get; set; } = 10;
-
-        /// <summary>
-        /// Gets or sets the authoritative DNS nameserver cache TTL, in minutes, for ACME DNS validation.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes is required")]
         [Range(1, 60, ErrorMessage = "BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes must be between 1 and 60")]
         public int? DnsAuthoritativeNsCacheMinutes { get; set; } = 5;
-
-        /// <summary>
-        /// Gets or sets the required authoritative DNS TXT quorum ratio for ACME DNS-01 propagation checks.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio is required")]
         [Range(typeof(double), "0.0000000001", "1", ErrorMessage = "BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio must be greater than 0 and less than or equal to 1")]
         public double? DnsAuthoritativeQuorumRatio { get; set; } = 0.7;
-
-        /// <summary>
-        /// Gets or sets the initial DNS propagation delay, in seconds, before authoritative DNS polling begins.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:DnsPropagationDelaySeconds is required")]
         [Range(0, 600, ErrorMessage = "BackFiller:LetsEncrypt:DnsPropagationDelaySeconds must be between 0 and 600")]
         public int? DnsPropagationDelaySeconds { get; set; } = 15;
-
-        /// <summary>
-        /// Gets or sets the interval, in seconds, between authoritative DNS TXT polling cycles.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds is required")]
         [Range(1, 60, ErrorMessage = "BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds must be between 1 and 60")]
         public int? DnsTxtPollIntervalSeconds { get; set; } = 3;
-
-        /// <summary>
-        /// Gets or sets the maximum timeout, in seconds, for authoritative DNS TXT propagation polling.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds must be between 1 and 3600")]
         public int? DnsTxtPollTimeoutSeconds { get; set; } = 600;
-
-        /// <summary>
-        /// Gets or sets the optional shared certificate SAN domain-name list.
-        /// </summary>
         /// <remarks>
         /// For VectorNNTP.BackFiller, this setting is validated only for syntax and is ignored
         /// as a certificate-identity source. The generated BackFiller FQDN remains authoritative.
         /// </remarks>
         public string[]? DomainNames { get; set; }
-
-        /// <summary>
-        /// Gets or sets the password used to protect exported PFX/PKCS#12 certificate bundles.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:PfxExportPassword is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:PfxExportPassword cannot be empty")]
         public string PfxExportPassword { get; set; } = "YOUR_PFX_PASSWORD";
-
-        /// <summary>
-        /// Gets or sets the interval, in hours, between certificate renewal state evaluations.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:RenewalCheckIntervalHours is required")]
         [Range(1, 168, ErrorMessage = "BackFiller:LetsEncrypt:RenewalCheckIntervalHours must be between 1 and 168")]
         public int? RenewalCheckIntervalHours { get; set; } = 6;
-
-        /// <summary>
-        /// Gets or sets the renewal scheduling jitter ratio applied to periodic certificate checks.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:RenewalJitterRatio is required")]
         [Range(typeof(double), "0", "0.9999999999", ErrorMessage = "BackFiller:LetsEncrypt:RenewalJitterRatio must be between 0 (inclusive) and 1 (exclusive)")]
         public double? RenewalJitterRatio { get; set; } = 0.1;
-
-        /// <summary>
-        /// Gets or sets the certificate renewal eligibility threshold, in days before expiration.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:RenewBeforeExpiryDays is required")]
         [Range(1, 60, ErrorMessage = "BackFiller:LetsEncrypt:RenewBeforeExpiryDays must be between 1 and 60")]
         public int? RenewBeforeExpiryDays { get; set; } = 7;
@@ -263,20 +180,12 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Gets or sets a value indicating whether ACME operations should use the Let's Encrypt staging directory.
         /// </summary>
         public bool UseStagingDirectory { get; set; }
-
-        /// <summary>
-        /// Gets or sets the Cloudflare API token used for DNS management.
-        /// </summary>
         /// <remarks>
         /// Required for BackFiller DNS/FQDN operational workflows regardless of <see cref="Enabled"/>.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareApiToken is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareApiToken cannot be empty")]
         public string CloudFlareApiToken { get; set; } = "YOUR_CLOUDFLARE_API_TOKEN";
-
-        /// <summary>
-        /// Gets or sets the Cloudflare Zone ID used for DNS operations.
-        /// </summary>
         /// <remarks>
         /// Required for BackFiller DNS/FQDN operational workflows regardless of <see cref="Enabled"/>.
         /// </remarks>
@@ -290,49 +199,22 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </summary>
     internal sealed class RabbitMqOptions
     {
-        /// <summary>
-        /// Gets or sets the maximum allowed duration, in seconds, for RabbitMQ operation-timeout coherence validation.
-        /// </summary>
         /// <remarks>
         /// Current runtime does not enforce channel lease revocation; this value is validated and projected for lifecycle policy coherence.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds must be between 1 and 3600")]
         public int? ChannelLeaseTimeoutSeconds { get; set; } = 60;
-
-        /// <summary>
-        /// Gets or sets the RabbitMQ RPC operation timeout, in seconds, used for lease/operation coherence checks.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:RpcTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:RpcTimeoutSeconds must be between 1 and 3600")]
         public int? RpcTimeoutSeconds { get; set; } = 30;
-
-        /// <summary>
-        /// Gets or sets the maximum duration, in seconds, that a broker-blocked RabbitMQ connection may remain blocked before recovery evaluation.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ConnectionBlockedTimeoutSeconds is required")]
         [Range(5, 3600, ErrorMessage = "BackFiller:RabbitMQ:ConnectionBlockedTimeoutSeconds must be between 5 and 3600")]
         public int? ConnectionBlockedTimeoutSeconds { get; set; } = 30;
-
-        /// <summary>
-        /// Gets or sets the collection of RabbitMQ broker host endpoints used for connection establishment.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:Hosts is required")]
         public string[]? Hosts { get; set; } = [];
-
-        /// <summary>
-        /// Gets or sets the RabbitMQ username used for credential-based authentication.
-        /// </summary>
         public string? Username { get; set; }
-
-        /// <summary>
-        /// Gets or sets the RabbitMQ password used for credential-based authentication.
-        /// </summary>
         public string? Password { get; set; }
-
-        /// <summary>
-        /// Gets or sets the RabbitMQ virtual host used for RabbitMQ namespace isolation.
-        /// </summary>
         public string? VirtualHost { get; set; } = "/";
 
         /// <summary>
@@ -340,173 +222,93 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:EnableSsl is required")]
         public bool? EnableSsl { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets the RabbitMQ AMQP TCP port used when connecting to configured hosts.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:Port is required")]
         [Range(1, 65535, ErrorMessage = "BackFiller:RabbitMQ:Port must be between 1 and 65535")]
         public int? Port { get; set; } = 5672;
-
-        /// <summary>
-        /// Gets or sets the bounded in-memory delivery buffer capacity used by RabbitMQ consumer infrastructure.
-        /// </summary>
         /// <remarks>
         /// Current runtime uses this value for delivery-channel buffering, not RabbitMQ channel-object pooling.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ChannelPoolSize is required")]
         [Range(1, 8192, ErrorMessage = "BackFiller:RabbitMQ:ChannelPoolSize must be between 1 and 8192")]
         public int? ChannelPoolSize { get; set; } = 512;
-
-        /// <summary>
-        /// Gets or sets the configured minimum RabbitMQ connection count target for future pool-scaling policy.
-        /// </summary>
         /// <remarks>
         /// Current runtime uses a single active RabbitMQ connection manager connection; this value is validated/projected but not enforced.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MinConnections is required")]
         [Range(1, 512, ErrorMessage = "BackFiller:RabbitMQ:MinConnections must be between 1 and 512")]
         public int? MinConnections { get; set; } = 4;
-
-        /// <summary>
-        /// Gets or sets the configured maximum RabbitMQ connection count limit for future pool-scaling policy.
-        /// </summary>
         /// <remarks>
         /// Current runtime uses a single active RabbitMQ connection manager connection; this value is validated/projected but not enforced.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaxConnections is required")]
         [Range(1, 512, ErrorMessage = "BackFiller:RabbitMQ:MaxConnections must be between 1 and 512")]
         public int? MaxConnections { get; set; } = 16;
-
-        /// <summary>
-        /// Gets or sets the maximum number of consecutive failed recovery attempts permitted for an individual RabbitMQ connection recovery context.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaxConsecutiveRecoveryFailures is required")]
         [Range(1, 100, ErrorMessage = "BackFiller:RabbitMQ:MaxConsecutiveRecoveryFailures must be between 1 and 100")]
         public int? MaxConsecutiveRecoveryFailures { get; set; } = 5;
-
-        /// <summary>
-        /// Gets or sets the maximum pending channel-lease waiter target for future RabbitMQ channel-pool policy.
-        /// </summary>
         /// <remarks>
         /// Current runtime creates owned channels directly without a shared lease-waiter queue; this value is validated/projected but not enforced.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaxPendingLeaseWaiters is required")]
         [Range(0, 65536, ErrorMessage = "BackFiller:RabbitMQ:MaxPendingLeaseWaiters must be between 0 and 65536")]
         public int? MaxPendingLeaseWaiters { get; set; } = 1024;
-
-        /// <summary>
-        /// Gets or sets the minimum idle duration, in seconds, for future RabbitMQ connection scale-down policy.
-        /// </summary>
         /// <remarks>
         /// Current runtime does not implement multi-connection scale-down logic; this value is validated/projected for planned policy.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ConnectionScaleDownIdleSeconds is required")]
         [Range(30, 86400, ErrorMessage = "BackFiller:RabbitMQ:ConnectionScaleDownIdleSeconds must be between 30 and 86400")]
         public int? ConnectionScaleDownIdleSeconds { get; set; } = 300;
-
-        /// <summary>
-        /// Gets or sets the cooldown, in seconds, for future RabbitMQ connection scale-down policy.
-        /// </summary>
         /// <remarks>
         /// Current runtime does not implement connection pool scale-down operations; this value is validated/projected for planned policy.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:ScaleDownCooldownSeconds is required")]
         [Range(0, 3600, ErrorMessage = "BackFiller:RabbitMQ:ScaleDownCooldownSeconds must be between 0 and 3600")]
         public int? ScaleDownCooldownSeconds { get; set; } = 30;
-
-        /// <summary>
-        /// Gets or sets the minimum base interval, in seconds, between automatic RabbitMQ network recovery attempts.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds must be between 1 and 3600")]
         public int? NetworkRecoveryIntervalSeconds { get; set; } = 5;
-
-        /// <summary>
-        /// Gets or sets the base delay, in milliseconds, used before pool-level RabbitMQ reconnect attempts.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:PoolReconnectBaseDelayMs is required")]
         [Range(50, 60000, ErrorMessage = "BackFiller:RabbitMQ:PoolReconnectBaseDelayMs must be between 50 and 60000")]
         public int? PoolReconnectBaseDelayMs { get; set; } = 250;
-
-        /// <summary>
-        /// Gets or sets the maximum delay, in milliseconds, allowed for pool-level RabbitMQ reconnect backoff.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:PoolReconnectMaxDelayMs is required")]
         [Range(50, 300000, ErrorMessage = "BackFiller:RabbitMQ:PoolReconnectMaxDelayMs must be between 50 and 300000")]
         public int? PoolReconnectMaxDelayMs { get; set; } = 30000;
-
-        /// <summary>
-        /// Gets or sets the minimum healthy RabbitMQ connection lifetime policy, in seconds, for future idle-retirement logic.
-        /// </summary>
         /// <remarks>
         /// Current runtime does not enforce connection lifetime retirement; this value is validated/projected for planned policy.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds is required")]
         [Range(30, 86400, ErrorMessage = "BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds must be between 30 and 86400")]
         public int? MinimumConnectionLifetimeSeconds { get; set; } = 300;
-
-        /// <summary>
-        /// Gets or sets the maximum wait time, in seconds, for RabbitMQ publisher confirmations.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds must be between 1 and 3600")]
         public int? PublishConfirmTimeoutSeconds { get; set; } = 10;
-
-        /// <summary>
-        /// Gets or sets the maximum RabbitMQ shutdown-drain budget, in seconds, used for shutdown-policy validation and runtime projection.
-        /// </summary>
         /// <remarks>
         /// Current RabbitMQ shutdown/disposal flow is cancellation-driven; this value is not used as an active internal timer in RabbitMQ components.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds is required")]
         [Range(1, 3600, ErrorMessage = "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds must be between 1 and 3600")]
         public int? MaximumShutdownDrainTimeoutSeconds { get; set; } = 30;
-
-        /// <summary>
-        /// Gets or sets the degraded-capacity threshold policy for future RabbitMQ health evaluation logic.
-        /// </summary>
         /// <remarks>
         /// Current runtime does not compute capacity-ratio degradation from this value; it remains a validated/projected policy input.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:DegradedThreshold is required")]
         [Range(0.000001d, 1d, ErrorMessage = "BackFiller:RabbitMQ:DegradedThreshold must be greater than 0 and less than or equal to 1")]
         public double? DegradedThreshold { get; set; } = 0.75;
-
-        /// <summary>
-        /// Gets or sets the consecutive-unhealthy threshold policy for future RabbitMQ health evaluation logic.
-        /// </summary>
         /// <remarks>
         /// Current runtime does not maintain an unhealthy-evaluation counter from this value; it remains a validated/projected policy input.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:UnhealthyThreshold is required")]
         [Range(1, 120, ErrorMessage = "BackFiller:RabbitMQ:UnhealthyThreshold must be between 1 and 120")]
         public int? UnhealthyThreshold { get; set; } = 5;
-
-        /// <summary>
-        /// Gets or sets the requested RabbitMQ heartbeat timeout, in seconds, for AMQP connection negotiation.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:RequestedHeartbeatSeconds is required")]
         [Range(0, 3600, ErrorMessage = "BackFiller:RabbitMQ:RequestedHeartbeatSeconds must be between 0 and 3600")]
         public int? RequestedHeartbeatSeconds { get; set; } = 60;
-
-        /// <summary>
-        /// Gets or sets the RabbitMQ socket operation timeout, in seconds, for low-level network I/O.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:SocketTimeoutSeconds is required")]
         [Range(5, 600, ErrorMessage = "BackFiller:RabbitMQ:SocketTimeoutSeconds must be between 5 and 600")]
         public int? SocketTimeoutSeconds { get; set; } = 30;
-
-        /// <summary>
-        /// Gets or sets the requested RabbitMQ channel limit per connection.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:RabbitMQ:RequestedChannelMax is required")]
         [Range(1, 65535, ErrorMessage = "BackFiller:RabbitMQ:RequestedChannelMax must be between 1 and 65535")]
         public int? RequestedChannelMax { get; set; } = 2047;
-
-        /// <summary>
-        /// Gets or sets the optional RabbitMQ consumer prefetch count used for Basic.Qos prefetch control.
-        /// </summary>
         [Range(1, 65535, ErrorMessage = "BackFiller:RabbitMQ:ConsumerPrefetchCount must be between 1 and 65535")]
         public ushort? ConsumerPrefetchCount { get; set; }
 
@@ -521,16 +323,9 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </summary>
     internal sealed class TransitServerOptions
     {
-        /// <summary>
-        /// Gets or sets the hostname or IP address of the downstream NNTP TransitServer.
-        /// </summary>
         [Required(ErrorMessage = "BackFiller:TransitServer:Host is required")]
         [MinLength(1, ErrorMessage = "BackFiller:TransitServer:Host cannot be empty")]
         public string Host { get; set; } = "localhost";
-
-        /// <summary>
-        /// Gets or sets the NNTP port used when connecting to the configured TransitServer host.
-        /// </summary>
         [Range(1, 65535, ErrorMessage = "BackFiller:TransitServer:Port must be between 1 and 65535")]
         public int Port { get; set; } = 119;
 
@@ -559,18 +354,11 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </remarks>
     internal sealed class ShutdownOptions : IValidatableObject
     {
-        /// <summary>
-        /// Stores minimum grace period seconds used by back filler options.
-        /// </summary>
         internal const int MinimumGracePeriodSeconds = 5;
         /// <summary>
         /// Limits maximum grace period seconds for back filler options.
         /// </summary>
         internal const int MaximumGracePeriodSeconds = 600;
-
-        /// <summary>
-        /// Gets or sets the grace period, in seconds, to allow for graceful shutdown.
-        /// </summary>
         public int GracePeriodSeconds { get; set; } = 30;
 
         /// <summary>
@@ -2003,9 +1791,6 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </summary>
     internal static class LetsEncryptValidator
     {
-        /// <summary>
-        /// Stores email validator used by back filler options.
-        /// </summary>
         private static readonly EmailAddressAttribute EmailValidator = new();
 
         /// <summary>
@@ -3104,10 +2889,6 @@ namespace VectorNNTP.Backfiller.Configuration
             ArgumentNullException.ThrowIfNull(address);
             return IPAddress.Any.Equals(address) || IPAddress.IPv6Any.Equals(address);
         }
-
-        /// <summary>
-        /// Performs a preflight bind test for an address:port combination.
-        /// </summary>
         /// <remarks>
         /// This check is diagnostic only and is not an authoritative reservation of the endpoint.
         /// A separate process may bind the endpoint after validation and before listener startup.
@@ -3181,3 +2962,6 @@ namespace VectorNNTP.Backfiller.Configuration
         }
     }
 }
+
+
+

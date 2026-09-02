@@ -6,34 +6,36 @@
 
 using System.Text.Json;
 
-namespace VectorNNTP.BackFiller.Benchmarks;
-
-/// <summary>
-/// Represents the json ArtifactWriter class used by the benchmark or regression gate.
-/// </summary>
-internal static class JsonArtifactWriter
+namespace VectorNNTP.BackFiller.Benchmarks
 {
-    /// <summary>
-    /// Serializes an artifact with indented JSON for human inspection and durable benchmark output.
-    /// </summary>
-    internal static string Serialize<TArtifact>(TArtifact artifact)
-    {
-        return JsonSerializer.Serialize(artifact, new JsonSerializerOptions { WriteIndented = true });
-    }
 
     /// <summary>
-    /// Gets ArtifactPath.
+    /// Represents the json ArtifactWriter class used by the benchmark or regression gate.
     /// </summary>
-    internal static string GetArtifactPath(string baseDirectory, string stamp)
+    internal static class JsonArtifactWriter
     {
-        return Path.Combine(baseDirectory, $"transit-benchmark-result-{stamp}.json");
-    }
+        /// <summary>
+        /// Serializes an artifact with indented JSON for human inspection and durable benchmark output.
+        /// </summary>
+        internal static string Serialize<TArtifact>(TArtifact artifact)
+        {
+            return JsonSerializer.Serialize(artifact, new JsonSerializerOptions { WriteIndented = true });
+        }
 
-    /// <summary>
-    /// Writes ToPath.
-    /// </summary>
-    internal static void WriteToPath(string path, string json)
-    {
-        File.WriteAllText(path, json);
+        /// <summary>
+        /// Gets ArtifactPath.
+        /// </summary>
+        internal static string GetArtifactPath(string baseDirectory, string stamp)
+        {
+            return Path.Combine(baseDirectory, $"transit-benchmark-result-{stamp}.json");
+        }
+
+        /// <summary>
+        /// Writes ToPath.
+        /// </summary>
+        internal static void WriteToPath(string path, string json)
+        {
+            File.WriteAllText(path, json);
+        }
     }
 }

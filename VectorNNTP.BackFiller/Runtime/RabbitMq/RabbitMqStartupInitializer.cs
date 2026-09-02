@@ -23,21 +23,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         BackFillerRuntimeOptions runtimeOptions,
         ILogger<RabbitMqStartupInitializer> logger) : IHostedService
     {
-        /// <summary>
-        /// Stores connection manager used by rabbit mq startup initializer.
-        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-        /// <summary>
-        /// Stores topology initializer used by rabbit mq startup initializer.
-        /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
         /// <summary>
         /// Limits account snapshot provider for rabbit mq startup initializer.
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider = accountSnapshotProvider ?? throw new ArgumentNullException(nameof(accountSnapshotProvider));
-        /// <summary>
-        /// Stores runtime options used by rabbit mq startup initializer.
-        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
         /// Supplies the logger used by rabbit mq startup initializer.
@@ -90,3 +81,4 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static partial void LogStartupInitializationCompleted(ILogger logger, RabbitMqInfrastructureState state, int backboneCount);
     }
 }
+

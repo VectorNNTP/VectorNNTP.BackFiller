@@ -5,7 +5,6 @@
 // VectorNNTP.Backfiller Runtime / RabbitMq
 // Implements the rabbit mq topology behavior.
 
-using System.Collections.Frozen;
 using RabbitMQ.Client;
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
@@ -85,7 +84,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     }));
             }
 
-            return [.. definitions.ToFrozenSet().OrderBy(static x => x.Backbone, StringComparer.OrdinalIgnoreCase)];
+            return [.. definitions.OrderBy(static x => x.Backbone, StringComparer.OrdinalIgnoreCase)];
         }
 
         /// <summary>
@@ -105,32 +104,24 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         RabbitMqConnectionManager connectionManager,
         ILogger<RabbitMqTopologyInitializer> logger)
     {
-        /// <summary>
-        /// Stores connection manager used by rabbit mq topology.
-        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         /// <summary>
         /// Supplies the logger used by rabbit mq topology.
         /// </summary>
         private readonly ILogger<RabbitMqTopologyInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        /// <summary>
-        /// Stores initialization gate used by rabbit mq topology.
-        /// </summary>
         private readonly SemaphoreSlim _initializationGate = new(1, 1);
-        /// <summary>
-        /// Stores declared topology keys used by rabbit mq topology.
-        /// </summary>
         private readonly HashSet<string> _declaredTopologyKeys = new(StringComparer.Ordinal);
-        /// <summary>
-        /// Stores declared topology generation used by rabbit mq topology.
-        /// </summary>
         private long _declaredTopologyGeneration;
 
         /// <summary>
         /// Declares all required RabbitMQ topology for configured backbones.
         /// </summary>
-        /// <param name="serverId">BackFiller server identifier.</param>
-        /// <param name="backbones">Backbone names to isolate.</param>
+        /// <remarks>
+        /// ServerId is retained for caller compatibility/context and is validated as a non-negative identifier.
+        /// RabbitMQ article-work topology identity remains Backbone-only.
+        /// </remarks>
+        /// <param name="serverId">BackFiller server identifier retained for call-site compatibility; does not participate in topology identity.</param>
+        /// <param name="backbones">Backbone names that determine topology identity.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task that completes when all declarations succeed.</returns>
         internal async Task InitializeAsync(
@@ -269,3 +260,4 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static partial void LogBackboneTopologyInitializationCompleted(ILogger logger, string backbone, string exchange, string queue, string routingKey);
     }
 }
+

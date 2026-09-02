@@ -17,14 +17,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
     /// </summary>
     internal static class ConfigurationFingerprintService
     {
-        /// <summary>
-        /// Stores fingerprint algorithm version used by configuration fingerprint service.
-        /// </summary>
         private const string FingerprintAlgorithmVersion = "v1";
-
-        /// <summary>
-        /// Stores sensitive segment patterns used by configuration fingerprint service.
-        /// </summary>
         private static readonly string[] SensitiveSegmentPatterns =
         [
             "password",
@@ -277,3 +270,4 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
     }
 }
+

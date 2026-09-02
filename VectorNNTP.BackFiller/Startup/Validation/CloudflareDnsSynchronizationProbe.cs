@@ -17,18 +17,12 @@ using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
-    /// <summary>
-    /// Performs startup-time Cloudflare DNS synchronization for the authoritative generated BackFiller FQDN.
-    /// </summary>
     /// <remarks>
     /// <para>Reconciles Cloudflare A/AAAA records for one FQDN to match the validated canonical bind-address set exactly.</para>
     /// <para>This operation is idempotent: if desired and existing records already match, no mutation calls are issued.</para>
     /// </remarks>
     internal static class CloudflareDnsSynchronizationProbe
     {
-        /// <summary>
-        /// Stores dependency name used by cloudflare dns synchronization probe.
-        /// </summary>
         private const string DependencyName = "CloudflareDnsSynchronization";
 
         /// <summary>
@@ -539,13 +533,10 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </summary>
     internal sealed class CloudflareDnsFacade : ICloudflareDnsFacade
     {
-        /// <summary>
-        /// Stores client used by cloudflare dns synchronization probe.
-        /// </summary>
         private readonly CloudFlareClient _client;
 
         /// <summary>
-        /// Initializes the facade with one Cloudflare API token.
+        /// Initializes facade with one Cloudflare API token.
         /// </summary>
         /// <param name="apiToken">Cloudflare API token.</param>
         public CloudflareDnsFacade(string apiToken)
@@ -710,3 +701,6 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
     }
 }
+
+
+

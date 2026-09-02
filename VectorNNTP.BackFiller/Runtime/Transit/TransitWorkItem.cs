@@ -14,13 +14,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed class TransitWorkItem
     {
-        /// <summary>
-        /// Stores terminal completion observed used by transit work item.
-        /// </summary>
         private int _terminalCompletionObserved;
-        /// <summary>
-        /// Stores state value used by transit work item.
-        /// </summary>
         private int _stateValue = (int)TransitWorkItemState.Queued;
 
         /// <summary>
@@ -53,25 +47,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             FirstEnqueuedUtc = DateTimeOffset.UtcNow;
             LastEnqueuedUtc = FirstEnqueuedUtc;
         }
-
-        /// <summary>
-        /// Stores work item id used by transit work item.
-        /// </summary>
         internal long WorkItemId { get; }
-
-        /// <summary>
-        /// Stores message id used by transit work item.
-        /// </summary>
         internal string MessageId { get; }
-
-        /// <summary>
-        /// Stores payload for transit work item.
-        /// </summary>
         internal byte[] Payload { get; }
-
-        /// <summary>
-        /// Stores payload bytes for transit work item.
-        /// </summary>
         internal int PayloadBytes { get; }
 
         /// <summary>
@@ -83,80 +61,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits max attempts for transit work item.
         /// </summary>
         internal int MaxAttempts { get; }
-
-        /// <summary>
-        /// Stores first enqueued utc used by transit work item.
-        /// </summary>
         internal DateTimeOffset FirstEnqueuedUtc { get; }
-
-        /// <summary>
-        /// Stores last enqueued utc used by transit work item.
-        /// </summary>
         internal DateTimeOffset LastEnqueuedUtc { get; private set; }
-
-        /// <summary>
-        /// Stores last claimed utc used by transit work item.
-        /// </summary>
         internal DateTimeOffset? LastClaimedUtc { get; private set; }
-
-        /// <summary>
-        /// Stores last failure utc used by transit work item.
-        /// </summary>
         internal DateTimeOffset? LastFailureUtc { get; private set; }
-
-        /// <summary>
-        /// Stores next eligible utc used by transit work item.
-        /// </summary>
         internal DateTimeOffset? NextEligibleUtc { get; private set; }
-
-        /// <summary>
-        /// Stores last failure class used by transit work item.
-        /// </summary>
         internal TransitWorkFailureClass? LastFailureClass { get; private set; }
-
-        /// <summary>
-        /// Stores last transmission uncertainty used by transit work item.
-        /// </summary>
         internal TransitTransmissionUncertainty? LastTransmissionUncertainty { get; private set; }
-
-        /// <summary>
-        /// Stores state used by transit work item.
-        /// </summary>
         internal TransitWorkItemState State => (TransitWorkItemState)Volatile.Read(ref _stateValue);
-
-        /// <summary>
-        /// Stores owner connection id used by transit work item.
-        /// </summary>
         internal string? OwnerConnectionId { get; private set; }
-
-        /// <summary>
-        /// Stores cancel requested used by transit work item.
-        /// </summary>
         internal bool CancelRequested { get; private set; }
-
-        /// <summary>
-        /// Stores terminal status used by transit work item.
-        /// </summary>
         internal TransitPublishStatus? TerminalStatus { get; private set; }
-
-        /// <summary>
-        /// Stores terminal provenance used by transit work item.
-        /// </summary>
         internal TransitPublishProvenance? TerminalProvenance { get; private set; }
-
-        /// <summary>
-        /// Stores last state transition tick used by transit work item.
-        /// </summary>
         internal long LastStateTransitionTick { get; private set; }
-
-        /// <summary>
-        /// Stores completion task used by transit work item.
-        /// </summary>
         internal Task<TransitPublishResult> CompletionTask => _completion.Task;
-
-        /// <summary>
-        /// Stores completion used by transit work item.
-        /// </summary>
         private readonly TaskCompletionSource<TransitPublishResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>
@@ -427,10 +345,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _ => TransitWorkItemState.CompletedFailed,
             };
         }
-
-        /// <summary>
-        /// Stores is terminal used by transit work item.
-        /// </summary>
         internal bool IsTerminal => Volatile.Read(ref _terminalCompletionObserved) == 1;
     }
 
@@ -480,3 +394,4 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         Retrying = 3,
     }
 }
+

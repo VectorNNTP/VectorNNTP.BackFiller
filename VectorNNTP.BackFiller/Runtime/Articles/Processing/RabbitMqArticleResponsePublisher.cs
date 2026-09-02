@@ -17,25 +17,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
     {
-        /// <summary>
-        /// Stores connection manager used by rabbit mq article response publisher.
-        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
-        /// <summary>
-        /// Stores options used by rabbit mq article response publisher.
-        /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
         /// <summary>
         /// Supplies the logger used by rabbit mq article response publisher.
         /// </summary>
         private readonly ILogger<RabbitMqArticleResponsePublisher> _logger;
-        /// <summary>
-        /// Stores publish gate used by rabbit mq article response publisher.
-        /// </summary>
         private readonly SemaphoreSlim _publishGate = new(1, 1);
-        /// <summary>
-        /// Stores owned publish channel used by rabbit mq article response publisher.
-        /// </summary>
         private RabbitMqOwnedChannel? _ownedPublishChannel;
 
         /// <summary>
@@ -229,3 +217,4 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
     }
 }
+

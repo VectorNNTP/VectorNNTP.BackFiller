@@ -1091,20 +1091,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             /// Returns the stable slot index.
             /// </summary>
             internal int SlotId { get; }
-
-            /// <summary>
-            /// Gets or sets the account snapshot associated with this slot.
-            /// </summary>
             internal NntpAccountSnapshot Account { get; set; }
-
-            /// <summary>
-            /// Gets or sets the endpoint associated with this slot.
-            /// </summary>
             internal NntpArticleAcquisitionEndpoint Endpoint { get; set; }
-
-            /// <summary>
-            /// Gets or sets the currently connected session for this slot.
-            /// </summary>
             internal NntpArticleAcquisitionSession? Session { get; set; }
 
             /// <summary>
@@ -1116,15 +1104,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             /// Gets or sets a value indicating whether the slot is currently leased.
             /// </summary>
             internal bool Busy { get; set; }
-
-            /// <summary>
-            /// Gets or sets the UTC time of the most recently completed ARTICLE operation for this slot.
-            /// </summary>
             internal DateTimeOffset LastArticleActivityUtc { get; set; }
-
-            /// <summary>
-            /// Gets or sets the UTC time of the last successful DATE keepalive probe for this slot.
-            /// </summary>
             internal DateTimeOffset? LastKeepAliveProbeUtc { get; set; }
 
             /// <summary>
@@ -1470,3 +1450,4 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
     }
 }
+

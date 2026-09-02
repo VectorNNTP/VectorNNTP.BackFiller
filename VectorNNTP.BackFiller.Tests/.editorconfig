@@ -74,8 +74,9 @@ dotnet_diagnostic.IDE0003.severity = warning
 dotnet_diagnostic.IDE0052.severity = warning
 
 # ── Namespace declarations ──────────────────────────────────────────────────
-# Project allows file-scoped and block-scoped namespaces; do not enforce either.
-csharp_style_namespace_declarations = block_scoped:silent
+# Repository standard requires block-scoped namespaces; file-scoped namespaces are not permitted.
+csharp_style_namespace_declarations = block_scoped:error
+dotnet_diagnostic.IDE0160.severity = error
 dotnet_diagnostic.IDE0161.severity = silent
 
 # ── Access modifiers ───────────────────────────────────────────────────────

@@ -15,9 +15,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </remarks>
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
-        /// <summary>
-        /// Stores channel used by rabbit mq owned channel.
-        /// </summary>
         private readonly IRabbitMqChannel _channel;
 
         /// <summary>
@@ -59,3 +56,4 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
     }
 }
+

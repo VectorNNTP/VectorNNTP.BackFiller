@@ -17,91 +17,29 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed partial class RabbitMqConnectionManager : IAsyncDisposable
     {
-        /// <summary>
-        /// Stores options used by rabbit mq connection manager.
-        /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
-        /// <summary>
-        /// Stores connection name used by rabbit mq connection manager.
-        /// </summary>
         private readonly string _connectionName;
-        /// <summary>
-        /// Stores connector used by rabbit mq connection manager.
-        /// </summary>
         private readonly IRabbitMqBrokerConnector _connector;
-        /// <summary>
-        /// Stores shutdown coordinator used by rabbit mq connection manager.
-        /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
-        /// <summary>
-        /// Stores time provider used by rabbit mq connection manager.
-        /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
         /// Supplies the logger used by rabbit mq connection manager.
         /// </summary>
         private readonly ILogger<RabbitMqConnectionManager> _logger;
-        /// <summary>
-        /// Stores state gate used by rabbit mq connection manager.
-        /// </summary>
         private readonly SemaphoreSlim _stateGate = new(1, 1);
-        /// <summary>
-        /// Stores recovery signal used by rabbit mq connection manager.
-        /// </summary>
         private readonly SemaphoreSlim _recoverySignal = new(0, int.MaxValue);
-        /// <summary>
-        /// Stores shutdown cts used by rabbit mq connection manager.
-        /// </summary>
         private readonly CancellationTokenSource _shutdownCts = new();
-
-        /// <summary>
-        /// Stores connection used by rabbit mq connection manager.
-        /// </summary>
         private IRabbitMqBrokerConnection? _connection;
-        /// <summary>
-        /// Stores recovery task used by rabbit mq connection manager.
-        /// </summary>
         private Task? _recoveryTask;
-        /// <summary>
-        /// Stores graceful shutdown registration used by rabbit mq connection manager.
-        /// </summary>
         private IDisposable? _gracefulShutdownRegistration;
-        /// <summary>
-        /// Stores forced shutdown registration used by rabbit mq connection manager.
-        /// </summary>
         private IDisposable? _forcedShutdownRegistration;
-
-        /// <summary>
-        /// Stores state used by rabbit mq connection manager.
-        /// </summary>
         private volatile RabbitMqInfrastructureState _state = RabbitMqInfrastructureState.NotInitialized;
-        /// <summary>
-        /// Stores dispose requested used by rabbit mq connection manager.
-        /// </summary>
         private volatile bool _disposeRequested;
-        /// <summary>
-        /// Stores recovery queued used by rabbit mq connection manager.
-        /// </summary>
         private int _recoveryQueued;
-        /// <summary>
-        /// Stores recovery attempt used by rabbit mq connection manager.
-        /// </summary>
         private int _recoveryAttempt;
-        /// <summary>
-        /// Stores consecutive client recovery errors used by rabbit mq connection manager.
-        /// </summary>
         private int _consecutiveClientRecoveryErrors;
-        /// <summary>
-        /// Stores connection generation used by rabbit mq connection manager.
-        /// </summary>
         private long _connectionGeneration;
-        /// <summary>
-        /// Stores topology initialized used by rabbit mq connection manager.
-        /// </summary>
         private volatile bool _topologyInitialized;
-        /// <summary>
-        /// Stores last connected at utc used by rabbit mq connection manager.
-        /// </summary>
         private DateTimeOffset? _lastConnectedAtUtc;
 
         /// <summary>
@@ -681,3 +619,4 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static partial void LogShutdownCompleted(ILogger logger);
     }
 }
+

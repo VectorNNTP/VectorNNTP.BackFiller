@@ -122,55 +122,20 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         /// Limits maximum grace period for shutdown coordinator.
         /// </summary>
         private static readonly TimeSpan MaximumGracePeriod = TimeSpan.FromMilliseconds(int.MaxValue);
-
-        /// <summary>
-        /// Stores gate used by shutdown coordinator.
-        /// </summary>
         private readonly object _gate = new();
-        /// <summary>
-        /// Stores graceful shutdown started cts used by shutdown coordinator.
-        /// </summary>
         private readonly CancellationTokenSource _gracefulShutdownStartedCts = new();
-        /// <summary>
-        /// Stores forced shutdown cts used by shutdown coordinator.
-        /// </summary>
         private readonly CancellationTokenSource _forcedShutdownCts = new();
         /// <summary>
         /// Supplies the logger used by shutdown coordinator.
         /// </summary>
         private readonly ILogger<ShutdownCoordinator> _logger;
-
-        /// <summary>
-        /// Stores grace period cts used by shutdown coordinator.
-        /// </summary>
         private CancellationTokenSource? _gracePeriodCts;
-        /// <summary>
-        /// Stores state used by shutdown coordinator.
-        /// </summary>
         private ShutdownState _state = ShutdownState.Running;
-        /// <summary>
-        /// Stores graceful shutdown started at utc used by shutdown coordinator.
-        /// </summary>
         private DateTimeOffset? _gracefulShutdownStartedAtUtc;
-        /// <summary>
-        /// Stores forced shutdown at utc used by shutdown coordinator.
-        /// </summary>
         private DateTimeOffset? _forcedShutdownAtUtc;
-        /// <summary>
-        /// Stores graceful shutdown started timestamp used by shutdown coordinator.
-        /// </summary>
         private long? _gracefulShutdownStartedTimestamp;
-        /// <summary>
-        /// Stores forced shutdown timestamp used by shutdown coordinator.
-        /// </summary>
         private long? _forcedShutdownTimestamp;
-        /// <summary>
-        /// Stores graceful shutdown reason used by shutdown coordinator.
-        /// </summary>
         private ShutdownReason _gracefulShutdownReason = ShutdownReason.Unknown;
-        /// <summary>
-        /// Stores forced shutdown reason used by shutdown coordinator.
-        /// </summary>
         private ShutdownReason _forcedShutdownReason = ShutdownReason.Unknown;
 
         /// <summary>
@@ -636,3 +601,4 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             string cancellationTokenSourceName);
     }
 }
+

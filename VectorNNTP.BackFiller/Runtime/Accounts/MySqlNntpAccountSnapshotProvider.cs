@@ -56,18 +56,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             "usessl " +
             "FROM nntpbackfilleraccounts " +
             "WHERE serverid = @ServerId;";
-
-        /// <summary>
-        /// Stores connection string used by my sql nntp account snapshot provider.
-        /// </summary>
         private readonly string _connectionString;
-        /// <summary>
-        /// Stores database name used by my sql nntp account snapshot provider.
-        /// </summary>
         private readonly string _databaseName;
-        /// <summary>
-        /// Stores server id used by my sql nntp account snapshot provider.
-        /// </summary>
         private readonly byte _serverId;
         /// <summary>
         /// Supplies the logger used by my sql nntp account snapshot provider.
@@ -77,18 +67,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// Limits query accounts for my sql nntp account snapshot provider.
         /// </summary>
         private readonly Func<CancellationToken, Task<List<NntpAccountSnapshot>>> _queryAccounts;
-        /// <summary>
-        /// Stores startup provisioning store used by my sql nntp account snapshot provider.
-        /// </summary>
         private readonly IStartupProvisioningStore _startupProvisioningStore;
-
-        /// <summary>
-        /// Stores refresh in progress used by my sql nntp account snapshot provider.
-        /// </summary>
         private int _refreshInProgress;
-        /// <summary>
-        /// Stores current snapshot used by my sql nntp account snapshot provider.
-        /// </summary>
         private volatile NntpAccountSnapshotState _currentSnapshot;
 
         /// <summary>
@@ -352,9 +332,6 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// </summary>
         internal sealed class NoOpStartupProvisioningStore : IStartupProvisioningStore
         {
-            /// <summary>
-            /// Stores instance used by my sql nntp account snapshot provider.
-            /// </summary>
             internal static readonly NoOpStartupProvisioningStore Instance = new();
 
             /// <summary>
@@ -378,9 +355,6 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// </summary>
         private sealed class MySqlStartupProvisioningStore : IStartupProvisioningStore
         {
-            /// <summary>
-            /// Stores connection string used by my sql nntp account snapshot provider.
-            /// </summary>
             private readonly string _connectionString;
             /// <summary>
             /// Supplies the logger used by my sql nntp account snapshot provider.
@@ -563,3 +537,4 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         private static partial void LogPeriodicRefreshSkippedInProgress(ILogger logger, byte serverId);
     }
 }
+

@@ -24,17 +24,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed partial class TransitConnection : IAsyncDisposable
     {
-        /// <summary>
-        /// Stores cr lf bytes for transit connection.
-        /// </summary>
         private static readonly byte[] CrLfBytes = "\r\n"u8.ToArray();
-        /// <summary>
-        /// Stores dot terminator bytes for transit connection.
-        /// </summary>
         private static readonly byte[] DotTerminatorBytes = ".\r\n"u8.ToArray();
-        /// <summary>
-        /// Stores takethis prefix bytes for transit connection.
-        /// </summary>
         private static readonly byte[] TakethisPrefixBytes = "TAKETHIS "u8.ToArray();
         /// <summary>
         /// Configures default response progress timeout for transit connection.
@@ -44,34 +35,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Configures default response progress check interval for transit connection.
         /// </summary>
         private static readonly TimeSpan DefaultResponseProgressCheckInterval = TimeSpan.FromMilliseconds(250);
-
-        /// <summary>
-        /// Stores host used by transit connection.
-        /// </summary>
         private readonly string _host;
-        /// <summary>
-        /// Stores port used by transit connection.
-        /// </summary>
         private readonly int _port;
-        /// <summary>
-        /// Stores use ssl used by transit connection.
-        /// </summary>
         private readonly bool _useSsl;
         /// <summary>
         /// Supplies the logger used by transit connection.
         /// </summary>
         private readonly ILogger _logger;
-        /// <summary>
-        /// Stores server certificate validation callback used by transit connection.
-        /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
-        /// <summary>
-        /// Stores pipeline depth used by transit connection.
-        /// </summary>
         private readonly int _pipelineDepth;
-        /// <summary>
-        /// Stores write batch coalesce microseconds used by transit connection.
-        /// </summary>
         private readonly int _writeBatchCoalesceMicroseconds;
         /// <summary>
         /// Configures response progress timeout for transit connection.
@@ -81,128 +53,38 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Configures response progress check interval for transit connection.
         /// </summary>
         private readonly TimeSpan _responseProgressCheckInterval;
-        /// <summary>
-        /// Stores timing collector used by transit connection.
-        /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
-
-        /// <summary>
-        /// Stores write gate used by transit connection.
-        /// </summary>
         private readonly SemaphoreSlim _writeGate = new(1, 1);
-        /// <summary>
-        /// Stores tokenless correlation gate used by transit connection.
-        /// </summary>
         private readonly SemaphoreSlim _tokenlessCorrelationGate = new(1, 1);
-
-        /// <summary>
-        /// Stores tcp client used by transit connection.
-        /// </summary>
         private TcpClient? _tcpClient;
-        /// <summary>
-        /// Stores transport stream used by transit connection.
-        /// </summary>
         private Stream? _transportStream;
-        /// <summary>
-        /// Stores read stream used by transit connection.
-        /// </summary>
         private Stream? _readStream;
-        /// <summary>
-        /// Stores write stream used by transit connection.
-        /// </summary>
         private Stream? _writeStream;
-        /// <summary>
-        /// Stores reader used by transit connection.
-        /// </summary>
         private PipeReader? _reader;
-        /// <summary>
-        /// Stores writer used by transit connection.
-        /// </summary>
         private PipeWriter? _writer;
-
-        /// <summary>
-        /// Stores response loop cancellation used by transit connection.
-        /// </summary>
         private CancellationTokenSource? _responseLoopCancellation;
-        /// <summary>
-        /// Stores response loop task used by transit connection.
-        /// </summary>
         private Task? _responseLoopTask;
-        /// <summary>
-        /// Stores response progress watchdog cancellation used by transit connection.
-        /// </summary>
         private CancellationTokenSource? _responseProgressWatchdogCancellation;
-        /// <summary>
-        /// Stores response progress watchdog task used by transit connection.
-        /// </summary>
         private Task? _responseProgressWatchdogTask;
-        /// <summary>
-        /// Stores response loop fault used by transit connection.
-        /// </summary>
         private ExceptionDispatchInfo? _responseLoopFault;
-        /// <summary>
-        /// Stores response loop faulted used by transit connection.
-        /// </summary>
         private int _responseLoopFaulted;
-
-        /// <summary>
-        /// Stores pending by message id used by transit connection.
-        /// </summary>
         private readonly ConcurrentDictionary<string, PendingOwnedWork> _pendingByMessageId = new(StringComparer.Ordinal);
-        /// <summary>
-        /// Stores pending by send order used by transit connection.
-        /// </summary>
         private readonly ConcurrentQueue<string> _pendingBySendOrder = new();
-        /// <summary>
-        /// Stores completed queue used by transit connection.
-        /// </summary>
         private readonly Channel<CompletedWork> _completedQueue = Channel.CreateUnbounded<CompletedWork>(new UnboundedChannelOptions
         {
             SingleReader = true,
             SingleWriter = true,
             AllowSynchronousContinuations = false,
         });
-        /// <summary>
-        /// Stores direct submit completions used by transit connection.
-        /// </summary>
         private readonly ConcurrentDictionary<long, TaskCompletionSource<TransitPublishResult>> _directSubmitCompletions = new();
-        /// <summary>
-        /// Stores completion enqueued ticks used by transit connection.
-        /// </summary>
         private readonly ConcurrentDictionary<long, long> _completionEnqueuedTicks = new();
-
-        /// <summary>
-        /// Stores capabilities used by transit connection.
-        /// </summary>
         private TransitCapabilitySnapshot _capabilities = new(SupportsStartTls: false, SupportsStreaming: false);
-        /// <summary>
-        /// Stores tls active used by transit connection.
-        /// </summary>
         private bool _tlsActive;
-        /// <summary>
-        /// Stores streaming mode negotiated used by transit connection.
-        /// </summary>
         private bool _streamingModeNegotiated;
-        /// <summary>
-        /// Stores state used by transit connection.
-        /// </summary>
         private TransitConnectionState _state = TransitConnectionState.Disconnected;
-
-        /// <summary>
-        /// Stores shutdown requested used by transit connection.
-        /// </summary>
         private int _shutdownRequested;
-        /// <summary>
-        /// Stores tokenless success mode enabled used by transit connection.
-        /// </summary>
         private int _tokenlessSuccessModeEnabled;
-        /// <summary>
-        /// Stores bytes transmitted for transit connection.
-        /// </summary>
         private long _bytesTransmitted;
-        /// <summary>
-        /// Stores bytes received for transit connection.
-        /// </summary>
         private long _bytesReceived;
         /// <summary>
         /// Limits socket open count for transit connection.
@@ -212,37 +94,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits ready transition count for transit connection.
         /// </summary>
         private long _readyTransitionCount;
-        /// <summary>
-        /// Stores submissions started used by transit connection.
-        /// </summary>
         private long _submissionsStarted;
-        /// <summary>
-        /// Stores submissions accepted used by transit connection.
-        /// </summary>
         private long _submissionsAccepted;
-        /// <summary>
-        /// Stores submissions rejected used by transit connection.
-        /// </summary>
         private long _submissionsRejected;
-        /// <summary>
-        /// Stores submissions failed used by transit connection.
-        /// </summary>
         private long _submissionsFailed;
-        /// <summary>
-        /// Stores submissions ambiguous used by transit connection.
-        /// </summary>
         private long _submissionsAmbiguous;
-        /// <summary>
-        /// Stores submissions unavailable used by transit connection.
-        /// </summary>
         private long _submissionsUnavailable;
         /// <summary>
         /// Limits max concurrent submissions for transit connection.
         /// </summary>
         private int _maxConcurrentSubmissions;
-        /// <summary>
-        /// Stores send sequence used by transit connection.
-        /// </summary>
         private long _sendSequence;
         /// <summary>
         /// Limits batch count for transit connection.
@@ -256,9 +117,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits max writer batch size for transit connection.
         /// </summary>
         private int _maxWriterBatchSize;
-        /// <summary>
-        /// Stores last definitive response progress tick used by transit connection.
-        /// </summary>
         private long _lastDefinitiveResponseProgressTick;
 
         /// <summary>
@@ -360,40 +218,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _timingCollector = timingCollector;
             _ = expectedBatchIntentCountProvider;
         }
-
-        /// <summary>
-        /// Stores connection id used by transit connection.
-        /// </summary>
         internal string ConnectionId { get; } = Guid.NewGuid().ToString("N");
-
-        /// <summary>
-        /// Stores current state used by transit connection.
-        /// </summary>
         internal TransitConnectionState CurrentState => _state;
-
-        /// <summary>
-        /// Stores is tls active used by transit connection.
-        /// </summary>
         internal bool IsTlsActive => _tlsActive;
-
-        /// <summary>
-        /// Stores capabilities used by transit connection.
-        /// </summary>
         internal TransitCapabilitySnapshot Capabilities => _capabilities;
 
         /// <summary>
         /// Limits outstanding submission count for transit connection.
         /// </summary>
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
-
-        /// <summary>
-        /// Stores pipeline depth used by transit connection.
-        /// </summary>
         internal int PipelineDepth => _pipelineDepth;
-
-        /// <summary>
-        /// Stores is response loop faulted used by transit connection.
-        /// </summary>
         internal bool IsResponseLoopFaulted => Volatile.Read(ref _responseLoopFaulted) == 1;
 
         /// <summary>
@@ -2001,30 +1835,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 WorkItem = workItem;
             }
-
-            /// <summary>
-            /// Stores work item used by transit connection.
-            /// </summary>
             internal TransitWorkItem WorkItem { get; }
-
-            /// <summary>
-            /// Stores t2 socket write begin tick used by transit connection.
-            /// </summary>
             internal long T2SocketWriteBeginTick;
-
-            /// <summary>
-            /// Stores t3 socket write end tick used by transit connection.
-            /// </summary>
             internal long T3SocketWriteEndTick;
-
-            /// <summary>
-            /// Stores t6 response correlated tick used by transit connection.
-            /// </summary>
             internal long T6ResponseCorrelatedTick;
-
-            /// <summary>
-            /// Stores send sequence used by transit connection.
-            /// </summary>
             internal long SendSequence;
         }
 
@@ -2073,10 +1887,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 Failure = failure;
             }
-
-            /// <summary>
-            /// Stores failure used by transit connection.
-            /// </summary>
             internal TransitConnectionLifecycleFailure Failure { get; }
         }
 
@@ -2105,3 +1915,4 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
     }
 }
+

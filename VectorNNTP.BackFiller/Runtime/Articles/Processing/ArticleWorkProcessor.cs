@@ -17,9 +17,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class ArticleWorkProcessor : IArticleWorkProcessor
     {
-        /// <summary>
-        /// Stores retriever used by article work processor.
-        /// </summary>
         private readonly IBackboneArticleRetriever _retriever;
         /// <summary>
         /// Supplies the logger used by article work processor.
@@ -144,3 +141,4 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
     }
 }
+

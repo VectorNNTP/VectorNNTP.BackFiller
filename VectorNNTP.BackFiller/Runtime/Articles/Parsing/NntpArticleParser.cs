@@ -805,10 +805,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
             return total;
         }
-
-        /// <summary>
-        /// Performs low-cost content classification based on header hints and previously computed yEnc detection state.
-        /// </summary>
         /// <param name="articleSpan">Article bytes.</param>
         /// <param name="headerOutcome">Header parse outcome.</param>
         /// <param name="yEncDetected">Precomputed yEnc marker detection result for the configured scan window.</param>
@@ -1007,10 +1003,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
             return true;
         }
-
-        /// <summary>
-        /// Performs case-insensitive ASCII equality without allocations.
-        /// </summary>
         /// <param name="left">First byte span.</param>
         /// <param name="right">Second byte span.</param>
         /// <returns><see langword="true"/> when equal ignoring ASCII case.</returns>
@@ -1031,10 +1023,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
             return true;
         }
-
-        /// <summary>
-        /// Performs case-insensitive ASCII substring search.
-        /// </summary>
         /// <param name="haystack">Input bytes.</param>
         /// <param name="needle">Pattern bytes.</param>
         /// <returns>First index or -1 when not found.</returns>
@@ -1140,3 +1128,4 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
     }
 }
+

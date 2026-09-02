@@ -73,10 +73,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// Indicates whether authentication completed and lifecycle commands such as QUIT are valid.
         /// </summary>
         private bool _protocolReadyForCommands;
-
-        /// <summary>
-        /// Stores whether transport/protocol failures make further command writes unsafe used by graceful lifecycle shutdown.
-        /// </summary>
         private bool _transportFailed;
 
         /// <summary>
@@ -378,10 +374,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             _tcpClient.Dispose();
             _connectionLoggingScope?.Dispose();
         }
-
-        /// <summary>
-        /// Performs AUTHINFO USER/PASS flow when credentials are configured.
-        /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Failure result or null on success.</returns>
         private async Task<NntpArticleAcquisitionResult?> AuthenticateIfConfiguredAsync(CancellationToken cancellationToken)
@@ -1109,3 +1101,5 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
     }
 }
+
+

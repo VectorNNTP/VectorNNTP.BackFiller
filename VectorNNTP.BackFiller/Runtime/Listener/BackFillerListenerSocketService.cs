@@ -31,39 +31,16 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         ShutdownCoordinator shutdownCoordinator,
         ILogger<BackFillerListenerSocketService> logger) : BackgroundService
     {
-        /// <summary>
-        /// Stores listen backlog used by back filler listener socket service.
-        /// </summary>
         private const int ListenBacklog = 512;
-
-        /// <summary>
-        /// Stores runtime options used by back filler listener socket service.
-        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
-        /// <summary>
-        /// Stores certificate state used by back filler listener socket service.
-        /// </summary>
         private readonly BackFillerCertificateState _certificateState = certificateState ?? throw new ArgumentNullException(nameof(certificateState));
-        /// <summary>
-        /// Stores shutdown coordinator used by back filler listener socket service.
-        /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator = shutdownCoordinator ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
         /// <summary>
         /// Supplies the logger used by back filler listener socket service.
         /// </summary>
         private readonly ILogger<BackFillerListenerSocketService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        /// <summary>
-        /// Stores connections gate used by back filler listener socket service.
-        /// </summary>
         private readonly object _connectionsGate = new();
-        /// <summary>
-        /// Stores active clients used by back filler listener socket service.
-        /// </summary>
         private readonly HashSet<TcpClient> _activeClients = [];
-        /// <summary>
-        /// Stores listen sockets used by back filler listener socket service.
-        /// </summary>
         private readonly List<Socket> _listenSockets = [];
 
         /// <inheritdoc/>
@@ -498,3 +475,4 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private static partial void LogListenerDisabled(ILogger logger);
     }
 }
+

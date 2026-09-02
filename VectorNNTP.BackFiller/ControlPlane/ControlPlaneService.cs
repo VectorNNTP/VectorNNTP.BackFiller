@@ -184,10 +184,6 @@ namespace VectorNNTP.Backfiller.ControlPlane
 
             throw new InvalidOperationException($"No active NNTP session lease could be acquired for backbone '{backbone}'.");
         }
-
-        /// <summary>
-        /// Performs control-plane startup initialization before the background loop begins.
-        /// </summary>
         /// <param name="cancellationToken">Token that cancels startup initialization.</param>
         /// <returns>A task that completes when the control plane has established its startup barrier.</returns>
         public override async Task StartAsync(CancellationToken cancellationToken)
@@ -235,10 +231,6 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 await DisposeAllAccountRuntimesAsync().ConfigureAwait(false);
             }
         }
-
-        /// <summary>
-        /// Performs startup-time desired-state reconciliation from the already-loaded snapshot.
-        /// </summary>
         /// <param name="cancellationToken">Token that cancels startup initialization.</param>
         /// <returns>A task that completes once startup reconciliation has converged as far as possible.</returns>
         private async Task InitializeControlPlaneAsync(CancellationToken cancellationToken)
@@ -515,9 +507,6 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// </summary>
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
-            /// <summary>
-            /// Stores instance used by control plane service.
-            /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
             /// <summary>
@@ -536,9 +525,6 @@ namespace VectorNNTP.Backfiller.ControlPlane
             NntpAccountSnapshot LastAppliedAccount,
             NntpArticleExecutionSessionManager Manager)
         {
-            /// <summary>
-            /// Gets or sets the latest desired account state applied to the runtime.
-            /// </summary>
             internal NntpAccountSnapshot LastAppliedAccount { get; set; } = LastAppliedAccount;
 
             /// <summary>
@@ -763,3 +749,6 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
     }
 }
+
+
+

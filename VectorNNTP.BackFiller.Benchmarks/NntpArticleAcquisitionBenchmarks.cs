@@ -389,7 +389,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
             private readonly Task _acceptLoop;
 
             /// <summary>
-            /// Initializes the loopback fixture server.
+            /// Initializes loopback fixture server.
             /// </summary>
             /// <param name="listener">Started listener.</param>
             /// <param name="messageId">Served Message-ID.</param>
@@ -573,3 +573,4 @@ namespace VectorNNTP.BackFiller.Benchmarks
         }
     }
 }
+

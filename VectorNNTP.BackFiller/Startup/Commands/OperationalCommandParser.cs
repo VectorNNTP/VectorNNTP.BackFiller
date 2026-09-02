@@ -14,9 +14,6 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     /// </summary>
     internal static class OperationalCommandParser
     {
-        /// <summary>
-        /// Stores command map used by operational command parser.
-        /// </summary>
         private static readonly FrozenDictionary<string, OperationalCommand> CommandMap =
             new Dictionary<string, OperationalCommand>(StringComparer.OrdinalIgnoreCase)
             {
@@ -165,3 +162,4 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
     }
 }
+

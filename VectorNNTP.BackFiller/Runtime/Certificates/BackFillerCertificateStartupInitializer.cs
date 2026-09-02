@@ -17,13 +17,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         BackFillerCertificateProvisioningService provisioningService,
         ILogger<BackFillerCertificateStartupInitializer> logger) : IHostedService
     {
-        /// <summary>
-        /// Stores runtime options used by back filler certificate startup initializer.
-        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
-        /// <summary>
-        /// Stores provisioning service used by back filler certificate startup initializer.
-        /// </summary>
         private readonly BackFillerCertificateProvisioningService _provisioningService = provisioningService ?? throw new ArgumentNullException(nameof(provisioningService));
         /// <summary>
         /// Supplies the logger used by back filler certificate startup initializer.
@@ -77,3 +71,4 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private static partial void LogCertificateStartupInitializerDisabled(ILogger logger);
     }
 }
+

@@ -6,67 +6,46 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-namespace VectorNNTP.BackFiller.Benchmarks;
-
-/// <summary>
-/// Represents the prepared BenchmarkWorkload class used by the benchmark or regression gate.
-/// </summary>
-internal sealed class PreparedBenchmarkWorkload : IDisposable
+namespace VectorNNTP.BackFiller.Benchmarks
 {
-    /// <summary>
-    /// Gets or sets the _messageIds.
-    /// </summary>
-    private readonly string[] _messageIds;
-    /// <summary>
-    /// Gets or sets the _nextMessageIndex.
-    /// </summary>
-    private int _nextMessageIndex;
 
     /// <summary>
-    /// Implements the prepared BenchmarkWorkload contract.
+    /// Represents the prepared BenchmarkWorkload class used by the benchmark or regression gate.
     /// </summary>
-    internal PreparedBenchmarkWorkload(string[] messageIds, byte[] reusablePayloadBytes, WorkloadPreparationSummary summary)
+    internal sealed class PreparedBenchmarkWorkload : IDisposable
     {
-        _messageIds = messageIds;
-        ReusableArticlePayload = reusablePayloadBytes;
-        PreparationSummary = summary;
-    }
-
-    /// <summary>
-    /// Gets or sets the reusable ArticlePayload.
-    /// </summary>
-    internal ReadOnlyMemory<byte> ReusableArticlePayload { get; }
-
-    /// <summary>
-    /// Gets or sets the payload Length.
-    /// </summary>
-    internal int PayloadLength => ReusableArticlePayload.Length;
-
-    /// <summary>
-    /// Gets or sets the preparation Summary.
-    /// </summary>
-    internal WorkloadPreparationSummary PreparationSummary { get; }
-
-    /// <summary>
-    /// Implements the try TakeNextMessageId contract.
-    /// </summary>
-    internal bool TryTakeNextMessageId([NotNullWhen(true)] out string? messageId)
-    {
-        int index = Interlocked.Increment(ref _nextMessageIndex) - 1;
-        if ((uint)index >= (uint)_messageIds.Length)
+        private readonly string[] _messageIds;
+        private int _nextMessageIndex;
+        internal PreparedBenchmarkWorkload(string[] messageIds, byte[] reusablePayloadBytes, WorkloadPreparationSummary summary)
         {
-            messageId = null;
-            return false;
+            _messageIds = messageIds;
+            ReusableArticlePayload = reusablePayloadBytes;
+            PreparationSummary = summary;
+        }
+        internal ReadOnlyMemory<byte> ReusableArticlePayload { get; }
+        internal int PayloadLength => ReusableArticlePayload.Length;
+        internal WorkloadPreparationSummary PreparationSummary { get; }
+        internal bool TryTakeNextMessageId([NotNullWhen(true)] out string? messageId)
+        {
+            int index = Interlocked.Increment(ref _nextMessageIndex) - 1;
+            if ((uint)index >= (uint)_messageIds.Length)
+            {
+                messageId = null;
+                return false;
+            }
+
+            messageId = _messageIds[index];
+            return true;
         }
 
-        messageId = _messageIds[index];
-        return true;
-    }
-
-    /// <summary>
-    /// Releases resources held by this instance.
-    /// </summary>
-    public void Dispose()
-    {
+        /// <summary>
+        /// Releases resources held by this instance.
+        /// </summary>
+        public void Dispose()
+        {
+        }
     }
 }
+
+
+

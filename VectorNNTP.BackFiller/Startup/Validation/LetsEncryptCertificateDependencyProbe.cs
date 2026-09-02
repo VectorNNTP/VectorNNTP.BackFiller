@@ -10,9 +10,6 @@ using VectorNNTP.Backfiller.Runtime.Certificates;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
-    /// <summary>
-    /// Performs startup-time ACME validation by constructing the certificate stack and ensuring the listener bundle exists.
-    /// </summary>
     /// <remarks>
     /// This probe intentionally creates an isolated certificate stack rather than resolving the host's production
     /// registrations, so startup validation can fail fast before the listener service is started. When Let’s Encrypt
@@ -20,9 +17,6 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </remarks>
     internal static class LetsEncryptCertificateDependencyProbe
     {
-        /// <summary>
-        /// Stores dependency name used by lets encrypt certificate dependency probe.
-        /// </summary>
         private const string DependencyName = "LetsEncryptCertificate";
 
         /// <summary>
@@ -85,3 +79,5 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
     }
 }
+
+

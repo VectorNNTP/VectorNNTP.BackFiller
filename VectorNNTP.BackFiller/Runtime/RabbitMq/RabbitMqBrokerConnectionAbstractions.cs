@@ -186,37 +186,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqBrokerConnectionAdapter : IRabbitMqBrokerConnection
     {
-        /// <summary>
-        /// Stores connection used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly IConnection _connection;
-        /// <summary>
-        /// Stores virtual host used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly string _virtualHost;
-        /// <summary>
-        /// Stores connection shutdown async handler used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly AsyncEventHandler<ShutdownEventArgs> _connectionShutdownAsyncHandler;
-        /// <summary>
-        /// Stores callback exception async handler used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly AsyncEventHandler<CallbackExceptionEventArgs> _callbackExceptionAsyncHandler;
-        /// <summary>
-        /// Stores connection blocked async handler used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly AsyncEventHandler<ConnectionBlockedEventArgs> _connectionBlockedAsyncHandler;
-        /// <summary>
-        /// Stores connection unblocked async handler used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _connectionUnblockedAsyncHandler;
-        /// <summary>
-        /// Stores connection recovery error async handler used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly AsyncEventHandler<ConnectionRecoveryErrorEventArgs> _connectionRecoveryErrorAsyncHandler;
-        /// <summary>
-        /// Stores recovery succeeded async handler used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _recoverySucceededAsyncHandler;
 
         /// <summary>
@@ -344,9 +320,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqChannelAdapter : IRabbitMqChannel
     {
-        /// <summary>
-        /// Stores channel used by rabbit mq broker connection abstractions.
-        /// </summary>
         private readonly IChannel _channel;
 
         /// <summary>
@@ -434,3 +407,4 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
     }
 }
+

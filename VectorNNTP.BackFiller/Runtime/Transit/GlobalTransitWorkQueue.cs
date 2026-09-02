@@ -15,25 +15,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed class GlobalTransitWorkQueue
     {
-        /// <summary>
-        /// Stores ready queue used by global transit work queue.
-        /// </summary>
         private readonly Channel<TransitWorkItem> _readyQueue;
-        /// <summary>
-        /// Stores scheduled retries used by global transit work queue.
-        /// </summary>
         private readonly ConcurrentQueue<ScheduledRetry> _scheduledRetries = new();
-        /// <summary>
-        /// Stores retry scheduled signal used by global transit work queue.
-        /// </summary>
         private readonly SemaphoreSlim _retryScheduledSignal = new(0);
-        /// <summary>
-        /// Stores admission gate used by global transit work queue.
-        /// </summary>
         private readonly object _admissionGate = new();
-        /// <summary>
-        /// Stores claim gate used by global transit work queue.
-        /// </summary>
         private readonly object _claimGate = new();
 
         /// <summary>
@@ -49,9 +34,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits queued item count for global transit work queue.
         /// </summary>
         private long _queuedItemCount;
-        /// <summary>
-        /// Stores queued payload bytes for global transit work queue.
-        /// </summary>
         private long _queuedPayloadBytes;
         /// <summary>
         /// Limits retry pending count for global transit work queue.
@@ -65,10 +47,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits admission wait count for global transit work queue.
         /// </summary>
         private long _admissionWaitCount;
-
-        /// <summary>
-        /// Stores admission frozen used by global transit work queue.
-        /// </summary>
         private volatile bool _admissionFrozen;
 
         /// <summary>
@@ -100,10 +78,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits queued item count for global transit work queue.
         /// </summary>
         internal long QueuedItemCount => Interlocked.Read(ref _queuedItemCount);
-
-        /// <summary>
-        /// Stores queued payload bytes for global transit work queue.
-        /// </summary>
         internal long QueuedPayloadBytes => Interlocked.Read(ref _queuedPayloadBytes);
 
         /// <summary>
@@ -120,10 +94,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits admission wait count for global transit work queue.
         /// </summary>
         internal long AdmissionWaitCount => Interlocked.Read(ref _admissionWaitCount);
-
-        /// <summary>
-        /// Stores is admission frozen used by global transit work queue.
-        /// </summary>
         internal bool IsAdmissionFrozen => _admissionFrozen;
 
         /// <summary>
@@ -479,3 +449,4 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         long AdmissionWaitCount,
         bool IsAdmissionFrozen);
 }
+

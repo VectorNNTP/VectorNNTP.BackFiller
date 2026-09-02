@@ -49,30 +49,14 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// Limits max systemd status length for systemd notifier.
         /// </summary>
         private const int MaxSystemdStatusLength = 1024;
-        /// <summary>
-        /// Stores systemd library state unknown used by systemd notifier.
-        /// </summary>
         private const int SystemdLibraryStateUnknown = 0;
-        /// <summary>
-        /// Stores systemd library state available used by systemd notifier.
-        /// </summary>
         private const int SystemdLibraryStateAvailable = 1;
-        /// <summary>
-        /// Stores systemd library state unavailable used by systemd notifier.
-        /// </summary>
         private const int SystemdLibraryStateUnavailable = 2;
-
-        /// <summary>
-        /// Stores status notify gate used by systemd notifier.
-        /// </summary>
         private static readonly object StatusNotifyGate = new();
         /// <summary>
         /// Limits last status notify tick count for systemd notifier.
         /// </summary>
         private static long _lastStatusNotifyTickCount = -1;
-        /// <summary>
-        /// Stores systemd library state used by systemd notifier.
-        /// </summary>
         private static int _systemdLibraryState = SystemdLibraryStateUnknown;
 
         #region Systemd Notifications
@@ -397,3 +381,4 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         private static partial void LogSystemdNotificationException(ILogger logger, Exception exception, string notificationType);
     }
 }
+

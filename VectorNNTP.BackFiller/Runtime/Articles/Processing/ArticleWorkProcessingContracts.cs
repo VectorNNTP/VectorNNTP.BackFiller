@@ -320,9 +320,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed class ArticleWorkResultChannelSink : IArticleWorkResultSink
     {
-        /// <summary>
-        /// Stores writer used by article work processing contracts.
-        /// </summary>
         private readonly ChannelWriter<ArticleWorkProcessingResult> _writer;
 
         /// <summary>
@@ -343,3 +340,4 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
     }
 }
+

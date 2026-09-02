@@ -264,42 +264,20 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
                 }
             }
         }
-
-        /// <summary>
-        /// Stores sync used by service lifecycle.
-        /// </summary>
         private readonly object _sync = new();
-        /// <summary>
-        /// Stores time provider used by service lifecycle.
-        /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
         /// Supplies the logger used by service lifecycle.
         /// </summary>
         private readonly ILogger<ServiceLifecycle> _logger;
-        /// <summary>
-        /// Stores current state used by service lifecycle.
-        /// </summary>
         private LifecycleState _currentState = LifecycleState.Starting;
-        /// <summary>
-        /// Stores state entered timestamp used by service lifecycle.
-        /// </summary>
         private long _stateEnteredTimestamp; // Monotonic timestamp from TimeProvider.GetTimestamp()
-        /// <summary>
-        /// Stores transition history used by service lifecycle.
-        /// </summary>
         private readonly List<StateTransition> _transitionHistory = [];
         /// <summary>
         /// Limits max history size for service lifecycle.
         /// </summary>
         private const int MaxHistorySize = 50;
-        /// <summary>
-        /// Stores is notifying observers used by service lifecycle.
-        /// </summary>
         private bool _isNotifyingObservers; // Prevents transitions during observer notification (reentrancy + concurrency)
-        /// <summary>
-        /// Stores slow phase warning logged used by service lifecycle.
-        /// </summary>
         private bool _slowPhaseWarningLogged; // One warning per phase
 
         /// <summary>
@@ -635,3 +613,4 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             double threshold);
     }
 }
+
