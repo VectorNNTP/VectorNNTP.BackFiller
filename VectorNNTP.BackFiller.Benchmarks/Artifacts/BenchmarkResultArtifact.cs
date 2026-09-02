@@ -353,9 +353,6 @@ internal readonly record struct BenchmarkResultArtifact(
 
         return string.Join(',', headers) + Environment.NewLine + string.Join(',', values) + Environment.NewLine;
 
-        /// <summary>
-        /// Performs the escape operation.
-        /// </summary>
         static string Escape(string value)
         {
             string escaped = value.Replace("\"", "\"\"");
