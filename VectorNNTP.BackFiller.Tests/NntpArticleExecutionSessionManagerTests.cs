@@ -197,9 +197,10 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("No acquisition sessions", ex.Message, StringComparison.Ordinal);
 
             CapturedLogEntry warning = Assert.Single(
-                loggerProvider.Entries.Where(static entry =>
+                loggerProvider.Entries,
+                static entry =>
                     entry.Level == LogLevel.Warning &&
-                    entry.Message.Contains("Grabber session slot initialization failed", StringComparison.Ordinal)));
+                    entry.Message.Contains("Grabber session slot initialization failed", StringComparison.Ordinal));
 
             Assert.Contains("Account=" + account.EntryId.ToString("D"), warning.Message, StringComparison.Ordinal);
             Assert.Contains("ConnectionIndex=0", warning.Message, StringComparison.Ordinal);
@@ -234,9 +235,10 @@ namespace VectorNNTP.Backfiller.Tests
                 async () => await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
 
             CapturedLogEntry warning = Assert.Single(
-                loggerProvider.Entries.Where(static entry =>
+                loggerProvider.Entries,
+                static entry =>
                     entry.Level == LogLevel.Warning &&
-                    entry.Message.Contains("Grabber session slot initialization failed", StringComparison.Ordinal)));
+                    entry.Message.Contains("Grabber session slot initialization failed", StringComparison.Ordinal));
 
             Assert.Contains("Account=" + account.EntryId.ToString("D"), warning.Message, StringComparison.Ordinal);
             Assert.Contains("ConnectionIndex=0", warning.Message, StringComparison.Ordinal);
@@ -288,9 +290,10 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             CapturedLogEntry reconnectWarning = Assert.Single(
-                loggerProvider.Entries.Where(static entry =>
+                loggerProvider.Entries,
+                static entry =>
                     entry.Level == LogLevel.Warning &&
-                    entry.Message.Contains("Grabber session reconnect failed", StringComparison.Ordinal)));
+                    entry.Message.Contains("Grabber session reconnect failed", StringComparison.Ordinal));
 
             Assert.Contains("Slot=0", reconnectWarning.Message, StringComparison.Ordinal);
             Assert.Contains("Account=" + account.EntryId.ToString("D"), reconnectWarning.Message, StringComparison.Ordinal);
@@ -1490,5 +1493,4 @@ namespace VectorNNTP.Backfiller.Tests
         }
     }
 }
-
 

@@ -2566,7 +2566,7 @@ namespace VectorNNTP.Backfiller.Tests
                     }
                 }
 
-                Assert.True(false, $"Session endpoint '{acceptedRemoteEndpoint}' did not match slot endpoints '{slot0Endpoint}' or '{slot1Endpoint}'.");
+                Assert.Fail($"Session endpoint '{acceptedRemoteEndpoint}' did not match slot endpoints '{slot0Endpoint}' or '{slot1Endpoint}'.");
             }
 
             /// <summary>
@@ -5181,5 +5181,4 @@ namespace VectorNNTP.Backfiller.Tests
         }
     }
 }
-
 

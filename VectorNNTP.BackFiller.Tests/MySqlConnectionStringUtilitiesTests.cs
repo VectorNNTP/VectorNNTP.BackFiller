@@ -1615,32 +1615,31 @@ namespace VectorNNTP.Backfiller.Tests
         /// </list>
         /// </remarks>
         [Theory]
-        [InlineData("Server=db01", true, false, "Basic unquoted value")]
-        [InlineData("Server=\"db;01\"", true, false, "Double-quoted value with semicolon")]
-        [InlineData("Server='db;01'", true, false, "Single-quoted value with semicolon")]
-        [InlineData("Server=\"abc\"\"def\"", true, false, "Double-quoted value with escaped double-quote")]
-        [InlineData("Server='abc''def'", true, false, "Single-quoted value with escaped single-quote")]
-        [InlineData("Server=\"abc", false, false, "Unterminated double-quoted value")]
-        [InlineData("Server='abc", false, false, "Unterminated single-quoted value")]
-        [InlineData("Server=\"abc\"x", false, false, "Garbage after closing double-quote")]
-        [InlineData("Server='abc'x", false, false, "Garbage after closing single-quote")]
-        [InlineData("Server = \"abc\"", true, false, "Whitespace before double-quoted value")]
-        [InlineData("Server = 'abc'", true, false, "Whitespace before single-quoted value")]
-        [InlineData("Server=db01;Server=db02", true, true, "Duplicate keys (syntax valid; semantically ambiguous)")]
-        [InlineData("Server=db01;Host=db02", true, true, "Conflicting aliases (syntax valid; semantically ambiguous)")]
-        [InlineData("", true, false, "Empty connection string")]
-        [InlineData("   ", true, false, "Whitespace-only connection string")]
-        [InlineData("Server=", true, false, "Empty value")]
-        [InlineData("Server=\"\"", true, false, "Empty double-quoted value")]
-        [InlineData("Server=''", true, false, "Empty single-quoted value")]
-        [InlineData(";Server=db01", true, false, "Leading semicolon")]
-        [InlineData("Server=db01;", true, false, "Trailing semicolon")]
-        [InlineData("Server=db01;;Host=db02", true, false, "Consecutive semicolons")]
+        [InlineData("Server=db01", true, false)]
+        [InlineData("Server=\"db;01\"", true, false)]
+        [InlineData("Server='db;01'", true, false)]
+        [InlineData("Server=\"abc\"\"def\"", true, false)]
+        [InlineData("Server='abc''def'", true, false)]
+        [InlineData("Server=\"abc", false, false)]
+        [InlineData("Server='abc", false, false)]
+        [InlineData("Server=\"abc\"x", false, false)]
+        [InlineData("Server='abc'x", false, false)]
+        [InlineData("Server = \"abc\"", true, false)]
+        [InlineData("Server = 'abc'", true, false)]
+        [InlineData("Server=db01;Server=db02", true, true)]
+        [InlineData("Server=db01;Host=db02", true, true)]
+        [InlineData("", true, false)]
+        [InlineData("   ", true, false)]
+        [InlineData("Server=", true, false)]
+        [InlineData("Server=\"\"", true, false)]
+        [InlineData("Server=''", true, false)]
+        [InlineData(";Server=db01", true, false)]
+        [InlineData("Server=db01;", true, false)]
+        [InlineData("Server=db01;;Host=db02", true, false)]
         public void RawParser_RejectsExactlySameSyntaxAsProvider(
             string connectionString,
             bool providerShouldAcceptSyntax,
-            bool isSemanticAmbiguity,
-            string scenario)
+            bool isSemanticAmbiguity)
         {
             // Arrange & Act (provider parser - syntax check only)
             bool providerAcceptsSyntax;

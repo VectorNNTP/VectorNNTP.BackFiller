@@ -5,7 +5,6 @@
 // VectorNNTP.Backfiller.Runtime.Certificates
 // DNS-01 stale-record recovery helpers for ACME issuance.
 
-using System.Security.Cryptography.X509Certificates;
 using Certes;
 using Certes.Acme;
 using Certes.Acme.Resource;

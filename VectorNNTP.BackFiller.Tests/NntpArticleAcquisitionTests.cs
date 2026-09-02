@@ -871,7 +871,8 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             CapturedLogEntry lifecycle = Assert.Single(
-                loggerProvider.Entries.Where(static entry => entry.Message.Contains("Article <missing-lifecycle@test> not found in ", StringComparison.Ordinal)));
+                loggerProvider.Entries,
+                static entry => entry.Message.Contains("Article <missing-lifecycle@test> not found in ", StringComparison.Ordinal));
 
             string suffix = lifecycle.Message.Split(" in ", StringSplitOptions.None)[1];
             string durationToken = suffix.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries)[0];
