@@ -54,7 +54,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.True(queue.TryClaim("conn-1", out _));
 
-            await blockedEnqueue.ConfigureAwait(false);
+            await blockedEnqueue;
             Assert.Equal(1, queue.QueuedItemCount);
             Assert.Equal(64, queue.QueuedPayloadBytes);
         }
@@ -74,7 +74,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.True(queue.TryClaim("conn-1", out _));
 
-            await blockedEnqueue.ConfigureAwait(false);
+            await blockedEnqueue;
             Assert.Equal(1, queue.QueuedItemCount);
             Assert.Equal(1, queue.QueuedPayloadBytes);
         }
@@ -191,3 +191,5 @@ namespace VectorNNTP.Backfiller.Tests
         }
     }
 }
+
+

@@ -71,7 +71,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 executor.CompleteNext();
             }
 
-            TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask.ConfigureAwait(false);
+            TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask;
 
             Assert.Equal(10, executor.StartedCount);
             Assert.Equal(10, executor.CompletedCount);
@@ -112,7 +112,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 executor.CompleteByCallIndex(expected);
             }
 
-            TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask.ConfigureAwait(false);
+            TransitSingleTraceRunner.SingleTracePublishBatchResult result = await publishTask;
 
             Assert.Equal(10, executor.StartedCount);
             Assert.Equal(10, executor.CompletedCount);
@@ -256,3 +256,5 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
     }
 }
+
+

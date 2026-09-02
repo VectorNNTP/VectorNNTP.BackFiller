@@ -393,7 +393,7 @@ namespace VectorNNTP.Backfiller.Tests
         /// Ensures no exceptions, no corrupted history, and consistent final state.
         /// </remarks>
         [Fact]
-        public void ConcurrentReaders_WithSingleWriter_NoCorruption()
+        public async Task ConcurrentReaders_WithSingleWriter_NoCorruption()
         {
             // Arrange
             ServiceLifecycle lifecycle = new(TimeProvider.System);
@@ -443,9 +443,9 @@ namespace VectorNNTP.Backfiller.Tests
             cts.Cancel();
             try
             {
-                Task.WaitAll([.. readerTasks]);
+                await Task.WhenAll(readerTasks);
             }
-            catch (AggregateException ex) when (ex.InnerExceptions.All(e => e is TaskCanceledException))
+            catch (TaskCanceledException)
             {
                 // Expected: tasks were cancelled
             }

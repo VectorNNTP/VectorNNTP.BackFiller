@@ -62,7 +62,7 @@ namespace VectorNNTP.Backfiller.Tests
                 dequeuedFirst.Payload.Dispose();
                 firstReleased = true;
 
-                bool secondQueued = await secondAdmissionTask.ConfigureAwait(false);
+                bool secondQueued = await secondAdmissionTask;
                 Assert.True(secondQueued);
 
                 Assert.True(queue.TryRead(out TransitBenchmarkCore.QueuedArticle dequeuedSecond));

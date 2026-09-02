@@ -31,6 +31,8 @@
 - Phase 2 workflow for this repo is benchmark-first: no production code changes before readiness assessment approval, use CLI + watchdog (not Visual Studio runner), and evaluate one optimization at a time with before/after evidence artifacts.
 - For transit transport performance work, require staged workflow: static investigation first, then minimal event-driven completion signaling change preserving ownership/recovery semantics, focused bounded tests only, depth-1 benchmark only (3 runs), no depth-2/full-suite, and explicit artifact documentation.
 - User prefers a static audit-only pass (no code changes, builds, or tests) before any further implementation when validating major architecture work.
+- For this repository's xUnit1030 cleanup, prefer carefully batched SAFE-only removals (target ~3-10 per pass) with full method-level safety inspection and strict build/test/diagnostic delta gates; avoid blanket replacements/suppressions and preserve working tree.
+- For this repository's xUnit1030 cleanup, diagnostic accounting should treat unique source locations as primary; each unique location currently emits twice, so -1 unique corresponds to -2 emitted and -2 unique corresponds to -4 emitted.
 
 ## Engineering Quality and Documentation Standards (Repository-Wide)
 - Scope and permanence: these standards apply to all future repository coding tasks unless a future task explicitly overrides a specific rule.

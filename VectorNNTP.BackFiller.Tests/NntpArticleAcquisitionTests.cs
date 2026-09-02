@@ -77,22 +77,22 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <second@test> article follows");
                 await FakeArticleServer.WriteBytesAsync(stream, secondArticle);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "pass");
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
             Assert.Equal(NntpArticleAcquisitionFailureCode.None, connectResult.FailureCode);
 
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult first = await session.DownloadArticleAsync("<first@test>", CancellationToken.None).ConfigureAwait(false);
-                using NntpArticleAcquisitionResult second = await session.DownloadArticleAsync("<second@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult first = await session.DownloadArticleAsync("<first@test>", CancellationToken.None);
+                using NntpArticleAcquisitionResult second = await session.DownloadArticleAsync("<second@test>", CancellationToken.None);
 
                 Assert.True(first.IsSuccess);
                 Assert.True(second.IsSuccess);
@@ -118,19 +118,19 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <exists@test> article follows");
                 await FakeArticleServer.WriteBytesAsync(stream, secondArticle);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult missing = await session.DownloadArticleAsync("<missing@test>", CancellationToken.None).ConfigureAwait(false);
-                using NntpArticleAcquisitionResult exists = await session.DownloadArticleAsync("<exists@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult missing = await session.DownloadArticleAsync("<missing@test>", CancellationToken.None);
+                using NntpArticleAcquisitionResult exists = await session.DownloadArticleAsync("<exists@test>", CancellationToken.None);
 
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleNotFound, missing.FailureCode);
                 Assert.True(exists.IsSuccess);
@@ -148,18 +148,18 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await Task.Delay(100).ConfigureAwait(false);
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("invalid-message-id", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("invalid-message-id", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.InvalidMessageId, result.FailureCode);
             }
         }
@@ -175,18 +175,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <badstatus@test>");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "x20 malformed");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<badstatus@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<badstatus@test>", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.MalformedResponse, result.FailureCode);
             }
         }
@@ -202,18 +202,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <unavailable@test>");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "500 command not understood");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<unavailable@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<unavailable@test>", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.RemoteRejected, result.FailureCode);
                 Assert.Equal(500, result.ResponseCode);
                 Assert.Equal("command not understood", result.ResponseText);
@@ -231,18 +231,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <unexpected@test>");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<unexpected@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<unexpected@test>", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ProtocolFailure, result.FailureCode);
                 Assert.Equal(111, result.ResponseCode);
                 Assert.Equal("20260826010101", result.ResponseText);
@@ -262,14 +262,14 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "381 pass required");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO PASS bad");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "481 authentication rejected");
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "bad");
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.Null(session);
             Assert.Equal(NntpArticleAcquisitionFailureCode.AuthenticationFailure, connectResult.FailureCode);
@@ -288,14 +288,14 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "481 authentication rejected");
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "bad");
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.Null(session);
             Assert.Equal(NntpArticleAcquisitionFailureCode.AuthenticationFailure, connectResult.FailureCode);
@@ -314,14 +314,14 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "211 list follows");
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "pass");
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.Null(session);
             Assert.Equal(NntpArticleAcquisitionFailureCode.ProtocolFailure, connectResult.FailureCode);
@@ -340,18 +340,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
                 Assert.Equal(111, result.ResponseCode);
                 Assert.Equal("20260826010101", result.ResponseText);
@@ -369,18 +369,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "500 command not understood");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.RemoteRejected, result.FailureCode);
                 Assert.Equal(500, result.ResponseCode);
                 Assert.Equal("command not understood", result.ResponseText);
@@ -398,18 +398,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 article follows");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ProtocolFailure, result.FailureCode);
                 Assert.Equal(220, result.ResponseCode);
                 Assert.Equal("article follows", result.ResponseText);
@@ -427,18 +427,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "x11 malformed");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.MalformedResponse, result.FailureCode);
             }
         }
@@ -458,18 +458,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <dot@test> article follows");
                 await FakeArticleServer.WriteBytesAsync(stream, stuffedArticle);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<dot@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<dot@test>", CancellationToken.None);
                 Assert.True(result.IsSuccess);
                 string text = Encoding.ASCII.GetString(result.ArticleBytes.Span);
                 Assert.Contains(".begins", text, StringComparison.Ordinal);
@@ -499,18 +499,18 @@ namespace VectorNNTP.Backfiller.Tests
                 }
 
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<fragment@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<fragment@test>", CancellationToken.None);
                 Assert.True(result.IsSuccess);
                 Assert.Equal(article, result.ArticleBytes.ToArray());
             }
@@ -531,19 +531,19 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <huge@test> article follows");
                 await FakeArticleServer.WriteBytesAsync(stream, article);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleAcquisitionOptions options = NntpArticleAcquisitionOptions.Default with { MaxArticleBytes = 4096 };
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 options,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<huge@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<huge@test>", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleTooLarge, result.FailureCode);
             }
         }
@@ -618,18 +618,18 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <missing@test>");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "430 no such article");
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<missing@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<missing@test>", CancellationToken.None);
                 NntpArticleParser parser = new("bf01.usenet.ninja");
                 InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => NntpArticleAcquisitionParserBridge.ParseSuccessfulArticle(parser, result));
                 Assert.Contains("unsuccessful acquisition", ex.Message, StringComparison.OrdinalIgnoreCase);
@@ -655,7 +655,7 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <log@test> article follows");
                 await FakeArticleServer.WriteBytesAsync(stream, article);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             CapturingLoggerProvider loggerProvider = new();
             ILogger<NntpArticleAcquisitionSession> logger = loggerProvider.CreateLogger<NntpArticleAcquisitionSession>();
@@ -664,12 +664,12 @@ namespace VectorNNTP.Backfiller.Tests
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 logger,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<log@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<log@test>", CancellationToken.None);
                 Assert.True(result.IsSuccess);
             }
 
@@ -709,7 +709,7 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "281 auth accepted");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101");
-            }).ConfigureAwait(false);
+            });
 
             CapturingLoggerProvider loggerProvider = new();
             NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "pass");
@@ -717,12 +717,12 @@ namespace VectorNNTP.Backfiller.Tests
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.KeepAliveWithDateAsync(CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
                 Assert.Equal(111, result.ResponseCode);
                 Assert.Equal("20260826010101", result.ResponseText);
@@ -748,17 +748,17 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "QUIT").ConfigureAwait(false);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
 
-            await session.DisposeAsync().ConfigureAwait(false);
+            await session.DisposeAsync();
 
             string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
             Assert.Contains("TX: QUIT", logs, StringComparison.Ordinal);
@@ -777,20 +777,20 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <connection-failure@test>").ConfigureAwait(false);
-            }).ConfigureAwait(false);
+            });
 
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
 
-            using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<connection-failure@test>", CancellationToken.None).ConfigureAwait(false);
+            using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<connection-failure@test>", CancellationToken.None);
             Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, result.FailureCode);
 
-            await session.DisposeAsync().ConfigureAwait(false);
+            await session.DisposeAsync();
 
             string logs = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
             Assert.DoesNotContain("TX: QUIT", logs, StringComparison.Ordinal);
@@ -854,19 +854,19 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <missing-lifecycle@test>");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "430 no such article");
-            }).ConfigureAwait(false);
+            });
 
             CapturingLoggerProvider loggerProvider = new();
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 loggerProvider.CreateLogger<NntpArticleAcquisitionSession>(),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
-                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<missing-lifecycle@test>", CancellationToken.None).ConfigureAwait(false);
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<missing-lifecycle@test>", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleNotFound, result.FailureCode);
             }
 
@@ -895,7 +895,7 @@ namespace VectorNNTP.Backfiller.Tests
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
                 },
                 FakeArticleServer.ConnectionTransport.ImplicitTls,
-                tlsFixture.ServerCertificate).ConfigureAwait(false);
+                tlsFixture.ServerCertificate);
 
             NntpArticleAcquisitionEndpoint endpoint = server.CreateEndpoint(useSsl: true, host: "localhost");
 
@@ -904,7 +904,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
                 CancellationToken.None,
-                tlsFixture.ServerCertificateValidationCallback).ConfigureAwait(false);
+                tlsFixture.ServerCertificateValidationCallback);
 
             using (connectResult)
             {
@@ -912,7 +912,7 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(NntpArticleAcquisitionFailureCode.None, connectResult.FailureCode);
             }
 
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
             }
         }
@@ -931,7 +931,7 @@ namespace VectorNNTP.Backfiller.Tests
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 },
                 FakeArticleServer.ConnectionTransport.ImplicitTls,
-                tlsFixture.ServerCertificate).ConfigureAwait(false);
+                tlsFixture.ServerCertificate);
 
             NntpArticleAcquisitionEndpoint endpoint = server.CreateEndpoint(useSsl: true, host: "localhost");
 
@@ -939,7 +939,7 @@ namespace VectorNNTP.Backfiller.Tests
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             using (connectResult)
             {
@@ -963,7 +963,7 @@ namespace VectorNNTP.Backfiller.Tests
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 },
                 FakeArticleServer.ConnectionTransport.ImplicitTls,
-                serverFixture.ServerCertificate).ConfigureAwait(false);
+                serverFixture.ServerCertificate);
 
             NntpArticleAcquisitionEndpoint endpoint = server.CreateEndpoint(useSsl: true, host: "localhost");
 
@@ -972,7 +972,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
                 CancellationToken.None,
-                trustedFixture.ServerCertificateValidationCallback).ConfigureAwait(false);
+                trustedFixture.ServerCertificateValidationCallback);
 
             using (connectResult)
             {

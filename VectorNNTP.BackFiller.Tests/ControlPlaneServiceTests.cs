@@ -88,7 +88,7 @@ namespace VectorNNTP.Backfiller.Tests
                 connectionAccepted.TrySetResult();
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
             }).ConfigureAwait(false);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -144,8 +144,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task StartAsync_WhenSnapshotContainsAccount_ConvergesToConfiguredPersistentCapacity()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -181,8 +181,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenAccountRemoved_DisposesManagedRuntime()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -225,8 +225,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenConfigurationUnchanged_RemainsIdempotent()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -270,8 +270,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenMaxConnectionsIncreases_AddsRequiredSessionsOnly()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 3).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 3).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -315,10 +315,10 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenNewAccountAppears_CreatesIndependentRuntime()
         {
-            FakeNntpServer firstServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable firstServerLease = firstServer.ConfigureAwait(true);
-            FakeNntpServer secondServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable secondServerLease = secondServer.ConfigureAwait(true);
+            FakeNntpServer firstServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable firstServerLease = firstServer.ConfigureAwait(false);
+            FakeNntpServer secondServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable secondServerLease = secondServer.ConfigureAwait(false);
 
             Guid firstAccountId = Guid.NewGuid();
             Guid secondAccountId = Guid.NewGuid();
@@ -362,8 +362,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenMaxConnectionsDecreases_RetiresExcessSessionsOnly()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 5).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 5).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -424,8 +424,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenCapacityDecreases_WaitsForRabbitRetirementBeforeNntpRetirementBecomesEffective()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 3).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 3).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -468,8 +468,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenKeepAliveChanges_DoesNotReconnectOrReauthenticate()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -511,8 +511,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenCredentialsChange_RecreatesAndReauthenticates()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 2).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -557,10 +557,10 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenHostnameChanges_ReplacesSessions()
         {
-            FakeNntpServer firstServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable firstServerLease = firstServer.ConfigureAwait(true);
-            FakeNntpServer secondServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable secondServerLease = secondServer.ConfigureAwait(true);
+            FakeNntpServer firstServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable firstServerLease = firstServer.ConfigureAwait(false);
+            FakeNntpServer secondServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable secondServerLease = secondServer.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -604,8 +604,8 @@ namespace VectorNNTP.Backfiller.Tests
         {
             FakeNntpServer server = await FakeNntpServer.StartWithTransportPlanAsync(
                 FakeNntpServer.ConnectionTransport.Plaintext,
-                FakeNntpServer.ConnectionTransport.ImplicitTls).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+                FakeNntpServer.ConnectionTransport.ImplicitTls).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -659,8 +659,8 @@ namespace VectorNNTP.Backfiller.Tests
             FakeNntpServer server = await FakeNntpServer.StartWithTransportPlanAsync(
                 FakeNntpServer.ConnectionTransport.Plaintext,
                 FakeNntpServer.ConnectionTransport.Plaintext,
-                FakeNntpServer.ConnectionTransport.ImmediateClose).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+                FakeNntpServer.ConnectionTransport.ImmediateClose).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -699,8 +699,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenAccountDisabled_RemovesRuntimeAndDisposesSessions()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -739,8 +739,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task StartAsync_PublishesAuthoritativeBackboneCapacitySnapshot()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -772,8 +772,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenCapacityDropsToZero_PublishesZeroBackboneCapacitySnapshot()
         {
-            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(true);
-            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(true);
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
             List<NntpAccountSnapshot> desiredAccounts =
@@ -1553,5 +1553,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
     }
 }
+
+
 
 

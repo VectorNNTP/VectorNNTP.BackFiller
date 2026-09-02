@@ -29,7 +29,7 @@ namespace VectorNNTP.Backfiller.Tests
             RecordingBrokerConnector connector = new();
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
             RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
-            await connectionManager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            await connectionManager.EnsureConnectedAsync(CancellationToken.None);
 
             RabbitMqArticleResponsePublisher publisher = new(runtimeOptions, connectionManager, NullLogger<RabbitMqArticleResponsePublisher>.Instance);
             ArticleWorkProcessingResult result = CreateSuccessResult(
@@ -46,7 +46,7 @@ namespace VectorNNTP.Backfiller.Tests
                 Uri: null,
                 Error: null);
 
-            RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
+            RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None);
 
             RecordingBrokerConnection connection = connector.RequireLastConnection();
             RecordingChannel channel = Assert.Single(connection.CreatedChannels);
@@ -65,7 +65,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(parsed.Uri);
             Assert.Null(parsed.Error);
 
-            await connectionManager.DisposeAsync().ConfigureAwait(false);
+            await connectionManager.DisposeAsync();
             result.Dispose();
         }
 
@@ -78,7 +78,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
             RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
-            await connectionManager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            await connectionManager.EnsureConnectedAsync(CancellationToken.None);
 
             RabbitMqArticleResponsePublisher publisher = new(runtimeOptions, connectionManager, NullLogger<RabbitMqArticleResponsePublisher>.Instance);
             ArticleWorkProcessingResult result = CreateSuccessResult(
@@ -88,12 +88,12 @@ namespace VectorNNTP.Backfiller.Tests
                 replyTo: "rpc.reply.failed");
 
             RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", null, null);
-            RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
+            RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None);
 
             Assert.Equal(RabbitMqResponsePublishStatus.Failed, publishResult.Status);
             Assert.NotNull(publishResult.Exception);
 
-            await connectionManager.DisposeAsync().ConfigureAwait(false);
+            await connectionManager.DisposeAsync();
             result.Dispose();
         }
 

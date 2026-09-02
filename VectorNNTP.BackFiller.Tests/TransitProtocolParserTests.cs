@@ -168,7 +168,7 @@ namespace VectorNNTP.Backfiller.Tests
             Pipe pipe = new();
             await pipe.Writer.CompleteAsync();
 
-            (string? line, int bytesRead, bool completedWithoutLine) = await TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false);
+            (string? line, int bytesRead, bool completedWithoutLine) = await TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(pipe.Reader, CancellationToken.None);
 
             Assert.Null(line);
             Assert.Equal(0, bytesRead);
@@ -181,7 +181,7 @@ namespace VectorNNTP.Backfiller.Tests
             Pipe pipe = new();
             await pipe.Writer.CompleteAsync();
 
-            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None));
         }
 
         [Fact]
@@ -194,7 +194,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = await pipe.Writer.WriteAsync(oversizedLine);
 
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None).ConfigureAwait(false));
+                await TransitProtocolParser.ReadNntpLineAsync(pipe.Reader, CancellationToken.None));
 
             Assert.Contains("exceeded maximum length", ex.Message, StringComparison.OrdinalIgnoreCase);
         }

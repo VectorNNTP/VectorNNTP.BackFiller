@@ -41,7 +41,7 @@ namespace VectorNNTP.Backfiller.Tests
                 correlationId: "rpc-correlation-001",
                 replyTo: "nnrpd.rpc.responses");
 
-            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None);
 
             Assert.True(parseResult.IsSuccess);
             RabbitMqArticleWorkRequest request = Assert.IsType<RabbitMqArticleWorkRequest>(parseResult.Request);
@@ -98,7 +98,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(
                 CreateDelivery(payload, correlationId: "rpc-ordering", replyTo: "rpc.replies"),
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.True(parseResult.IsSuccess);
             RabbitMqArticleWorkRequest request = Assert.IsType<RabbitMqArticleWorkRequest>(parseResult.Request);
@@ -109,8 +109,7 @@ namespace VectorNNTP.Backfiller.Tests
         public async Task ParseAsync_WhenPayloadIsEmpty_ReturnsInvalidRequestAsync()
         {
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(string.Empty, correlationId: "rpc-empty", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(string.Empty, correlationId: "rpc-empty", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -119,8 +118,7 @@ namespace VectorNNTP.Backfiller.Tests
         public async Task ParseAsync_WhenPayloadIsInvalidJson_ReturnsInvalidRequestAsync()
         {
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery("{invalid", correlationId: "rpc-invalid-json", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery("{invalid", correlationId: "rpc-invalid-json", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -138,7 +136,7 @@ namespace VectorNNTP.Backfiller.Tests
                 replyTo: "rpc.reply.queue",
                 deliveryTag: 37);
 
-            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
 
@@ -159,8 +157,7 @@ namespace VectorNNTP.Backfiller.Tests
         public async Task ParseAsync_WhenPayloadIsJsonArray_ReturnsInvalidRequestAsync()
         {
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery("[]", correlationId: "rpc-array", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery("[]", correlationId: "rpc-array", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -169,8 +166,7 @@ namespace VectorNNTP.Backfiller.Tests
         public async Task ParseAsync_WhenPayloadIsJsonPrimitive_ReturnsInvalidRequestAsync()
         {
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery("42", correlationId: "rpc-primitive", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery("42", correlationId: "rpc-primitive", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -180,8 +176,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = $$"""{"requestId":"{{Guid.NewGuid()}}","messageId":"<v-missing@example.com>","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-missing", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-missing", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -191,8 +186,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = $$"""{"version":2,"requestId":"{{Guid.NewGuid()}}","messageId":"<v-unsupported@example.com>","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-unsupported", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-unsupported", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -202,8 +196,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = "{\"version\":1,\"messageId\":\"<missing-requestid@example.com>\",\"backbone\":\"BackboneA\"}";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-missing", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-missing", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -213,8 +206,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = "{\"version\":1,\"requestId\":\"not-a-guid\",\"messageId\":\"<invalid-requestid@example.com>\",\"backbone\":\"BackboneA\"}";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-invalid", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-invalid", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -224,8 +216,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = $$"""{"version":1,"requestId":"{{Guid.NewGuid()}}","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-messageid-missing", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-messageid-missing", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -235,8 +226,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = $$"""{"version":1,"requestId":"{{Guid.NewGuid()}}","messageId":"","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-messageid-empty", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-messageid-empty", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -246,8 +236,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = $$"""{"version":1,"requestId":"{{Guid.NewGuid()}}","messageId":"<missing-backbone@example.com>"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-backbone-missing", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-backbone-missing", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -257,8 +246,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = $$"""{"version":1,"requestId":"{{Guid.NewGuid()}}","messageId":"<empty-backbone@example.com>","backbone":""}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-backbone-empty", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-backbone-empty", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -268,8 +256,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = CreateValidJsonPayload(Guid.NewGuid(), "<mismatch@example.com>", "Eweka");
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, backbone: "Giganews", correlationId: "rpc-backbone-mismatch", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, backbone: "Giganews", correlationId: "rpc-backbone-mismatch", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -279,8 +266,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = CreateValidJsonPayload(Guid.NewGuid(), "<case-backbone@example.com>", "giganews");
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, backbone: "Giganews", correlationId: "rpc-case", replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, backbone: "Giganews", correlationId: "rpc-case", replyTo: "rpc.replies"), CancellationToken.None);
 
             Assert.True(parseResult.IsSuccess);
         }
@@ -290,8 +276,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = CreateValidJsonPayload(Guid.NewGuid(), "<missing-correlation@example.com>", "BackboneA");
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: null, replyTo: "rpc.replies"), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: null, replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -301,8 +286,7 @@ namespace VectorNNTP.Backfiller.Tests
         {
             string payload = CreateValidJsonPayload(Guid.NewGuid(), "<missing-replyto@example.com>", "BackboneA");
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-missing-replyto", replyTo: null), CancellationToken.None)
-                .ConfigureAwait(false);
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-missing-replyto", replyTo: null), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
         }
@@ -364,8 +348,8 @@ namespace VectorNNTP.Backfiller.Tests
             RabbitMqArticleDelivery redelivery = CreateDelivery(payload, correlationId: "rpc-redeliver-1", replyTo: "rpc.responses", redelivered: true, deliveryTag: 22, connectionGeneration: 4, consumerIdentity: "consumer-2");
 
             RabbitMqArticleWorkRequestParser parser = new();
-            RabbitMqArticleWorkParseResult firstResult = await parser.ParseAsync(firstDelivery, CancellationToken.None).ConfigureAwait(false);
-            RabbitMqArticleWorkParseResult secondResult = await parser.ParseAsync(redelivery, CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleWorkParseResult firstResult = await parser.ParseAsync(firstDelivery, CancellationToken.None);
+            RabbitMqArticleWorkParseResult secondResult = await parser.ParseAsync(redelivery, CancellationToken.None);
 
             RabbitMqArticleWorkRequest firstRequest = Assert.IsType<RabbitMqArticleWorkRequest>(firstResult.Request);
             RabbitMqArticleWorkRequest secondRequest = Assert.IsType<RabbitMqArticleWorkRequest>(secondResult.Request);
@@ -403,7 +387,7 @@ namespace VectorNNTP.Backfiller.Tests
                 correlationId: "rpc-notfound",
                 replyTo: "rpc.responses");
 
-            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
+            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None);
 
             Assert.Equal(ArticleWorkProcessingOutcome.ArticleNotFound, result.Outcome);
             Assert.Equal(ArticleWorkDispositionRecommendation.NackDrop, result.Disposition);
@@ -424,7 +408,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             using CancellationTokenSource cancellationTokenSource = new();
             cancellationTokenSource.Cancel();
-            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, cancellationTokenSource.Token).ConfigureAwait(false);
+            ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, cancellationTokenSource.Token);
 
             Assert.Equal(ArticleWorkProcessingOutcome.Cancelled, result.Outcome);
             Assert.Equal(ArticleWorkDispositionRecommendation.None, result.Disposition);

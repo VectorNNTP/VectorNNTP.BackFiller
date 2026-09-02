@@ -92,11 +92,11 @@ namespace VectorNNTP.Backfiller.Tests
             Task<bool> firstRefresh = provider.RefreshSnapshotAsync(CancellationToken.None);
             Task<bool> secondRefresh = provider.RefreshSnapshotAsync(CancellationToken.None);
 
-            bool secondResult = await secondRefresh.ConfigureAwait(false);
+            bool secondResult = await secondRefresh;
             Assert.False(secondResult);
 
             unblock.SetResult();
-            bool firstResult = await firstRefresh.ConfigureAwait(false);
+            bool firstResult = await firstRefresh;
 
             Assert.True(firstResult);
         }

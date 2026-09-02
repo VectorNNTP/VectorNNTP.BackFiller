@@ -85,7 +85,7 @@ namespace VectorNNTP.Backfiller.Tests
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Failed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
 
-            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+            await sink.OnProcessedAsync(result, CancellationToken.None);
 
             Assert.Null(settlement.AckDeliveryTag);
             Assert.Equal(913UL, settlement.NackDeliveryTag);
@@ -143,7 +143,7 @@ namespace VectorNNTP.Backfiller.Tests
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
 
-            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+            await sink.OnProcessedAsync(result, CancellationToken.None);
 
             Assert.Equal(1001UL, settlement.NackDeliveryTag);
             Assert.False(settlement.NackRequeue);
@@ -176,7 +176,7 @@ namespace VectorNNTP.Backfiller.Tests
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
 
-            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+            await sink.OnProcessedAsync(result, CancellationToken.None);
 
             Assert.Equal(1002UL, settlement.NackDeliveryTag);
             Assert.False(settlement.NackRequeue);
@@ -209,7 +209,7 @@ namespace VectorNNTP.Backfiller.Tests
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
 
-            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+            await sink.OnProcessedAsync(result, CancellationToken.None);
 
             Assert.Equal(1003UL, settlement.NackDeliveryTag);
             Assert.False(settlement.NackRequeue);
@@ -242,7 +242,7 @@ namespace VectorNNTP.Backfiller.Tests
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
 
-            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+            await sink.OnProcessedAsync(result, CancellationToken.None);
 
             Assert.Equal(1004UL, settlement.NackDeliveryTag);
             Assert.True(settlement.NackRequeue);

@@ -190,8 +190,8 @@ dotnet_diagnostic.SA1512.severity = none
 # CA1848: Use LoggerMessage delegates — encourage project-wide
 dotnet_diagnostic.CA1848.severity = warning
 
-# CA2007: ConfigureAwait — required in class library projects (see Directory.Build.targets / host project overrides)
-dotnet_diagnostic.CA2007.severity = warning
+# CA2007: ConfigureAwait — disabled for test project to avoid conflict with xUnit1030 test-method semantics.
+dotnet_diagnostic.CA2007.severity = none
 
 # CA5351: Do Not Use Broken Cryptographic Algorithms — suppress per-site in source when used as non-cryptographic hash
 dotnet_diagnostic.CA5351.severity = none

@@ -87,15 +87,15 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Directory.CreateDirectory(plainDirectory);
             _ = Directory.CreateDirectory(corruptDirectory);
 
-            await DownloadAndWriteSamplesAsync(endpoint, yEncMessageIds, yEncDirectory, "yenc").ConfigureAwait(false);
-            await DownloadAndWriteSamplesAsync(endpoint, plainMessageIds, plainDirectory, "plain").ConfigureAwait(false);
+            await DownloadAndWriteSamplesAsync(endpoint, yEncMessageIds, yEncDirectory, "yenc");
+            await DownloadAndWriteSamplesAsync(endpoint, plainMessageIds, plainDirectory, "plain");
             BuildDeterministicCorruptVariants(yEncDirectory, corruptDirectory);
 
             string readmePath = Path.Combine(CorpusRootDirectory, "README.md");
             await File.WriteAllTextAsync(
                 readmePath,
                 BuildCorpusReadme(endpoint, yEncMessageIds.Length, plainMessageIds.Length),
-                Encoding.UTF8).ConfigureAwait(false);
+                Encoding.UTF8);
 
             Assert.True(File.Exists(readmePath));
         }

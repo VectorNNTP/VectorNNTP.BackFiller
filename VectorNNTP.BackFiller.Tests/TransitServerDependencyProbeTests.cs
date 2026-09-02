@@ -64,7 +64,7 @@ namespace VectorNNTP.Backfiller.Tests
                         await ProbeNntpServer.WriteLineAsync(stream, "205 closing connection", cancellationToken).ConfigureAwait(false);
                     }
                 }
-            }).ConfigureAwait(false);
+            });
 
             await using (serverInstance.ConfigureAwait(false))
             {
@@ -81,7 +81,7 @@ namespace VectorNNTP.Backfiller.Tests
                 DependencyValidationResult result = await TransitServerDependencyProbe.ValidateTransitServerConnectivityAsync(
                 options,
                 TimeSpan.FromSeconds(3),
-                testTimeout.Token).ConfigureAwait(false);
+                testTimeout.Token);
 
                 Assert.False(result.IsValid);
                 Assert.Contains(result.FailedDependencies, static failure =>

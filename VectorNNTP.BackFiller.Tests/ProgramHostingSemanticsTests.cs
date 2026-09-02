@@ -56,7 +56,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
-        public void ConcurrentReentrantShutdownRace_DoesNotThrowAndLifecycleIsDraining()
+        public async Task ConcurrentReentrantShutdownRace_DoesNotThrowAndLifecycleIsDraining()
         {
             FakeHostApplicationLifetime lifetime = new();
             ServiceLifecycle lifecycle = new(TimeProvider.System);
@@ -117,9 +117,10 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 // Ensure we always release the observer to avoid hanging the transitionTask
                 continueNotification.Set();
-                Assert.True(
-                    transitionTask.Wait(TimeSpan.FromSeconds(5)),
-                    "The concurrent lifecycle transition did not complete.");
+                Task completedTask = await Task.WhenAny(transitionTask, Task.Delay(TimeSpan.FromSeconds(5)));
+                Assert.Same(
+                    transitionTask,
+                    completedTask);
             }
 
             // Ensure the transition task did not capture an unexpected exception
@@ -165,7 +166,8 @@ namespace VectorNNTP.Backfiller.Tests
                 ShutdownDrainQueuedWork: true,
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
-                WriteBatchCoalesceMicroseconds: 250);
+                WriteBatchCoalesceMicroseconds: 250,
+                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
 
             ServiceLifecycle lifecycle = new(TimeProvider.System);
 
@@ -525,3 +527,5 @@ namespace VectorNNTP.Backfiller.Tests
     }
 
 }
+
+

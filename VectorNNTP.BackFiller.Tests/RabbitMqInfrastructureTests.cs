@@ -107,7 +107,7 @@ namespace VectorNNTP.Backfiller.Tests
             List<RabbitMqConnectionReplacedEventArgs> replacements = [];
             manager.ConnectionReplaced += (_, args) => replacements.Add(args);
 
-            await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            await manager.EnsureConnectedAsync(CancellationToken.None);
             Assert.Equal(RabbitMqInfrastructureState.Connected, manager.State);
             Assert.Equal(1, manager.ConnectionGeneration);
 
@@ -124,7 +124,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(replacements, static args => args.ConnectionGeneration == 1 && !args.IsReplacement);
             Assert.Contains(replacements, static args => args.ConnectionGeneration >= 2 && args.IsReplacement);
 
-            await manager.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync();
         }
 
         [Fact]
@@ -135,7 +135,7 @@ namespace VectorNNTP.Backfiller.Tests
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
 
-            await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            await manager.EnsureConnectedAsync(CancellationToken.None);
             int initialConnectCount = connector.ConnectCallCount;
 
             shutdownCoordinator.SignalGracefulShutdown(TimeSpan.FromSeconds(1), ShutdownCoordinator.ShutdownReason.HostStopping);
@@ -146,7 +146,7 @@ namespace VectorNNTP.Backfiller.Tests
             await Task.Delay(250).ConfigureAwait(false);
             Assert.Equal(initialConnectCount, connector.ConnectCallCount);
 
-            await manager.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync();
         }
 
         [Fact]
@@ -157,10 +157,10 @@ namespace VectorNNTP.Backfiller.Tests
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
 
-            await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            await manager.EnsureConnectedAsync(CancellationToken.None);
 
-            await using RabbitMqOwnedChannel first = await manager.CreateOwnedChannelAsync("test-owner-1", CancellationToken.None).ConfigureAwait(false);
-            await using RabbitMqOwnedChannel second = await manager.CreateOwnedChannelAsync("test-owner-2", CancellationToken.None).ConfigureAwait(false);
+            await using RabbitMqOwnedChannel first = await manager.CreateOwnedChannelAsync("test-owner-1", CancellationToken.None);
+            await using RabbitMqOwnedChannel second = await manager.CreateOwnedChannelAsync("test-owner-2", CancellationToken.None);
 
             Assert.NotSame(first.Channel, second.Channel);
             Assert.Equal("test-owner-1", first.Owner);
@@ -168,7 +168,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(manager.ConnectionGeneration, first.ConnectionGeneration);
             Assert.Equal(manager.ConnectionGeneration, second.ConnectionGeneration);
 
-            await manager.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync();
         }
 
         [Fact]
@@ -215,18 +215,18 @@ namespace VectorNNTP.Backfiller.Tests
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
             RabbitMqTopologyInitializer initializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
 
-            await manager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            await manager.EnsureConnectedAsync(CancellationToken.None);
 
-            await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None).ConfigureAwait(false);
+            await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None);
             int channelsAfterFirstInit = connector.LastConnection?.ChannelCreateCount ?? throw new InvalidOperationException("Expected initialized RabbitMQ connection.");
 
-            await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None).ConfigureAwait(false);
+            await initializer.InitializeAsync(runtimeOptions.BackFillerId, ["Giganews", "Eweka"], CancellationToken.None);
             int channelsAfterSecondInit = connector.LastConnection?.ChannelCreateCount ?? throw new InvalidOperationException("Expected initialized RabbitMQ connection.");
 
             Assert.Equal(RabbitMqInfrastructureState.TopologyReady, manager.State);
             Assert.Equal(2, channelsAfterFirstInit);
             Assert.Equal(2, channelsAfterSecondInit);
-            await manager.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync();
         }
 
         private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)

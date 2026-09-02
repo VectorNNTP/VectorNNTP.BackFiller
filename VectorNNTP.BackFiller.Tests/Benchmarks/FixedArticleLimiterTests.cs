@@ -76,7 +76,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 });
             }
 
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            await Task.WhenAll(tasks);
 
             Assert.Equal(Target, granted);
         }

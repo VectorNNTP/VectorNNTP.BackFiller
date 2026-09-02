@@ -1,4 +1,4 @@
-// <copyright file="NntpArticleGrabberWorkflowTests.cs" company="Usenet Ninja">
+﻿// <copyright file="NntpArticleGrabberWorkflowTests.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -40,22 +40,22 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeServer.WriteAsciiLineAsync(stream, "220 0 <workflow-success@test> article follows");
                 await FakeServer.WriteBytesAsync(stream, article);
                 await FakeServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleGrabberWorkflow workflow = CreateWorkflow();
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
                 using NntpArticleGrabberResult result = await workflow.ProcessAsync(
                     session,
                     new NntpArticleGrabberWorkItem("<workflow-success@test>"),
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
 
                 Assert.True(result.IsSuccess);
                 Assert.Equal(NntpArticleGrabberFailureCode.None, result.FailureCode);
@@ -81,22 +81,22 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeServer.WriteAsciiLineAsync(stream, "220 0 <workflow-malformed@test> article follows");
                 await FakeServer.WriteBytesAsync(stream, malformed);
                 await FakeServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleGrabberWorkflow workflow = CreateWorkflow();
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
                 using NntpArticleGrabberResult result = await workflow.ProcessAsync(
                     session,
                     new NntpArticleGrabberWorkItem("<workflow-malformed@test>"),
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
 
                 Assert.False(result.IsSuccess);
                 Assert.Equal(NntpArticleGrabberFailureCode.InvalidHeaders, result.FailureCode);
@@ -124,22 +124,22 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeServer.WriteAsciiLineAsync(stream, "220 0 <workflow-yenc@test> article follows");
                 await FakeServer.WriteBytesAsync(stream, invalidYEnc);
                 await FakeServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleGrabberWorkflow workflow = CreateWorkflow();
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
                 using NntpArticleGrabberResult result = await workflow.ProcessAsync(
                     session,
                     new NntpArticleGrabberWorkItem("<workflow-yenc@test>"),
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
 
                 Assert.False(result.IsSuccess);
                 Assert.Equal(NntpArticleGrabberFailureCode.YEncValidationFailure, result.FailureCode);
@@ -159,22 +159,22 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeServer.ExpectAsciiLineAsync(stream, "ARTICLE <workflow-missing@test>");
                 await FakeServer.WriteAsciiLineAsync(stream, "430 no such article");
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleGrabberWorkflow workflow = CreateWorkflow();
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.NotNull(session);
-            await using (session.ConfigureAwait(false))
+            await using (session)
             {
                 using NntpArticleGrabberResult result = await workflow.ProcessAsync(
                     session,
                     new NntpArticleGrabberWorkItem("<workflow-missing@test>"),
-                    CancellationToken.None).ConfigureAwait(false);
+                    CancellationToken.None);
 
                 Assert.False(result.IsSuccess);
                 Assert.Equal(NntpArticleGrabberFailureCode.ArticleNotFound, result.FailureCode);
@@ -196,14 +196,14 @@ namespace VectorNNTP.Backfiller.Tests
                 await FakeServer.WriteAsciiLineAsync(stream, "381 pass required");
                 await FakeServer.ExpectAsciiLineAsync(stream, "AUTHINFO PASS bad");
                 await FakeServer.WriteAsciiLineAsync(stream, "481 authentication rejected");
-            }).ConfigureAwait(false);
+            });
 
             NntpArticleAcquisitionEndpoint endpoint = new("127.0.0.1", server.Port, UseSsl: false, Username: "user", Password: "bad");
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
                 endpoint,
                 NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None);
 
             Assert.Null(session);
             Assert.Equal(NntpArticleAcquisitionFailureCode.AuthenticationFailure, connectResult.FailureCode);

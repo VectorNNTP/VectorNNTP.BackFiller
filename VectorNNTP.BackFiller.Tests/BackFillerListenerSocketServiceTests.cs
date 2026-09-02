@@ -44,10 +44,10 @@ namespace VectorNNTP.Backfiller.Tests
             using CancellationTokenSource runCts = new();
             Task runTask = service.StartAsync(runCts.Token);
 
-            await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5));
 
             using TcpClient client = new();
-            await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+            await client.ConnectAsync(IPAddress.Loopback, port);
 
             using SslStream sslStream = new(
                 client.GetStream(),
@@ -59,12 +59,12 @@ namespace VectorNNTP.Backfiller.Tests
                 TargetHost = "localhost",
                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-            }).ConfigureAwait(false);
+            });
 
             Assert.True(sslStream.IsAuthenticated);
 
-            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
-            await runTask.ConfigureAwait(false);
+            await service.StopAsync(CancellationToken.None);
+            await runTask;
 
             state.Dispose();
             shutdown.Dispose();
@@ -91,18 +91,18 @@ namespace VectorNNTP.Backfiller.Tests
             using CancellationTokenSource runCts = new();
             Task runTask = service.StartAsync(runCts.Token);
 
-            await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5));
 
-            string thumbprintA = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+            string thumbprintA = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port);
             Assert.Equal(certA.Thumbprint, thumbprintA, ignoreCase: true);
 
             state.Publish(new BackFillerCertificateBundle(new X509Certificate2(certB.Export(X509ContentType.Pkcs12)), "memory", DateTimeOffset.UtcNow));
 
-            string thumbprintB = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+            string thumbprintB = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port);
             Assert.Equal(certB.Thumbprint, thumbprintB, ignoreCase: true);
 
-            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
-            await runTask.ConfigureAwait(false);
+            await service.StopAsync(CancellationToken.None);
+            await runTask;
 
             state.Dispose();
             shutdown.Dispose();
