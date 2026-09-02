@@ -142,9 +142,6 @@ internal static class TransitBenchmarkOrchestrator
     /// </summary>
     private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
-        /// <summary>
-        /// Gets or sets the smoke Articles value.
-        /// </summary>
         const int smokeArticles = 5;
 
         for (int i = 0; i < smokeArticles; i++)
