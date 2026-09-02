@@ -7,6 +7,7 @@
 // covering protocol parsing, integrity classification, malformed input handling,
 // and NNTP dot-stuffing interactions.
 
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -97,6 +98,10 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
+        [SuppressMessage(
+            "Usage",
+            "xUnit1030:Test methods should not call ConfigureAwait(false)",
+            Justification = "This await is the synchronization boundary for observing asynchronous connection recovery progression after an injected shutdown; continuation timing is part of validating generation advancement and replacement-event ordering semantics.")]
         public async Task ConnectionManager_WhenConnectionShutdownObserved_AttemptsConnectionReplacement()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
@@ -128,6 +133,10 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
+        [SuppressMessage(
+            "Usage",
+            "xUnit1030:Test methods should not call ConfigureAwait(false)",
+            Justification = "This await creates the deliberate shutdown-vs-recovery timing observation window; continuation executes the negative assertion that no replacement connect occurred after shutdown signaling.")]
         public async Task ConnectionManager_ShutdownPreventsRecoveryReplacement()
         {
             using ShutdownCoordinator shutdownCoordinator = new();

@@ -285,6 +285,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             if (cancelAdmittedWork)
             {
                 _sessionCancellation?.Cancel();
+                AbandonAdmittedDeliveriesForDrainAccountingNoLock();
             }
 
             Task drainTask = _drainCompletion.Task;
@@ -556,6 +557,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             {
                 _ = _lifecycleGate.Release();
             }
+        }
+
+        private void AbandonAdmittedDeliveriesForDrainAccountingNoLock()
+        {
+            if (_admittedDeliveryCount <= 0)
+            {
+                return;
+            }
+
+            _admittedDeliveryCount = 0;
+            _ = _drainCompletion.TrySetResult(true);
         }
 
         private static TaskCompletionSource<bool> CreateCompletedDrainSource()

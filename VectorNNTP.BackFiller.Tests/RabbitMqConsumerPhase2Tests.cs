@@ -46,7 +46,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<RabbitMqBackboneConsumerSession>.Instance,
                 prefetchCount: 32);
 
-            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            await session.StartAsync(CancellationToken.None);
 
             TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
 
@@ -55,9 +55,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal((ushort)32, consumerChannel.LastPrefetchCount);
             Assert.Equal(manager.ConnectionGeneration, session.ActiveConnectionGeneration);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
-            await session.DisposeAsync().ConfigureAwait(false);
-            await manager.DisposeAsync().ConfigureAwait(false);
+            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            await session.DisposeAsync();
+            await manager.DisposeAsync();
         }
 
         /// <summary>
@@ -378,6 +378,52 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, channel.AckCallCount);
             Assert.True(channel.OperationLog.IndexOf("ack") >= 0);
             Assert.True(channel.OperationLog.IndexOf("dispose") > channel.OperationLog.IndexOf("ack"));
+
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenCancelAdmittedWorkTrue_StopsWithoutSettlementAndDisposesChannel()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 10, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                sink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: null);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            TrackingChannel channel = connector.RequireLastConnection().Channels.Single(static c => c.ConsumeCallCount == 1);
+
+            await channel.DeliverAsync(601UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x11 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleDelivery admitted = Assert.Single(sink.Deliveries);
+
+            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            bool stopCompleted = await WaitForAsync(() => stopTask.IsCompleted, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            Assert.True(stopCompleted);
+            await stopTask.ConfigureAwait(false);
+
+            Assert.True(channel.Disposed);
+            Assert.Equal(1, channel.CancelCallCount);
+            Assert.Equal(0, channel.AckCallCount);
+            Assert.Equal(0, channel.NackCallCount);
+
+            int cancelIndex = channel.OperationLog.IndexOf("cancel");
+            int disposeIndex = channel.OperationLog.IndexOf("dispose");
+            Assert.True(cancelIndex >= 0);
+            Assert.True(disposeIndex > cancelIndex);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => admitted.Settlement.AckAsync(CancellationToken.None).AsTask()).ConfigureAwait(false);
+            Assert.Equal(0, channel.AckCallCount);
 
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
