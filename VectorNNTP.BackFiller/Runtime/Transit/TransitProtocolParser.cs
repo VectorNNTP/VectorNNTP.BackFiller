@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal static class TransitProtocolParser
     {
         /// <summary>
-        /// Tracks capabilities response code for transit protocol parser.
+        /// Stores capabilities response code used by transit protocol parser.
         /// </summary>
         private const int CapabilitiesResponseCode = 101;
         /// <summary>
@@ -27,7 +27,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private const int MaximumNntpLineLengthBytes = 16 * 1024;
 
         /// <summary>
-        /// Coordinates read nntp line async for transit protocol parser.
+        /// Handles read nntp line async for transit protocol parser.
         /// </summary>
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
@@ -36,7 +36,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates read nntp line with byte count async for transit protocol parser.
+        /// Handles read nntp line with byte count async for transit protocol parser.
         /// </summary>
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
@@ -92,7 +92,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates static for transit protocol parser.
+        /// Handles static for transit protocol parser.
         /// </summary>
         internal static (int Code, string ResponseText, string[] Tokens) ParseStatusLine(string line)
         {
@@ -105,7 +105,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates static for transit protocol parser.
+        /// Handles static for transit protocol parser.
         /// </summary>
         internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
         {
@@ -130,7 +130,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates validate greeting for transit protocol parser.
+        /// Handles validate greeting for transit protocol parser.
         /// </summary>
         internal static void ValidateGreeting(string greetingLine)
         {
@@ -145,7 +145,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates parse capabilities response for transit protocol parser.
+        /// Handles parse capabilities response for transit protocol parser.
         /// </summary>
         internal static TransitCapabilitySnapshot ParseCapabilitiesResponse(IReadOnlyList<string> responseLines)
         {
@@ -203,7 +203,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates decode line for transit protocol parser.
+        /// Handles decode line for transit protocol parser.
         /// </summary>
         private static string DecodeLine(ReadOnlySequence<byte> line)
         {

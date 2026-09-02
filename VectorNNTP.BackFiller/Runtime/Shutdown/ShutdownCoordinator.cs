@@ -35,7 +35,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace VectorNNTP.Backfiller.Runtime.Shutdown
 {
     /// <summary>
-    /// Coordinates shutdown state transitions and cancellation signaling for graceful and forced termination.
+    /// Handles shutdown state transitions and cancellation signaling for graceful and forced termination.
     /// </summary>
     /// <remarks>
     /// <para>State transitions are monotonic.</para>
@@ -124,52 +124,52 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         private static readonly TimeSpan MaximumGracePeriod = TimeSpan.FromMilliseconds(int.MaxValue);
 
         /// <summary>
-        /// Tracks gate for shutdown coordinator.
+        /// Stores gate used by shutdown coordinator.
         /// </summary>
         private readonly object _gate = new();
         /// <summary>
-        /// Tracks graceful shutdown started cts for shutdown coordinator.
+        /// Stores graceful shutdown started cts used by shutdown coordinator.
         /// </summary>
         private readonly CancellationTokenSource _gracefulShutdownStartedCts = new();
         /// <summary>
-        /// Tracks forced shutdown cts for shutdown coordinator.
+        /// Stores forced shutdown cts used by shutdown coordinator.
         /// </summary>
         private readonly CancellationTokenSource _forcedShutdownCts = new();
         /// <summary>
-        /// Provides logging for shutdown coordinator.
+        /// Supplies the logger used by shutdown coordinator.
         /// </summary>
         private readonly ILogger<ShutdownCoordinator> _logger;
 
         /// <summary>
-        /// Tracks grace period cts for shutdown coordinator.
+        /// Stores grace period cts used by shutdown coordinator.
         /// </summary>
         private CancellationTokenSource? _gracePeriodCts;
         /// <summary>
-        /// Tracks state for shutdown coordinator.
+        /// Stores state used by shutdown coordinator.
         /// </summary>
         private ShutdownState _state = ShutdownState.Running;
         /// <summary>
-        /// Tracks graceful shutdown started at utc for shutdown coordinator.
+        /// Stores graceful shutdown started at utc used by shutdown coordinator.
         /// </summary>
         private DateTimeOffset? _gracefulShutdownStartedAtUtc;
         /// <summary>
-        /// Tracks forced shutdown at utc for shutdown coordinator.
+        /// Stores forced shutdown at utc used by shutdown coordinator.
         /// </summary>
         private DateTimeOffset? _forcedShutdownAtUtc;
         /// <summary>
-        /// Tracks graceful shutdown started timestamp for shutdown coordinator.
+        /// Stores graceful shutdown started timestamp used by shutdown coordinator.
         /// </summary>
         private long? _gracefulShutdownStartedTimestamp;
         /// <summary>
-        /// Tracks forced shutdown timestamp for shutdown coordinator.
+        /// Stores forced shutdown timestamp used by shutdown coordinator.
         /// </summary>
         private long? _forcedShutdownTimestamp;
         /// <summary>
-        /// Tracks graceful shutdown reason for shutdown coordinator.
+        /// Stores graceful shutdown reason used by shutdown coordinator.
         /// </summary>
         private ShutdownReason _gracefulShutdownReason = ShutdownReason.Unknown;
         /// <summary>
-        /// Tracks forced shutdown reason for shutdown coordinator.
+        /// Stores forced shutdown reason used by shutdown coordinator.
         /// </summary>
         private ShutdownReason _forcedShutdownReason = ShutdownReason.Unknown;
 
@@ -385,7 +385,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
 
                 _ = timeoutCts.Token.Register(
                     // <summary>
-                    // Tracks state for shutdown coordinator.
+                    // Stores state used by shutdown coordinator.
                     // </summary>
                     static state =>
                     {
@@ -541,7 +541,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Coordinates throw if disposed for shutdown coordinator.
+        /// Handles throw if disposed for shutdown coordinator.
         /// </summary>
         private void ThrowIfDisposed()
         {
@@ -549,7 +549,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Coordinates cancel grace period timer safely for shutdown coordinator.
+        /// Handles cancel grace period timer safely for shutdown coordinator.
         /// </summary>
         private static void CancelGracePeriodTimerSafely(CancellationTokenSource gracePeriodCts)
         {
@@ -564,7 +564,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Coordinates cancel token source safely for shutdown coordinator.
+        /// Handles cancel token source safely for shutdown coordinator.
         /// </summary>
         private static void CancelTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name, ShutdownState state)
         {
@@ -583,7 +583,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Coordinates dispose cancellation token source safely for shutdown coordinator.
+        /// Handles dispose cancellation token source safely for shutdown coordinator.
         /// </summary>
         private static void DisposeCancellationTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name)
         {
@@ -602,7 +602,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
         // <summary>
-        // Coordinates log cancellation callback failed for shutdown coordinator.
+        // Emits the cancellation callback failed log event for shutdown coordinator.
         // </summary>
         private static partial void LogCancellationCallbackFailed(
             ILogger logger,
@@ -615,7 +615,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
         // <summary>
-        // Coordinates log cancellation skipped already disposed for shutdown coordinator.
+        // Emits the cancellation skipped already disposed log event for shutdown coordinator.
         // </summary>
         private static partial void LogCancellationSkippedAlreadyDisposed(
             ILogger logger,
@@ -628,7 +628,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
         // <summary>
-        // Coordinates log disposal skipped already disposed for shutdown coordinator.
+        // Emits the disposal skipped already disposed log event for shutdown coordinator.
         // </summary>
         private static partial void LogDisposalSkippedAlreadyDisposed(
             ILogger logger,

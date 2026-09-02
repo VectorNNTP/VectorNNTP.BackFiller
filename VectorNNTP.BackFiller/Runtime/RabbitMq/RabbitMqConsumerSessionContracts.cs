@@ -44,7 +44,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Coordinates account-capacity retirement boundaries for RabbitMQ consumer sessions.
+    /// Handles account-capacity retirement boundaries for RabbitMQ consumer sessions.
     /// </summary>
     internal interface IRabbitMqCapacityRetirementCoordinator
     {
@@ -96,12 +96,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
         /// <summary>
-        /// Tracks writer for rabbit mq consumer session contracts.
+        /// Stores writer used by rabbit mq consumer session contracts.
         /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
         /// <summary>
-        /// Coordinates rabbit mq delivery channel sink for rabbit mq consumer session contracts.
+        /// Handles rabbit mq delivery channel sink for rabbit mq consumer session contracts.
         /// </summary>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Coordinates on delivery async for rabbit mq consumer session contracts.
+        /// Handles on delivery async for rabbit mq consumer session contracts.
         /// </summary>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller.Runtime.Certificates
-// Tracks the lifecycle of one ACME DNS-01 TXT record for cleanup.
+// Stores the lifecycle of one ACME DNS-01 TXT record used by cleanup.
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {

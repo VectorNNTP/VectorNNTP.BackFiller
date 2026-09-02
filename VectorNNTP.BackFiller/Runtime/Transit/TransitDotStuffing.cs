@@ -31,7 +31,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal static class TransitDotStuffing
     {
         /// <summary>
-        /// Coordinates get required destination length for transit dot stuffing.
+        /// Handles get required destination length for transit dot stuffing.
         /// </summary>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
@@ -71,7 +71,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff for transit dot stuffing.
+        /// Handles try dot stuff for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuff(
             ReadOnlySpan<byte> source,
@@ -90,7 +90,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff baseline byte loop for transit dot stuffing.
+        /// Handles try dot stuff baseline byte loop for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuffBaselineByteLoop(
             ReadOnlySpan<byte> source,
@@ -147,7 +147,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff bulk line oriented single pass for transit dot stuffing.
+        /// Handles try dot stuff bulk line oriented single pass for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuffBulkLineOrientedSinglePass(
             ReadOnlySpan<byte> source,
@@ -205,7 +205,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Coordinates try dot stuff bulk line oriented two pass for transit dot stuffing.
+        /// Handles try dot stuff bulk line oriented two pass for transit dot stuffing.
         /// </summary>
         internal static bool TryDotStuffBulkLineOrientedTwoPass(
             ReadOnlySpan<byte> source,

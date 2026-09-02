@@ -19,11 +19,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     internal sealed class NntpConnectionLogContext
     {
         /// <summary>
-        /// Tracks scope properties for nntp connection log context.
+        /// Stores scope properties used by nntp connection log context.
         /// </summary>
         private readonly KeyValuePair<string, object?>[] _scopeProperties;
         /// <summary>
-        /// Tracks connection prefix for nntp connection log context.
+        /// Stores connection prefix used by nntp connection log context.
         /// </summary>
         private readonly string _connectionPrefix;
 
@@ -162,12 +162,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private sealed class CompositeDisposable : IDisposable
         {
             /// <summary>
-            /// Tracks disposables for nntp connection log context.
+            /// Stores disposables used by nntp connection log context.
             /// </summary>
             private readonly IReadOnlyList<IDisposable> _disposables;
 
             /// <summary>
-            /// Coordinates composite disposable for nntp connection log context.
+            /// Handles composite disposable for nntp connection log context.
             /// </summary>
             internal CompositeDisposable(IReadOnlyList<IDisposable> disposables)
             {
@@ -175,7 +175,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             /// <summary>
-            /// Coordinates dispose for nntp connection log context.
+            /// Handles dispose for nntp connection log context.
             /// </summary>
             public void Dispose()
             {

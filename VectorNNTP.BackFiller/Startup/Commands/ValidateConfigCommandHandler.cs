@@ -65,7 +65,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Coordinates build validate config command result for validate config command handler.
+        /// Handles build validate config command result for validate config command handler.
         /// </summary>
         internal static ConfigurationValidationResult BuildValidateConfigCommandResult(IConfiguration configuration)
         {

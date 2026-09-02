@@ -245,7 +245,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates certificate contains dns name for back filler certificate store.
+        /// Handles certificate contains dns name for back filler certificate store.
         /// </summary>
         private static bool CertificateContainsDnsName(X509Certificate2 certificate, string expectedDnsName)
         {
@@ -291,7 +291,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates has server authentication usage for back filler certificate store.
+        /// Handles has server authentication usage for back filler certificate store.
         /// </summary>
         private static bool HasServerAuthenticationUsage(X509Certificate2 certificate)
         {
@@ -309,7 +309,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build certificate chain for back filler certificate store.
+        /// Handles build certificate chain for back filler certificate store.
         /// </summary>
         private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
         {
@@ -351,7 +351,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates build pfx bundle for back filler certificate store.
+        /// Handles build pfx bundle for back filler certificate store.
         /// </summary>
         private static byte[] BuildPfxBundle(AcmeOrderIssueResult issueResult, string pfxPassword)
         {
@@ -393,7 +393,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates import certificate private key for back filler certificate store.
+        /// Handles import certificate private key for back filler certificate store.
         /// </summary>
         private static AsymmetricAlgorithm ImportCertificatePrivateKey(string pem)
         {
@@ -423,7 +423,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates write file atomically async for back filler certificate store.
+        /// Handles write file atomically async for back filler certificate store.
         /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
@@ -436,7 +436,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates write file atomically async for back filler certificate store.
+        /// Handles write file atomically async for back filler certificate store.
         /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
@@ -492,7 +492,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates try delete temp file for back filler certificate store.
+        /// Handles try delete temp file for back filler certificate store.
         /// </summary>
         private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {

@@ -75,7 +75,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private bool _protocolReadyForCommands;
 
         /// <summary>
-        /// Tracks whether transport/protocol failures make further command writes unsafe for graceful lifecycle shutdown.
+        /// Stores whether transport/protocol failures make further command writes unsafe used by graceful lifecycle shutdown.
         /// </summary>
         private bool _transportFailed;
 
@@ -155,7 +155,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     options.ConnectTimeout,
                     cancellationToken,
                     // <summary>
-                    // Tracks token for nntp article acquisition session.
+                    // Stores token used by nntp article acquisition session.
                     // </summary>
                     async token =>
                     {
@@ -185,7 +185,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                         options.ConnectTimeout,
                         cancellationToken,
                         // <summary>
-                        // Tracks token for nntp article acquisition session.
+                        // Stores token used by nntp article acquisition session.
                         // </summary>
                         async token =>
                         {
@@ -527,7 +527,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     timeout,
                     cancellationToken,
                     // <summary>
-                    // Tracks token for nntp article acquisition session.
+                    // Stores token used by nntp article acquisition session.
                     // </summary>
                     async token =>
                     {

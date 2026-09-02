@@ -14,7 +14,7 @@ using System.Runtime.Intrinsics;
 namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 {
     /// <summary>
-    /// Provides byte-level CRLF and line-prefix scanning for raw NNTP article body spans.
+    /// Supplies byte-level CRLF and line-prefix scanning for raw NNTP article body spans.
     /// </summary>
     internal static class ArticleLineScanner
     {

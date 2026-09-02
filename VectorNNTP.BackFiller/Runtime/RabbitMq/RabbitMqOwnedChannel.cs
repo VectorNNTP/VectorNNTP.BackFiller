@@ -16,7 +16,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
         /// <summary>
-        /// Tracks channel for rabbit mq owned channel.
+        /// Stores channel used by rabbit mq owned channel.
         /// </summary>
         private readonly IRabbitMqChannel _channel;
 

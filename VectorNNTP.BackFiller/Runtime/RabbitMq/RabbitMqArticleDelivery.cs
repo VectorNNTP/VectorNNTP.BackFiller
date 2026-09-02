@@ -8,7 +8,7 @@
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Tracks admission lifecycle for one RabbitMQ delivery accepted by a logical consumer session.
+    /// Stores admission lifecycle used by one RabbitMQ delivery accepted by a logical consumer session.
     /// </summary>
     internal interface IRabbitMqAdmittedDeliveryTracker
     {

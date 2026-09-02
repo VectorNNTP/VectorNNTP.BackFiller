@@ -22,11 +22,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed partial class AuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
     {
         /// <summary>
-        /// Tracks time provider for authoritative dns txt propagation verifier.
+        /// Stores time provider used by authoritative dns txt propagation verifier.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Provides logging for authoritative dns txt propagation verifier.
+        /// Supplies the logger used by authoritative dns txt propagation verifier.
         /// </summary>
         private readonly ILogger<AuthoritativeDnsTxtPropagationVerifier> _logger;
 
@@ -114,7 +114,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates resolve authoritative name server addresses async for authoritative dns txt propagation verifier.
+        /// Handles resolve authoritative name server addresses async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<IReadOnlyList<IPAddress>> ResolveAuthoritativeNameServerAddressesAsync(string fqdn, CancellationToken cancellationToken)
         {
@@ -158,7 +158,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates query ns record names from system resolvers async for authoritative dns txt propagation verifier.
+        /// Handles query ns record names from system resolvers async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<IReadOnlyList<string>> QueryNsRecordNamesFromSystemResolversAsync(string zoneName, CancellationToken cancellationToken)
         {
@@ -197,7 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates resolve system name servers for authoritative dns txt propagation verifier.
+        /// Handles resolve system name servers for authoritative dns txt propagation verifier.
         /// </summary>
         private static string[] ResolveSystemNameServers()
         {
@@ -238,7 +238,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates query txt contains value async for authoritative dns txt propagation verifier.
+        /// Handles query txt contains value async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<bool> QueryTxtContainsValueAsync(IPAddress nameServer, string fqdn, string expectedTxtValue, CancellationToken cancellationToken)
         {
@@ -249,7 +249,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates send dns udp query async for authoritative dns txt propagation verifier.
+        /// Handles send dns udp query async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
         {
@@ -267,7 +267,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Coordinates normalize dns name for authoritative dns txt propagation verifier.
+        /// Handles normalize dns name for authoritative dns txt propagation verifier.
         /// </summary>
         private static string NormalizeDnsName(string value)
         {
@@ -289,7 +289,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private static class DnsWireMessageBuilder
         {
             /// <summary>
-            /// Coordinates build query for authoritative dns txt propagation verifier.
+            /// Handles build query for authoritative dns txt propagation verifier.
             /// </summary>
             internal static byte[] BuildQuery(string fqdn, DnsRecordTypeCode type)
             {
@@ -318,7 +318,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates encode dns name for authoritative dns txt propagation verifier.
+            /// Handles encode dns name for authoritative dns txt propagation verifier.
             /// </summary>
             private static byte[] EncodeDnsName(string fqdn)
             {
@@ -336,7 +336,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates write uint16 for authoritative dns txt propagation verifier.
+            /// Handles write uint16 for authoritative dns txt propagation verifier.
             /// </summary>
             private static void WriteUInt16(byte[] buffer, int offset, ushort value)
             {
@@ -351,7 +351,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private static class DnsWireMessageParser
         {
             /// <summary>
-            /// Coordinates parse ns record names for authoritative dns txt propagation verifier.
+            /// Handles parse ns record names for authoritative dns txt propagation verifier.
             /// </summary>
             internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
             {
@@ -393,7 +393,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates parse txt values for authoritative dns txt propagation verifier.
+            /// Handles parse txt values for authoritative dns txt propagation verifier.
             /// </summary>
             internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
             {
@@ -444,7 +444,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates static for authoritative dns txt propagation verifier.
+            /// Handles static for authoritative dns txt propagation verifier.
             /// </summary>
             private static (int QuestionCount, int AnswerCount, int AuthorityCount, int AdditionalCount) ReadHeaderCounts(byte[] message)
             {
@@ -461,7 +461,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates skip name for authoritative dns txt propagation verifier.
+            /// Handles skip name for authoritative dns txt propagation verifier.
             /// </summary>
             private static int SkipName(byte[] message, int offset)
             {
@@ -485,7 +485,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates read name for authoritative dns txt propagation verifier.
+            /// Handles read name for authoritative dns txt propagation verifier.
             /// </summary>
             private static string ReadName(byte[] message, ref int offset)
             {
@@ -537,7 +537,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates read uint16 for authoritative dns txt propagation verifier.
+            /// Handles read uint16 for authoritative dns txt propagation verifier.
             /// </summary>
             private static ushort ReadUInt16(byte[] message, int offset)
             {
@@ -545,7 +545,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates read uint16 for authoritative dns txt propagation verifier.
+            /// Handles read uint16 for authoritative dns txt propagation verifier.
             /// </summary>
             private static ushort ReadUInt16(byte[] message, ref int offset)
             {
@@ -555,7 +555,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Coordinates read uint32 for authoritative dns txt propagation verifier.
+            /// Handles read uint32 for authoritative dns txt propagation verifier.
             /// </summary>
             private static uint ReadUInt32(byte[] message, ref int offset)
             {

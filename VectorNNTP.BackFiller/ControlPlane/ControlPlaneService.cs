@@ -15,7 +15,7 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 namespace VectorNNTP.Backfiller.ControlPlane
 {
     /// <summary>
-    /// Provides backbone-scoped NNTP session leases from the control-plane managed account runtimes.
+    /// Supplies backbone-scoped NNTP session leases from the control-plane managed account runtimes.
     /// </summary>
     internal interface IBackboneSessionLeaseProvider
     {
@@ -471,7 +471,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Coordinates publish backbone usable capacity snapshot for control plane service.
+        /// Handles publish backbone usable capacity snapshot for control plane service.
         /// </summary>
         private void PublishBackboneUsableCapacitySnapshot()
         {
@@ -502,7 +502,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Coordinates retire rabbit mq capacity boundary async for control plane service.
+        /// Handles retire rabbit mq capacity boundary async for control plane service.
         /// </summary>
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
@@ -516,12 +516,12 @@ namespace VectorNNTP.Backfiller.ControlPlane
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
             /// <summary>
-            /// Tracks instance for control plane service.
+            /// Stores instance used by control plane service.
             /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
             /// <summary>
-            /// Coordinates publish snapshot for control plane service.
+            /// Handles publish snapshot for control plane service.
             /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {

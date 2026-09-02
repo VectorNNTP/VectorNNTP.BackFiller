@@ -58,19 +58,19 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             "WHERE serverid = @ServerId;";
 
         /// <summary>
-        /// Tracks connection string for my sql nntp account snapshot provider.
+        /// Stores connection string used by my sql nntp account snapshot provider.
         /// </summary>
         private readonly string _connectionString;
         /// <summary>
-        /// Tracks database name for my sql nntp account snapshot provider.
+        /// Stores database name used by my sql nntp account snapshot provider.
         /// </summary>
         private readonly string _databaseName;
         /// <summary>
-        /// Tracks server id for my sql nntp account snapshot provider.
+        /// Stores server id used by my sql nntp account snapshot provider.
         /// </summary>
         private readonly byte _serverId;
         /// <summary>
-        /// Provides logging for my sql nntp account snapshot provider.
+        /// Supplies the logger used by my sql nntp account snapshot provider.
         /// </summary>
         private readonly ILogger<MySqlNntpAccountSnapshotProvider> _logger;
         /// <summary>
@@ -78,21 +78,21 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// </summary>
         private readonly Func<CancellationToken, Task<List<NntpAccountSnapshot>>> _queryAccounts;
         /// <summary>
-        /// Tracks startup provisioning store for my sql nntp account snapshot provider.
+        /// Stores startup provisioning store used by my sql nntp account snapshot provider.
         /// </summary>
         private readonly IStartupProvisioningStore _startupProvisioningStore;
 
         /// <summary>
-        /// Tracks refresh in progress for my sql nntp account snapshot provider.
+        /// Stores refresh in progress used by my sql nntp account snapshot provider.
         /// </summary>
         private int _refreshInProgress;
         /// <summary>
-        /// Tracks current snapshot for my sql nntp account snapshot provider.
+        /// Stores current snapshot used by my sql nntp account snapshot provider.
         /// </summary>
         private volatile NntpAccountSnapshotState _currentSnapshot;
 
         /// <summary>
-        /// Coordinates my sql nntp account snapshot provider for my sql nntp account snapshot provider.
+        /// Handles my sql nntp account snapshot provider for my sql nntp account snapshot provider.
         /// </summary>
         public MySqlNntpAccountSnapshotProvider(
             IConfiguration configuration,
@@ -122,7 +122,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates my sql nntp account snapshot provider for my sql nntp account snapshot provider.
+        /// Handles my sql nntp account snapshot provider for my sql nntp account snapshot provider.
         /// </summary>
         internal MySqlNntpAccountSnapshotProvider(
             byte serverId,
@@ -203,7 +203,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates load and publish snapshot async for my sql nntp account snapshot provider.
+        /// Handles load and publish snapshot async for my sql nntp account snapshot provider.
         /// </summary>
         private async Task<int> LoadAndPublishSnapshotAsync(CancellationToken cancellationToken)
         {
@@ -219,7 +219,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates query accounts async for my sql nntp account snapshot provider.
+        /// Handles query accounts async for my sql nntp account snapshot provider.
         /// </summary>
         private async Task<List<NntpAccountSnapshot>> QueryAccountsAsync(CancellationToken cancellationToken)
         {
@@ -281,7 +281,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates parse entry id value for my sql nntp account snapshot provider.
+        /// Handles parse entry id value for my sql nntp account snapshot provider.
         /// </summary>
         internal static Guid ParseEntryIdValue(object rawEntryId)
         {
@@ -294,7 +294,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates parse entry id for my sql nntp account snapshot provider.
+        /// Handles parse entry id for my sql nntp account snapshot provider.
         /// </summary>
         internal static Guid ParseEntryId(string rawEntryId)
         {
@@ -304,7 +304,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates parse keep alive value for my sql nntp account snapshot provider.
+        /// Handles parse keep alive value for my sql nntp account snapshot provider.
         /// </summary>
         internal static byte ParseKeepAliveValue(object rawKeepAlive)
         {
@@ -324,7 +324,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Coordinates parse use ssl for my sql nntp account snapshot provider.
+        /// Handles parse use ssl for my sql nntp account snapshot provider.
         /// </summary>
         internal static bool ParseUseSsl(string rawUseSsl)
         {
@@ -342,7 +342,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         internal interface IStartupProvisioningStore
         {
             /// <summary>
-            /// Coordinates ensure database and table async for my sql nntp account snapshot provider.
+            /// Handles ensure database and table async for my sql nntp account snapshot provider.
             /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken);
         }
@@ -353,19 +353,19 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         internal sealed class NoOpStartupProvisioningStore : IStartupProvisioningStore
         {
             /// <summary>
-            /// Tracks instance for my sql nntp account snapshot provider.
+            /// Stores instance used by my sql nntp account snapshot provider.
             /// </summary>
             internal static readonly NoOpStartupProvisioningStore Instance = new();
 
             /// <summary>
-            /// Coordinates no op startup provisioning store for my sql nntp account snapshot provider.
+            /// Handles no op startup provisioning store for my sql nntp account snapshot provider.
             /// </summary>
             private NoOpStartupProvisioningStore()
             {
             }
 
             /// <summary>
-            /// Coordinates ensure database and table async for my sql nntp account snapshot provider.
+            /// Handles ensure database and table async for my sql nntp account snapshot provider.
             /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
@@ -379,16 +379,16 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         private sealed class MySqlStartupProvisioningStore : IStartupProvisioningStore
         {
             /// <summary>
-            /// Tracks connection string for my sql nntp account snapshot provider.
+            /// Stores connection string used by my sql nntp account snapshot provider.
             /// </summary>
             private readonly string _connectionString;
             /// <summary>
-            /// Provides logging for my sql nntp account snapshot provider.
+            /// Supplies the logger used by my sql nntp account snapshot provider.
             /// </summary>
             private readonly ILogger<MySqlNntpAccountSnapshotProvider> _logger;
 
             /// <summary>
-            /// Coordinates my sql startup provisioning store for my sql nntp account snapshot provider.
+            /// Handles my sql startup provisioning store for my sql nntp account snapshot provider.
             /// </summary>
             internal MySqlStartupProvisioningStore(string connectionString, ILogger<MySqlNntpAccountSnapshotProvider> logger)
             {
@@ -400,7 +400,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             }
 
             /// <summary>
-            /// Coordinates ensure database and table async for my sql nntp account snapshot provider.
+            /// Handles ensure database and table async for my sql nntp account snapshot provider.
             /// </summary>
             public async Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
@@ -418,7 +418,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             }
 
             /// <summary>
-            /// Coordinates ensure database exists async for my sql nntp account snapshot provider.
+            /// Handles ensure database exists async for my sql nntp account snapshot provider.
             /// </summary>
             private async Task EnsureDatabaseExistsAsync(
                 MySqlConnectionStringBuilder baseBuilder,
@@ -462,7 +462,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             }
 
             /// <summary>
-            /// Coordinates ensure table exists async for my sql nntp account snapshot provider.
+            /// Handles ensure table exists async for my sql nntp account snapshot provider.
             /// </summary>
             private async Task EnsureTableExistsAsync(
                 MySqlConnectionStringBuilder baseBuilder,
@@ -509,55 +509,55 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
                 /// <summary>
-        /// Coordinates log initial account load starting for my sql nntp account snapshot provider.
+        /// Emits the initial account load starting log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2000, Level = LogLevel.Information, Message = "Initial NNTP account load starting for ServerId={ServerId}")]
         private static partial void LogInitialAccountLoadStarting(ILogger logger, byte serverId);
 
                 /// <summary>
-        /// Coordinates log initial account load succeeded for my sql nntp account snapshot provider.
+        /// Emits the initial account load succeeded log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Initial NNTP account load succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}")]
         private static partial void LogInitialAccountLoadSucceeded(ILogger logger, byte serverId, int accountCount);
 
                 /// <summary>
-        /// Coordinates log provisioning connect server failed for my sql nntp account snapshot provider.
+        /// Emits the provisioning connect server failed log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2004, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while connecting to server target={ServerTarget}. Startup cannot continue.")]
         private static partial void LogProvisioningConnectServerFailed(ILogger logger, string serverTarget, Exception exception);
 
                 /// <summary>
-        /// Coordinates log provisioning create database failed for my sql nntp account snapshot provider.
+        /// Emits the provisioning create database failed log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2005, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE DATABASE for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
         private static partial void LogProvisioningCreateDatabaseFailed(ILogger logger, string serverTarget, string databaseName, Exception exception);
 
                 /// <summary>
-        /// Coordinates log provisioning select database failed for my sql nntp account snapshot provider.
+        /// Emits the provisioning select database failed log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2006, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while selecting database for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
         private static partial void LogProvisioningSelectDatabaseFailed(ILogger logger, string serverTarget, string databaseName, Exception exception);
 
                 /// <summary>
-        /// Coordinates log provisioning create table failed for my sql nntp account snapshot provider.
+        /// Emits the provisioning create table failed log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2007, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE TABLE for server target={ServerTarget}, database={DatabaseName}, table={TableName}. Startup cannot continue.")]
         private static partial void LogProvisioningCreateTableFailed(ILogger logger, string serverTarget, string databaseName, string tableName, Exception exception);
 
                 /// <summary>
-        /// Coordinates log periodic refresh starting for my sql nntp account snapshot provider.
+        /// Emits the periodic refresh starting log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2100, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh starting for ServerId={ServerId}")]
         private static partial void LogPeriodicRefreshStarting(ILogger logger, byte serverId);
 
                 /// <summary>
-        /// Coordinates log periodic refresh succeeded for my sql nntp account snapshot provider.
+        /// Emits the periodic refresh succeeded log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2101, Level = LogLevel.Information, Message = "Periodic NNTP account refresh succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}; DurationMs={DurationMs}")]
         private static partial void LogPeriodicRefreshSucceeded(ILogger logger, byte serverId, int accountCount, long durationMs);
 
                 /// <summary>
-        /// Coordinates log periodic refresh skipped in progress for my sql nntp account snapshot provider.
+        /// Emits the periodic refresh skipped in progress log event for my sql nntp account snapshot provider.
         /// </summary>
         [LoggerMessage(EventId = 2102, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh skipped because a refresh is already in progress for ServerId={ServerId}")]
         private static partial void LogPeriodicRefreshSkippedInProgress(ILogger logger, byte serverId);

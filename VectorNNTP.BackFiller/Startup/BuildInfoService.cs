@@ -15,7 +15,7 @@ namespace VectorNNTP.Backfiller.Startup
     internal static class BuildInfoService
     {
         /// <summary>
-        /// Tracks build info for build info service.
+        /// Stores build info used by build info service.
         /// </summary>
         private static BuildInfo? _buildInfo;
 
