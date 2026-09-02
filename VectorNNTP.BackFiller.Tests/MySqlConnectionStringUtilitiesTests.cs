@@ -23,107 +23,106 @@ namespace VectorNNTP.Backfiller.Tests
         /// Confirms the try get server accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin", "localhost")]
-        [InlineData("Host=myhost;Database=test;User ID=admin", "myhost")]
-        [InlineData("Data Source=ds01;Database=test;User ID=admin", "ds01")]
-        [InlineData("DataSource=ds02;Database=test;User ID=admin", "ds02")]
-        [InlineData("Address=addr01;Database=test;User ID=admin", "addr01")]
-        [InlineData("Addr=addr02;Database=test;User ID=admin", "addr02")]
-        [InlineData("Network Address=netaddr;Database=test;User ID=admin", "netaddr")]
-        public void TryGetServer_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedServer)
+        [InlineData("server alias: Server", "Server=localhost;Database=test;User ID=admin", "localhost")]
+        [InlineData("server alias: Host", "Host=myhost;Database=test;User ID=admin", "myhost")]
+        [InlineData("server alias: Data Source", "Data Source=ds01;Database=test;User ID=admin", "ds01")]
+        [InlineData("server alias: DataSource", "DataSource=ds02;Database=test;User ID=admin", "ds02")]
+        [InlineData("server alias: Address", "Address=addr01;Database=test;User ID=admin", "addr01")]
+        [InlineData("server alias: Addr", "Addr=addr02;Database=test;User ID=admin", "addr02")]
+        [InlineData("server alias: Network Address", "Network Address=netaddr;Database=test;User ID=admin", "netaddr")]
+        public void TryGetServer_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedServer)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedServer, server);
         }
         /// <summary>
         /// Confirms the try get database accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=mydb;User ID=admin", "mydb")]
-        [InlineData("Server=localhost;Initial Catalog=catalog01;User ID=admin", "catalog01")]
-        [InlineData("Server=localhost;InitialCatalog=catalog02;User ID=admin", "catalog02")]
-        public void TryGetDatabase_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedDatabase)
+        [InlineData("database alias: Database", "Server=localhost;Database=mydb;User ID=admin", "mydb")]
+        [InlineData("database alias: Initial Catalog", "Server=localhost;Initial Catalog=catalog01;User ID=admin", "catalog01")]
+        [InlineData("database alias: InitialCatalog", "Server=localhost;InitialCatalog=catalog02;User ID=admin", "catalog02")]
+        public void TryGetDatabase_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedDatabase)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetDatabase(connectionString, out string? database);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedDatabase, database);
         }
         /// <summary>
         /// Confirms the try get username accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=user1", "user1")]
-        [InlineData("Server=localhost;Database=test;UserID=user2", "user2")]
-        [InlineData("Server=localhost;Database=test;Username=user3", "user3")]
-        [InlineData("Server=localhost;Database=test;Uid=user4", "user4")]
-        [InlineData("Server=localhost;Database=test;User name=user5", "user5")]
-        [InlineData("Server=localhost;Database=test;User=user6", "user6")]
-        public void TryGetUsername_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedUsername)
+        [InlineData("username alias: User ID", "Server=localhost;Database=test;User ID=user1", "user1")]
+        [InlineData("username alias: UserID", "Server=localhost;Database=test;UserID=user2", "user2")]
+        [InlineData("username alias: Username", "Server=localhost;Database=test;Username=user3", "user3")]
+        [InlineData("username alias: Uid", "Server=localhost;Database=test;Uid=user4", "user4")]
+        [InlineData("username alias: User name", "Server=localhost;Database=test;User name=user5", "user5")]
+        [InlineData("username alias: User", "Server=localhost;Database=test;User=user6", "user6")]
+        public void TryGetUsername_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedUsername)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out string? username);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedUsername, username);
         }
         /// <summary>
         /// Confirms the try get password accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Password=secret", "secret")]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Pwd=pass123", "pass123")]
-        public void TryGetPassword_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedPassword)
+        [InlineData("password alias: Password", "Server=localhost;Database=test;User ID=admin;Password=secret", "secret")]
+        [InlineData("password alias: Password with quoted value", "Server=localhost;Database=test;User ID=admin;Password='pass123'", "pass123")]
+        public void TryGetPassword_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedPassword)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetPassword(connectionString, out string? password);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedPassword, password);
         }
         /// <summary>
         /// Confirms the try get min pool size accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Min Pool Size=5", 5)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MinPoolSize=10", 10)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Minimum Pool Size=2", 2)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MinimumPoolSize=7", 7)]
-        public void TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(string connectionString, int expectedMinPoolSize)
+        [InlineData("min pool size alias: Min Pool Size", "Server=localhost;Database=test;User ID=admin;Min Pool Size=5", 5)]
+        [InlineData("min pool size alias: MinPoolSize", "Server=localhost;Database=test;User ID=admin;MinPoolSize=10", 10)]
+        [InlineData("min pool size alias: Minimum Pool Size", "Server=localhost;Database=test;User ID=admin;Minimum Pool Size=2", 2)]
+        [InlineData("min pool size alias: MinimumPoolSize", "Server=localhost;Database=test;User ID=admin;MinimumPoolSize=7", 7)]
+        public void TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, int expectedMinPoolSize)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetMinPoolSize(connectionString, out int minPoolSize);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedMinPoolSize, minPoolSize);
         }
         /// <summary>
         /// Confirms the try get max pool size accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Max Pool Size=100", 100)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MaxPoolSize=50", 50)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Maximum Pool Size=200", 200)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MaximumPoolSize=75", 75)]
-        public void TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(string connectionString, int expectedMaxPoolSize)
+        [InlineData("max pool size alias: Max Pool Size", "Server=localhost;Database=test;User ID=admin;Max Pool Size=100", 100)]
+        [InlineData("max pool size alias: MaxPoolSize", "Server=localhost;Database=test;User ID=admin;MaxPoolSize=50", 50)]
+        [InlineData("max pool size alias: Maximum Pool Size", "Server=localhost;Database=test;User ID=admin;Maximum Pool Size=200", 200)]
+        [InlineData("max pool size alias: MaximumPoolSize", "Server=localhost;Database=test;User ID=admin;MaximumPoolSize=75", 75)]
+        public void TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, int expectedMaxPoolSize)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetMaxPoolSize(connectionString, out int maxPoolSize);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedMaxPoolSize, maxPoolSize);
         }
-
         #endregion
 
         #region Missing Values Tests
