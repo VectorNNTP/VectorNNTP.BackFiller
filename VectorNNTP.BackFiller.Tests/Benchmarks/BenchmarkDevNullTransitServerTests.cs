@@ -1,11 +1,9 @@
 // <copyright file="BenchmarkDevNullTransitServerTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for benchmark dev null transit server, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
@@ -65,6 +63,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenMultipleSubmissionsAreSent_ConsumesAllPayloadsAndReturnsAccepted()
         {
+            /// <summary>
+            /// Supplies submission count for the fixture or scenario under test.
+            /// </summary>
             const int SubmissionCount = 8;
             byte[] payload = Encoding.ASCII.GetBytes("X\r\nY\r\nZ\r\n");
 
@@ -96,7 +97,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenTwoTakethisCommandsArePipelinedInSingleWrite_ConsumesBothAndReturnsTwoAccepted()
         {
+            /// <summary>
+            /// Supplies message id1 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId1 = "<pipe-1@example.com>";
+            /// <summary>
+            /// Supplies message id2 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId2 = "<pipe-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("A\r\nB\r\n");
             byte[] payload2 = Encoding.ASCII.GetBytes("C\r\nD\r\nE\r\n");
@@ -125,11 +132,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(2, server.AcceptedArticles);
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Exercises fake server  when terminator is immediately followed by next takethis  keeps next command readable behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenTerminatorIsImmediatelyFollowedByNextTakethis_KeepsNextCommandReadable()
         {
+            /// <summary>
+            /// Supplies message id1 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId1 = "<adjacent-1@example.com>";
+            /// <summary>
+            /// Supplies message id2 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId2 = "<adjacent-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("BodyOne\r\n");
             byte[] payload2 = Encoding.ASCII.GetBytes("BodyTwo\r\n");
@@ -158,11 +173,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(2, server.AcceptedArticles);
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Exercises fake server  when terminator and next command arrive in partial chunks  parses without overflow or disconnect behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenTerminatorAndNextCommandArriveInPartialChunks_ParsesWithoutOverflowOrDisconnect()
         {
+            /// <summary>
+            /// Supplies message id1 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId1 = "<partial-1@example.com>";
+            /// <summary>
+            /// Supplies message id2 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId2 = "<partial-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("LineOne\r\nLineTwo");
             byte[] payload2 = Encoding.ASCII.GetBytes("LineThree");
@@ -194,11 +217,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(2, server.AcceptedArticles);
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Exercises fake server  when commands are pipelined with mixed case and check  parses and responds by command kind behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenCommandsArePipelinedWithMixedCaseAndCheck_ParsesAndRespondsByCommandKind()
         {
+            /// <summary>
+            /// Supplies check message id for the fixture or scenario under test.
+            /// </summary>
             const string CheckMessageId = "<check-1@example.com>";
+            /// <summary>
+            /// Supplies take message id for the fixture or scenario under test.
+            /// </summary>
             const string TakeMessageId = "<take-1@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("A\r\nB\r\n");
 
@@ -224,10 +255,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, server.AcceptedArticles);
             Assert.Equal(payload.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Exercises fake server  when command is fragmented across many writes  parses takethis and payload behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenCommandIsFragmentedAcrossManyWrites_ParsesTakethisAndPayload()
         {
+            /// <summary>
+            /// Supplies message id for the fixture or scenario under test.
+            /// </summary>
             const string MessageId = "<fragmented-1@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("BodyLine1\r\nBodyLine2\r\n");
 
@@ -257,10 +293,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, server.AcceptedArticles);
             Assert.Equal(payload.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Exercises fake server  when quit sent after takethis completion  returns closing response behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenQuitSentAfterTakethisCompletion_ReturnsClosingResponse()
         {
+            /// <summary>
+            /// Supplies message id for the fixture or scenario under test.
+            /// </summary>
             const string MessageId = "<quit-after-complete@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("Q1\r\nQ2\r\n");
 
@@ -281,11 +322,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Assert.Equal(1, server.AcceptedArticles);
         }
-
+        /// <summary>
+        /// Exercises fake server  when quit arrives with pending takethis  responds with closing and stops without drain behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenQuitArrivesWithPendingTakethis_RespondsWithClosingAndStopsWithoutDrain()
         {
+            /// <summary>
+            /// Supplies message id1 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId1 = "<quit-pending-1@example.com>";
+            /// <summary>
+            /// Supplies message id2 for the fixture or scenario under test.
+            /// </summary>
             const string MessageId2 = "<quit-pending-2@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("Body\r\n");
 
@@ -322,7 +371,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("205 closing connection", responses);
             Assert.True(server.AcceptedArticles >= 1);
         }
-
+        /// <summary>
+        /// Exercises transit benchmark config load  when fake server overrides provided  applies endpoint identity and overrides behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TransitBenchmarkConfigLoad_WhenFakeServerOverridesProvided_AppliesEndpointIdentityAndOverrides()
         {
@@ -358,6 +409,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.False(config.EndpointUseSsl);
         }
 
+        /// <summary>
+        /// Exercises perform streaming handshake async behavior, including the expected result and failure semantics.
+        /// </summary>
         private static async Task PerformStreamingHandshakeAsync(NetworkStream stream)
         {
             string greeting = await ReadAsciiLineAsync(stream);
@@ -372,17 +426,26 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal("203 Streaming permitted", await ReadAsciiLineAsync(stream));
         }
 
+        /// <summary>
+        /// Exercises build takethis command behavior, including the expected result and failure semantics.
+        /// </summary>
         private static string BuildTakethisCommand(string messageId, byte[] payload)
         {
             string body = Encoding.ASCII.GetString(payload);
             return $"TAKETHIS {messageId}\r\n{body}\r\n.\r\n";
         }
 
+        /// <summary>
+        /// Exercises write ascii line async behavior, including the expected result and failure semantics.
+        /// </summary>
         private static async Task WriteAsciiLineAsync(NetworkStream stream, string line)
         {
             await WriteAsciiAsync(stream, line + "\r\n");
         }
 
+        /// <summary>
+        /// Exercises write ascii async behavior, including the expected result and failure semantics.
+        /// </summary>
         private static async Task WriteAsciiAsync(NetworkStream stream, string value)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(value);
@@ -390,6 +453,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             await stream.FlushAsync();
         }
 
+        /// <summary>
+        /// Exercises read ascii line async behavior, including the expected result and failure semantics.
+        /// </summary>
         private static async Task<string> ReadAsciiLineAsync(NetworkStream stream)
         {
             List<byte> buffer = [];

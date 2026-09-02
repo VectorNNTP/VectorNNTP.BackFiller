@@ -2,80 +2,226 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit timing collector behavior.
 
 using System.Diagnostics;
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
+    /// <summary>
+    /// Defines transit timing collector and its transit timing collector contract.
+    /// </summary>
     internal sealed class TransitTimingCollector
     {
+        /// <summary>
+        /// Limits publish payload copy count for transit timing collector.
+        /// </summary>
         private long _publishPayloadCopyCount;
+        /// <summary>
+        /// Stores publish payload copy total ticks for transit timing collector.
+        /// </summary>
         private long _publishPayloadCopyTotalTicks;
 
+        /// <summary>
+        /// Limits dot stuff stage count for transit timing collector.
+        /// </summary>
         private long _dotStuffStageCount;
+        /// <summary>
+        /// Tracks dot stuff stage total ticks for transit timing collector.
+        /// </summary>
         private long _dotStuffStageTotalTicks;
+        /// <summary>
+        /// Tracks dot stuff stage min ticks for transit timing collector.
+        /// </summary>
         private long _dotStuffStageMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits dot stuff stage max ticks for transit timing collector.
+        /// </summary>
         private long _dotStuffStageMaxTicks;
+        /// <summary>
+        /// Stores dot stuff payload bytes for transit timing collector.
+        /// </summary>
         private long _dotStuffPayloadBytes;
+        /// <summary>
+        /// Tracks dot stuff get span calls for transit timing collector.
+        /// </summary>
         private long _dotStuffGetSpanCalls;
+        /// <summary>
+        /// Tracks dot stuff advance calls for transit timing collector.
+        /// </summary>
         private long _dotStuffAdvanceCalls;
+        /// <summary>
+        /// Tracks dot stuff stuffed dot events for transit timing collector.
+        /// </summary>
         private long _dotStuffStuffedDotEvents;
 
+        /// <summary>
+        /// Limits flush count for transit timing collector.
+        /// </summary>
         private long _flushCount;
+        /// <summary>
+        /// Tracks flush total ticks for transit timing collector.
+        /// </summary>
         private long _flushTotalTicks;
+        /// <summary>
+        /// Tracks flush min ticks for transit timing collector.
+        /// </summary>
         private long _flushMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits flush max ticks for transit timing collector.
+        /// </summary>
         private long _flushMaxTicks;
 
+        /// <summary>
+        /// Limits response line read count for transit timing collector.
+        /// </summary>
         private long _responseLineReadCount;
+        /// <summary>
+        /// Tracks response line read total ticks for transit timing collector.
+        /// </summary>
         private long _responseLineReadTotalTicks;
+        /// <summary>
+        /// Tracks response line read min ticks for transit timing collector.
+        /// </summary>
         private long _responseLineReadMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits response line read max ticks for transit timing collector.
+        /// </summary>
         private long _responseLineReadMaxTicks;
 
+        /// <summary>
+        /// Limits response correlation count for transit timing collector.
+        /// </summary>
         private long _responseCorrelationCount;
+        /// <summary>
+        /// Tracks response correlation total ticks for transit timing collector.
+        /// </summary>
         private long _responseCorrelationTotalTicks;
+        /// <summary>
+        /// Tracks response correlation min ticks for transit timing collector.
+        /// </summary>
         private long _responseCorrelationMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits response correlation max ticks for transit timing collector.
+        /// </summary>
         private long _responseCorrelationMaxTicks;
 
+        /// <summary>
+        /// Limits response available to correlated count for transit timing collector.
+        /// </summary>
         private long _responseAvailableToCorrelatedCount;
+        /// <summary>
+        /// Tracks response available to correlated total ticks for transit timing collector.
+        /// </summary>
         private long _responseAvailableToCorrelatedTotalTicks;
+        /// <summary>
+        /// Tracks response available to correlated min ticks for transit timing collector.
+        /// </summary>
         private long _responseAvailableToCorrelatedMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits response available to correlated max ticks for transit timing collector.
+        /// </summary>
         private long _responseAvailableToCorrelatedMaxTicks;
 
+        /// <summary>
+        /// Limits completion enqueue to observe count for transit timing collector.
+        /// </summary>
         private long _completionEnqueueToObserveCount;
+        /// <summary>
+        /// Tracks completion enqueue to observe total ticks for transit timing collector.
+        /// </summary>
         private long _completionEnqueueToObserveTotalTicks;
+        /// <summary>
+        /// Tracks completion enqueue to observe min ticks for transit timing collector.
+        /// </summary>
         private long _completionEnqueueToObserveMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits completion enqueue to observe max ticks for transit timing collector.
+        /// </summary>
         private long _completionEnqueueToObserveMaxTicks;
 
+        /// <summary>
+        /// Limits worker poll delay count for transit timing collector.
+        /// </summary>
         private long _workerPollDelayCount;
+        /// <summary>
+        /// Configures worker poll delay total ticks for transit timing collector.
+        /// </summary>
         private long _workerPollDelayTotalTicks;
 
+        /// <summary>
+        /// Limits response to worker observation count for transit timing collector.
+        /// </summary>
         private long _responseToWorkerObservationCount;
+        /// <summary>
+        /// Tracks response to worker observation total ticks for transit timing collector.
+        /// </summary>
         private long _responseToWorkerObservationTotalTicks;
+        /// <summary>
+        /// Tracks response to worker observation min ticks for transit timing collector.
+        /// </summary>
         private long _responseToWorkerObservationMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits response to worker observation max ticks for transit timing collector.
+        /// </summary>
         private long _responseToWorkerObservationMaxTicks;
 
+        /// <summary>
+        /// Limits worker observation to next staging count for transit timing collector.
+        /// </summary>
         private long _workerObservationToNextStagingCount;
+        /// <summary>
+        /// Tracks worker observation to next staging total ticks for transit timing collector.
+        /// </summary>
         private long _workerObservationToNextStagingTotalTicks;
+        /// <summary>
+        /// Tracks worker observation to next staging min ticks for transit timing collector.
+        /// </summary>
         private long _workerObservationToNextStagingMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits worker observation to next staging max ticks for transit timing collector.
+        /// </summary>
         private long _workerObservationToNextStagingMaxTicks;
 
+        /// <summary>
+        /// Limits response to next staging count for transit timing collector.
+        /// </summary>
         private long _responseToNextStagingCount;
+        /// <summary>
+        /// Tracks response to next staging total ticks for transit timing collector.
+        /// </summary>
         private long _responseToNextStagingTotalTicks;
+        /// <summary>
+        /// Tracks response to next staging min ticks for transit timing collector.
+        /// </summary>
         private long _responseToNextStagingMinTicks = long.MaxValue;
+        /// <summary>
+        /// Limits response to next staging max ticks for transit timing collector.
+        /// </summary>
         private long _responseToNextStagingMaxTicks;
 
+        /// <summary>
+        /// Tracks last definitive response correlated tick for transit timing collector.
+        /// </summary>
         private long _lastDefinitiveResponseCorrelatedTick;
+        /// <summary>
+        /// Tracks last worker observation tick for transit timing collector.
+        /// </summary>
         private long _lastWorkerObservationTick;
 
+        /// <summary>
+        /// Coordinates record publish payload copy for transit timing collector.
+        /// </summary>
         internal void RecordPublishPayloadCopy(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _publishPayloadCopyCount);
             _ = Interlocked.Add(ref _publishPayloadCopyTotalTicks, elapsedTicks);
         }
 
+        /// <summary>
+        /// Coordinates record dot stuff stage for transit timing collector.
+        /// </summary>
         internal void RecordDotStuffStage(long elapsedTicks, long payloadBytes, long getSpanCalls, long advanceCalls, long stuffedDotEvents)
         {
             _ = Interlocked.Increment(ref _dotStuffStageCount);
@@ -89,6 +235,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             UpdateMax(ref _dotStuffStageMaxTicks, elapsedTicks);
         }
 
+        /// <summary>
+        /// Coordinates record flush wait for transit timing collector.
+        /// </summary>
         internal void RecordFlushWait(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _flushCount);
@@ -97,6 +246,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             UpdateMax(ref _flushMaxTicks, elapsedTicks);
         }
 
+        /// <summary>
+        /// Coordinates record response line read for transit timing collector.
+        /// </summary>
         internal void RecordResponseLineRead(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _responseLineReadCount);
@@ -105,6 +257,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             UpdateMax(ref _responseLineReadMaxTicks, elapsedTicks);
         }
 
+        /// <summary>
+        /// Coordinates record response correlation for transit timing collector.
+        /// </summary>
         internal void RecordResponseCorrelation(long elapsedTicks, long responseAvailableTick, long correlatedTick, bool definitive)
         {
             _ = Interlocked.Increment(ref _responseCorrelationCount);
@@ -127,6 +282,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates record completion observed for transit timing collector.
+        /// </summary>
         internal void RecordCompletionObserved(long completionEnqueuedTick, long workerObservedTick)
         {
             long enqueueToObserveTicks = workerObservedTick - completionEnqueuedTick;
@@ -154,12 +312,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _ = Interlocked.Exchange(ref _lastWorkerObservationTick, workerObservedTick);
         }
 
+        /// <summary>
+        /// Coordinates record worker poll delay for transit timing collector.
+        /// </summary>
         internal void RecordWorkerPollDelay(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _workerPollDelayCount);
             _ = Interlocked.Add(ref _workerPollDelayTotalTicks, elapsedTicks);
         }
 
+        /// <summary>
+        /// Coordinates record staging started for transit timing collector.
+        /// </summary>
         internal void RecordStagingStarted(long stageStartTick)
         {
             long lastObservationTick = Volatile.Read(ref _lastWorkerObservationTick);
@@ -189,6 +353,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates capture snapshot for transit timing collector.
+        /// </summary>
         internal TransitTimingSnapshot CaptureSnapshot()
         {
             return new TransitTimingSnapshot(
@@ -254,11 +421,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     MaxTicks: Volatile.Read(ref _responseToNextStagingMaxTicks)));
         }
 
+        /// <summary>
+        /// Coordinates normalize min for transit timing collector.
+        /// </summary>
         private static long NormalizeMin(long value)
         {
             return value == long.MaxValue ? 0 : value;
         }
 
+        /// <summary>
+        /// Coordinates update min for transit timing collector.
+        /// </summary>
         private static void UpdateMin(ref long target, long candidate)
         {
             while (true)
@@ -276,6 +449,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates update max for transit timing collector.
+        /// </summary>
         private static void UpdateMax(ref long target, long candidate)
         {
             while (true)
@@ -294,6 +470,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
     }
 
+    /// <summary>
+    /// Defines transit timing snapshot and its transit timing collector contract.
+    /// </summary>
     internal sealed record TransitTimingSnapshot(
         long StopwatchFrequency,
         TransitTimingBucket PublishPayloadCopy,
@@ -312,6 +491,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         TransitTimingBucket WorkerObservationToNextStaging,
         TransitTimingBucket ResponseToNextStaging);
 
+    /// <summary>
+    /// Defines transit timing bucket and its transit timing collector contract.
+    /// </summary>
     internal sealed record TransitTimingBucket(
         long Count,
         long TotalTicks,

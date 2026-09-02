@@ -17,7 +17,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class ArticleWorkProcessor : IArticleWorkProcessor
     {
+        /// <summary>
+        /// Tracks retriever for article work processor.
+        /// </summary>
         private readonly IBackboneArticleRetriever _retriever;
+        /// <summary>
+        /// Provides logging for article work processor.
+        /// </summary>
         private readonly ILogger<ArticleWorkProcessor> _logger;
 
         /// <summary>
@@ -109,6 +115,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Coordinates static for article work processor.
+        /// </summary>
         private static (ArticleWorkProcessingOutcome Outcome, ArticleWorkDispositionRecommendation Disposition) Classify(NntpArticleGrabberResult result)
         {
             return result.FailureCode switch

@@ -1,10 +1,9 @@
 // <copyright file="NntpArticleAcquisitionTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Articles / Acquisition
-// Integration tests for reusable NNTP article acquisition sessions, deterministic failure
-// classifications, message-id validation, parser handoff boundaries, and protocol logging behavior.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for nntp article acquisition, covering NNTP article and transport behavior.
 
 using System.Net;
 using System.Net.Security;
@@ -926,6 +925,9 @@ namespace VectorNNTP.Backfiller.Tests
             using TestTlsCertificateFixture tlsFixture = new();
 
             await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
+                /// <summary>
+                /// Supplies stream for the fixture or scenario under test.
+                /// </summary>
                 static async stream =>
                 {
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
@@ -958,6 +960,9 @@ namespace VectorNNTP.Backfiller.Tests
             using TestTlsCertificateFixture serverFixture = new();
 
             await using FakeArticleServer server = await FakeArticleServer.StartWithTransportAsync(
+                /// <summary>
+                /// Supplies stream for the fixture or scenario under test.
+                /// </summary>
                 static async stream =>
                 {
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);

@@ -1,11 +1,9 @@
 // <copyright file="TransitBenchmarkConfigArticleCountValidationTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for transit benchmark config article count validation, covering configuration and validation contracts; NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
 
 using System.Reflection;
 using VectorNNTP.BackFiller.Benchmarks;

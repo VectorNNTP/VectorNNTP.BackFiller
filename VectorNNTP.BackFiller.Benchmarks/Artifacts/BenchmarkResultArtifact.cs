@@ -1,7 +1,16 @@
+// <copyright file="BenchmarkResultArtifact.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Artifacts/BenchmarkResultArtifact: writes durable JSON and CSV representations of benchmark measurements.
+
 using System.Globalization;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the benchmark ResultArtifact record struct for benchmark or isolated-regression execution.
+/// </summary>
 internal readonly record struct BenchmarkResultArtifact(
     string BenchmarkBuildVersion,
     string RuntimeAssemblyVersion,
@@ -108,6 +117,9 @@ internal readonly record struct BenchmarkResultArtifact(
     SubmissionPumpFaultSummary SubmissionPumpFault,
     P1GreetingProvenanceSummary? P1GreetingProvenance)
 {
+    /// <summary>
+    /// Performs the from operation.
+    /// </summary>
     internal static BenchmarkResultArtifact From(BenchmarkResult result, TransitBenchmarkConfig config, int processorCount)
     {
         return new BenchmarkResultArtifact(
@@ -217,6 +229,9 @@ internal readonly record struct BenchmarkResultArtifact(
             P1GreetingProvenance: result.P1GreetingProvenance);
     }
 
+    /// <summary>
+    /// Performs the to Csv operation.
+    /// </summary>
     internal string ToCsv()
     {
         string[] headers =

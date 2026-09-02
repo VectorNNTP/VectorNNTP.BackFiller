@@ -26,6 +26,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </remarks>
     internal static class CloudflareDnsSynchronizationProbe
     {
+        /// <summary>
+        /// Tracks dependency name for cloudflare dns synchronization probe.
+        /// </summary>
         private const string DependencyName = "CloudflareDnsSynchronization";
 
         /// <summary>
@@ -536,6 +539,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </summary>
     internal sealed class CloudflareDnsFacade : ICloudflareDnsFacade
     {
+        /// <summary>
+        /// Tracks client for cloudflare dns synchronization probe.
+        /// </summary>
         private readonly CloudFlareClient _client;
 
         /// <summary>

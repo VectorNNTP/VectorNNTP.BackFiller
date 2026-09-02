@@ -1,11 +1,9 @@
 // <copyright file="MySqlNntpAccountSnapshotProviderCancellationPublicationTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for my sql nntp account snapshot provider cancellation publication, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -18,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class MySqlNntpAccountSnapshotProviderCancellationPublicationTests
     {
+        /// <summary>
+        /// Exercises refresh snapshot async  when canceled after query completes  does not publish and throws cancellation behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenCanceledAfterQueryCompletes_DoesNotPublishAndThrowsCancellation()
         {
@@ -65,6 +66,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(initial.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
 
+        /// <summary>
+        /// Exercises build account behavior, including the expected result and failure semantics.
+        /// </summary>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {
             return new NntpAccountSnapshot(

@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleParserBenchmarks.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks / Articles / Parsing
@@ -22,6 +22,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
+    /// <summary>
+    /// Defines the nntp ArticleParserBenchmarks class for benchmark or isolated-regression execution.
+    /// </summary>
     public class NntpArticleParserBenchmarks
     {
         /// <summary>
@@ -83,6 +86,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Builds deterministic benchmark fixtures.
         /// </summary>
         [GlobalSetup]
+        /// <summary>
+        /// Performs the setup operation.
+        /// </summary>
         public void Setup()
         {
             _parser = new NntpArticleParser(LocalFqdn);
@@ -177,6 +183,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Baseline = true, Description = "TinyText")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse TinyText operation.
+        /// </summary>
         public bool ParseTinyText()
         {
             return _parser.Parse(_tinyText).IsAccepted;
@@ -188,6 +197,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "TypicalText")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse TypicalText operation.
+        /// </summary>
         public bool ParseTypicalText()
         {
             return _parser.Parse(_typicalText).IsAccepted;
@@ -199,6 +211,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "LargeText")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse LargeText operation.
+        /// </summary>
         public bool ParseLargeText()
         {
             return _parser.Parse(_largeText).IsAccepted;
@@ -210,6 +225,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "YEncSinglePart")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse y EncSinglePart operation.
+        /// </summary>
         public bool ParseYEncSinglePart()
         {
             return _parser.Parse(_yencSingle).IsAccepted;
@@ -221,6 +239,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "YEncMultiPart")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse y EncMultiPart operation.
+        /// </summary>
         public bool ParseYEncMultiPart()
         {
             return _parser.Parse(_yencMultipart).IsAccepted;
@@ -232,6 +253,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "MalformedArticle")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse MalformedArticle operation.
+        /// </summary>
         public bool ParseMalformedArticle()
         {
             return _parser.Parse(_malformed).IsAccepted;
@@ -243,6 +267,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "InvalidDate")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse InvalidDate operation.
+        /// </summary>
         public bool ParseInvalidDate()
         {
             return _parser.Parse(_invalidDate).IsAccepted;
@@ -254,6 +281,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "LargeHeaderSet")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse LargeHeaderSet operation.
+        /// </summary>
         public bool ParseLargeHeaderSet()
         {
             return _parser.Parse(_largeHeaderSet).IsAccepted;
@@ -265,6 +295,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "LargeBinary")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Performs the parse LargeBinary operation.
+        /// </summary>
         public bool ParseLargeBinary()
         {
             return _parser.Parse(_largeBinary).IsAccepted;

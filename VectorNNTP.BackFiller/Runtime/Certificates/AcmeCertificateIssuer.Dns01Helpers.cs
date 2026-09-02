@@ -12,6 +12,9 @@ using Certes.Acme.Resource;
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
+    /// <summary>
+    /// Defines acme certificate issuer and its acme certificate issuer.dns01 helpers contract.
+    /// </summary>
     internal sealed partial class AcmeCertificateIssuer
     {
         /// <summary>

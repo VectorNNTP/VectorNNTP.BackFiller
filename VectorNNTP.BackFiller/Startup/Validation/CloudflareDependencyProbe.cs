@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Validation
+// Implements the cloudflare dependency probe behavior.
 
 using CloudFlare.Client;
 using CloudFlare.Client.Api.Result;
@@ -16,6 +15,9 @@ using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines cloudflare dependency probe and its cloudflare dependency probe contract.
+    /// </summary>
     internal static class CloudflareDependencyProbe
     {
         /// <summary>

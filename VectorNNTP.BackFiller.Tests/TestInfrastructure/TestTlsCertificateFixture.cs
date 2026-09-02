@@ -1,10 +1,9 @@
 // <copyright file="TestTlsCertificateFixture.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / TestInfrastructure / TLS
-// Shared self-signed certificate fixture for deterministic loopback TLS test sessions
-// without machine trust-store mutation or interactive trust prompts.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for test tls certificate fixture, covering certificate and DNS dependency behavior.
 
 using System.Net;
 using System.Net.Security;

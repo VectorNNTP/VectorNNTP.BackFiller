@@ -1,4 +1,9 @@
-// MySqlConnectionStringUtilitiesTests.cs -- Tests for canonical MySQL connection string interpretation.
+// <copyright file="MySqlConnectionStringUtilitiesTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for my sql connection string utilities, covering dependency integration and failure handling.
 
 using System.Data.Common;
 using MySqlConnector;
@@ -7,10 +12,15 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers my sql connection string utilities behavior and invariants exercised by this test suite.
+    /// </summary>
     public class MySqlConnectionStringUtilitiesTests
     {
         #region Basic Extraction Tests
-
+        /// <summary>
+        /// Exercises try get server  accepts all my sql connector aliases behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=test;User ID=admin", "localhost")]
         [InlineData("Host=myhost;Database=test;User ID=admin", "myhost")]
@@ -28,7 +38,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(expectedServer, server);
         }
-
+        /// <summary>
+        /// Exercises try get database  accepts all my sql connector aliases behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=mydb;User ID=admin", "mydb")]
         [InlineData("Server=localhost;Initial Catalog=catalog01;User ID=admin", "catalog01")]
@@ -42,7 +54,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(expectedDatabase, database);
         }
-
+        /// <summary>
+        /// Exercises try get username  accepts all my sql connector aliases behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=test;User ID=user1", "user1")]
         [InlineData("Server=localhost;Database=test;UserID=user2", "user2")]
@@ -59,7 +73,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(expectedUsername, username);
         }
-
+        /// <summary>
+        /// Exercises try get password  accepts all my sql connector aliases behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=test;User ID=admin;Password=secret", "secret")]
         [InlineData("Server=localhost;Database=test;User ID=admin;Pwd=pass123", "pass123")]
@@ -72,7 +88,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(expectedPassword, password);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  accepts all my sql connector aliases behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=test;User ID=admin;Min Pool Size=5", 5)]
         [InlineData("Server=localhost;Database=test;User ID=admin;MinPoolSize=10", 10)]
@@ -87,7 +105,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(expectedMinPoolSize, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  accepts all my sql connector aliases behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=localhost;Database=test;User ID=admin;Max Pool Size=100", 100)]
         [InlineData("Server=localhost;Database=test;User ID=admin;MaxPoolSize=50", 50)]
@@ -106,7 +126,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Missing Values Tests
-
+        /// <summary>
+        /// Exercises try get server  when missing  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenMissing_ReturnsFalse()
         {
@@ -120,7 +142,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(server);
         }
-
+        /// <summary>
+        /// Exercises try get username  when missing  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_WhenMissing_ReturnsFalse()
         {
@@ -134,7 +158,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(username);
         }
-
+        /// <summary>
+        /// Exercises try get password  when missing  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenMissing_ReturnsFalse()
         {
@@ -148,7 +174,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(password);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  when missing  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenMissing_ReturnsFalse()
         {
@@ -166,7 +194,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Malformed Values Tests
-
+        /// <summary>
+        /// Exercises try get min pool size  when negative  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenNegative_ReturnsFalse()
         {
@@ -180,7 +210,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  when negative  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_WhenNegative_ReturnsFalse()
         {
@@ -194,7 +226,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, maxPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  when exceeds int max value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenExceedsIntMaxValue_ReturnsFalse()
         {
@@ -208,7 +242,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  when exceeds int max value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_WhenExceedsIntMaxValue_ReturnsFalse()
         {
@@ -222,7 +258,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, maxPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  when exactly int max value  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenExactlyIntMaxValue_ReturnsTrue()
         {
@@ -236,7 +274,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(int.MaxValue, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  when exactly int max value  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_WhenExactlyIntMaxValue_ReturnsTrue()
         {
@@ -250,7 +290,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(int.MaxValue, maxPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  when one above int max value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenOneAboveIntMaxValue_ReturnsFalse()
         {
@@ -264,7 +306,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  when one above int max value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_WhenOneAboveIntMaxValue_ReturnsFalse()
         {
@@ -278,7 +322,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, maxPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get server  when malformed connection string  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenMalformedConnectionString_ReturnsFalse()
         {
@@ -292,7 +338,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(server);
         }
-
+        /// <summary>
+        /// Exercises try get password  when unterminated quoted value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenUnterminatedQuotedValue_ReturnsFalse()
         {
@@ -306,7 +354,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(password);
         }
-
+        /// <summary>
+        /// Exercises try get server  when unterminated quoted value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenUnterminatedQuotedValue_ReturnsFalse()
         {
@@ -320,7 +370,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(server);
         }
-
+        /// <summary>
+        /// Exercises try get password when unterminated single quoted value returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPasswordWhenUnterminatedSingleQuotedValueReturnsFalse()
         {
@@ -334,7 +386,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(password);
         }
-
+        /// <summary>
+        /// Exercises try get server  when unterminated single quoted value  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenUnterminatedSingleQuotedValue_ReturnsFalse()
         {
@@ -348,7 +402,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(server);
         }
-
+        /// <summary>
+        /// Exercises try get password  when garbage after closing quote  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenGarbageAfterClosingQuote_ReturnsFalse()
         {
@@ -362,7 +418,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(password);
         }
-
+        /// <summary>
+        /// Exercises try get server  when garbage after closing quote  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenGarbageAfterClosingQuote_ReturnsFalse()
         {
@@ -376,7 +434,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(server);
         }
-
+        /// <summary>
+        /// Exercises try get password  when single quoted with garbage after closing quote  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenSingleQuotedWithGarbageAfterClosingQuote_ReturnsFalse()
         {
@@ -390,7 +450,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when whitespace after closing quote  succeeds behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenWhitespaceAfterClosingQuote_Succeeds()
         {
@@ -404,7 +466,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("secret", password);
         }
-
+        /// <summary>
+        /// Exercises try get server  when quoted value at end  succeeds behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenQuotedValueAtEnd_Succeeds()
         {
@@ -422,7 +486,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Case Insensitivity Tests
-
+        /// <summary>
+        /// Exercises try get server  is case insensitive behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_IsCaseInsensitive()
         {
@@ -436,7 +502,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("localhost", server);
         }
-
+        /// <summary>
+        /// Exercises try get database  is case insensitive behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_IsCaseInsensitive()
         {
@@ -450,7 +518,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("testdb", database);
         }
-
+        /// <summary>
+        /// Exercises try get username  is case insensitive behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_IsCaseInsensitive()
         {
@@ -464,7 +534,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("admin", username);
         }
-
+        /// <summary>
+        /// Exercises try get password  is case insensitive behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_IsCaseInsensitive()
         {
@@ -478,7 +550,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("secret", password);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  is case insensitive behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_IsCaseInsensitive()
         {
@@ -492,7 +566,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal(10, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  is case insensitive behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_IsCaseInsensitive()
         {
@@ -510,7 +586,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Whitespace Handling Tests
-
+        /// <summary>
+        /// Exercises try get server  when unquoted with leading whitespace  trims whitespace behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenUnquotedWithLeadingWhitespace_TrimsWhitespace()
         {
@@ -524,7 +602,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("localhost", server);
         }
-
+        /// <summary>
+        /// Exercises try get database  when unquoted with trailing whitespace  trims whitespace behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_WhenUnquotedWithTrailingWhitespace_TrimsWhitespace()
         {
@@ -542,7 +622,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Quoted Values Tests
-
+        /// <summary>
+        /// Exercises try get password  when value contains semicolon  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenValueContainsSemicolon_HandlesQuoting()
         {
@@ -556,7 +638,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("abc;123", password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when value contains equals  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenValueContainsEquals_HandlesQuoting()
         {
@@ -570,7 +654,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("pass=word", password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when single quoted with semicolon  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenSingleQuotedWithSemicolon_HandlesQuoting()
         {
@@ -584,7 +670,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("abc;123", password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when single quoted with escaping  handles doubled quotes behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenSingleQuotedWithEscaping_HandlesDoubledQuotes()
         {
@@ -598,7 +686,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("it's secret", password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when double quoted with escaping  handles doubled quotes behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenDoubleQuotedWithEscaping_HandlesDoubledQuotes()
         {
@@ -612,7 +702,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("say \"hello\"", password);
         }
-
+        /// <summary>
+        /// Exercises try get server  when single quoted  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenSingleQuoted_HandlesQuoting()
         {
@@ -626,7 +718,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("my-server", server);
         }
-
+        /// <summary>
+        /// Exercises try get database  when single quoted  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_WhenSingleQuoted_HandlesQuoting()
         {
@@ -640,7 +734,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("my-database", database);
         }
-
+        /// <summary>
+        /// Exercises try get password  when quoted with leading whitespace  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenQuotedWithLeadingWhitespace_HandlesQuoting()
         {
@@ -654,7 +750,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("abc;123", password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when single quoted with leading whitespace  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenSingleQuotedWithLeadingWhitespace_HandlesQuoting()
         {
@@ -668,7 +766,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("it's secret", password);
         }
-
+        /// <summary>
+        /// Exercises try get server  when quoted with whitespace around equals  handles quoting behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenQuotedWithWhitespaceAroundEquals_HandlesQuoting()
         {
@@ -686,7 +786,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Empty Values Tests
-
+        /// <summary>
+        /// Exercises try get server  when empty  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenEmpty_ReturnsFalse()
         {
@@ -699,7 +801,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get database  when empty  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_WhenEmpty_ReturnsFalse()
         {
@@ -712,7 +816,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get username  when empty  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_WhenEmpty_ReturnsFalse()
         {
@@ -725,7 +831,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get password  when empty  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenEmpty_ReturnsFalse()
         {
@@ -738,7 +846,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  when empty string  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenEmptyString_ReturnsFalse()
         {
@@ -752,7 +862,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  when empty string  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_WhenEmptyString_ReturnsFalse()
         {
@@ -770,7 +882,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region Ambiguous Aliases Tests
-
+        /// <summary>
+        /// Exercises try get server  when conflicting server aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenConflictingServerAliases_ReturnsFalse()
         {
@@ -784,7 +898,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(server);
         }
-
+        /// <summary>
+        /// Exercises try get server  when redundant but identical server aliases  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenRedundantButIdenticalServerAliases_ReturnsTrue()
         {
@@ -798,7 +914,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("db01", server);
         }
-
+        /// <summary>
+        /// Exercises try get database  when conflicting database aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_WhenConflictingDatabaseAliases_ReturnsFalse()
         {
@@ -812,7 +930,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(database);
         }
-
+        /// <summary>
+        /// Exercises try get database  when redundant but identical database aliases  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_WhenRedundantButIdenticalDatabaseAliases_ReturnsTrue()
         {
@@ -826,7 +946,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("GrabberDB", database);
         }
-
+        /// <summary>
+        /// Exercises try get username  when conflicting username aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_WhenConflictingUsernameAliases_ReturnsFalse()
         {
@@ -840,7 +962,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(username);
         }
-
+        /// <summary>
+        /// Exercises try get username  when redundant but identical username aliases  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_WhenRedundantButIdenticalUsernameAliases_ReturnsTrue()
         {
@@ -854,7 +978,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("admin", username);
         }
-
+        /// <summary>
+        /// Exercises try get password  when conflicting password aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenConflictingPasswordAliases_ReturnsFalse()
         {
@@ -868,7 +994,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(password);
         }
-
+        /// <summary>
+        /// Exercises try get password  when redundant but identical password aliases  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenRedundantButIdenticalPasswordAliases_ReturnsTrue()
         {
@@ -882,7 +1010,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
             Assert.Equal("secret", password);
         }
-
+        /// <summary>
+        /// Exercises try get min pool size  when conflicting min pool size aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMinPoolSize_WhenConflictingMinPoolSizeAliases_ReturnsFalse()
         {
@@ -896,7 +1026,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, minPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get max pool size  when conflicting max pool size aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetMaxPoolSize_WhenConflictingMaxPoolSizeAliases_ReturnsFalse()
         {
@@ -910,7 +1042,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Equal(0, maxPoolSize);
         }
-
+        /// <summary>
+        /// Exercises try get server  when three conflicting aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenThreeConflictingAliases_ReturnsFalse()
         {
@@ -923,7 +1057,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert - Must reject ambiguous configuration
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get username  when three conflicting aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_WhenThreeConflictingAliases_ReturnsFalse()
         {
@@ -936,7 +1072,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert - Must reject ambiguous configuration
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get server  when same key repeated with different values  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetServer_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse()
         {
@@ -949,7 +1087,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert - Must reject duplicate key with different values
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get password  when same key repeated with different values  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetPassword_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse()
         {
@@ -962,7 +1102,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert - Must reject duplicate key with different values (SECURITY)
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get username  when same key repeated with different values  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetUsername_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse()
         {
@@ -975,7 +1117,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert - Must reject duplicate key with different values
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises try get database  when same key repeated with different values  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryGetDatabase_WhenSameKeyRepeatedWithDifferentValues_ReturnsFalse()
         {
@@ -992,7 +1136,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region HasAmbiguousAliases Tests
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when no conflicts  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("Server=db01;Database=GrabberDB;User ID=admin;Password=secret")]
         [InlineData("Server=db01;Database=GrabberDB;User ID=admin")]
@@ -1002,120 +1148,177 @@ namespace VectorNNTP.Backfiller.Tests
             // Act & Assert - Valid connection strings with no conflicting aliases
             Assert.False(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when server conflicts  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenServerConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting server aliases
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=db01;Host=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when database conflicts  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenDatabaseConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting database aliases
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=dbA;Initial Catalog=dbB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when username conflicts  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenUsernameConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting username aliases
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when password conflicts  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenPasswordConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting password aliases
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Pwd=secret2";
 
             // Act & Assert - This IS ambiguous
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when min pool size conflicts  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenMinPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting min pool size aliases
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Min Pool Size=5;MinimumPoolSize=10";
 
             // Act & Assert - This IS ambiguous
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when max pool size conflicts  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenMaxPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting max pool size aliases
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Max Pool Size=50;MaximumPoolSize=100";
 
             // Act & Assert - This IS ambiguous
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when multiple conflicting groups  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenMultipleConflictingGroups_ReturnsTrue()
         {
             // Arrange - Multiple conflicting alias groups at once
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=db01;Host=db02;Database=dbA;Initial Catalog=dbB;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous (multiple conflicts should still return true)
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when same key repeated with different server values  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentServerValues_ReturnsTrue()
         {
             // Arrange - CRITICAL: Server=db01;Server=db02 (same key repeated)
             // DbConnectionStringBuilder would canonicalize this to just the last value,
             // but our raw parser must detect it BEFORE canonicalization
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=db01;Server=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous and MUST be detected
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when same key repeated with different password values  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentPasswordValues_ReturnsTrue()
         {
             // Arrange - CRITICAL: Password=secret1;Password=secret2 (same key repeated)
             // This is a SECURITY issue if not detected
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Password=secret2";
 
             // Act & Assert - This IS ambiguous and MUST be detected
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when same key repeated with different username values  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentUsernameValues_ReturnsTrue()
         {
             // Arrange - CRITICAL: User ID=alice;User ID=bob (same key repeated)
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=alice;User ID=bob";
 
             // Act & Assert - This IS ambiguous and MUST be detected
             Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when same key repeated with identical values  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithIdenticalValues_ReturnsFalse()
         {
             // Arrange - Server=db01;Server=db01 (same key, same value - redundant but not ambiguous)
+            /// <summary>
+            /// Supplies connection string for the fixture or scenario under test.
+            /// </summary>
             const string connectionString = "Server=db01;Server=db01;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - Redundant but consistent should NOT be ambiguous
             Assert.False(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when redundant but identical  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenRedundantButIdentical_ReturnsFalse()
         {
@@ -1128,7 +1331,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Assert - Redundant but consistent is NOT ambiguous
             Assert.False(result);
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when null or empty  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenNullOrEmpty_ReturnsFalse()
         {
@@ -1137,7 +1342,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(MySqlConnectionStringUtilities.HasAmbiguousAliases(""));
             Assert.False(MySqlConnectionStringUtilities.HasAmbiguousAliases("   "));
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when malformed syntax  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenMalformedSyntax_ReturnsFalse()
         {
@@ -1155,7 +1362,9 @@ namespace VectorNNTP.Backfiller.Tests
             // Important: A malformed string will fail TryParse/TryParseEffective
             // HasAmbiguousAliases returning false does NOT make it safe!
         }
-
+        /// <summary>
+        /// Exercises has ambiguous aliases  when fully populated and valid  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void HasAmbiguousAliases_WhenFullyPopulatedAndValid_ReturnsFalse()
         {
@@ -1172,7 +1381,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region ConnectionStringParseResult Tests
-
+        /// <summary>
+        /// Exercises parse result  distinguishes missing from invalid from ambiguous  for max pool size behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ParseResult_DistinguishesMissingFromInvalidFromAmbiguous_ForMaxPoolSize()
         {
@@ -1198,7 +1409,9 @@ namespace VectorNNTP.Backfiller.Tests
             // The TryGet* API cannot distinguish these states
             // This is the fundamental limitation the user identified
         }
-
+        /// <summary>
+        /// Exercises parse result  distinguishes missing from invalid from ambiguous  for server behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ParseResult_DistinguishesMissingFromInvalidFromAmbiguous_ForServer()
         {
@@ -1222,7 +1435,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             // All three return false, but for different reasons
         }
-
+        /// <summary>
+        /// Exercises ambiguity detection  is independent of property extraction behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void AmbiguityDetection_IsIndependentOfPropertyExtraction()
         {
@@ -1264,7 +1479,9 @@ namespace VectorNNTP.Backfiller.Tests
         #endregion
 
         #region TryParseEffective Tests
-
+        /// <summary>
+        /// Exercises try parse effective  when valid connection string  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParseEffective_WhenValidConnectionString_ReturnsTrue()
         {
@@ -1281,7 +1498,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("test", builder.Database);
             Assert.Equal("admin", builder.UserID);
         }
-
+        /// <summary>
+        /// Exercises try parse effective  when ambiguous server aliases  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParseEffective_WhenAmbiguousServerAliases_ReturnsFalse()
         {
@@ -1295,7 +1514,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(builder);
         }
-
+        /// <summary>
+        /// Exercises try parse effective  when duplicate same key  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParseEffective_WhenDuplicateSameKey_ReturnsFalse()
         {
@@ -1309,7 +1530,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(builder);
         }
-
+        /// <summary>
+        /// Exercises try parse effective  when malformed connection string  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParseEffective_WhenMalformedConnectionString_ReturnsFalse()
         {
@@ -1323,7 +1546,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
             Assert.Null(builder);
         }
-
+        /// <summary>
+        /// Exercises try parse effective  when null or empty  matches provider behavior behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParseEffective_WhenNullOrEmpty_MatchesProviderBehavior()
         {
@@ -1335,7 +1560,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(MySqlConnectionStringUtilities.TryParseEffective("", out MySqlConnectionStringBuilder? builder2));
             Assert.NotNull(builder2);
         }
-
+        /// <summary>
+        /// Exercises try parse effective  when redundant identical aliases  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParseEffective_WhenRedundantIdenticalAliases_ReturnsTrue()
         {
@@ -1350,7 +1577,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotNull(builder);
             Assert.Equal("localhost", builder.Server);
         }
-
+        /// <summary>
+        /// Exercises try parse  accepts ambiguous configuration without validation behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryParse_AcceptsAmbiguousConfigurationWithoutValidation()
         {

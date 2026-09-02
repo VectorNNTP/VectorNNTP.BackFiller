@@ -1,6 +1,9 @@
 // <copyright file="AcmeCertificateIssuerDns01RecoveryTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
+//
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for acme certificate issuer dns01 recovery, covering certificate and DNS dependency behavior.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
@@ -9,8 +12,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers acme certificate issuer dns01 recovery behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class AcmeCertificateIssuerDns01RecoveryTests
     {
+        /// <summary>
+        /// Exercises issue certificate async  when no existing txt record  creates challenge and cleans up behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenNoExistingTxtRecord_CreatesChallengeAndCleansUp()
         {
@@ -21,7 +30,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, result.Api.DeleteCallCount);
             Assert.Empty(result.Api.Records);
         }
-
+        /// <summary>
+        /// Exercises issue certificate async  when stale challenge record exists  deletes stale record and creates replacement behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenStaleChallengeRecordExists_DeletesStaleRecordAndCreatesReplacement()
         {
@@ -40,7 +51,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(result.Api.Records, record => record.Content == "unrelated-value");
             Assert.DoesNotContain(result.Api.Records, record => record.Content == "old-value");
         }
-
+        /// <summary>
+        /// Exercises issue certificate async  when exact txt already exists  reuses existing challenge value behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValue()
         {
@@ -55,7 +68,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0, result.Api.AddCallCount);
             Assert.Equal(0, result.Api.DeleteCallCount);
         }
-
+        /// <summary>
+        /// Exercises issue certificate async  when issuance fails  still attempts cleanup behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenIssuanceFails_StillAttemptsCleanup()
         {
@@ -66,6 +81,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, result.Api.DeleteCallCount);
         }
 
+        /// <summary>
+        /// Exercises execute scenario async behavior, including the expected result and failure semantics.
+        /// </summary>
         private static async Task<RecoveryScenarioResult> ExecuteScenarioAsync(
             IReadOnlyList<CloudflareTxtRecordInfo> initialRecords,
             bool shouldFailValidation,
@@ -104,6 +122,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Exercises create lets encrypt options behavior, including the expected result and failure semantics.
+        /// </summary>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir)
         {
             return new BackFillerLetsEncryptRuntimeOptions(
@@ -128,36 +149,78 @@ namespace VectorNNTP.Backfiller.Tests
                 CloudFlareZoneId: "zone");
         }
 
+        /// <summary>
+        /// Covers recovery scenario behavior and invariants exercised by this test suite.
+        /// </summary>
         private static class RecoveryScenario
         {
+            /// <summary>
+            /// Supplies fqdn for the fixture or scenario under test.
+            /// </summary>
             internal const string Fqdn = "backfiller01.usenet.ninja";
+            /// <summary>
+            /// Supplies expected txt value for the fixture or scenario under test.
+            /// </summary>
             internal const string ExpectedTxtValue = "challenge-value";
         }
 
+        /// <summary>
+        /// Covers recovery scenario result behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed record RecoveryScenarioResult(FakeCloudflareTxtRecordApi Api, bool WasSuccessful, Exception? Error);
 
+        /// <summary>
+        /// Covers fake cloudflare txt record api behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FakeCloudflareTxtRecordApi : ICloudflareTxtRecordApi
         {
+            /// <summary>
+            /// Supplies  records for the fixture or scenario under test.
+            /// </summary>
             private readonly List<CloudflareTxtRecordInfo> _records;
+            /// <summary>
+            /// Supplies  throw on delete for the fixture or scenario under test.
+            /// </summary>
             private readonly bool _throwOnDelete;
+            /// <summary>
+            /// Supplies  next id for the fixture or scenario under test.
+            /// </summary>
             private int _nextId = 1000;
 
+            /// <summary>
+            /// Exercises fake cloudflare txt record api behavior, including the expected result and failure semantics.
+            /// </summary>
             internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete)
             {
                 _records = [.. initialRecords];
                 _throwOnDelete = throwOnDelete;
             }
 
+            /// <summary>
+            /// Supplies records for the fixture or scenario under test.
+            /// </summary>
             internal IReadOnlyList<CloudflareTxtRecordInfo> Records => _records;
+            /// <summary>
+            /// Supplies add call count for the fixture or scenario under test.
+            /// </summary>
             internal int AddCallCount { get; private set; }
+            /// <summary>
+            /// Supplies delete call count for the fixture or scenario under test.
+            /// </summary>
             internal int DeleteCallCount { get; private set; }
 
+            /// <summary>
+            /// Exercises get txt records async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult<IReadOnlyList<CloudflareTxtRecordInfo>>([.. _records.Where(record => record.Name == recordName)]);
             }
 
+            /// <summary>
+            /// Exercises add txt record async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -167,6 +230,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.FromResult(record);
             }
 
+            /// <summary>
+            /// Exercises delete txt record async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -180,14 +246,23 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
+            /// </summary>
             public ValueTask DisposeAsync()
             {
                 return ValueTask.CompletedTask;
             }
         }
 
+        /// <summary>
+        /// Covers fake authoritative dns txt propagation verifier behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FakeAuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
         {
+            /// <summary>
+            /// Exercises wait for propagation async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task WaitForPropagationAsync(string fqdn, string expectedTxtValue, BackFillerLetsEncryptRuntimeOptions options, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -195,10 +270,22 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Covers fake acme context factory behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FakeAcmeContextFactory(bool shouldFailValidation, bool shouldFailFinalize, bool failChallengeAfterCreate)
         {
+            /// <summary>
+            /// Supplies should fail validation for the fixture or scenario under test.
+            /// </summary>
             private bool ShouldFailValidation { get; } = shouldFailValidation;
+            /// <summary>
+            /// Supplies should fail finalize for the fixture or scenario under test.
+            /// </summary>
             private bool ShouldFailFinalize { get; } = shouldFailFinalize;
+            /// <summary>
+            /// Supplies fail challenge after create for the fixture or scenario under test.
+            /// </summary>
             private bool FailChallengeAfterCreate { get; } = failChallengeAfterCreate;
         }
     }

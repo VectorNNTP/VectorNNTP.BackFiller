@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq broker connection abstractions behavior.
 
 using System.Text;
 using RabbitMQ.Client;
@@ -188,13 +187,37 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqBrokerConnectionAdapter : IRabbitMqBrokerConnection
     {
+        /// <summary>
+        /// Tracks connection for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly IConnection _connection;
+        /// <summary>
+        /// Tracks virtual host for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly string _virtualHost;
+        /// <summary>
+        /// Tracks connection shutdown async handler for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<ShutdownEventArgs> _connectionShutdownAsyncHandler;
+        /// <summary>
+        /// Tracks callback exception async handler for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<CallbackExceptionEventArgs> _callbackExceptionAsyncHandler;
+        /// <summary>
+        /// Tracks connection blocked async handler for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<ConnectionBlockedEventArgs> _connectionBlockedAsyncHandler;
+        /// <summary>
+        /// Tracks connection unblocked async handler for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _connectionUnblockedAsyncHandler;
+        /// <summary>
+        /// Tracks connection recovery error async handler for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<ConnectionRecoveryErrorEventArgs> _connectionRecoveryErrorAsyncHandler;
+        /// <summary>
+        /// Tracks recovery succeeded async handler for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _recoverySucceededAsyncHandler;
 
         /// <summary>
@@ -322,6 +345,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqChannelAdapter : IRabbitMqChannel
     {
+        /// <summary>
+        /// Tracks channel for rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly IChannel _channel;
 
         /// <summary>
@@ -400,6 +426,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             return _channel.DisposeAsync();
         }
 
+        /// <summary>
+        /// Coordinates to mutable for rabbit mq broker connection abstractions.
+        /// </summary>
         private static IDictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
         {
             return arguments is null ? null : (IDictionary<string, object?>)arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);

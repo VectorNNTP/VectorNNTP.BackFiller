@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the global transit work queue behavior.
 
 using System.Collections.Concurrent;
 using System.Threading.Channels;
@@ -16,23 +15,65 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed class GlobalTransitWorkQueue
     {
+        /// <summary>
+        /// Tracks ready queue for global transit work queue.
+        /// </summary>
         private readonly Channel<TransitWorkItem> _readyQueue;
+        /// <summary>
+        /// Tracks scheduled retries for global transit work queue.
+        /// </summary>
         private readonly ConcurrentQueue<ScheduledRetry> _scheduledRetries = new();
+        /// <summary>
+        /// Tracks retry scheduled signal for global transit work queue.
+        /// </summary>
         private readonly SemaphoreSlim _retryScheduledSignal = new(0);
+        /// <summary>
+        /// Tracks admission gate for global transit work queue.
+        /// </summary>
         private readonly object _admissionGate = new();
+        /// <summary>
+        /// Tracks claim gate for global transit work queue.
+        /// </summary>
         private readonly object _claimGate = new();
 
+        /// <summary>
+        /// Limits max queued item count for global transit work queue.
+        /// </summary>
         private readonly int _maxQueuedItemCount;
+        /// <summary>
+        /// Limits max queued payload bytes for global transit work queue.
+        /// </summary>
         private readonly long _maxQueuedPayloadBytes;
 
+        /// <summary>
+        /// Limits queued item count for global transit work queue.
+        /// </summary>
         private long _queuedItemCount;
+        /// <summary>
+        /// Stores queued payload bytes for global transit work queue.
+        /// </summary>
         private long _queuedPayloadBytes;
+        /// <summary>
+        /// Limits retry pending count for global transit work queue.
+        /// </summary>
         private long _retryPendingCount;
+        /// <summary>
+        /// Limits in flight count for global transit work queue.
+        /// </summary>
         private long _inFlightCount;
+        /// <summary>
+        /// Limits admission wait count for global transit work queue.
+        /// </summary>
         private long _admissionWaitCount;
 
+        /// <summary>
+        /// Tracks admission frozen for global transit work queue.
+        /// </summary>
         private volatile bool _admissionFrozen;
 
+        /// <summary>
+        /// Coordinates global transit work queue for global transit work queue.
+        /// </summary>
         internal GlobalTransitWorkQueue(int maxQueuedItemCount, long maxQueuedPayloadBytes)
         {
             if (maxQueuedItemCount <= 0)
@@ -55,18 +96,39 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             });
         }
 
+        /// <summary>
+        /// Limits queued item count for global transit work queue.
+        /// </summary>
         internal long QueuedItemCount => Interlocked.Read(ref _queuedItemCount);
 
+        /// <summary>
+        /// Stores queued payload bytes for global transit work queue.
+        /// </summary>
         internal long QueuedPayloadBytes => Interlocked.Read(ref _queuedPayloadBytes);
 
+        /// <summary>
+        /// Limits retry pending count for global transit work queue.
+        /// </summary>
         internal long RetryPendingCount => Interlocked.Read(ref _retryPendingCount);
 
+        /// <summary>
+        /// Limits in flight count for global transit work queue.
+        /// </summary>
         internal long InFlightCount => Interlocked.Read(ref _inFlightCount);
 
+        /// <summary>
+        /// Limits admission wait count for global transit work queue.
+        /// </summary>
         internal long AdmissionWaitCount => Interlocked.Read(ref _admissionWaitCount);
 
+        /// <summary>
+        /// Tracks is admission frozen for global transit work queue.
+        /// </summary>
         internal bool IsAdmissionFrozen => _admissionFrozen;
 
+        /// <summary>
+        /// Coordinates enqueue async for global transit work queue.
+        /// </summary>
         internal async ValueTask EnqueueAsync(TransitWorkItem item, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -112,6 +174,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates try claim for global transit work queue.
+        /// </summary>
         internal bool TryClaim(string connectionId, out TransitWorkItem? item)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
@@ -142,6 +207,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates wait for work async for global transit work queue.
+        /// </summary>
         internal async ValueTask<bool> WaitForWorkAsync(CancellationToken cancellationToken)
         {
             while (true)
@@ -176,6 +244,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates schedule retry async for global transit work queue.
+        /// </summary>
         internal async ValueTask<bool> ScheduleRetryAsync(
             TransitWorkItem item,
             TransitWorkFailureClass failureClass,
@@ -214,6 +285,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Coordinates drain eligible retries async for global transit work queue.
+        /// </summary>
         internal async ValueTask DrainEligibleRetriesAsync(CancellationToken cancellationToken)
         {
             while (_scheduledRetries.TryPeek(out ScheduledRetry scheduled))
@@ -254,6 +328,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates mark in flight terminal for global transit work queue.
+        /// </summary>
         internal void MarkInFlightTerminal()
         {
             while (true)
@@ -271,21 +348,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates mark queued terminal for global transit work queue.
+        /// </summary>
         internal void MarkQueuedTerminal(int payloadBytes)
         {
             DecrementQueuedOwnership(payloadBytes);
         }
 
+        /// <summary>
+        /// Coordinates mark retry pending terminal for global transit work queue.
+        /// </summary>
         internal void MarkRetryPendingTerminal()
         {
             DecrementRetryPendingOwnership();
         }
 
+        /// <summary>
+        /// Coordinates freeze admission for global transit work queue.
+        /// </summary>
         internal void FreezeAdmission()
         {
             _admissionFrozen = true;
         }
 
+        /// <summary>
+        /// Coordinates capture snapshot for global transit work queue.
+        /// </summary>
         internal GlobalTransitWorkQueueSnapshot CaptureSnapshot()
         {
             return new GlobalTransitWorkQueueSnapshot(
@@ -299,6 +388,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 IsAdmissionFrozen: _admissionFrozen);
         }
 
+        /// <summary>
+        /// Coordinates can admit for global transit work queue.
+        /// </summary>
         private bool CanAdmit(int payloadBytes)
         {
             long currentCount = Interlocked.Read(ref _queuedItemCount);
@@ -306,11 +398,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return currentCount + 1 <= _maxQueuedItemCount && currentBytes + payloadBytes <= _maxQueuedPayloadBytes;
         }
 
+        /// <summary>
+        /// Coordinates wait for capacity async for global transit work queue.
+        /// </summary>
         private static Task WaitForCapacityAsync(CancellationToken cancellationToken)
         {
             return Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
         }
 
+        /// <summary>
+        /// Coordinates decrement queued ownership for global transit work queue.
+        /// </summary>
         private void DecrementQueuedOwnership(int payloadBytes)
         {
             while (true)
@@ -342,6 +440,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates decrement retry pending ownership for global transit work queue.
+        /// </summary>
         private void DecrementRetryPendingOwnership()
         {
             while (true)
@@ -359,9 +460,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Defines struct and its global transit work queue contract.
+        /// </summary>
         private readonly record struct ScheduledRetry(TransitWorkItem Item, DateTimeOffset NotBeforeUtc);
     }
 
+    /// <summary>
+    /// Defines global transit work queue snapshot and its global transit work queue contract.
+    /// </summary>
     internal sealed record GlobalTransitWorkQueueSnapshot(
         int MaxQueuedItemCount,
         long MaxQueuedPayloadBytes,

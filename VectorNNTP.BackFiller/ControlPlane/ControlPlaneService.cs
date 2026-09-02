@@ -46,7 +46,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
         ILoggerFactory? loggerFactory = null,
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
+        /// <summary>
+        /// Configures heartbeat interval for control plane service.
+        /// </summary>
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+        /// <summary>
+        /// Configures refresh interval for control plane service.
+        /// </summary>
         private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
 
         /// <summary>
@@ -462,6 +468,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
             PublishBackboneUsableCapacitySnapshot();
         }
 
+        /// <summary>
+        /// Coordinates publish backbone usable capacity snapshot for control plane service.
+        /// </summary>
         private void PublishBackboneUsableCapacitySnapshot()
         {
             Dictionary<string, int> capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
@@ -490,6 +499,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
             _backboneUsableCapacityStateWriter.PublishSnapshot(capacityByBackbone);
         }
 
+        /// <summary>
+        /// Coordinates retire rabbit mq capacity boundary async for control plane service.
+        /// </summary>
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
             return _rabbitMqCapacityRetirementCoordinator
@@ -503,14 +515,23 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="Manager">Owned session manager implementing persistent session lifecycle for the account.</param>
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
+            /// <summary>
+            /// Tracks instance for control plane service.
+            /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
+            /// <summary>
+            /// Coordinates publish snapshot for control plane service.
+            /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);
             }
         }
 
+        /// <summary>
+        /// Defines account runtime state and its control plane service contract.
+        /// </summary>
         private sealed record AccountRuntimeState(
             NntpAccountSnapshot LastAppliedAccount,
             NntpArticleExecutionSessionManager Manager)

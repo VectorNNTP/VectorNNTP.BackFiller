@@ -1,9 +1,21 @@
+// <copyright file="MetricMathHelpers.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/MetricMathHelpers: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using System.Diagnostics;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the metric MathHelpers class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class MetricMathHelpers
 {
+    /// <summary>
+    /// Performs the compute PercentileMicroseconds operation.
+    /// </summary>
     internal static double ComputePercentileMicroseconds(List<long> sortedLatencyTicks, double percentile)
     {
         ArgumentNullException.ThrowIfNull(sortedLatencyTicks);
@@ -19,6 +31,9 @@ internal static class MetricMathHelpers
         return TransitBenchmarkCore.StopwatchTicksToMilliseconds(ticks) * 1000d;
     }
 
+    /// <summary>
+    /// Performs the classify DepthBucket operation.
+    /// </summary>
     internal static int ClassifyDepthBucket(int pending)
     {
         if (pending <= 4) return 0;
@@ -28,6 +43,9 @@ internal static class MetricMathHelpers
         return 4;
     }
 
+    /// <summary>
+    /// Performs the percentile Us operation.
+    /// </summary>
     internal static double PercentileUs(List<long> samples, double percentile)
     {
         if (samples.Count == 0)
@@ -41,6 +59,9 @@ internal static class MetricMathHelpers
         return TicksToUs(sorted[index]);
     }
 
+    /// <summary>
+    /// Performs the ticks ToUs operation.
+    /// </summary>
     internal static double TicksToUs(double ticks)
     {
         if (ticks <= 0)
@@ -51,11 +72,17 @@ internal static class MetricMathHelpers
         return ticks * 1_000_000d / Stopwatch.Frequency;
     }
 
+    /// <summary>
+    /// Performs the normalize Min operation.
+    /// </summary>
     internal static long NormalizeMin(long value)
     {
         return value == long.MaxValue ? 0 : value;
     }
 
+    /// <summary>
+    /// Performs the compute Average operation.
+    /// </summary>
     internal static double ComputeAverage(long sum, long count)
     {
         return count <= 0 ? 0 : (double)sum / count;

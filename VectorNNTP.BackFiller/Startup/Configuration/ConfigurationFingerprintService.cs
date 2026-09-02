@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Configuration
+// Implements the configuration fingerprint service behavior.
 
 using System.Data.Common;
 using System.Security.Cryptography;
@@ -18,8 +17,14 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
     /// </summary>
     internal static class ConfigurationFingerprintService
     {
+        /// <summary>
+        /// Tracks fingerprint algorithm version for configuration fingerprint service.
+        /// </summary>
         private const string FingerprintAlgorithmVersion = "v1";
 
+        /// <summary>
+        /// Tracks sensitive segment patterns for configuration fingerprint service.
+        /// </summary>
         private static readonly string[] SensitiveSegmentPatterns =
         [
             "password",
@@ -43,6 +48,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             "credentials"
         ];
 
+        /// <summary>
+        /// Coordinates is sensitive configuration key for configuration fingerprint service.
+        /// </summary>
         internal static bool IsSensitiveConfigurationKey(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -62,6 +70,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             return false;
         }
 
+        /// <summary>
+        /// Coordinates is connection string for configuration fingerprint service.
+        /// </summary>
         internal static bool IsConnectionString(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -89,6 +100,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             return false;
         }
 
+        /// <summary>
+        /// Coordinates sanitize connection string for configuration fingerprint service.
+        /// </summary>
         internal static string? SanitizeConnectionString(string connectionString)
         {
             try
@@ -173,6 +187,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             }
         }
 
+        /// <summary>
+        /// Coordinates canonicalize non secret value for configuration fingerprint service.
+        /// </summary>
         private static string CanonicalizeNonSecretValue(string configurationKey, string value)
         {
             if (configurationKey.Equals("BackFiller:DnsSuffix", StringComparison.OrdinalIgnoreCase))
@@ -190,6 +207,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             return value;
         }
 
+        /// <summary>
+        /// Coordinates calculate configuration fingerprint for configuration fingerprint service.
+        /// </summary>
         internal static string CalculateConfigurationFingerprint(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

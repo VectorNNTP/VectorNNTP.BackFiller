@@ -1,11 +1,9 @@
 // <copyright file="ProgramHostingSemanticsTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for program hosting semantics, covering service lifecycle and shutdown contracts.
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +27,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ProgramHostingSemanticsTests
     {
+        /// <summary>
+        /// Exercises register readiness hook  when application stopping  transitions to draining  and signals graceful shutdown behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void RegisterReadinessHook_WhenApplicationStopping_TransitionsToDraining_AndSignalsGracefulShutdown()
         {
@@ -54,7 +55,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             shutdownCoordinator.Dispose();
         }
-
+        /// <summary>
+        /// Exercises concurrent reentrant shutdown race  does not throw and lifecycle is draining behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task ConcurrentReentrantShutdownRace_DoesNotThrowAndLifecycleIsDraining()
         {
@@ -133,7 +136,9 @@ namespace VectorNNTP.Backfiller.Tests
         // cancellation callbacks. The intentional idempotency of the shutdown hook is
         // exercised elsewhere; therefore we avoid a duplicate test that relies on
         // multiple Cancel() invocations.
-
+        /// <summary>
+        /// Exercises configure host services  when lifecycle provided  registers same instance  and required hosted services behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ConfigureHostServices_WhenLifecycleProvided_RegistersSameInstance_AndRequiredHostedServices()
         {
@@ -210,7 +215,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Same(lifecycle, resolvedLifecycle);
             Assert.Same(controlPlane, leaseProvider);
         }
-
+        /// <summary>
+        /// Exercises configure host services  does not register shutdown options for runtime resolution behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ConfigureHostServices_DoesNotRegisterShutdownOptionsForRuntimeResolution()
         {
@@ -251,7 +258,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Null(host.Services.GetService<ShutdownOptions>());
         }
-
+        /// <summary>
+        /// Exercises configure host services  uses runtime snapshot grace period  for host shutdown timeout behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ConfigureHostServices_UsesRuntimeSnapshotGracePeriod_ForHostShutdownTimeout()
         {
@@ -293,7 +302,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(TimeSpan.FromSeconds(runtimeOptions.ShutdownGracePeriodSeconds), hostOptions.Value.ShutdownTimeout);
         }
-
+        /// <summary>
+        /// Exercises configure host services  rabbit mq graph resolves core services behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ConfigureHostServices_RabbitMqGraphResolvesCoreServices()
         {
@@ -353,7 +364,9 @@ namespace VectorNNTP.Backfiller.Tests
                 .Single(static service => service is RabbitMqArticleProcessingService);
             Assert.IsType<RabbitMqArticleProcessingService>(processingHostedService);
         }
-
+        /// <summary>
+        /// Exercises should publish readiness  when application stopping already signaled  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ShouldPublishReadiness_WhenApplicationStoppingAlreadySignaled_ReturnsFalse()
         {
@@ -364,7 +377,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.False(shouldPublish);
         }
-
+        /// <summary>
+        /// Exercises should publish readiness  when application stopping not signaled  returns true behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ShouldPublishReadiness_WhenApplicationStoppingNotSignaled_ReturnsTrue()
         {
@@ -442,6 +457,9 @@ namespace VectorNNTP.Backfiller.Tests
                 RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
         }
 
+        /// <summary>
+        /// Exercises create rabbit mq runtime options behavior, including the expected result and failure semantics.
+        /// </summary>
         private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
         {
             return new RabbitMqRuntimeOptions(
@@ -502,23 +520,50 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Covers fake host application lifetime behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FakeHostApplicationLifetime : IHostApplicationLifetime
         {
+            /// <summary>
+            /// Exercises  application started behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly CancellationTokenSource _applicationStarted = new();
+            /// <summary>
+            /// Exercises  application stopping behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly CancellationTokenSource _applicationStopping = new();
+            /// <summary>
+            /// Exercises  application stopped behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly CancellationTokenSource _applicationStopped = new();
 
+            /// <summary>
+            /// Supplies application started for the fixture or scenario under test.
+            /// </summary>
             public CancellationToken ApplicationStarted => _applicationStarted.Token;
 
+            /// <summary>
+            /// Supplies application stopping for the fixture or scenario under test.
+            /// </summary>
             public CancellationToken ApplicationStopping => _applicationStopping.Token;
 
+            /// <summary>
+            /// Supplies application stopped for the fixture or scenario under test.
+            /// </summary>
             public CancellationToken ApplicationStopped => _applicationStopped.Token;
 
+            /// <summary>
+            /// Exercises stop application behavior, including the expected result and failure semantics.
+            /// </summary>
             public void StopApplication()
             {
                 _applicationStopping.Cancel();
             }
 
+            /// <summary>
+            /// Exercises trigger application stopping behavior, including the expected result and failure semantics.
+            /// </summary>
             internal void TriggerApplicationStopping()
             {
                 _applicationStopping.Cancel();

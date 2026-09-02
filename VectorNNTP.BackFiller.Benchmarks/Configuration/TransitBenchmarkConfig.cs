@@ -1,7 +1,16 @@
+// <copyright file="TransitBenchmarkConfig.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Configuration/TransitBenchmarkConfig: binds and normalizes benchmark runtime settings.
+
 using Microsoft.Extensions.Configuration;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the benchmark Mode enum for benchmark or isolated-regression execution.
+/// </summary>
 internal enum BenchmarkMode
 {
     Validation,
@@ -10,6 +19,9 @@ internal enum BenchmarkMode
     Forensic,
 }
 
+/// <summary>
+/// Defines the transit BenchmarkConfig record struct for benchmark or isolated-regression execution.
+/// </summary>
 internal readonly record struct TransitBenchmarkConfig(
     BenchmarkMode Mode,
     long BenchmarkInstanceId,
@@ -33,10 +45,22 @@ internal readonly record struct TransitBenchmarkConfig(
     int ProducerQueueTargetArticles,
     RuntimeIdentityExpectation ExpectedRuntimeIdentity)
 {
+    /// <summary>
+    /// Gets or sets the required TransitHostname value.
+    /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
+    /// <summary>
+    /// Gets or sets the default ArticleTargetBytes value.
+    /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
+    /// <summary>
+    /// Gets or sets the default WarmupSeconds value.
+    /// </summary>
     private const int DefaultWarmupSeconds = 10;
 
+    /// <summary>
+    /// Performs the load operation.
+    /// </summary>
     internal static TransitBenchmarkConfig Load(
             TimeSpan measurementDuration,
             BenchmarkMode mode,
@@ -200,6 +224,9 @@ internal readonly record struct TransitBenchmarkConfig(
             ExpectedRuntimeIdentity: expectedRuntimeIdentity);
     }
 
+    /// <summary>
+    /// Performs the find BackFillerAppSettingsPath operation.
+    /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);

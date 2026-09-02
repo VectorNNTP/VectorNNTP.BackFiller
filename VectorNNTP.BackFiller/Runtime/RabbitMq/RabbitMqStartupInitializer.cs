@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq startup initializer behavior.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -24,10 +23,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         BackFillerRuntimeOptions runtimeOptions,
         ILogger<RabbitMqStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Tracks connection manager for rabbit mq startup initializer.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        /// <summary>
+        /// Tracks topology initializer for rabbit mq startup initializer.
+        /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
+        /// <summary>
+        /// Limits account snapshot provider for rabbit mq startup initializer.
+        /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider = accountSnapshotProvider ?? throw new ArgumentNullException(nameof(accountSnapshotProvider));
+        /// <summary>
+        /// Tracks runtime options for rabbit mq startup initializer.
+        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
+        /// <summary>
+        /// Provides logging for rabbit mq startup initializer.
+        /// </summary>
         private readonly ILogger<RabbitMqStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
@@ -64,9 +78,15 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
+        /// <summary>
+        /// Coordinates log startup initialization beginning for rabbit mq startup initializer.
+        /// </summary>
         private static partial void LogStartupInitializationBeginning(ILogger logger);
 
         [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
+        /// <summary>
+        /// Coordinates log startup initialization completed for rabbit mq startup initializer.
+        /// </summary>
         private static partial void LogStartupInitializationCompleted(ILogger logger, RabbitMqInfrastructureState state, int backboneCount);
     }
 }

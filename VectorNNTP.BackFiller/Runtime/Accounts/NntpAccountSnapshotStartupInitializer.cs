@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Accounts
+// Implements the nntp account snapshot startup initializer behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Accounts
 {
@@ -15,7 +14,13 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         MySqlNntpAccountSnapshotProvider snapshotProvider,
         ILogger<NntpAccountSnapshotStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Tracks snapshot provider for nntp account snapshot startup initializer.
+        /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _snapshotProvider = snapshotProvider ?? throw new ArgumentNullException(nameof(snapshotProvider));
+        /// <summary>
+        /// Provides logging for nntp account snapshot startup initializer.
+        /// </summary>
         private readonly ILogger<NntpAccountSnapshotStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
@@ -42,9 +47,15 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "NNTP account startup initializer beginning initial snapshot load")]
+        /// <summary>
+        /// Coordinates log startup initializer beginning for nntp account snapshot startup initializer.
+        /// </summary>
         private static partial void LogStartupInitializerBeginning(ILogger logger);
 
         [LoggerMessage(EventId = 2003, Level = LogLevel.Information, Message = "NNTP account startup initializer completed; AccountsLoaded={AccountCount}")]
+        /// <summary>
+        /// Coordinates log startup initializer completed for nntp account snapshot startup initializer.
+        /// </summary>
         private static partial void LogStartupInitializerCompleted(ILogger logger, int accountCount);
     }
 }

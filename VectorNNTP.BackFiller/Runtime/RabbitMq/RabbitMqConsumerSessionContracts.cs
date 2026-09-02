@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq consumer session contracts behavior.
 
 using System.Threading.Channels;
 
@@ -96,13 +95,22 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
+        /// <summary>
+        /// Tracks writer for rabbit mq consumer session contracts.
+        /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
+        /// <summary>
+        /// Coordinates rabbit mq delivery channel sink for rabbit mq consumer session contracts.
+        /// </summary>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
             _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         }
 
+        /// <summary>
+        /// Coordinates on delivery async for rabbit mq consumer session contracts.
+        /// </summary>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();

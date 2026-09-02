@@ -1,11 +1,9 @@
 // <copyright file="MeasurementMetricsClassificationContractTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for measurement metrics classification contract, covering benchmark measurement and runtime identity contracts.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -13,8 +11,14 @@ using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
+    /// <summary>
+    /// Covers measurement metrics classification contract behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class MeasurementMetricsClassificationContractTests
     {
+        /// <summary>
+        /// Exercises on publish result  classifies statuses into accepted rejected and ambiguous contracts behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void OnPublishResult_ClassifiesStatusesIntoAcceptedRejectedAndAmbiguousContracts()
         {

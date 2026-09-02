@@ -1,3 +1,9 @@
+// <copyright file="BenchmarkDevNullTransitServer.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/BenchmarkDevNullTransitServer: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO;
@@ -15,31 +21,97 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 /// </summary>
 internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
 {
+    /// <summary>
+    /// Performs the greeting Bytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> GreetingBytes = Encoding.ASCII.GetBytes("200 benchmark dev-null sink ready\r\n");
+    /// <summary>
+    /// Performs the capabilities HeaderBytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> CapabilitiesHeaderBytes = Encoding.ASCII.GetBytes("101 Capability list:\r\n");
+    /// <summary>
+    /// Performs the capabilities StreamingBytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> CapabilitiesStreamingBytes = Encoding.ASCII.GetBytes("STREAMING\r\n");
+    /// <summary>
+    /// Performs the dot LineBytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> DotLineBytes = Encoding.ASCII.GetBytes(".\r\n");
+    /// <summary>
+    /// Performs the streaming PermittedBytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> StreamingPermittedBytes = Encoding.ASCII.GetBytes("203 Streaming permitted\r\n");
+    /// <summary>
+    /// Performs the quit ResponseBytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> QuitResponseBytes = Encoding.ASCII.GetBytes("205 closing connection\r\n");
+    /// <summary>
+    /// Performs the unknown CommandBytes operation.
+    /// </summary>
     private static readonly ReadOnlyMemory<byte> UnknownCommandBytes = Encoding.ASCII.GetBytes("500 unknown command\r\n");
+    /// <summary>
+    /// Gets or sets the capabilities CommandBytes value.
+    /// </summary>
     private static ReadOnlySpan<byte> CapabilitiesCommandBytes => "CAPABILITIES"u8;
+    /// <summary>
+    /// Gets or sets the mode StreamCommandBytes value.
+    /// </summary>
     private static ReadOnlySpan<byte> ModeStreamCommandBytes => "MODE STREAM"u8;
+    /// <summary>
+    /// Gets or sets the quit CommandBytes value.
+    /// </summary>
     private static ReadOnlySpan<byte> QuitCommandBytes => "QUIT"u8;
+    /// <summary>
+    /// Gets or sets the check PrefixBytes value.
+    /// </summary>
     private static ReadOnlySpan<byte> CheckPrefixBytes => "CHECK "u8;
+    /// <summary>
+    /// Gets or sets the takethis PrefixBytes value.
+    /// </summary>
     private static ReadOnlySpan<byte> TakethisPrefixBytes => "TAKETHIS "u8;
+    /// <summary>
+    /// Performs the article Terminator operation.
+    /// </summary>
     private static readonly byte[] ArticleTerminator = "\r\n.\r\n"u8.ToArray();
 
+    /// <summary>
+    /// Gets or sets the _listener value.
+    /// </summary>
     private readonly TcpListener _listener;
+    /// <summary>
+    /// Performs the _clientTasks operation.
+    /// </summary>
     private readonly ConcurrentDictionary<int, Task> _clientTasks = new();
+    /// <summary>
+    /// Performs the _shutdown operation.
+    /// </summary>
     private readonly CancellationTokenSource _shutdown = new();
 
+    /// <summary>
+    /// Gets or sets the _acceptLoopTask value.
+    /// </summary>
     private Task? _acceptLoopTask;
+    /// <summary>
+    /// Gets or sets the _clientTaskId value.
+    /// </summary>
     private int _clientTaskId;
 
+    /// <summary>
+    /// Gets or sets the _acceptedArticles value.
+    /// </summary>
     private long _acceptedArticles;
+    /// <summary>
+    /// Gets or sets the _consumedArticleBytes value.
+    /// </summary>
     private long _consumedArticleBytes;
+    /// <summary>
+    /// Gets or sets the _totalConnections value.
+    /// </summary>
     private long _totalConnections;
 
+    /// <summary>
+    /// Performs the benchmark DevNullTransitServer operation.
+    /// </summary>
     private BenchmarkDevNullTransitServer(IPAddress listenAddress, int port)
     {
         ArgumentNullException.ThrowIfNull(listenAddress);
@@ -426,6 +498,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the try ParseCommand operation.
+    /// </summary>
     private static bool TryParseCommand(in ReadOnlySequence<byte> line, out ParsedCommand command)
     {
         if (line.IsEmpty)
@@ -472,6 +547,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         return true;
     }
 
+    /// <summary>
+    /// Performs the decode MessageIdOrDefault operation.
+    /// </summary>
     private static string DecodeMessageIdOrDefault(in ReadOnlySequence<byte> messageIdBytes)
     {
         string raw = Encoding.ASCII.GetString(messageIdBytes.ToArray()).Trim();
@@ -480,6 +558,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
             : raw;
     }
 
+    /// <summary>
+    /// Performs the ascii EqualsIgnoreCase operation.
+    /// </summary>
     private static bool AsciiEqualsIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> expected)
     {
         if (value.Length != expected.Length)
@@ -505,6 +586,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         return index == expected.Length;
     }
 
+    /// <summary>
+    /// Performs the ascii StartsWithIgnoreCase operation.
+    /// </summary>
     private static bool AsciiStartsWithIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> prefix)
     {
         if (value.Length < prefix.Length)
@@ -535,6 +619,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         return index == prefix.Length;
     }
 
+    /// <summary>
+    /// Performs the try GetLastByte operation.
+    /// </summary>
     private static bool TryGetLastByte(in ReadOnlySequence<byte> sequence, out byte value)
     {
         value = 0;
@@ -555,6 +642,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         return true;
     }
 
+    /// <summary>
+    /// Performs the to UpperAsciiInvariant operation.
+    /// </summary>
     private static byte ToUpperAsciiInvariant(byte value)
     {
         return value is >= (byte)'a' and <= (byte)'z'
@@ -572,6 +662,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(reader);
 
+        /// <summary>
+        /// Gets or sets the terminator Length value.
+        /// </summary>
         const int terminatorLength = 5; // "\r\n.\r\n"
         byte[] trailingWindow = new byte[terminatorLength];
         int trailingCount = 0;
@@ -694,6 +787,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the send QuitAndStopAsync operation.
+    /// </summary>
     private static async Task SendQuitAndStopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopMetrics metrics, Action onResponseWritten)
     {
         while (queueReader.TryRead(out _))
@@ -712,6 +808,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the enqueue Response operation.
+    /// </summary>
     private static void EnqueueResponse(ChannelWriter<ResponseWorkItem> writer, in ResponseWorkItem workItem)
     {
         ArgumentNullException.ThrowIfNull(writer);
@@ -731,6 +830,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         writeTask.AsTask().GetAwaiter().GetResult();
     }
 
+    /// <summary>
+    /// Performs the write Response operation.
+    /// </summary>
     private static void WriteResponse(PipeWriter writer, in ResponseWorkItem response)
     {
         switch (response.Kind)
@@ -749,36 +851,78 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Defines the transmit LoopControl class for benchmark or isolated-regression execution.
+    /// </summary>
     private sealed class TransmitLoopControl
     {
+        /// <summary>
+        /// Gets or sets the _quitRequested value.
+        /// </summary>
         private int _quitRequested;
 
+        /// <summary>
+        /// Performs the is QuitRequested operation.
+        /// </summary>
         internal bool IsQuitRequested => Volatile.Read(ref _quitRequested) == 1;
 
+        /// <summary>
+        /// Performs the request Quit operation.
+        /// </summary>
         internal void RequestQuit()
         {
             Interlocked.Exchange(ref _quitRequested, 1);
         }
     }
 
+    /// <summary>
+    /// Defines the transmit LoopMetrics class for benchmark or isolated-regression execution.
+    /// </summary>
     private sealed class TransmitLoopMetrics
     {
+        /// <summary>
+        /// Gets or sets the _flushCount value.
+        /// </summary>
         private long _flushCount;
+        /// <summary>
+        /// Gets or sets the _totalResponsesSent value.
+        /// </summary>
         private long _totalResponsesSent;
+        /// <summary>
+        /// Gets or sets the _maxResponsesPerFlush value.
+        /// </summary>
         private int _maxResponsesPerFlush;
 
+        /// <summary>
+        /// Gets or sets the iterations value.
+        /// </summary>
         internal long Iterations { get; set; }
 
+        /// <summary>
+        /// Performs the flush Count operation.
+        /// </summary>
         internal long FlushCount => Interlocked.Read(ref _flushCount);
 
+        /// <summary>
+        /// Performs the total ResponsesSent operation.
+        /// </summary>
         internal long TotalResponsesSent => Interlocked.Read(ref _totalResponsesSent);
 
+        /// <summary>
+        /// Performs the max ResponsesPerFlush operation.
+        /// </summary>
         internal int MaxResponsesPerFlush => Volatile.Read(ref _maxResponsesPerFlush);
 
+        /// <summary>
+        /// Gets or sets the average ResponsesPerFlush value.
+        /// </summary>
         internal double AverageResponsesPerFlush => FlushCount == 0
             ? 0d
             : (double)TotalResponsesSent / FlushCount;
 
+        /// <summary>
+        /// Performs the record Flush operation.
+        /// </summary>
         internal void RecordFlush(int responsesInFlush)
         {
             Interlocked.Increment(ref _flushCount);
@@ -800,12 +944,18 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Defines the expected Command enum for benchmark or isolated-regression execution.
+    /// </summary>
     private enum ExpectedCommand
     {
         Capabilities,
         ModeStream,
     }
 
+    /// <summary>
+    /// Defines the command Kind enum for benchmark or isolated-regression execution.
+    /// </summary>
     private enum CommandKind
     {
         Unknown,
@@ -816,8 +966,14 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         Quit,
     }
 
+    /// <summary>
+    /// Defines the parsed Command record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct ParsedCommand(CommandKind Kind, string MessageId);
 
+    /// <summary>
+    /// Defines the response Kind enum for benchmark or isolated-regression execution.
+    /// </summary>
     private enum ResponseKind
     {
         TakethisAccepted,
@@ -825,12 +981,24 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         UnknownCommand,
     }
 
+    /// <summary>
+    /// Defines the response WorkItem record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct ResponseWorkItem(ResponseKind Kind, string MessageId)
     {
+        /// <summary>
+        /// Performs the takethis operation.
+        /// </summary>
         public static ResponseWorkItem Takethis(string messageId) => new(ResponseKind.TakethisAccepted, messageId);
 
+        /// <summary>
+        /// Performs the check operation.
+        /// </summary>
         public static ResponseWorkItem Check(string messageId) => new(ResponseKind.CheckSend, messageId);
 
+        /// <summary>
+        /// Performs the unknown operation.
+        /// </summary>
         public static ResponseWorkItem Unknown() => new(ResponseKind.UnknownCommand, string.Empty);
     }
 
@@ -843,7 +1011,13 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(messageId);
 
+        /// <summary>
+        /// Gets or sets the response Prefix value.
+        /// </summary>
         const string responsePrefix = "238 ";
+        /// <summary>
+        /// Gets or sets the response Suffix value.
+        /// </summary>
         const string responseSuffix = " send article to be transferred\r\n";
 
         int maxBytes = responsePrefix.Length + messageId.Length + responseSuffix.Length;
@@ -864,7 +1038,13 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(messageId);
 
+        /// <summary>
+        /// Gets or sets the response Prefix value.
+        /// </summary>
         const string responsePrefix = "239 ";
+        /// <summary>
+        /// Gets or sets the response Suffix value.
+        /// </summary>
         const string responseSuffix = " Article transferred OK\r\n";
 
         int maxBytes = responsePrefix.Length + messageId.Length + responseSuffix.Length;
@@ -917,6 +1097,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the describe SocketState operation.
+    /// </summary>
     private static string DescribeSocketState(TcpClient client)
     {
         ArgumentNullException.ThrowIfNull(client);

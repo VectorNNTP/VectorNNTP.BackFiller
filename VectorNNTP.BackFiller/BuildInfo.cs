@@ -1,3 +1,9 @@
+// <copyright file="BuildInfo.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: build info in the vector nntp.back filler subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // BuildInfo.cs — Application version and runtime metadata.
 //
 // Contains immutable identity details for the current executable plus runtime
@@ -34,6 +40,9 @@ namespace VectorNNTP.Backfiller
         /// </summary>
         private const string UnknownValue = "unknown";
 
+        /// <summary>
+        /// Tracks metadata token separators for build info.
+        /// </summary>
         private static readonly char[] MetadataTokenSeparators = ['.', '-', '_'];
 
         /// <summary>

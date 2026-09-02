@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleAcquisitionBenchmarks.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks / Articles / Acquisition
@@ -25,6 +25,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [SimpleJob(launchCount: 1, warmupCount: 2, iterationCount: 8)]
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
+    /// <summary>
+    /// Defines the nntp ArticleAcquisitionBenchmarks class for benchmark or isolated-regression execution.
+    /// </summary>
     public class NntpArticleAcquisitionBenchmarks
     {
         /// <summary>
@@ -106,6 +109,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Builds deterministic fixtures, starts loopback fake servers, and establishes reusable authenticated sessions.
         /// </summary>
         [GlobalSetup]
+        /// <summary>
+        /// Performs the setup Async operation.
+        /// </summary>
         public async Task SetupAsync()
         {
             byte[] smallArticle = BuildArticleBytes("<bench-small@test>", BuildRepeatedTextLine("small", 16));
@@ -132,6 +138,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Stops reusable sessions and loopback servers.
         /// </summary>
         [GlobalCleanup]
+        /// <summary>
+        /// Performs the cleanup Async operation.
+        /// </summary>
         public async Task CleanupAsync()
         {
             if (_smallSession is not null)
@@ -164,6 +173,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Total bytes downloaded across the measured article operations.</returns>
         [Benchmark(Baseline = true)]
         [BenchmarkCategory("SteadyStateArticle")]
+        /// <summary>
+        /// Performs the steady StateSmallArticleAsync operation.
+        /// </summary>
         public Task<int> SteadyStateSmallArticleAsync()
         {
             return RunSteadyStateArticleLoopAsync(_smallSession, "<bench-small@test>");
@@ -175,6 +187,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Total bytes downloaded across the measured article operations.</returns>
         [Benchmark]
         [BenchmarkCategory("SteadyStateArticle")]
+        /// <summary>
+        /// Performs the steady StateTypicalArticleAsync operation.
+        /// </summary>
         public Task<int> SteadyStateTypicalArticleAsync()
         {
             return RunSteadyStateArticleLoopAsync(_typicalSession, "<bench-typical@test>");
@@ -186,6 +201,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Total bytes downloaded across the measured article operations.</returns>
         [Benchmark]
         [BenchmarkCategory("SteadyStateArticle")]
+        /// <summary>
+        /// Performs the steady StateLargey EncArticleAsync operation.
+        /// </summary>
         public Task<int> SteadyStateLargeYEncArticleAsync()
         {
             return RunSteadyStateArticleLoopAsync(_largeYEncSession, "<bench-yenc@test>");
@@ -195,6 +213,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Gets configured ARTICLE operations per measured iteration.
         /// </summary>
         [BenchmarkCategory("Metadata")]
+        /// <summary>
+        /// Performs the article OperationsPerMeasuredIteration operation.
+        /// </summary>
         public int ArticleOperationsPerMeasuredIteration()
         {
             return ArticleOperationsPerIteration;
@@ -204,6 +225,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Gets configured small article transfer size for throughput calculations.
         /// </summary>
         [BenchmarkCategory("Metadata")]
+        /// <summary>
+        /// Performs the small ArticleBytes operation.
+        /// </summary>
         public int SmallArticleBytes()
         {
             return _smallArticleBytes;
@@ -213,6 +237,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Gets configured typical article transfer size for throughput calculations.
         /// </summary>
         [BenchmarkCategory("Metadata")]
+        /// <summary>
+        /// Performs the typical ArticleBytes operation.
+        /// </summary>
         public int TypicalArticleBytes()
         {
             return _typicalArticleBytes;
@@ -222,6 +249,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Gets configured large article transfer size for throughput calculations.
         /// </summary>
         [BenchmarkCategory("Metadata")]
+        /// <summary>
+        /// Performs the large ArticleBytes operation.
+        /// </summary>
         public int LargeArticleBytes()
         {
             return _largeArticleBytes;
@@ -231,6 +261,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Gets configured large yEnc article transfer size for throughput calculations.
         /// </summary>
         [BenchmarkCategory("Metadata")]
+        /// <summary>
+        /// Performs the large y EncArticleBytes operation.
+        /// </summary>
         public int LargeYEncArticleBytes()
         {
             return _largeYEncArticleBytes;

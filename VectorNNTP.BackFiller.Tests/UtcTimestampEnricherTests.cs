@@ -1,9 +1,9 @@
 // <copyright file="UtcTimestampEnricherTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Startup / Logging
-// Unit tests that verify UTC timestamp enrichment contracts used by Serilog sink templates.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for utc timestamp enricher, covering the covered test contracts.
 
 using Serilog.Core;
 using Serilog.Events;

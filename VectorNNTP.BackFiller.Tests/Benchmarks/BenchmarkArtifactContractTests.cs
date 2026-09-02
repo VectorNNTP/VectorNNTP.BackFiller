@@ -1,11 +1,9 @@
 // <copyright file="BenchmarkArtifactContractTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for benchmark artifact contract, covering benchmark measurement and runtime identity contracts.
 
 using System.Text.Json;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -13,8 +11,14 @@ using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
+    /// <summary>
+    /// Covers benchmark artifact contract behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class BenchmarkArtifactContractTests
     {
+        /// <summary>
+        /// Exercises benchmark result artifact  from  maps core benchmark and config values without reinterpretation behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void BenchmarkResultArtifact_From_MapsCoreBenchmarkAndConfigValuesWithoutReinterpretation()
         {
@@ -87,7 +91,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Assert.Equal(8 * (result.AverageCpuPercent / 100d), artifact.EquivalentBusyCores);
         }
-
+        /// <summary>
+        /// Exercises json artifact writer  serialize  contains expected contract shape and property names behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void JsonArtifactWriter_Serialize_ContainsExpectedContractShapeAndPropertyNames()
         {
@@ -146,7 +152,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(root.TryGetProperty("ObservabilityNotes", out _));
             Assert.True(root.TryGetProperty("FixedCountBoundaryTelemetry", out _));
         }
-
+        /// <summary>
+        /// Exercises benchmark result artifact  to csv  preserves header order escaping and newline contract behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void BenchmarkResultArtifact_ToCsv_PreservesHeaderOrderEscapingAndNewlineContract()
         {

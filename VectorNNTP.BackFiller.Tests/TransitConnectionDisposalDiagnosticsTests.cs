@@ -1,11 +1,9 @@
 // <copyright file="TransitConnectionDisposalDiagnosticsTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit connection disposal diagnostics, covering NNTP article and transport behavior.
 
 using System.Net.Sockets;
 using System.Reflection;
@@ -20,6 +18,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class TransitConnectionDisposalDiagnosticsTests
     {
+        /// <summary>
+        /// Exercises dispose async  when transport artifact dispose throws  propagates exception without leaking sensitive host behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData("read-stream", "object-disposed")]
         [InlineData("write-stream", "io")]
@@ -55,7 +56,9 @@ namespace VectorNNTP.Backfiller.Tests
                 entry.Message + string.Join('|', entry.StateValues.Values.Select(static value => value?.ToString() ?? string.Empty))));
             Assert.DoesNotContain("superSecretPassword", rendered, StringComparison.OrdinalIgnoreCase);
         }
-
+        /// <summary>
+        /// Exercises dispose async  when transport artifacts dispose normally  clears fields without diagnostic failures behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenTransportArtifactsDisposeNormally_ClearsFieldsWithoutDiagnosticFailures()
         {
@@ -88,6 +91,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
         }
 
+        /// <summary>
+        /// Exercises set transport artifact behavior, including the expected result and failure semantics.
+        /// </summary>
         private static void SetTransportArtifact(TransitConnection connection, string artifactName, Stream stream)
         {
             string fieldName = artifactName switch
@@ -110,82 +116,160 @@ namespace VectorNNTP.Backfiller.Tests
             return field.GetValue(connection) as T;
         }
 
+        /// <summary>
+        /// Covers throwing dispose stream behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class ThrowingDisposeStream(Exception disposeException) : Stream
         {
+            /// <summary>
+            /// Supplies  dispose exception for the fixture or scenario under test.
+            /// </summary>
             private readonly Exception _disposeException = disposeException;
 
+            /// <summary>
+            /// Supplies can read for the fixture or scenario under test.
+            /// </summary>
             public override bool CanRead => false;
+            /// <summary>
+            /// Supplies can seek for the fixture or scenario under test.
+            /// </summary>
             public override bool CanSeek => false;
+            /// <summary>
+            /// Supplies can write for the fixture or scenario under test.
+            /// </summary>
             public override bool CanWrite => false;
+            /// <summary>
+            /// Supplies length for the fixture or scenario under test.
+            /// </summary>
             public override long Length => 0;
+            /// <summary>
+            /// Exercises position behavior, including the expected result and failure semantics.
+            /// </summary>
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
+            /// <summary>
+            /// Exercises flush behavior, including the expected result and failure semantics.
+            /// </summary>
             public override void Flush()
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises read behavior, including the expected result and failure semantics.
+            /// </summary>
             public override int Read(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises seek behavior, including the expected result and failure semantics.
+            /// </summary>
             public override long Seek(long offset, SeekOrigin origin)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises set length behavior, including the expected result and failure semantics.
+            /// </summary>
             public override void SetLength(long value)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises write behavior, including the expected result and failure semantics.
+            /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises dispose behavior, including the expected result and failure semantics.
+            /// </summary>
             protected override void Dispose(bool disposing)
             {
                 throw _disposeException;
             }
         }
 
+        /// <summary>
+        /// Covers tracking dispose stream behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class TrackingDisposeStream : Stream
         {
+            /// <summary>
+            /// Supplies dispose count for the fixture or scenario under test.
+            /// </summary>
             internal int DisposeCount { get; private set; }
 
+            /// <summary>
+            /// Supplies can read for the fixture or scenario under test.
+            /// </summary>
             public override bool CanRead => false;
+            /// <summary>
+            /// Supplies can seek for the fixture or scenario under test.
+            /// </summary>
             public override bool CanSeek => false;
+            /// <summary>
+            /// Supplies can write for the fixture or scenario under test.
+            /// </summary>
             public override bool CanWrite => false;
+            /// <summary>
+            /// Supplies length for the fixture or scenario under test.
+            /// </summary>
             public override long Length => 0;
+            /// <summary>
+            /// Exercises position behavior, including the expected result and failure semantics.
+            /// </summary>
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
+            /// <summary>
+            /// Exercises flush behavior, including the expected result and failure semantics.
+            /// </summary>
             public override void Flush()
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises read behavior, including the expected result and failure semantics.
+            /// </summary>
             public override int Read(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises seek behavior, including the expected result and failure semantics.
+            /// </summary>
             public override long Seek(long offset, SeekOrigin origin)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises set length behavior, including the expected result and failure semantics.
+            /// </summary>
             public override void SetLength(long value)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises write behavior, including the expected result and failure semantics.
+            /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Exercises dispose behavior, including the expected result and failure semantics.
+            /// </summary>
             protected override void Dispose(bool disposing)
             {
                 DisposeCount++;
@@ -193,10 +277,19 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Covers capturing logger provider behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class CapturingLoggerProvider
         {
+            /// <summary>
+            /// Exercises  gate behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly object _gate = new();
 
+            /// <summary>
+            /// Supplies entries for the fixture or scenario under test.
+            /// </summary>
             internal List<LogEntry> Entries { get; } = [];
 
             internal ILogger<T> CreateLogger<T>()
@@ -204,11 +297,23 @@ namespace VectorNNTP.Backfiller.Tests
                 return new CapturingLogger<T>(Entries, _gate);
             }
 
+            /// <summary>
+            /// Covers log entry behavior and invariants exercised by this test suite.
+            /// </summary>
             internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
 
+            /// <summary>
+            /// Covers capturing logger behavior and invariants exercised by this test suite.
+            /// </summary>
             private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
             {
+                /// <summary>
+                /// Supplies  entries for the fixture or scenario under test.
+                /// </summary>
                 private readonly List<LogEntry> _entries = entries;
+                /// <summary>
+                /// Supplies  gate for the fixture or scenario under test.
+                /// </summary>
                 private readonly object _gate = gate;
 
                 public IDisposable BeginScope<TState>(TState state) where TState : notnull
@@ -216,6 +321,9 @@ namespace VectorNNTP.Backfiller.Tests
                     return NullScope.Instance;
                 }
 
+                /// <summary>
+                /// Exercises is enabled behavior, including the expected result and failure semantics.
+                /// </summary>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -239,10 +347,19 @@ namespace VectorNNTP.Backfiller.Tests
                     }
                 }
 
+                /// <summary>
+                /// Covers null scope behavior and invariants exercised by this test suite.
+                /// </summary>
                 private sealed class NullScope : IDisposable
                 {
+                    /// <summary>
+                    /// Exercises instance behavior, including the expected result and failure semantics.
+                    /// </summary>
                     internal static readonly NullScope Instance = new();
 
+                    /// <summary>
+                    /// Exercises dispose behavior, including the expected result and failure semantics.
+                    /// </summary>
                     public void Dispose()
                     {
                     }

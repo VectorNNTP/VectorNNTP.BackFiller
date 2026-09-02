@@ -1,10 +1,22 @@
+// <copyright file="BenchmarkResultFactory.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/BenchmarkResultFactory: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the benchmark ResultFactory class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class BenchmarkResultFactory
 {
+    /// <summary>
+    /// Performs the create operation.
+    /// </summary>
     internal static BenchmarkResult Create(
         TransitBenchmarkConfig config,
         RuntimeExecutionIdentity runtimeIdentity,

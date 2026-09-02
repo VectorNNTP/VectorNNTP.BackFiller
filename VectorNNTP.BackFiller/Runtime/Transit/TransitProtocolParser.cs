@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit protocol parser behavior.
 
 using System.Buffers;
 using System.Globalization;
@@ -18,15 +17,27 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal static class TransitProtocolParser
     {
+        /// <summary>
+        /// Tracks capabilities response code for transit protocol parser.
+        /// </summary>
         private const int CapabilitiesResponseCode = 101;
+        /// <summary>
+        /// Limits maximum nntp line length bytes for transit protocol parser.
+        /// </summary>
         private const int MaximumNntpLineLengthBytes = 16 * 1024;
 
+        /// <summary>
+        /// Coordinates read nntp line async for transit protocol parser.
+        /// </summary>
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
             return completedWithoutLine ? throw new InvalidOperationException("NNTP connection closed while awaiting line response.") : line!;
         }
 
+        /// <summary>
+        /// Coordinates read nntp line with byte count async for transit protocol parser.
+        /// </summary>
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -80,6 +91,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Coordinates static for transit protocol parser.
+        /// </summary>
         internal static (int Code, string ResponseText, string[] Tokens) ParseStatusLine(string line)
         {
             (int code, string responseText) = ParseStatusCodeAndText(line);
@@ -90,6 +104,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return (code, responseText, tokens);
         }
 
+        /// <summary>
+        /// Coordinates static for transit protocol parser.
+        /// </summary>
         internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -112,6 +129,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return (code, responseText);
         }
 
+        /// <summary>
+        /// Coordinates validate greeting for transit protocol parser.
+        /// </summary>
         internal static void ValidateGreeting(string greetingLine)
         {
             (int code, _, _) = ParseStatusLine(greetingLine);
@@ -124,6 +144,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             throw new InvalidOperationException($"Unexpected NNTP greeting response code: {code}.");
         }
 
+        /// <summary>
+        /// Coordinates parse capabilities response for transit protocol parser.
+        /// </summary>
         internal static TransitCapabilitySnapshot ParseCapabilitiesResponse(IReadOnlyList<string> responseLines)
         {
             ArgumentNullException.ThrowIfNull(responseLines);
@@ -179,6 +202,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 SupportsStreaming: supportsStreaming);
         }
 
+        /// <summary>
+        /// Coordinates decode line for transit protocol parser.
+        /// </summary>
         private static string DecodeLine(ReadOnlySequence<byte> line)
         {
             if (line.IsSingleSegment)

@@ -26,9 +26,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </remarks>
     internal sealed class RabbitMqArticleWorkRequestParser : IRabbitMqArticleWorkRequestParser
     {
+        /// <summary>
+        /// Tracks supported version for rabbit mq article work request parser.
+        /// </summary>
         private const int SupportedVersion = 1;
 
+        /// <summary>
+        /// Provides logging for rabbit mq article work request parser.
+        /// </summary>
         private readonly ILogger<RabbitMqArticleWorkRequestParser> _logger;
+        /// <summary>
+        /// Tracks diagnostic correlation id for rabbit mq article work request parser.
+        /// </summary>
         private readonly string? _diagnosticCorrelationId;
 
         /// <summary>
@@ -158,6 +167,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Coordinates should log diagnostic payload for rabbit mq article work request parser.
+        /// </summary>
         private bool ShouldLogDiagnosticPayload(string? correlationId)
         {
             return !string.IsNullOrWhiteSpace(_diagnosticCorrelationId)
@@ -165,6 +177,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 && string.Equals(_diagnosticCorrelationId, correlationId, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Coordinates log payload diagnostic at parser entry for rabbit mq article work request parser.
+        /// </summary>
         private static void LogPayloadDiagnosticAtParserEntry(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -193,6 +208,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 payloadSha256);
         }
 
+        /// <summary>
+        /// Coordinates log payload diagnostic json exception for rabbit mq article work request parser.
+        /// </summary>
         private static void LogPayloadDiagnosticJsonException(
             ILogger logger,
             string? correlationId,
@@ -212,6 +230,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 bytePositionInLine);
         }
 
+        /// <summary>
+        /// Coordinates failed for rabbit mq article work request parser.
+        /// </summary>
         private RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
         {
             string payloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
@@ -245,6 +266,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             return new RabbitMqArticleWorkParseResult(Request: null, Failure: result);
         }
 
+        /// <summary>
+        /// Coordinates try read required int32 for rabbit mq article work request parser.
+        /// </summary>
         private static bool TryReadRequiredInt32(JsonElement root, string propertyName, out int value)
         {
             value = default;
@@ -256,6 +280,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             return property.TryGetInt32(out value);
         }
 
+        /// <summary>
+        /// Coordinates try read required guid for rabbit mq article work request parser.
+        /// </summary>
         private static bool TryReadRequiredGuid(JsonElement root, string propertyName, out Guid value)
         {
             value = Guid.Empty;
@@ -267,6 +294,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             return Guid.TryParse(textValue, out value);
         }
 
+        /// <summary>
+        /// Coordinates try read required string for rabbit mq article work request parser.
+        /// </summary>
         private static bool TryReadRequiredString(JsonElement root, string propertyName, out string? value)
         {
             value = null;

@@ -1,11 +1,9 @@
 // <copyright file="ControlPlaneServiceTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for control plane service, covering service lifecycle and shutdown contracts.
 
 using System.Net;
 using System.Net.Security;
@@ -464,7 +462,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, service.GetManagedAccountActiveSessionCount(accountId));
             await service.StopAsync(CancellationToken.None);
         }
-
+        /// <summary>
+        /// Exercises refresh and reconcile once async  when keep alive changes  does not reconnect or reauthenticate behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenKeepAliveChanges_DoesNotReconnectOrReauthenticate()
         {
@@ -735,7 +735,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await service.StopAsync(CancellationToken.None);
         }
-
+        /// <summary>
+        /// Exercises start async  publishes authoritative backbone capacity snapshot behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task StartAsync_PublishesAuthoritativeBackboneCapacitySnapshot()
         {
@@ -768,7 +770,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await service.StopAsync(CancellationToken.None);
         }
-
+        /// <summary>
+        /// Exercises refresh and reconcile once async  when capacity drops to zero  publishes zero backbone capacity snapshot behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenCapacityDropsToZero_PublishesZeroBackboneCapacitySnapshot()
         {
@@ -806,12 +810,24 @@ namespace VectorNNTP.Backfiller.Tests
             await service.StopAsync(CancellationToken.None);
         }
 
+        /// <summary>
+        /// Covers rabbit mq retirement call behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed record RabbitMqRetirementCall(Guid AccountId, int RetainConnectionCount);
 
+        /// <summary>
+        /// Covers tracking rabbit mq capacity retirement coordinator behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class TrackingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
         {
+            /// <summary>
+            /// Supplies calls for the fixture or scenario under test.
+            /// </summary>
             internal List<RabbitMqRetirementCall> Calls { get; } = [];
 
+            /// <summary>
+            /// Exercises retire capacity async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -820,11 +836,23 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Covers blocking rabbit mq capacity retirement coordinator behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class BlockingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
         {
+            /// <summary>
+            /// Exercises  release behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            /// <summary>
+            /// Exercises called behavior, including the expected result and failure semantics.
+            /// </summary>
             internal TaskCompletionSource<bool> Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+            /// <summary>
+            /// Exercises retire capacity async behavior, including the expected result and failure semantics.
+            /// </summary>
             public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -832,15 +860,27 @@ namespace VectorNNTP.Backfiller.Tests
                 await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            /// <summary>
+            /// Exercises release behavior, including the expected result and failure semantics.
+            /// </summary>
             internal void Release()
             {
                 _ = _release.TrySetResult(true);
             }
         }
 
+        /// <summary>
+        /// Covers recording backbone usable capacity state writer behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class RecordingBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
+            /// <summary>
+            /// Exercises  gate behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly object _gate = new();
+            /// <summary>
+            /// Supplies  snapshots for the fixture or scenario under test.
+            /// </summary>
             private readonly List<Dictionary<string, int>> _snapshots = [];
 
             internal IReadOnlyList<IReadOnlyDictionary<string, int>> Snapshots
@@ -854,6 +894,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises publish snapshot behavior, including the expected result and failure semantics.
+            /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);
@@ -865,6 +908,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises get latest capacity behavior, including the expected result and failure semantics.
+            /// </summary>
             internal int GetLatestCapacity(string backbone)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -891,6 +937,9 @@ namespace VectorNNTP.Backfiller.Tests
         {
             ArgumentNullException.ThrowIfNull(condition);
 
+            /// <summary>
+            /// Supplies max attempts for the fixture or scenario under test.
+            /// </summary>
             const int MaxAttempts = 40;
             for (int attempt = 0; attempt < MaxAttempts; attempt++)
             {
@@ -1008,7 +1057,13 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             private sealed class CapturingLogger(List<CapturedLogEntry> entries, object gate) : ILogger
             {
+                /// <summary>
+                /// Supplies  entries for the fixture or scenario under test.
+                /// </summary>
                 private readonly List<CapturedLogEntry> _entries = entries;
+                /// <summary>
+                /// Supplies  gate for the fixture or scenario under test.
+                /// </summary>
                 private readonly object _gate = gate;
 
                 /// <summary>
@@ -1058,6 +1113,9 @@ namespace VectorNNTP.Backfiller.Tests
             /// <typeparam name="T">Category type.</typeparam>
             private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries, object gate) : ILogger<T>
             {
+                /// <summary>
+                /// Exercises  inner behavior, including the expected result and failure semantics.
+                /// </summary>
                 private readonly CapturingLogger _inner = new(entries, gate);
 
                 /// <summary>
@@ -1116,6 +1174,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Covers fake nntp server behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FakeNntpServer : IAsyncDisposable
         {
             /// <summary>

@@ -1,12 +1,36 @@
+// <copyright file="ByteBudget.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/ByteBudget: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the byte Budget class for benchmark or isolated-regression execution.
+/// </summary>
 internal sealed class ByteBudget : IDisposable
 {
+    /// <summary>
+    /// Performs the _gate operation.
+    /// </summary>
     private readonly object _gate = new();
+    /// <summary>
+    /// Performs the _waiters operation.
+    /// </summary>
     private readonly Queue<BudgetWaiter> _waiters = new();
+    /// <summary>
+    /// Gets or sets the _availableBytes value.
+    /// </summary>
     private long _availableBytes;
+    /// <summary>
+    /// Gets or sets the _disposed value.
+    /// </summary>
     private bool _disposed;
 
+    /// <summary>
+    /// Performs the byte Budget operation.
+    /// </summary>
     internal ByteBudget(long maxBytes)
     {
         if (maxBytes <= 0)
@@ -17,6 +41,9 @@ internal sealed class ByteBudget : IDisposable
         _availableBytes = maxBytes;
     }
 
+    /// <summary>
+    /// Performs the acquire Async operation.
+    /// </summary>
     internal ValueTask AcquireAsync(int bytes, CancellationToken cancellationToken)
     {
         if (bytes <= 0)
@@ -46,6 +73,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the release operation.
+    /// </summary>
     internal void Release(int bytes)
     {
         if (bytes <= 0)
@@ -96,6 +126,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the cancel Waiter operation.
+    /// </summary>
     private void CancelWaiter(BudgetWaiter waiter)
     {
         lock (_gate)
@@ -104,6 +137,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the throw IfDisposed operation.
+    /// </summary>
     private void ThrowIfDisposed()
     {
         if (_disposed)
@@ -112,6 +148,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Performs the dispose operation.
+    /// </summary>
     public void Dispose()
     {
         List<BudgetWaiter>? waitersToCancel = null;
@@ -143,21 +182,45 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Defines the budget Waiter class for benchmark or isolated-regression execution.
+    /// </summary>
     private sealed class BudgetWaiter
     {
+        /// <summary>
+        /// Gets or sets the _completion value.
+        /// </summary>
         private readonly TaskCompletionSource _completion;
+        /// <summary>
+        /// Gets or sets the _registration value.
+        /// </summary>
         private CancellationTokenRegistration _registration;
 
+        /// <summary>
+        /// Performs the budget Waiter operation.
+        /// </summary>
         internal BudgetWaiter(int requestedBytes)
         {
             RequestedBytes = requestedBytes;
             _completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
+        /// <summary>
+        /// Gets or sets the requested Bytes value.
+        /// </summary>
         internal int RequestedBytes { get; }
+        /// <summary>
+        /// Gets or sets the task value.
+        /// </summary>
         internal Task Task => _completion.Task;
+        /// <summary>
+        /// Gets or sets the is Canceled value.
+        /// </summary>
         internal bool IsCanceled { get; private set; }
 
+        /// <summary>
+        /// Performs the register Cancellation operation.
+        /// </summary>
         internal void RegisterCancellation(CancellationToken cancellationToken, ByteBudget budget)
         {
             _registration = cancellationToken.Register(static state =>
@@ -168,17 +231,26 @@ internal sealed class ByteBudget : IDisposable
             }, new CancellationState(budget, this));
         }
 
+        /// <summary>
+        /// Performs the mark Canceled operation.
+        /// </summary>
         internal void MarkCanceled()
         {
             IsCanceled = true;
         }
 
+        /// <summary>
+        /// Performs the try SetAcquired operation.
+        /// </summary>
         internal void TrySetAcquired()
         {
             _registration.Dispose();
             _completion.TrySetResult();
         }
 
+        /// <summary>
+        /// Performs the try SetCanceled operation.
+        /// </summary>
         internal void TrySetCanceled()
         {
             IsCanceled = true;
@@ -186,6 +258,9 @@ internal sealed class ByteBudget : IDisposable
             _completion.TrySetCanceled();
         }
 
+        /// <summary>
+        /// Defines the cancellation State record struct for benchmark or isolated-regression execution.
+        /// </summary>
         private readonly record struct CancellationState(ByteBudget Budget, BudgetWaiter Waiter);
     }
 }

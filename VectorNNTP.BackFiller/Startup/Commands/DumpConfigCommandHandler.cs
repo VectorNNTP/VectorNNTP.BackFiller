@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Commands
+// Implements the dump config command handler behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
@@ -13,12 +12,18 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     /// </summary>
     internal static class DumpConfigCommandHandler
     {
+        /// <summary>
+        /// Tracks dump config included section prefixes for dump config command handler.
+        /// </summary>
         private static readonly string[] DumpConfigIncludedSectionPrefixes =
         [
             "BackFiller",
             "ConnectionStrings"
         ];
 
+        /// <summary>
+        /// Tracks dump config clear text keys for dump config command handler.
+        /// </summary>
         private static readonly HashSet<string> DumpConfigClearTextKeys = new(StringComparer.OrdinalIgnoreCase)
         {
             "BackFiller:Name",

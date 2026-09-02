@@ -242,6 +242,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Coordinates certificate contains dns name for back filler certificate store.
+        /// </summary>
         private static bool CertificateContainsDnsName(X509Certificate2 certificate, string expectedDnsName)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -285,6 +288,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return false;
         }
 
+        /// <summary>
+        /// Coordinates has server authentication usage for back filler certificate store.
+        /// </summary>
         private static bool HasServerAuthenticationUsage(X509Certificate2 certificate)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -300,6 +306,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 .Any(oid => string.Equals(oid.Value, ServerAuthenticationOid, StringComparison.Ordinal));
         }
 
+        /// <summary>
+        /// Coordinates build certificate chain for back filler certificate store.
+        /// </summary>
         private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -339,6 +348,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return false;
         }
 
+        /// <summary>
+        /// Coordinates build pfx bundle for back filler certificate store.
+        /// </summary>
         private static byte[] BuildPfxBundle(AcmeOrderIssueResult issueResult, string pfxPassword)
         {
             ArgumentNullException.ThrowIfNull(issueResult);
@@ -378,6 +390,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Coordinates import certificate private key for back filler certificate store.
+        /// </summary>
         private static AsymmetricAlgorithm ImportCertificatePrivateKey(string pem)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pem);
@@ -405,6 +420,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             throw new InvalidOperationException("Certificate private key PEM is not a supported RSA/ECDSA key.");
         }
 
+        /// <summary>
+        /// Coordinates write file atomically async for back filler certificate store.
+        /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -415,6 +433,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             await WriteFileAtomicallyAsync(tempPath, targetPath, payload, cancellationToken, logger).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Coordinates write file atomically async for back filler certificate store.
+        /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -468,6 +489,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Coordinates try delete temp file for back filler certificate store.
+        /// </summary>
         private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {
             if (string.IsNullOrWhiteSpace(tempPath))

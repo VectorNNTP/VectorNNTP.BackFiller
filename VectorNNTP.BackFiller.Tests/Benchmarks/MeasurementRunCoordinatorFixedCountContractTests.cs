@@ -1,11 +1,9 @@
 // <copyright file="MeasurementRunCoordinatorFixedCountContractTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for measurement run coordinator fixed count contract, covering benchmark measurement and runtime identity contracts.
 
 using Xunit;
 
@@ -81,6 +79,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             return ReadBenchmarkSource("Execution", "MeasurementExecutionEngine.Drain.cs");
         }
 
+        /// <summary>
+        /// Exercises read benchmark source behavior, including the expected result and failure semantics.
+        /// </summary>
         private static string ReadBenchmarkSource(params string[] pathSegments)
         {
             string repoRoot = ResolveRepositoryRoot();
@@ -89,6 +90,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             return File.ReadAllText(path);
         }
 
+        /// <summary>
+        /// Exercises resolve repository root behavior, including the expected result and failure semantics.
+        /// </summary>
         private static string ResolveRepositoryRoot()
         {
             foreach (string startPath in EnumerateRootCandidates())
@@ -107,6 +111,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             throw new DirectoryNotFoundException("Unable to locate repository root for benchmark source-contract tests.");
         }
 
+        /// <summary>
+        /// Exercises enumerate root candidates behavior, including the expected result and failure semantics.
+        /// </summary>
         private static IEnumerable<string> EnumerateRootCandidates()
         {
             yield return AppContext.BaseDirectory;

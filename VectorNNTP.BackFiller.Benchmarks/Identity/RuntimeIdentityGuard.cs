@@ -1,3 +1,9 @@
+// <copyright file="RuntimeIdentityGuard.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Identity/RuntimeIdentityGuard: verifies that benchmark measurements execute against the intended build identity.
+
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Security.Cryptography;
@@ -5,8 +11,14 @@ using System.Text;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the runtime IdentityGuard class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class RuntimeIdentityGuard
 {
+    /// <summary>
+    /// Performs the ensure Matches operation.
+    /// </summary>
     internal static void EnsureMatches(RuntimeIdentityExpectation expected, RuntimeExecutionIdentity runtimeIdentity)
     {
         if (string.IsNullOrWhiteSpace(expected.ExpectedAssemblyPath) ||
@@ -225,12 +237,18 @@ internal static class RuntimeIdentityGuard
         throw new InvalidOperationException(message.ToString());
     }
 
+    /// <summary>
+    /// Performs the resolve LoadedProductionAssembly operation.
+    /// </summary>
     private static Assembly? ResolveLoadedProductionAssembly()
     {
         return AssemblyLoadContext.Default.Assemblies
             .FirstOrDefault(static assembly => string.Equals(assembly.GetName().Name, "VectorNNTP.BackFiller", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Performs the resolve ActualProductionAssemblyPath operation.
+    /// </summary>
     private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
     {
         if (loadedProductionAssembly is not null && !string.IsNullOrWhiteSpace(loadedProductionAssembly.Location))
@@ -243,6 +261,9 @@ internal static class RuntimeIdentityGuard
             : Path.GetFullPath(runtimeIdentity.ProductionDependencyPath!);
     }
 
+    /// <summary>
+    /// Performs the compute Sha256 operation.
+    /// </summary>
     private static string ComputeSha256(string filePath)
     {
         using FileStream stream = File.OpenRead(filePath);
@@ -250,11 +271,17 @@ internal static class RuntimeIdentityGuard
         return Convert.ToHexString(hash);
     }
 
+    /// <summary>
+    /// Performs the is UnknownIdentityValue operation.
+    /// </summary>
     private static bool IsUnknownIdentityValue(string? value)
     {
         return string.IsNullOrWhiteSpace(value) || string.Equals(value, "(unknown)", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Performs the normalize TargetFramework operation.
+    /// </summary>
     private static string NormalizeTargetFramework(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))

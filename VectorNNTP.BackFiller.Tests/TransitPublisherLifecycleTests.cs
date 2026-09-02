@@ -1,3 +1,10 @@
+// <copyright file="TransitPublisherLifecycleTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit publisher lifecycle, covering NNTP article and transport behavior; service lifecycle and shutdown contracts.
+
 using System.Net;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,8 +16,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers transit publisher lifecycle behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class TransitPublisherLifecycleTests
     {
+        /// <summary>
+        /// Exercises dispose async  before initialize  does not throw behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_BeforeInitialize_DoesNotThrow()
         {
@@ -21,7 +34,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(exception);
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises dispose async  when partially initialized worker array contains null entries  does not throw behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenPartiallyInitializedWorkerArrayContainsNullEntries_DoesNotThrow()
         {
@@ -39,7 +54,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(exception);
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises dispose async  after initialize  does not throw behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_AfterInitialize_DoesNotThrow()
         {
@@ -51,7 +68,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(exception);
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises dispose async  when called repeatedly  does not throw behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenCalledRepeatedly_DoesNotThrow()
         {
@@ -63,7 +82,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(exception);
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when canceled before start  dispose async  does not throw behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCanceledBeforeStart_DisposeAsync_DoesNotThrow()
         {
@@ -77,7 +98,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(disposeException);
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises host startup failure  before transit initialization  dispose does not mask original exception behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task HostStartupFailure_BeforeTransitInitialization_DisposeDoesNotMaskOriginalException()
         {
@@ -97,6 +120,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Null(disposeException);
         }
 
+        /// <summary>
+        /// Exercises create publisher behavior, including the expected result and failure semantics.
+        /// </summary>
         private static TransitPublisher CreatePublisher(int port, int connectionPoolSize)
         {
             return new TransitPublisher(
@@ -107,6 +133,9 @@ namespace VectorNNTP.Backfiller.Tests
                 perConnectionPipelineDepth: 2);
         }
 
+        /// <summary>
+        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int port)
         {
             return new BackFillerRuntimeOptions(
@@ -128,13 +157,22 @@ namespace VectorNNTP.Backfiller.Tests
                 WriteBatchCoalesceMicroseconds: 250);
         }
 
+        /// <summary>
+        /// Covers failing startup hosted service behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FailingStartupHostedService : IHostedService
         {
+            /// <summary>
+            /// Exercises start async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task StartAsync(CancellationToken cancellationToken)
             {
                 throw new InvalidOperationException("Synthetic startup failure");
             }
 
+            /// <summary>
+            /// Exercises stop async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task StopAsync(CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;

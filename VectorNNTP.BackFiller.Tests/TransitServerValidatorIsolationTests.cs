@@ -1,11 +1,9 @@
 // <copyright file="TransitServerValidatorIsolationTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit server validator isolation, covering configuration and validation contracts; NNTP article and transport behavior.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -14,15 +12,26 @@ using Xunit.Abstractions;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers transit server validator isolation behavior and invariants exercised by this test suite.
+    /// </summary>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
+        /// <summary>
+        /// Supplies  out for the fixture or scenario under test.
+        /// </summary>
         private readonly ITestOutputHelper _out = output;
 
+        /// <summary>
+        /// Exercises build behavior, including the expected result and failure semantics.
+        /// </summary>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {
             return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         }
-
+        /// <summary>
+        /// Exercises transit server  use ssl missing  default false  direct and full pipeline behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline()
         {
@@ -36,7 +45,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:DirLogs"] = "logs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -76,7 +85,9 @@ namespace VectorNNTP.Backfiller.Tests
             // No error should be produced for the missing UseSsl setting; it should default to false and not be an error
             Assert.DoesNotContain(configResult.Errors, static e => e.Setting == "BackFiller:TransitServer:UseSsl");
         }
-
+        /// <summary>
+        /// Exercises transit server  use ssl true  port119 behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port119()
         {
@@ -89,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -116,7 +127,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(configResult.Warnings, static w =>
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally non-TLS", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Exercises transit server  use ssl false  port563 behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslFalse_Port563()
         {
@@ -129,7 +142,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -153,7 +166,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(configResult.Warnings, static w =>
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally TLS", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Exercises transit server  use ssl true  port563 behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port563()
         {
@@ -166,7 +181,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",

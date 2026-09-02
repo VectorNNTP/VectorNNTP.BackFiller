@@ -1,9 +1,21 @@
+// <copyright file="TopologyReporter.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Reporting/TopologyReporter: formats benchmark measurements and topology details for operators and artifacts.
+
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the topology Reporter class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class TopologyReporter
 {
+    /// <summary>
+    /// Performs the print ConnectionTopologyDiagnostics operation.
+    /// </summary>
     internal static void PrintConnectionTopologyDiagnostics(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics)
     {
         Console.WriteLine($"Configured pool size: {diagnostics.ConfiguredConnectionPoolSize}");

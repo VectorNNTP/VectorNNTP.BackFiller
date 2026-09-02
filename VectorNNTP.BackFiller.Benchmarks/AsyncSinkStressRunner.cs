@@ -1,3 +1,9 @@
+// <copyright file="AsyncSinkStressRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// AsyncSinkStressRunner: defines the benchmark entry point or scenario for controlled performance validation.
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -7,13 +13,31 @@ using Serilog.Sinks.Async;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the async SinkStressRunner class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class AsyncSinkStressRunner
 {
+    /// <summary>
+    /// Gets or sets the default BufferSize value.
+    /// </summary>
     private const int DefaultBufferSize = 10_000;
+    /// <summary>
+    /// Gets or sets the producer Counts value.
+    /// </summary>
     private static readonly int[] ProducerCounts = [1, 2, 4, 8, 16, 32];
+    /// <summary>
+    /// Gets or sets the sustained RatesPerSecond value.
+    /// </summary>
     private static readonly int[] SustainedRatesPerSecond = [1_000, 10_000, 50_000, 100_000];
+    /// <summary>
+    /// Performs the sustained Duration operation.
+    /// </summary>
     private static readonly TimeSpan SustainedDuration = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// Performs the run AllAsync operation.
+    /// </summary>
     public static async Task RunAllAsync()
     {
         Console.WriteLine("=== Async Sink Stress Runner ===");
@@ -28,6 +52,9 @@ internal static class AsyncSinkStressRunner
         await RunShutdownFlushScenarioAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Performs the run BurstMatrixAsync operation.
+    /// </summary>
     private static async Task RunBurstMatrixAsync()
     {
         Console.WriteLine();
@@ -35,6 +62,9 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("| Producers | Events/Producer | Submitted | Written | EventsLost | ProduceMs | FlushMs | TotalMs | P50us | P95us | P99us | MaxUs |");
         Console.WriteLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
+        /// <summary>
+        /// Gets or sets the events PerProducer value.
+        /// </summary>
         const int eventsPerProducer = 50_000;
 
         foreach (int producerCount in ProducerCounts)
@@ -44,6 +74,9 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Performs the run SustainedMatrixAsync operation.
+    /// </summary>
     private static async Task RunSustainedMatrixAsync()
     {
         Console.WriteLine();
@@ -61,12 +94,21 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Performs the run ShutdownFlushScenarioAsync operation.
+    /// </summary>
     private static async Task RunShutdownFlushScenarioAsync()
     {
         Console.WriteLine();
         Console.WriteLine("=== Shutdown Flush Scenario ===");
 
+        /// <summary>
+        /// Gets or sets the producer Count value.
+        /// </summary>
         const int producerCount = 8;
+        /// <summary>
+        /// Gets or sets the events PerProducer value.
+        /// </summary>
         const int eventsPerProducer = 75_000;
 
         StressScenarioResult result = await RunBurstScenarioAsync(producerCount, eventsPerProducer).ConfigureAwait(false);
@@ -79,6 +121,9 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine($"TotalMs: {result.TotalMilliseconds:F2}");
     }
 
+    /// <summary>
+    /// Performs the run BurstScenarioAsync operation.
+    /// </summary>
     private static async Task<StressScenarioResult> RunBurstScenarioAsync(int producerCount, int eventsPerProducer)
     {
         string outputDirectory = CreateTempOutputDirectory("burst");
@@ -143,6 +188,9 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Performs the run SustainedScenarioAsync operation.
+    /// </summary>
     private static async Task<StressScenarioResult> RunSustainedScenarioAsync(int producerCount, int targetRatePerSecond, TimeSpan duration)
     {
         string outputDirectory = CreateTempOutputDirectory("sustained");
@@ -219,6 +267,9 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Performs the build ProductionLikeLogger operation.
+    /// </summary>
     private static Serilog.ILogger BuildProductionLikeLogger(string outputDirectory, SequenceCountingSink countingSink)
     {
         string logFilePath = Path.Combine(outputDirectory, "stress-.log");
@@ -249,6 +300,9 @@ internal static class AsyncSinkStressRunner
             .CreateLogger();
     }
 
+    /// <summary>
+    /// Performs the build Result operation.
+    /// </summary>
     private static StressScenarioResult BuildResult(
         int producerCount,
         int? eventsPerProducer,
@@ -278,6 +332,9 @@ internal static class AsyncSinkStressRunner
             ProducerLatency: producerLatency);
     }
 
+    /// <summary>
+    /// Performs the create TempOutputDirectory operation.
+    /// </summary>
     private static string CreateTempOutputDirectory(string scenario)
     {
         string directory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Benchmarks", scenario, Guid.NewGuid().ToString("N"));
@@ -285,6 +342,9 @@ internal static class AsyncSinkStressRunner
         return directory;
     }
 
+    /// <summary>
+    /// Performs the try DeleteDirectory operation.
+    /// </summary>
     private static void TryDeleteDirectory(string path)
     {
         try
@@ -300,17 +360,32 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Performs the to Microseconds operation.
+    /// </summary>
     private static double ToMicroseconds(long ticks)
     {
         return ticks * 1_000_000.0 / Stopwatch.Frequency;
     }
 
+    /// <summary>
+    /// Defines the sequence CountingSink class for benchmark or isolated-regression execution.
+    /// </summary>
     private sealed class SequenceCountingSink : Serilog.Core.ILogEventSink
     {
+        /// <summary>
+        /// Gets or sets the _writtenCount value.
+        /// </summary>
         private long _writtenCount;
 
+        /// <summary>
+        /// Performs the written Count operation.
+        /// </summary>
         public long WrittenCount => Interlocked.Read(ref _writtenCount);
 
+        /// <summary>
+        /// Performs the emit operation.
+        /// </summary>
         public void Emit(LogEvent logEvent)
         {
             _ = logEvent;
@@ -318,8 +393,14 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Defines the percentile Set record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct PercentileSet(double P50Microseconds, double P95Microseconds, double P99Microseconds, double MaxMicroseconds)
     {
+        /// <summary>
+        /// Performs the from operation.
+        /// </summary>
         public static PercentileSet From(IEnumerable<double> values)
         {
             double[] ordered = values.OrderBy(v => v).ToArray();
@@ -335,6 +416,9 @@ internal static class AsyncSinkStressRunner
                 MaxMicroseconds: ordered[^1]);
         }
 
+        /// <summary>
+        /// Performs the percentile operation.
+        /// </summary>
         private static double Percentile(double[] ordered, double percentile)
         {
             if (ordered.Length == 0)
@@ -355,6 +439,9 @@ internal static class AsyncSinkStressRunner
         }
     }
 
+    /// <summary>
+    /// Defines the stress ScenarioResult record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct StressScenarioResult(
         int ProducerCount,
         int? EventsPerProducer,

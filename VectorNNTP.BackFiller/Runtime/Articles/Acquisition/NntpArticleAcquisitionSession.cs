@@ -151,6 +151,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     options.ConnectTimeout,
                     cancellationToken,
+                    /// <summary>
+                    /// Tracks token for nntp article acquisition session.
+                    /// </summary>
                     async token =>
                     {
                         await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
@@ -178,6 +181,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
                         cancellationToken,
+                        /// <summary>
+                        /// Tracks token for nntp article acquisition session.
+                        /// </summary>
                         async token =>
                         {
                             await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
@@ -517,6 +523,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     timeout,
                     cancellationToken,
+                    /// <summary>
+                    /// Tracks token for nntp article acquisition session.
+                    /// </summary>
                     async token =>
                     {
                         await _stream.WriteAsync(bytes, token).ConfigureAwait(false);

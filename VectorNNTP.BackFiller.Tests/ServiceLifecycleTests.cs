@@ -1,11 +1,9 @@
 // <copyright file="ServiceLifecycleTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for service lifecycle, covering service lifecycle and shutdown contracts.
 
 using Xunit;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;

@@ -16,10 +16,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class RabbitMqArticleProcessingService : BackgroundService
     {
+        /// <summary>
+        /// Tracks consumer service for rabbit mq article processing service.
+        /// </summary>
         private readonly RabbitMqConsumerService _consumerService;
+        /// <summary>
+        /// Tracks request parser for rabbit mq article processing service.
+        /// </summary>
         private readonly IRabbitMqArticleWorkRequestParser _requestParser;
+        /// <summary>
+        /// Tracks processor for rabbit mq article processing service.
+        /// </summary>
         private readonly IArticleWorkProcessor _processor;
+        /// <summary>
+        /// Tracks result sink for rabbit mq article processing service.
+        /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
+        /// <summary>
+        /// Provides logging for rabbit mq article processing service.
+        /// </summary>
         private readonly ILogger<RabbitMqArticleProcessingService> _logger;
 
         /// <summary>
@@ -88,6 +103,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Coordinates create linked token source for rabbit mq article processing service.
+        /// </summary>
         private static CancellationTokenSource? CreateLinkedTokenSource(CancellationToken hostToken, CancellationToken deliveryToken)
         {
             if (!deliveryToken.CanBeCanceled || deliveryToken == hostToken)

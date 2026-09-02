@@ -1,11 +1,9 @@
 // <copyright file="CloudflareDnsSynchronizationProbeTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for cloudflare dns synchronization probe, covering certificate and DNS dependency behavior.
 
 using System.Net;
 using CloudFlare.Client.Enumerators;
@@ -20,6 +18,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class CloudflareDnsSynchronizationProbeTests
     {
+        /// <summary>
+        /// Supplies generated fqdn for the fixture or scenario under test.
+        /// </summary>
         private const string GeneratedFqdn = "nntpbackfiller01.usenet.ninja";
 
         /// <summary>
@@ -285,7 +286,7 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 LetsEncrypt = new LetsEncryptOptions
                 {
-                    CloudFlareApiToken = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                    CloudFlareApiToken = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     CloudFlareZoneId = "5811a29d39a0732afb5f160c9b137c3d",
                 },
             };
@@ -340,7 +341,13 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         private sealed class FakeCloudflareDnsFacade : ICloudflareDnsFacade
         {
+            /// <summary>
+            /// Supplies  records for the fixture or scenario under test.
+            /// </summary>
             private readonly List<CloudflareDnsRecordInfo> _records;
+            /// <summary>
+            /// Supplies  next identifier for the fixture or scenario under test.
+            /// </summary>
             private int _nextIdentifier = 1000;
 
             /// <summary>

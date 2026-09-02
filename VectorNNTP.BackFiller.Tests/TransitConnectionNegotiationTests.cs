@@ -1,11 +1,9 @@
 // <copyright file="TransitConnectionNegotiationTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit connection negotiation, covering NNTP article and transport behavior.
 
 using System.Net;
 using System.Net.Security;
@@ -26,14 +24,22 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class TransitConnectionNegotiationTests : IClassFixture<TestTlsCertificateFixture>
     {
+        /// <summary>
+        /// Supplies  tls fixture for the fixture or scenario under test.
+        /// </summary>
         private readonly TestTlsCertificateFixture _tlsFixture;
 
+        /// <summary>
+        /// Exercises transit connection negotiation behavior, including the expected result and failure semantics.
+        /// </summary>
         public TransitConnectionNegotiationTests(TestTlsCertificateFixture tlsFixture)
         {
             ArgumentNullException.ThrowIfNull(tlsFixture);
             _tlsFixture = tlsFixture;
         }
-
+        /// <summary>
+        /// Exercises initialize async  when plain streaming capabilities  reaches ready behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenPlainStreamingCapabilities_ReachesReady()
         {
@@ -62,7 +68,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(connection.IsTlsActive);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when plain stream capability alias  reaches ready behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenPlainStreamCapabilityAlias_ReachesReady()
         {
@@ -90,10 +98,15 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
-
+        /// <summary>
+        /// Exercises dispose async  when disposed immediately after ready  does not throw from write loop startup race behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenDisposedImmediatelyAfterReady_DoesNotThrowFromWriteLoopStartupRace()
         {
+            /// <summary>
+            /// Supplies iterations for the fixture or scenario under test.
+            /// </summary>
             const int Iterations = 100;
 
             for (int iteration = 0; iteration < Iterations; iteration++)
@@ -125,7 +138,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
             }
         }
-
+        /// <summary>
+        /// Exercises initialize async  when initialization token canceled after ready  response loop continues processing behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenInitializationTokenCanceledAfterReady_ResponseLoopContinuesProcessing()
         {
@@ -187,7 +202,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotEqual(TransitConnectionState.Faulted, connection.CurrentState);
             Assert.NotEqual(TransitConnectionState.Disconnected, connection.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when start tls advertised  upgrades to tls and renegotiates capabilities behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenStartTlsAdvertised_UpgradesToTlsAndRenegotiatesCapabilities()
         {
@@ -237,7 +254,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(connection.IsTlsActive);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when streaming not advertised  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenStreamingNotAdvertised_Throws()
         {
@@ -260,7 +279,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Contains("STREAMING capability", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when capabilities response code unexpected  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCapabilitiesResponseCodeUnexpected_Throws()
         {
@@ -281,7 +302,9 @@ namespace VectorNNTP.Backfiller.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("Unexpected CAPABILITIES response code", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when mode stream rejected  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenModeStreamRejected_Throws()
         {
@@ -305,7 +328,9 @@ namespace VectorNNTP.Backfiller.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("Unexpected MODE STREAM response code", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when compress deflate advertised  does not negotiate compression behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCompressDeflateAdvertised_DoesNotNegotiateCompression()
         {
@@ -341,7 +366,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when greeting unexpected  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenGreetingUnexpected_Throws()
         {
@@ -359,7 +386,9 @@ namespace VectorNNTP.Backfiller.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("Unexpected NNTP greeting response code", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when server closes during greeting  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenServerClosesDuringGreeting_Throws()
         {
@@ -395,6 +424,9 @@ namespace VectorNNTP.Backfiller.Tests
             string diagnosticPath = Path.Combine(artifactsDirectory, "phase2-p1-greeting-test-endpoint-diag.txt");
             File.WriteAllText(diagnosticPath, diagnosticLine + Environment.NewLine);
 
+            /// <summary>
+            /// Exercises get listener local endpoint behavior, including the expected result and failure semantics.
+            /// </summary>
             static string? GetListenerLocalEndpoint(FakeNntpServer serverInstance)
             {
                 FieldInfo? listenerField = typeof(FakeNntpServer).GetField("_listener", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -402,6 +434,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return listener?.LocalEndpoint?.ToString();
             }
 
+            /// <summary>
+            /// Exercises resolve artifacts directory behavior, including the expected result and failure semantics.
+            /// </summary>
             static string ResolveArtifactsDirectory()
             {
                 DirectoryInfo? current = new(AppContext.BaseDirectory);
@@ -419,7 +454,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Path.Combine(AppContext.BaseDirectory, "artifacts");
             }
         }
-
+        /// <summary>
+        /// Exercises initialize async  when server closes during capabilities  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenServerClosesDuringCapabilities_Throws()
         {
@@ -439,7 +476,9 @@ namespace VectorNNTP.Backfiller.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("closed while awaiting line response", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when use ssl true  negotiation runs over tls behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenUseSslTrue_NegotiationRunsOverTls()
         {
@@ -479,7 +518,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(connection.IsTlsActive);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when use ssl true and compression advertised  uses tls without compression behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenUseSslTrueAndCompressionAdvertised_UsesTlsWithoutCompression()
         {
@@ -532,7 +573,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(connection.IsTlsActive);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when use ssl true and streaming not advertised  throws behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenUseSslTrueAndStreamingNotAdvertised_Throws()
         {
@@ -566,7 +609,9 @@ namespace VectorNNTP.Backfiller.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("STREAMING capability", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when start tls advertised with compression  upgrades to tls without compression behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenStartTlsAdvertisedWithCompression_UpgradesToTlsWithoutCompression()
         {
@@ -628,7 +673,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(connection.IsTlsActive);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when server closes during tls handshake  throws authentication or io exception behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenServerClosesDuringTlsHandshake_ThrowsAuthenticationOrIoException()
         {
@@ -658,7 +705,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotNull(ex);
             Assert.True(ex is AuthenticationException or IOException);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when use ssl true and server closes during tls handshake  throws authentication or io exception behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenUseSslTrueAndServerClosesDuringTlsHandshake_ThrowsAuthenticationOrIoException()
         {
@@ -679,7 +728,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotNull(ex);
             Assert.True(ex is AuthenticationException or IOException);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when compression advertised  publishes over uncompressed transport behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCompressionAdvertised_PublishesOverUncompressedTransport()
         {
@@ -715,7 +766,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when capabilities failure then retry on same instance  succeeds with fresh transport behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCapabilitiesFailureThenRetryOnSameInstance_SucceedsWithFreshTransport()
         {
@@ -760,7 +813,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(2, sessionCount);
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when mode stream rejected then retry on same instance  succeeds with fresh transport behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenModeStreamRejectedThenRetryOnSameInstance_SucceedsWithFreshTransport()
         {
@@ -808,7 +863,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(2, sessionCount);
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when only compress advertised with no streaming  throws streaming required behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenOnlyCompressAdvertisedWithNoStreaming_ThrowsStreamingRequired()
         {
@@ -829,7 +886,9 @@ namespace VectorNNTP.Backfiller.Tests
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("does not advertise STREAMING capability", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when start tls handshake fails then retry on same instance  succeeds with fresh transport behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenStartTlsHandshakeFailsThenRetryOnSameInstance_SucceedsWithFreshTransport()
         {
@@ -881,7 +940,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(2, sessionCount);
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
         }
-
+        /// <summary>
+        /// Exercises initialize async  when canceled during greeting then retry on same instance  succeeds with fresh transport behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCanceledDuringGreetingThenRetryOnSameInstance_SucceedsWithFreshTransport()
         {
@@ -942,13 +1003,31 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
 
+        /// <summary>
+        /// Covers fake nntp server behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class FakeNntpServer : IAsyncDisposable
         {
+            /// <summary>
+            /// Supplies  listener for the fixture or scenario under test.
+            /// </summary>
             private readonly TcpListener _listener;
+            /// <summary>
+            /// Supplies  sessions for the fixture or scenario under test.
+            /// </summary>
             private readonly IReadOnlyList<Func<NetworkStream, CancellationToken, Task>> _sessions;
+            /// <summary>
+            /// Exercises  cts behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly CancellationTokenSource _cts = new();
+            /// <summary>
+            /// Supplies  accept loop for the fixture or scenario under test.
+            /// </summary>
             private readonly Task _acceptLoop;
 
+            /// <summary>
+            /// Exercises fake nntp server behavior, including the expected result and failure semantics.
+            /// </summary>
             private FakeNntpServer(TcpListener listener, IReadOnlyList<Func<NetworkStream, CancellationToken, Task>> sessions)
             {
                 _listener = listener;
@@ -956,14 +1035,23 @@ namespace VectorNNTP.Backfiller.Tests
                 _acceptLoop = Task.Run(AcceptLoopAsync);
             }
 
+            /// <summary>
+            /// Exercises port behavior, including the expected result and failure semantics.
+            /// </summary>
             internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
+            /// <summary>
+            /// Exercises start async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task<FakeNntpServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)
             {
                 ArgumentNullException.ThrowIfNull(session);
                 return await StartSessionsAsync([session]);
             }
 
+            /// <summary>
+            /// Exercises start sessions async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task<FakeNntpServer> StartSessionsAsync(IReadOnlyList<Func<NetworkStream, CancellationToken, Task>> sessions)
             {
                 ArgumentNullException.ThrowIfNull(sessions);
@@ -980,6 +1068,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return server;
             }
 
+            /// <summary>
+            /// Exercises accept loop async behavior, including the expected result and failure semantics.
+            /// </summary>
             private async Task AcceptLoopAsync()
             {
                 try
@@ -996,6 +1087,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises read line async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> buffer = [];
@@ -1019,6 +1113,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return System.Text.Encoding.ASCII.GetString([.. buffer]);
             }
 
+            /// <summary>
+            /// Exercises read byte async behavior, including the expected result and failure semantics.
+            /// </summary>
             private static async ValueTask<byte> ReadByteAsync(Stream stream, CancellationToken cancellationToken)
             {
                 byte[] single = new byte[1];
@@ -1026,6 +1123,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return read == 0 ? throw new InvalidOperationException("Unexpected EOF while reading stream data.") : single[0];
             }
 
+            /// <summary>
+            /// Exercises read takethis payload async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task<byte[]> ReadTakethisPayloadAsync(Stream stream, CancellationToken cancellationToken)
             {
                 using MemoryStream payload = new();
@@ -1071,12 +1171,18 @@ namespace VectorNNTP.Backfiller.Tests
                 return payload.ToArray();
             }
 
+            /// <summary>
+            /// Exercises expect command async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task ExpectCommandAsync(Stream stream, string expected)
             {
                 string line = await ReadLineAsync(stream, CancellationToken.None);
                 Assert.Equal(expected, line);
             }
 
+            /// <summary>
+            /// Exercises write line async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task WriteLineAsync(Stream stream, string line)
             {
                 byte[] bytes = System.Text.Encoding.ASCII.GetBytes(line + "\r\n");
@@ -1084,10 +1190,19 @@ namespace VectorNNTP.Backfiller.Tests
                 await stream.FlushAsync(CancellationToken.None);
             }
 
+            /// <summary>
+            /// Covers capturing logger provider behavior and invariants exercised by this test suite.
+            /// </summary>
             internal sealed class CapturingLoggerProvider
             {
+                /// <summary>
+                /// Exercises  gate behavior, including the expected result and failure semantics.
+                /// </summary>
                 private readonly object _gate = new();
 
+                /// <summary>
+                /// Supplies entries for the fixture or scenario under test.
+                /// </summary>
                 internal List<LogEntry> Entries { get; } = [];
 
                 internal ILogger<T> CreateLogger<T>()
@@ -1095,11 +1210,23 @@ namespace VectorNNTP.Backfiller.Tests
                     return new CapturingLogger<T>(Entries, _gate);
                 }
 
+                /// <summary>
+                /// Covers log entry behavior and invariants exercised by this test suite.
+                /// </summary>
                 internal sealed record LogEntry(EventId EventId, string Message);
 
+                /// <summary>
+                /// Covers capturing logger behavior and invariants exercised by this test suite.
+                /// </summary>
                 private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
                 {
+                    /// <summary>
+                    /// Supplies  entries for the fixture or scenario under test.
+                    /// </summary>
                     private readonly List<LogEntry> _entries = entries;
+                    /// <summary>
+                    /// Supplies  gate for the fixture or scenario under test.
+                    /// </summary>
                     private readonly object _gate = gate;
 
                     public IDisposable BeginScope<TState>(TState state) where TState : notnull
@@ -1107,6 +1234,9 @@ namespace VectorNNTP.Backfiller.Tests
                         return NullScope.Instance;
                     }
 
+                    /// <summary>
+                    /// Exercises is enabled behavior, including the expected result and failure semantics.
+                    /// </summary>
                     public bool IsEnabled(LogLevel logLevel)
                     {
                         return true;
@@ -1121,10 +1251,19 @@ namespace VectorNNTP.Backfiller.Tests
                         }
                     }
 
+                    /// <summary>
+                    /// Covers null scope behavior and invariants exercised by this test suite.
+                    /// </summary>
                     private sealed class NullScope : IDisposable
                     {
+                        /// <summary>
+                        /// Exercises instance behavior, including the expected result and failure semantics.
+                        /// </summary>
                         internal static readonly NullScope Instance = new();
 
+                        /// <summary>
+                        /// Exercises dispose behavior, including the expected result and failure semantics.
+                        /// </summary>
                         public void Dispose()
                         {
                         }
@@ -1132,6 +1271,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises write lines async behavior, including the expected result and failure semantics.
+            /// </summary>
             internal static async Task WriteLinesAsync(Stream stream, IReadOnlyList<string> lines)
             {
                 ArgumentNullException.ThrowIfNull(stream);
@@ -1163,6 +1305,9 @@ namespace VectorNNTP.Backfiller.Tests
                 await stream.FlushAsync(CancellationToken.None);
             }
 
+            /// <summary>
+            /// Exercises dispose async behavior, including the expected result and failure semantics.
+            /// </summary>
             public async ValueTask DisposeAsync()
             {
                 _cts.Cancel();

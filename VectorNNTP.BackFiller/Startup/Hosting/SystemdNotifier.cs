@@ -41,14 +41,38 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
     /// </remarks>
     internal static partial class SystemdNotifier
     {
+        /// <summary>
+        /// Configures min status notify interval milliseconds for systemd notifier.
+        /// </summary>
         private const int MinStatusNotifyIntervalMilliseconds = 5000;
+        /// <summary>
+        /// Limits max systemd status length for systemd notifier.
+        /// </summary>
         private const int MaxSystemdStatusLength = 1024;
+        /// <summary>
+        /// Tracks systemd library state unknown for systemd notifier.
+        /// </summary>
         private const int SystemdLibraryStateUnknown = 0;
+        /// <summary>
+        /// Tracks systemd library state available for systemd notifier.
+        /// </summary>
         private const int SystemdLibraryStateAvailable = 1;
+        /// <summary>
+        /// Tracks systemd library state unavailable for systemd notifier.
+        /// </summary>
         private const int SystemdLibraryStateUnavailable = 2;
 
+        /// <summary>
+        /// Tracks status notify gate for systemd notifier.
+        /// </summary>
         private static readonly object StatusNotifyGate = new();
+        /// <summary>
+        /// Limits last status notify tick count for systemd notifier.
+        /// </summary>
         private static long _lastStatusNotifyTickCount = -1;
+        /// <summary>
+        /// Tracks systemd library state for systemd notifier.
+        /// </summary>
         private static int _systemdLibraryState = SystemdLibraryStateUnknown;
 
         #region Systemd Notifications
@@ -331,24 +355,45 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         #endregion
 
         [LoggerMessage(EventId = 1300, Level = LogLevel.Debug, Message = "Notified systemd that service is ready")]
+        /// <summary>
+        /// Coordinates log systemd ready notified for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdReadyNotified(ILogger logger);
 
         [LoggerMessage(EventId = 1301, Level = LogLevel.Debug, Message = "Notified systemd that service is stopping")]
+        /// <summary>
+        /// Coordinates log systemd stopping notified for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdStoppingNotified(ILogger logger);
 
         [LoggerMessage(EventId = 1302, Level = LogLevel.Debug, Message = "Notified systemd with status: {Status}")]
+        /// <summary>
+        /// Coordinates log systemd status notified for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdStatusNotified(ILogger logger, string status);
 
         [LoggerMessage(EventId = 1303, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification failed with result {Result}")]
+        /// <summary>
+        /// Coordinates log systemd notification failed result for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdNotificationFailedResult(ILogger logger, string notificationType, int result);
 
         [LoggerMessage(EventId = 1304, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: libsystemd.so.0 not found")]
+        /// <summary>
+        /// Coordinates log systemd library not found for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdLibraryNotFound(ILogger logger, string notificationType);
 
         [LoggerMessage(EventId = 1305, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: sd_notify entry point not found")]
+        /// <summary>
+        /// Coordinates log systemd entry point not found for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdEntryPointNotFound(ILogger logger, string notificationType);
 
         [LoggerMessage(EventId = 1306, Level = LogLevel.Debug, Message = "Exception during systemd {NotificationType} notification")]
+        /// <summary>
+        /// Coordinates log systemd notification exception for systemd notifier.
+        /// </summary>
         private static partial void LogSystemdNotificationException(ILogger logger, Exception exception, string notificationType);
     }
 }

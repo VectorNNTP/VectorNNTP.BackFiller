@@ -1,11 +1,9 @@
 // <copyright file="MySqlNntpAccountSnapshotProviderProvisioningTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for my sql nntp account snapshot provider provisioning, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -18,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class MySqlNntpAccountSnapshotProviderProvisioningTests
     {
+        /// <summary>
+        /// Exercises ensure startup dependencies async  uses configured database and table and authoritative schema behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_UsesConfiguredDatabaseAndTableAndAuthoritativeSchema()
         {
@@ -52,7 +53,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("KEY `idx_serverid` (`serverid`)", call.createTableSql, StringComparison.Ordinal);
             Assert.Contains(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;", call.createTableSql, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises ensure startup dependencies async  when repeated  remains idempotent at provider boundary behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_WhenRepeated_RemainsIdempotentAtProviderBoundary()
         {
@@ -74,7 +77,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(MySqlNntpAccountSnapshotProvider.AccountsTableCreateSql, call.createTableSql);
             });
         }
-
+        /// <summary>
+        /// Exercises ensure startup dependencies async  when provisioning fails  propagates failure behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_WhenProvisioningFails_PropagatesFailure()
         {
@@ -89,7 +94,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             _ = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
         }
-
+        /// <summary>
+        /// Exercises accounts table create sql  uses new backfiller table name and not legacy name behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void AccountsTableCreateSql_UsesNewBackfillerTableNameAndNotLegacyName()
         {
@@ -97,10 +104,16 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("nntpgrabberaccounts", MySqlNntpAccountSnapshotProvider.AccountsTableCreateSql, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Covers capturing provisioning store behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class CapturingProvisioningStore : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             internal List<(string databaseName, string tableName, string createTableSql)> Calls { get; } = [];
 
+            /// <summary>
+            /// Exercises ensure database and table async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 Calls.Add((databaseName, tableName, createTableSql));
@@ -108,8 +121,14 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Covers delegate provisioning store behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
+            /// <summary>
+            /// Exercises ensure database and table async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return callback(cancellationToken);

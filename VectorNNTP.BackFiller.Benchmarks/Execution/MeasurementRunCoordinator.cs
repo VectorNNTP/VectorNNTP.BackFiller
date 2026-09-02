@@ -1,10 +1,22 @@
+// <copyright file="MeasurementRunCoordinator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/MeasurementRunCoordinator: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks.Execution;
 
+/// <summary>
+/// Defines the measurement RunCoordinator class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class MeasurementRunCoordinator
 {
+    /// <summary>
+    /// Performs the run Async operation.
+    /// </summary>
     internal static async Task<BenchmarkResult> RunAsync(
         TransitPublisher publisher,
         TransitBenchmarkConfig config,

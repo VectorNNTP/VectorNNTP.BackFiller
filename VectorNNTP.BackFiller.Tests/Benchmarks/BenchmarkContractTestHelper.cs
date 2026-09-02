@@ -1,11 +1,9 @@
 // <copyright file="BenchmarkContractTestHelper.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for benchmark contract test helper, covering benchmark measurement and runtime identity contracts.
 
 using System.Diagnostics;
 using System.Reflection;
@@ -16,15 +14,30 @@ using VectorNNTP.BackFiller.Benchmarks;
 
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
+    /// <summary>
+    /// Covers benchmark contract test helper behavior and invariants exercised by this test suite.
+    /// </summary>
     internal static class BenchmarkContractTestHelper
     {
+        /// <summary>
+        /// Exercises runtime identity behavior, including the expected result and failure semantics.
+        /// </summary>
         private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
+        /// <summary>
+        /// Supplies benchmark build version for the fixture or scenario under test.
+        /// </summary>
         private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
 
+        /// <summary>
+        /// Exercises create benchmark result method behavior, including the expected result and failure semantics.
+        /// </summary>
         private static readonly MethodInfo CreateBenchmarkResultMethod = typeof(BenchmarkResultFactory)
             .GetMethod("Create", BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new InvalidOperationException("BenchmarkResultFactory.Create was not found.");
 
+        /// <summary>
+        /// Exercises create config behavior, including the expected result and failure semantics.
+        /// </summary>
         internal static TransitBenchmarkConfig CreateConfig(
             double measurementSeconds = 10,
             long maxResidentBytes = 16L * 1024L * 1024L,
@@ -56,6 +69,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 ExpectedRuntimeIdentity: default);
         }
 
+        /// <summary>
+        /// Exercises create workload preparation behavior, including the expected result and failure semantics.
+        /// </summary>
         internal static WorkloadPreparationSummary CreateWorkloadPreparation()
         {
             return new WorkloadPreparationSummary(
@@ -67,6 +83,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 ReusablePayloadBytes: 131072);
         }
 
+        /// <summary>
+        /// Exercises create measurement snapshot behavior, including the expected result and failure semantics.
+        /// </summary>
         internal static MeasurementSnapshot CreateMeasurementSnapshot(
             long generatedCount = 100,
             long generatedBytes = 100_000_000,
@@ -111,6 +130,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 ArticleBytes: articleBytes);
         }
 
+        /// <summary>
+        /// Exercises create runtime metrics with snapshot values behavior, including the expected result and failure semantics.
+        /// </summary>
         internal static RuntimeMetrics CreateRuntimeMetricsWithSnapshotValues(long workingSetBytes, long gcHeapBytes, long allocatedBytes)
         {
             RuntimeMetrics runtime = new();
@@ -124,6 +146,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             return runtime;
         }
 
+        /// <summary>
+        /// Exercises create measurement metrics with forensic sample behavior, including the expected result and failure semantics.
+        /// </summary>
         internal static MeasurementMetrics CreateMeasurementMetricsWithForensicSample()
         {
             MeasurementMetrics metrics = new(articleBytes: 1_000_000);
@@ -154,6 +179,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             return metrics;
         }
 
+        /// <summary>
+        /// Exercises invoke create benchmark result behavior, including the expected result and failure semantics.
+        /// </summary>
         internal static BenchmarkResult InvokeCreateBenchmarkResult(
             TransitBenchmarkConfig config,
             MeasurementSnapshot snapshot,
@@ -197,6 +225,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 : throw new InvalidOperationException("CreateBenchmarkResult invocation did not return BenchmarkResult.");
         }
 
+        /// <summary>
+        /// Exercises create publisher for contracts behavior, including the expected result and failure semantics.
+        /// </summary>
         private static TransitPublisher CreatePublisherForContracts()
         {
             BackFillerRuntimeOptions runtimeOptions = new(

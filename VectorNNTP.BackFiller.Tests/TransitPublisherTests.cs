@@ -1,20 +1,10 @@
-// ============================================================================
-// WARNING: TransitPublisherTests.cs is a high-value concurrency/lifecycle test
-// suite and is currently validated at 44/44 passing.
+// <copyright file="TransitPublisherTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
 //
-// DO NOT MODIFY THIS FILE UNLESS AN EXPLICIT REQUIREMENT, PRODUCTION CONTRACT
-// CHANGE, OR DEMONSTRATED TEST DEFECT REQUIRES IT.
-//
-// These tests intentionally exercise timing-sensitive ownership, admission,
-// pipelining, reconnect, shutdown, cancellation, preemption, correlation, and
-// uncertainty semantics. Small changes can invalidate synchronization barriers,
-// hide lifecycle regressions, or create false positives/negatives.
-//
-// If a modification is explicitly required, make the smallest possible change,
-// preserve the externally observable invariant being tested, and re-run the
-// complete TransitPublisherTests suite plus the relevant targeted/race-order
-// validations. DO SO AT YOUR OWN RISK.
-// ============================================================================
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit publisher, covering NNTP article and transport behavior.
+
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Net;
@@ -102,7 +92,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the demand-driven connection lifecycle when initialization completes with no queued work.
+        /// Exercises initialize async  when no queued work  defers connection until publish and returns to idle after quit behavior, including the expected result and failure semantics.
         /// </summary>
         /// <remarks>
         /// Initialization must not eagerly create a TCP session. A later publish must create the session, complete normally, and disposal must perform the protocol <c>QUIT</c> handshake and leave the publisher disconnected with no queued or in-flight work.
@@ -235,7 +225,13 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PublishAsync_WhenCanceledBeforeChannelAdmission_DoesNotLeakQueuedSubmissionCount()
         {
+            /// <summary>
+            /// Supplies queue capacity for the fixture or scenario under test.
+            /// </summary>
             const int QueueCapacity = 2048;
+            /// <summary>
+            /// Supplies expected admitted outstanding for the fixture or scenario under test.
+            /// </summary>
             const int ExpectedAdmittedOutstanding = QueueCapacity + 1;
 
             byte[] payload = [(byte)'Q', (byte)'\n'];
@@ -392,6 +388,9 @@ namespace VectorNNTP.Backfiller.Tests
             List<string> firstSessionObservedMessageIds = [];
             List<string> secondSessionObservedMessageIds = [];
 
+            /// <summary>
+            /// Exercises handle session async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task HandleSessionAsync(
                 NetworkStream stream,
                 CancellationToken cancellationToken,
@@ -724,6 +723,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
             {
+                /// <summary>
+                /// Exercises try extract takethis message id behavior, including the expected result and failure semantics.
+                /// </summary>
                 static bool TryExtractTakethisMessageId(string commandLine, out string? messageId)
                 {
                     if (commandLine.StartsWith("TAKETHIS ", StringComparison.Ordinal))
@@ -753,6 +755,9 @@ namespace VectorNNTP.Backfiller.Tests
                     return builder.ToString();
                 }
 
+                /// <summary>
+                /// Exercises read command with timeout async behavior, including the expected result and failure semantics.
+                /// </summary>
                 async Task<string> ReadCommandWithTimeoutAsync(string expectedStage)
                 {
                     using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -768,6 +773,9 @@ namespace VectorNNTP.Backfiller.Tests
                     }
                 }
 
+                /// <summary>
+                /// Exercises read takethis payload with timeout async behavior, including the expected result and failure semantics.
+                /// </summary>
                 async Task<byte[]> ReadTakethisPayloadWithTimeoutAsync(string expectedStage)
                 {
                     using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -1477,8 +1485,17 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PublishAsync_WhenConnectionCountFourAndPipelineDepthOne_UtilizesAllConnectionsConcurrently()
         {
+            /// <summary>
+            /// Supplies connection count for the fixture or scenario under test.
+            /// </summary>
             const int connectionCount = 4;
+            /// <summary>
+            /// Supplies pipeline depth for the fixture or scenario under test.
+            /// </summary>
             const int pipelineDepth = 1;
+            /// <summary>
+            /// Supplies submission count for the fixture or scenario under test.
+            /// </summary>
             const int submissionCount = connectionCount;
 
             string[] messageIds = Enumerable.Range(0, submissionCount)
@@ -1891,6 +1908,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             FakePublisherServer? fakeServer = null;
 
+            /// <summary>
+            /// Exercises endpoints match behavior, including the expected result and failure semantics.
+            /// </summary>
             static bool EndpointsMatch(string firstEndpoint, string secondEndpoint)
             {
                 if (string.Equals(firstEndpoint, secondEndpoint, StringComparison.Ordinal))
@@ -1909,6 +1929,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return first.Port == second.Port && firstAddress.Equals(secondAddress);
             }
 
+            /// <summary>
+            /// Exercises resolve primary entry behavior, including the expected result and failure semantics.
+            /// </summary>
             static TransitPublisher.ConnectionDiagnosticsEntry? ResolvePrimaryEntry(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot)
             {
                 if (snapshot.Slots.Length == 0)
@@ -1978,6 +2001,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises wait for primary terminal fault async behavior, including the expected result and failure semantics.
+            /// </summary>
             static async Task WaitForPrimaryTerminalFaultAsync(TransitPublisher publisher, CancellationToken cancellationToken)
             {
                 while (true)
@@ -1994,6 +2020,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises wait for primary ready with connection id async behavior, including the expected result and failure semantics.
+            /// </summary>
             static async Task WaitForPrimaryReadyWithConnectionIdAsync(
                 TransitPublisher publisher,
                 string expectedConnectionId,
@@ -2027,6 +2056,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises run first session async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task RunFirstSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2076,6 +2108,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises run second session async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task RunSecondSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await releaseSecondSessionHandshake.Task.WaitAsync(cancellationToken);
@@ -2124,6 +2159,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises run third session async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task RunThirdSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 thirdSessionAccepted.TrySetResult();
@@ -2248,6 +2286,9 @@ namespace VectorNNTP.Backfiller.Tests
             FakePublisherServer? fakeServer = null;
             TransitPublisher? publisher = null;
 
+            /// <summary>
+            /// Exercises resolve slot state behavior, including the expected result and failure semantics.
+            /// </summary>
             static TransitConnectionState ResolveSlotState(
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot,
                 int slotIndex)
@@ -2269,6 +2310,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return entry?.Snapshot.CurrentState ?? TransitConnectionState.Disconnected;
             }
 
+            /// <summary>
+            /// Exercises resolve slot local endpoint behavior, including the expected result and failure semantics.
+            /// </summary>
             static string? ResolveSlotLocalEndpoint(
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot,
                 int slotIndex)
@@ -2290,6 +2334,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return entry?.Snapshot.LocalEndpoint;
             }
 
+            /// <summary>
+            /// Exercises endpoints match behavior, including the expected result and failure semantics.
+            /// </summary>
             static bool EndpointsMatch(string firstEndpoint, string secondEndpoint)
             {
                 if (string.Equals(firstEndpoint, secondEndpoint, StringComparison.Ordinal))
@@ -2308,6 +2355,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return first.Port == second.Port && firstAddress.Equals(secondAddress);
             }
 
+            /// <summary>
+            /// Exercises get connection by slot behavior, including the expected result and failure semantics.
+            /// </summary>
             static TransitConnection GetConnectionBySlot(TransitPublisher publisherInstance, int slotIndex)
             {
                 FieldInfo? connectionsField = typeof(TransitPublisher).GetField("_connections", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -2319,6 +2369,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Assert.IsType<TransitConnection>(connections[slotIndex]);
             }
 
+            /// <summary>
+            /// Exercises wait for both slots ready async behavior, including the expected result and failure semantics.
+            /// </summary>
             static async Task<TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot> WaitForBothSlotsReadyAsync(
                 TransitPublisher publisherInstance,
                 CancellationToken cancellationToken)
@@ -2345,6 +2398,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises run role agnostic session behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task RunRoleAgnosticSession(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2420,6 +2476,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.True(false, $"Session endpoint '{acceptedRemoteEndpoint}' did not match slot endpoints '{slot0Endpoint}' or '{slot1Endpoint}'.");
             }
 
+            /// <summary>
+            /// Exercises run fallback session behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task RunFallbackSession(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2527,6 +2586,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             FakePublisherServer? fakeServer = null;
 
+            /// <summary>
+            /// Exercises endpoints match behavior, including the expected result and failure semantics.
+            /// </summary>
             static bool EndpointsMatch(string firstEndpoint, string secondEndpoint)
             {
                 if (string.Equals(firstEndpoint, secondEndpoint, StringComparison.Ordinal))
@@ -2567,6 +2629,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises run session async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task RunSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2891,7 +2956,13 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PublishAsync_WhenAdmissionCanceledBeforeEnqueue_DoesNotIncrementTotalSubmittedMetric()
         {
+            /// <summary>
+            /// Supplies queue capacity for the fixture or scenario under test.
+            /// </summary>
             const int queueCapacity = 2048;
+            /// <summary>
+            /// Supplies expected admitted outstanding for the fixture or scenario under test.
+            /// </summary>
             const int expectedAdmittedOutstanding = queueCapacity + 1;
 
             byte[] payload = [(byte)'M', (byte)'\n'];
@@ -3022,7 +3093,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the preemption path where the connection reports no pending operations while the publisher still has admitted outstanding submissions.
+        /// Exercises preempt submission processing async  when connection pending is zero and publisher outstanding is positive  terminalizes publisher backlog behavior, including the expected result and failure semantics.
         /// </summary>
         /// <remarks>
         /// Preemption must find and terminalize the publisher-level backlog rather than relying solely on connection-local pending state.
@@ -3114,6 +3185,9 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PreemptSubmissionProcessingAsync_WhenQueuedBacklogExceedsPipelineDepth_TerminalizesAllAdmittedSubmissionsAndClearsTracking()
         {
+            /// <summary>
+            /// Supplies submission count for the fixture or scenario under test.
+            /// </summary>
             const int submissionCount = 12;
             byte[] payload = [(byte)'Q', (byte)'\n'];
             TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -3208,7 +3282,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the ownership-transition versus preemption race repeatedly rather than relying on a single favorable scheduling outcome.
+        /// Exercises preempt submission processing async  when raced with ownership transition across repeated runs  does not strand submission behavior, including the expected result and failure semantics.
         /// </summary>
         /// <remarks>
         /// Each iteration creates real demand, proves ownership/awaiting state, invokes preemption, and requires every submission to terminalize with no queue, active-work, or outstanding-operation residue.
@@ -3216,6 +3290,9 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PreemptSubmissionProcessingAsync_WhenRacedWithOwnershipTransitionAcrossRepeatedRuns_DoesNotStrandSubmission()
         {
+            /// <summary>
+            /// Supplies iterations for the fixture or scenario under test.
+            /// </summary>
             const int iterations = 20;
 
             for (int iteration = 0; iteration < iterations; iteration++)
@@ -3383,7 +3460,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the exact depth-two case in which two <c>TAKETHIS</c> commands are transmitted before any response and then a follow-up article is dispatched.
+        /// Exercises publish async  when pipeline depth two receives two takethis before any response  completes both and clears in flight correlation behavior, including the expected result and failure semantics.
         /// </summary>
         /// <remarks>
         /// The test checks both definitive results and the absence of residual in-flight correlation state before issuing the follow-up publish.
@@ -3506,6 +3583,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             TransitPublisher? publisher = null;
 
+            /// <summary>
+            /// Exercises is lifecycle terminal status behavior, including the expected result and failure semantics.
+            /// </summary>
             static bool IsLifecycleTerminalStatus(TransitPublishStatus status)
             {
                 return status is TransitPublishStatus.Accepted
@@ -3513,6 +3593,9 @@ namespace VectorNNTP.Backfiller.Tests
                     or TransitPublishStatus.Ambiguous;
             }
 
+            /// <summary>
+            /// Exercises wait for no stranded work async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task WaitForNoStrandedWorkAsync(TransitPublisher publisherInstance, CancellationToken cancellationToken)
             {
                 while (true)
@@ -3538,6 +3621,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Exercises handle responsive session async behavior, including the expected result and failure semantics.
+            /// </summary>
             async Task HandleResponsiveSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");

@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Commands
+// Implements the validate config command handler behavior.
 
 using Serilog;
 using VectorNNTP.Backfiller.Configuration;
@@ -65,6 +64,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             }
         }
 
+        /// <summary>
+        /// Coordinates build validate config command result for validate config command handler.
+        /// </summary>
         internal static ConfigurationValidationResult BuildValidateConfigCommandResult(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

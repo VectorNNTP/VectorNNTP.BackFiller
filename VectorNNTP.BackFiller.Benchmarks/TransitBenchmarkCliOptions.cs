@@ -1,5 +1,14 @@
+// <copyright file="TransitBenchmarkCliOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// TransitBenchmarkCliOptions: defines the benchmark entry point or scenario for controlled performance validation.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the transit BenchmarkCliOptions record struct for benchmark or isolated-regression execution.
+/// </summary>
 internal readonly record struct TransitBenchmarkCliOptions(
     int? DurationSeconds,
     int? WarmupSeconds,
@@ -24,6 +33,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
     string? ExpectedProductionAssemblyVersion = null,
     string? ExpectedProductionFileVersion = null)
 {
+    /// <summary>
+    /// Performs the parse operation.
+    /// </summary>
     internal static TransitBenchmarkCliOptions Parse(string[] args)
     {
         if (args.Length == 0)
@@ -180,6 +192,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
             ExpectedProductionFileVersion: expectedProductionFileVersion);
     }
 
+    /// <summary>
+    /// Performs the parse PositiveInt operation.
+    /// </summary>
     private static int ParsePositiveInt(string key, string raw)
     {
         if (!int.TryParse(raw, out int parsed) || parsed <= 0)
@@ -190,6 +205,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
         return parsed;
     }
 
+    /// <summary>
+    /// Performs the parse RequiredString operation.
+    /// </summary>
     private static string ParseRequiredString(string key, string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))

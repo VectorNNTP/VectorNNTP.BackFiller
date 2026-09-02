@@ -1,11 +1,9 @@
 // <copyright file="LetsEncryptCertificateDependencyProbeTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for lets encrypt certificate dependency probe, covering certificate and DNS dependency behavior.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -13,8 +11,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers lets encrypt certificate dependency probe behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class LetsEncryptCertificateDependencyProbeTests
     {
+        /// <summary>
+        /// Exercises ensure certificate availability async  when acme account key missing  returns certificate dependency failure behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenAcmeAccountKeyMissing_ReturnsCertificateDependencyFailure()
         {
@@ -36,6 +40,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(string certDir)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
@@ -81,6 +88,9 @@ namespace VectorNNTP.Backfiller.Tests
                 LetsEncrypt: letsEncrypt);
         }
 
+        /// <summary>
+        /// Exercises create unique temp directory behavior, including the expected result and failure semantics.
+        /// </summary>
         private static string CreateUniqueTempDirectory()
         {
             string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-LetsEncryptProbeTests-{Guid.NewGuid():N}");
@@ -88,6 +98,9 @@ namespace VectorNNTP.Backfiller.Tests
             return path;
         }
 
+        /// <summary>
+        /// Exercises delete directory if exists behavior, including the expected result and failure semantics.
+        /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {
             if (!Directory.Exists(path))

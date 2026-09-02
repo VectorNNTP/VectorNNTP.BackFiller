@@ -1,3 +1,9 @@
+// <copyright file="Transit32WorkerExperimentRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Transit32WorkerExperimentRunner: defines the benchmark entry point or scenario for controlled performance validation.
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
@@ -7,19 +13,52 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the transit 32 WorkerExperimentRunner class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class Transit32WorkerExperimentRunner
 {
+    /// <summary>
+    /// Gets or sets the article Bytes value.
+    /// </summary>
     private const int ArticleBytes = 1024 * 1024;
+    /// <summary>
+    /// Gets or sets the producer Workers value.
+    /// </summary>
     private const int ProducerWorkers = 32;
+    /// <summary>
+    /// Gets or sets the dispatch Workers value.
+    /// </summary>
     private const int DispatchWorkers = 512;
+    /// <summary>
+    /// Gets or sets the queue Articles value.
+    /// </summary>
     private const int QueueArticles = 1024;
+    /// <summary>
+    /// Gets or sets the queue Bytes value.
+    /// </summary>
     private const long QueueBytes = 1024L * 1024L * 1024L;
+    /// <summary>
+    /// Gets or sets the queue Target value.
+    /// </summary>
     private const int QueueTarget = 512;
+    /// <summary>
+    /// Gets or sets the connections value.
+    /// </summary>
     private const int Connections = 64;
+    /// <summary>
+    /// Gets or sets the pipeline Depth value.
+    /// </summary>
     private const int PipelineDepth = 16;
 
+    /// <summary>
+    /// Gets or sets the required TransitHostname value.
+    /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
 
+    /// <summary>
+    /// Performs the run Async operation.
+    /// </summary>
     internal static async Task RunAsync(CancellationToken cancellationToken = default)
     {
         Console.WriteLine("=== 32-Worker Benchmark Experiments ===");
@@ -35,6 +74,9 @@ internal static class Transit32WorkerExperimentRunner
         PrintFinalSummary(exp1, exp2, exp3);
     }
 
+    /// <summary>
+    /// Performs the run GeneratorOnlyAsync operation.
+    /// </summary>
     private static async Task<GeneratorResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int workers, CancellationToken cancellationToken)
     {
         Console.WriteLine();
@@ -119,6 +161,9 @@ internal static class Transit32WorkerExperimentRunner
         return result;
     }
 
+    /// <summary>
+    /// Performs the run QueueNoOpAsync operation.
+    /// </summary>
     private static async Task<QueueResult> RunQueueNoOpAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
         Console.WriteLine();
@@ -268,6 +313,9 @@ internal static class Transit32WorkerExperimentRunner
         return result;
     }
 
+    /// <summary>
+    /// Performs the run RealPipelineAsync operation.
+    /// </summary>
     private static async Task<RealPipelineResult> RunRealPipelineAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
         Console.WriteLine();
@@ -542,6 +590,9 @@ internal static class Transit32WorkerExperimentRunner
         return result;
     }
 
+    /// <summary>
+    /// Performs the warmup GeneratorAsync operation.
+    /// </summary>
     private static async Task WarmupGeneratorAsync(int warmupSeconds, int workers, CancellationToken cancellationToken)
     {
         using CancellationTokenSource warmup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -572,6 +623,9 @@ internal static class Transit32WorkerExperimentRunner
         }
     }
 
+    /// <summary>
+    /// Performs the build RuntimeOptions operation.
+    /// </summary>
     private static BackFillerRuntimeOptions BuildRuntimeOptions(RuntimeConfig runtime)
     {
         return new BackFillerRuntimeOptions(
@@ -595,6 +649,9 @@ internal static class Transit32WorkerExperimentRunner
             WriteBatchCoalesceMicroseconds: 250);
     }
 
+    /// <summary>
+    /// Performs the load RuntimeConfig operation.
+    /// </summary>
     private static RuntimeConfig LoadRuntimeConfig()
     {
         string appSettingsPath = FindBackFillerAppSettingsPath();
@@ -621,6 +678,9 @@ internal static class Transit32WorkerExperimentRunner
         return new RuntimeConfig(normalizedHost, port, useSsl);
     }
 
+    /// <summary>
+    /// Performs the find BackFillerAppSettingsPath operation.
+    /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);
@@ -638,6 +698,9 @@ internal static class Transit32WorkerExperimentRunner
         throw new FileNotFoundException("Unable to locate existing BackFiller appsettings.json from benchmark runner base directory.");
     }
 
+    /// <summary>
+    /// Performs the percentile Us operation.
+    /// </summary>
     private static double PercentileUs(IEnumerable<long> ticks, double percentile)
     {
         long[] ordered = ticks.OrderBy(static x => x).ToArray();
@@ -651,11 +714,26 @@ internal static class Transit32WorkerExperimentRunner
         return ordered[index] * 1_000_000d / Stopwatch.Frequency;
     }
 
+    /// <summary>
+    /// Performs the print ScalingEfficiency operation.
+    /// </summary>
     private static void PrintScalingEfficiency(double current32Rate)
     {
+        /// <summary>
+        /// Gets or sets the baseline 1 value.
+        /// </summary>
         const double baseline1 = 772.2691;
+        /// <summary>
+        /// Gets or sets the baseline 4 value.
+        /// </summary>
         const double baseline4 = 2932.5899;
+        /// <summary>
+        /// Gets or sets the baseline 8 value.
+        /// </summary>
         const double baseline8 = 4264.0247;
+        /// <summary>
+        /// Gets or sets the baseline 16 value.
+        /// </summary>
         const double baseline16 = 6666.1003;
 
         Console.WriteLine("Scaling efficiency of 32-worker run relative to baselines:");
@@ -665,6 +743,9 @@ internal static class Transit32WorkerExperimentRunner
         Console.WriteLine($"vs 16 workers: x{(current32Rate / baseline16):F4}");
     }
 
+    /// <summary>
+    /// Performs the print GeneratorResult operation.
+    /// </summary>
     private static void PrintGeneratorResult(GeneratorResult result)
     {
         Console.WriteLine($"Articles/sec={result.ArticlesPerSecond:F4}, Gbps={result.Gbps:F4}, CPU%={result.CpuPercent:F2}, EqBusyCores={result.BusyCores:F3}");
@@ -672,6 +753,9 @@ internal static class Transit32WorkerExperimentRunner
         Console.WriteLine($"Alloc/article={result.AllocatedBytesPerArticle:F2} bytes, GC=({result.Gen0},{result.Gen1},{result.Gen2}), WSpeakMB={result.PeakWorkingSetBytes / 1024d / 1024d:F2}");
     }
 
+    /// <summary>
+    /// Performs the print QueueResult operation.
+    /// </summary>
     private static void PrintQueueResult(QueueResult result)
     {
         Console.WriteLine($"Generated/sec={result.GeneratedPerSecond:F4}, Dispatched/sec={result.DispatchedPerSecond:F4}, Completed/sec={result.CompletedPerSecond:F4}");
@@ -682,6 +766,9 @@ internal static class Transit32WorkerExperimentRunner
         Console.WriteLine($"CPU%={result.CpuPercent:F2}, EqBusyCores={result.BusyCores:F3}, alloc/article={result.AllocatedBytesPerArticle:F2} bytes, GC=({result.Gen0},{result.Gen1},{result.Gen2}), WSpeakMB={result.PeakWorkingSetBytes / 1024d / 1024d:F2}");
     }
 
+    /// <summary>
+    /// Performs the print RealPipelineResult operation.
+    /// </summary>
     private static void PrintRealPipelineResult(RealPipelineResult result)
     {
         Console.WriteLine($"Generated/sec={result.GeneratedPerSecond:F4}, Completed/sec={result.CompletedPerSecond:F4}, Accepted/sec={result.AcceptedPerSecond:F4}, Accepted Gbps={result.Gbps:F4}");
@@ -695,6 +782,9 @@ internal static class Transit32WorkerExperimentRunner
         Console.WriteLine($"CPU%={result.CpuPercent:F2}, EqBusyCores={result.BusyCores:F3}, alloc/article={result.AllocatedBytesPerArticle:F2} bytes, GC=({result.Gen0},{result.Gen1},{result.Gen2}), WSpeakMB={result.PeakWorkingSetBytes / 1024d / 1024d:F2}");
     }
 
+    /// <summary>
+    /// Performs the format Distribution operation.
+    /// </summary>
     private static string FormatDistribution(Dictionary<int, int> distribution)
     {
         if (distribution.Count == 0)
@@ -705,6 +795,9 @@ internal static class Transit32WorkerExperimentRunner
         return string.Join(", ", distribution.OrderBy(static kvp => kvp.Key).Select(static kvp => $"{kvp.Key}:{kvp.Value}"));
     }
 
+    /// <summary>
+    /// Performs the print FinalSummary operation.
+    /// </summary>
     private static void PrintFinalSummary(GeneratorResult exp1, QueueResult exp2, RealPipelineResult exp3)
     {
         Console.WriteLine();
@@ -719,26 +812,65 @@ internal static class Transit32WorkerExperimentRunner
         Console.WriteLine("Use real-pipeline accepted Gbps vs prior 3.7009 Gbps to determine material improvement.");
     }
 
+    /// <summary>
+    /// Defines the cpu Sampler class for benchmark or isolated-regression execution.
+    /// </summary>
     private sealed class CpuSampler
     {
+        /// <summary>
+        /// Gets or sets the _process value.
+        /// </summary>
         private readonly Process _process;
+        /// <summary>
+        /// Performs the _elapsed operation.
+        /// </summary>
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
+        /// <summary>
+        /// Gets or sets the _cts value.
+        /// </summary>
         private CancellationTokenSource? _cts;
+        /// <summary>
+        /// Gets or sets the _task value.
+        /// </summary>
         private Task? _task;
+        /// <summary>
+        /// Gets or sets the _cpuStart value.
+        /// </summary>
         private TimeSpan _cpuStart;
+        /// <summary>
+        /// Gets or sets the _peakWorkingSet value.
+        /// </summary>
         private long _peakWorkingSet;
 
+        /// <summary>
+        /// Performs the cpu Sampler operation.
+        /// </summary>
         internal CpuSampler(Process process)
         {
             _process = process;
             _peakWorkingSet = process.WorkingSet64;
         }
 
+        /// <summary>
+        /// Gets or sets the average CpuPercent value.
+        /// </summary>
         internal double AverageCpuPercent { get; private set; }
+        /// <summary>
+        /// Gets or sets the equivalent BusyCores value.
+        /// </summary>
         internal double EquivalentBusyCores => AverageCpuPercent / 100d * Environment.ProcessorCount;
+        /// <summary>
+        /// Gets or sets the peak WorkingSetBytes value.
+        /// </summary>
         internal long PeakWorkingSetBytes => _peakWorkingSet;
+        /// <summary>
+        /// Gets or sets the total CpuTime value.
+        /// </summary>
         internal TimeSpan TotalCpuTime { get; private set; }
 
+        /// <summary>
+        /// Performs the start operation.
+        /// </summary>
         internal void Start()
         {
             _cpuStart = _process.TotalProcessorTime;
@@ -758,6 +890,9 @@ internal static class Transit32WorkerExperimentRunner
             }, CancellationToken.None);
         }
 
+        /// <summary>
+        /// Performs the stop operation.
+        /// </summary>
         internal void Stop()
         {
             if (_cts is null)
@@ -782,29 +917,80 @@ internal static class Transit32WorkerExperimentRunner
         }
     }
 
+    /// <summary>
+    /// Defines the queue Sampler class for benchmark or isolated-regression execution.
+    /// </summary>
     private sealed class QueueSampler
     {
+        /// <summary>
+        /// Gets or sets the _queue value.
+        /// </summary>
         private readonly TransitBenchmarkCore.BoundedArticleQueue _queue;
+        /// <summary>
+        /// Gets or sets the _cts value.
+        /// </summary>
         private CancellationTokenSource? _cts;
+        /// <summary>
+        /// Gets or sets the _task value.
+        /// </summary>
         private Task? _task;
+        /// <summary>
+        /// Gets or sets the _depthSum value.
+        /// </summary>
         private long _depthSum;
+        /// <summary>
+        /// Gets or sets the _byteSum value.
+        /// </summary>
         private long _byteSum;
+        /// <summary>
+        /// Gets or sets the _count value.
+        /// </summary>
         private long _count;
+        /// <summary>
+        /// Gets or sets the _minDepth value.
+        /// </summary>
         private int _minDepth = int.MaxValue;
+        /// <summary>
+        /// Gets or sets the _maxDepth value.
+        /// </summary>
         private int _maxDepth;
+        /// <summary>
+        /// Gets or sets the _maxBytes value.
+        /// </summary>
         private long _maxBytes;
 
+        /// <summary>
+        /// Performs the queue Sampler operation.
+        /// </summary>
         internal QueueSampler(TransitBenchmarkCore.BoundedArticleQueue queue)
         {
             _queue = queue;
         }
 
+        /// <summary>
+        /// Gets or sets the min Depth value.
+        /// </summary>
         internal int MinDepth => _minDepth == int.MaxValue ? 0 : _minDepth;
+        /// <summary>
+        /// Gets or sets the max Depth value.
+        /// </summary>
         internal int MaxDepth => _maxDepth;
+        /// <summary>
+        /// Performs the average Depth operation.
+        /// </summary>
         internal double AverageDepth => _count == 0 ? 0 : (double)_depthSum / _count;
+        /// <summary>
+        /// Performs the average Bytes operation.
+        /// </summary>
         internal double AverageBytes => _count == 0 ? 0 : (double)_byteSum / _count;
+        /// <summary>
+        /// Gets or sets the max Bytes value.
+        /// </summary>
         internal long MaxBytes => _maxBytes;
 
+        /// <summary>
+        /// Performs the start operation.
+        /// </summary>
         internal void Start()
         {
             _cts = new CancellationTokenSource();
@@ -825,6 +1011,9 @@ internal static class Transit32WorkerExperimentRunner
             }, CancellationToken.None);
         }
 
+        /// <summary>
+        /// Performs the stop operation.
+        /// </summary>
         internal void Stop()
         {
             if (_cts is null)
@@ -846,9 +1035,18 @@ internal static class Transit32WorkerExperimentRunner
         }
     }
 
+    /// <summary>
+    /// Defines the runtime Config record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct RuntimeConfig(string Host, int Port, bool UseSsl);
+    /// <summary>
+    /// Defines the article StageStamp record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct ArticleStageStamp(long GenerationTicks, long EnqueueEndTick, long DequeueTick);
 
+    /// <summary>
+    /// Defines the generator Result record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct GeneratorResult(
         string Label,
         int Workers,
@@ -867,11 +1065,23 @@ internal static class Transit32WorkerExperimentRunner
         double P95Us,
         double P99Us)
     {
+        /// <summary>
+        /// Gets or sets the articles PerSecond value.
+        /// </summary>
         internal double ArticlesPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Articles / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the gbps value.
+        /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Performs the allocated BytesPerArticle operation.
+        /// </summary>
         internal double AllocatedBytesPerArticle => Articles == 0 ? 0 : (double)AllocatedBytes / Articles;
     }
 
+    /// <summary>
+    /// Defines the queue Result record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct QueueResult(
         string Label,
         long Generated,
@@ -896,13 +1106,31 @@ internal static class Transit32WorkerExperimentRunner
         int PeakDispatcherInFlight,
         int PeakActualPending)
     {
+        /// <summary>
+        /// Gets or sets the generated PerSecond value.
+        /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the dispatched PerSecond value.
+        /// </summary>
         internal double DispatchedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Dispatched / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the completed PerSecond value.
+        /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the gbps value.
+        /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Performs the allocated BytesPerArticle operation.
+        /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
 
+    /// <summary>
+    /// Defines the real PipelineResult record struct for benchmark or isolated-regression execution.
+    /// </summary>
     private readonly record struct RealPipelineResult(
         string Label,
         long Generated,
@@ -938,10 +1166,25 @@ internal static class Transit32WorkerExperimentRunner
         int ActiveConnections,
         Dictionary<int, int> MaxInFlightDistribution)
     {
+        /// <summary>
+        /// Gets or sets the generated PerSecond value.
+        /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the completed PerSecond value.
+        /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the accepted PerSecond value.
+        /// </summary>
         internal double AcceptedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Accepted / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Gets or sets the gbps value.
+        /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
+        /// <summary>
+        /// Performs the allocated BytesPerArticle operation.
+        /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
 }

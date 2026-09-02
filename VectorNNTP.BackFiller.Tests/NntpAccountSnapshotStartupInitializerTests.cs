@@ -1,3 +1,10 @@
+// <copyright file="NntpAccountSnapshotStartupInitializerTests.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for nntp account snapshot startup initializer, covering NNTP article and transport behavior.
+
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using Xunit;
@@ -9,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class NntpAccountSnapshotStartupInitializerTests
     {
+        /// <summary>
+        /// Exercises start async  when entry id provided as string encoded guid  publishes snapshot behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task StartAsync_WhenEntryIdProvidedAsStringEncodedGuid_PublishesSnapshot()
         {
@@ -40,7 +50,9 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Single(provider.CurrentSnapshot.Accounts);
             Assert.Equal(expectedEntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
-
+        /// <summary>
+        /// Exercises start async  provisions before initial snapshot load behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task StartAsync_ProvisionsBeforeInitialSnapshotLoad()
         {
@@ -71,7 +83,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(["provision", "load"], operations);
         }
-
+        /// <summary>
+        /// Exercises start async  when provisioning fails  throws and does not load snapshot behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task StartAsync_WhenProvisioningFails_ThrowsAndDoesNotLoadSnapshot()
         {
@@ -102,8 +116,14 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(["provision"], operations);
         }
 
+        /// <summary>
+        /// Covers delegate provisioning store behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
+            /// <summary>
+            /// Exercises ensure database and table async behavior, including the expected result and failure semantics.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return callback(cancellationToken);

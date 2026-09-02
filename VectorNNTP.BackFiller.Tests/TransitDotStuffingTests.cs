@@ -1,19 +1,23 @@
 // <copyright file="TransitDotStuffingTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit dot stuffing, covering NNTP article and transport behavior.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers transit dot stuffing behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class TransitDotStuffingTests
     {
+        /// <summary>
+        /// Exercises payload cases behavior, including the expected result and failure semantics.
+        /// </summary>
         public static IEnumerable<object[]> PayloadCases()
         {
             yield return ["empty", Array.Empty<byte>()];
@@ -33,7 +37,9 @@ namespace VectorNNTP.Backfiller.Tests
             yield return ["large-random-binary", BuildRandomPayload(512 * 1024, seed: 23)];
             yield return ["payload-2mib", BuildMixedPayload(2_097_152, seed: 29, dotStartEvery: 19, averageLineLength: 300)];
         }
-
+        /// <summary>
+        /// Exercises try dot stuff  all algorithms  match reference behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
         public void TryDotStuff_AllAlgorithms_MatchReference(string _, byte[] payload)
@@ -53,7 +59,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(expected, destination);
             }
         }
-
+        /// <summary>
+        /// Exercises try dot stuff  without trailing crlf append  matches reference behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
         public void TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(string _, byte[] payload)
@@ -73,7 +81,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(expected, destination);
             }
         }
-
+        /// <summary>
+        /// Exercises try dot stuff  when destination too small  returns false behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void TryDotStuff_WhenDestinationTooSmall_ReturnsFalse()
         {
@@ -88,6 +98,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Exercises build all byte values payload behavior, including the expected result and failure semantics.
+        /// </summary>
         private static byte[] BuildAllByteValuesPayload()
         {
             byte[] bytes = new byte[256 + 32];
@@ -104,6 +117,9 @@ namespace VectorNNTP.Backfiller.Tests
             return bytes;
         }
 
+        /// <summary>
+        /// Exercises build random payload behavior, including the expected result and failure semantics.
+        /// </summary>
         private static byte[] BuildRandomPayload(int size, int seed)
         {
             byte[] data = new byte[size];
@@ -118,6 +134,9 @@ namespace VectorNNTP.Backfiller.Tests
             return data;
         }
 
+        /// <summary>
+        /// Exercises build mixed payload behavior, including the expected result and failure semantics.
+        /// </summary>
         private static byte[] BuildMixedPayload(int size, int seed, int dotStartEvery, int averageLineLength)
         {
             byte[] data = new byte[size];
@@ -160,6 +179,9 @@ namespace VectorNNTP.Backfiller.Tests
             return data;
         }
 
+        /// <summary>
+        /// Exercises reference dot stuff behavior, including the expected result and failure semantics.
+        /// </summary>
         private static byte[] ReferenceDotStuff(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf)
         {
             List<byte> output = new(source.Length + 64);

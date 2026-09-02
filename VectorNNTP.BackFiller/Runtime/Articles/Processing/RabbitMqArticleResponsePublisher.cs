@@ -17,10 +17,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
     {
+        /// <summary>
+        /// Tracks connection manager for rabbit mq article response publisher.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
+        /// <summary>
+        /// Tracks options for rabbit mq article response publisher.
+        /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
+        /// <summary>
+        /// Provides logging for rabbit mq article response publisher.
+        /// </summary>
         private readonly ILogger<RabbitMqArticleResponsePublisher> _logger;
+        /// <summary>
+        /// Tracks publish gate for rabbit mq article response publisher.
+        /// </summary>
         private readonly SemaphoreSlim _publishGate = new(1, 1);
+        /// <summary>
+        /// Tracks owned publish channel for rabbit mq article response publisher.
+        /// </summary>
         private RabbitMqOwnedChannel? _ownedPublishChannel;
 
         /// <summary>
@@ -170,6 +185,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Coordinates get or create publish channel async for rabbit mq article response publisher.
+        /// </summary>
         private async Task<RabbitMqOwnedChannel?> GetOrCreatePublishChannelAsync(string backbone, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -197,6 +215,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Coordinates reset publish channel async for rabbit mq article response publisher.
+        /// </summary>
         private async ValueTask ResetPublishChannelAsync()
         {
             RabbitMqOwnedChannel? owned = _ownedPublishChannel;

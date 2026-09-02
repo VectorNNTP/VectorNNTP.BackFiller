@@ -1,11 +1,9 @@
 // <copyright file="MeasurementExecutionEngineDrainLifecycleTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for measurement execution engine drain lifecycle, covering service lifecycle and shutdown contracts; benchmark measurement and runtime identity contracts.
 
 using System.Diagnostics;
 using System.Net;
@@ -184,11 +182,26 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// </summary>
         private sealed class DrainLifecycleFakeServer : IAsyncDisposable
         {
+            /// <summary>
+            /// Supplies  listener for the fixture or scenario under test.
+            /// </summary>
             private readonly TcpListener _listener;
+            /// <summary>
+            /// Supplies  session for the fixture or scenario under test.
+            /// </summary>
             private readonly Func<NetworkStream, CancellationToken, Task> _session;
+            /// <summary>
+            /// Exercises  cts behavior, including the expected result and failure semantics.
+            /// </summary>
             private readonly CancellationTokenSource _cts = new();
+            /// <summary>
+            /// Supplies  accept loop for the fixture or scenario under test.
+            /// </summary>
             private readonly Task _acceptLoop;
 
+            /// <summary>
+            /// Exercises drain lifecycle fake server behavior, including the expected result and failure semantics.
+            /// </summary>
             private DrainLifecycleFakeServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {
                 _listener = listener;

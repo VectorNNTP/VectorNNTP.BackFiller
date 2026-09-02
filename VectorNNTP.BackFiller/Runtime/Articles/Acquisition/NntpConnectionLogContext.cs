@@ -18,7 +18,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     /// </remarks>
     internal sealed class NntpConnectionLogContext
     {
+        /// <summary>
+        /// Tracks scope properties for nntp connection log context.
+        /// </summary>
         private readonly KeyValuePair<string, object?>[] _scopeProperties;
+        /// <summary>
+        /// Tracks connection prefix for nntp connection log context.
+        /// </summary>
         private readonly string _connectionPrefix;
 
         /// <summary>
@@ -153,13 +159,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// </summary>
         private sealed class CompositeDisposable : IDisposable
         {
+            /// <summary>
+            /// Tracks disposables for nntp connection log context.
+            /// </summary>
             private readonly IReadOnlyList<IDisposable> _disposables;
 
+            /// <summary>
+            /// Coordinates composite disposable for nntp connection log context.
+            /// </summary>
             internal CompositeDisposable(IReadOnlyList<IDisposable> disposables)
             {
                 _disposables = disposables ?? throw new ArgumentNullException(nameof(disposables));
             }
 
+            /// <summary>
+            /// Coordinates dispose for nntp connection log context.
+            /// </summary>
             public void Dispose()
             {
                 for (int index = _disposables.Count - 1; index >= 0; index--)

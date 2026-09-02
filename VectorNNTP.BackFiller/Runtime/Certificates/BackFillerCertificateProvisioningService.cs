@@ -19,11 +19,29 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed class BackFillerCertificateProvisioningService : IDisposable
     {
+        /// <summary>
+        /// Tracks certificate store for back filler certificate provisioning service.
+        /// </summary>
         private readonly BackFillerCertificateStore _certificateStore;
+        /// <summary>
+        /// Tracks acme issuer for back filler certificate provisioning service.
+        /// </summary>
         private readonly IAcmeCertificateIssuer _acmeIssuer;
+        /// <summary>
+        /// Tracks certificate state for back filler certificate provisioning service.
+        /// </summary>
         private readonly BackFillerCertificateState _certificateState;
+        /// <summary>
+        /// Provides logging for back filler certificate provisioning service.
+        /// </summary>
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
+        /// <summary>
+        /// Tracks time provider for back filler certificate provisioning service.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
+        /// <summary>
+        /// Tracks provision gate for back filler certificate provisioning service.
+        /// </summary>
         private static readonly SemaphoreSlim ProvisionGate = new(1, 1);
 
         /// <summary>
@@ -147,6 +165,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Coordinates ensure certificate availability core async for back filler certificate provisioning service.
+        /// </summary>
         private async Task EnsureCertificateAvailabilityCoreAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -184,6 +205,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             await ProvisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Coordinates provision new certificate async for back filler certificate provisioning service.
+        /// </summary>
         private async Task ProvisionNewCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -319,74 +343,116 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 new EventId(2707, nameof(LogListenerCertificateActivatedSuccessfully)),
                 "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}");
 
+        /// <summary>
+        /// Coordinates log certificate provisioning disabled for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificateProvisioningDisabled(ILogger logger)
         {
             LogCertificateProvisioningDisabledMessage(logger, null);
         }
 
+        /// <summary>
+        /// Coordinates log certificate renewal required with unusable certificate for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason)
         {
             LogCertificateRenewalRequiredWithUnusableCertificateMessage(logger, reason, null);
         }
 
+        /// <summary>
+        /// Coordinates log certificate renewal failed using existing certificate for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception)
         {
             LogCertificateRenewalFailedUsingExistingCertificateMessage(logger, exception);
         }
 
+        /// <summary>
+        /// Coordinates log using existing listener certificate for back filler certificate provisioning service.
+        /// </summary>
         private static void LogUsingExistingListenerCertificate(ILogger logger, string reason)
         {
             LogUsingExistingListenerCertificateMessage(logger, reason, null);
         }
 
+        /// <summary>
+        /// Coordinates log listener certificate inside renewal window for back filler certificate provisioning service.
+        /// </summary>
         private static void LogListenerCertificateInsideRenewalWindow(ILogger logger)
         {
             LogListenerCertificateInsideRenewalWindowMessage(logger, null);
         }
 
+        /// <summary>
+        /// Coordinates log certificate renewal failed retaining existing certificate for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception)
         {
             LogCertificateRenewalFailedRetainingExistingCertificateMessage(logger, exception);
         }
 
+        /// <summary>
+        /// Coordinates log listener certificate unavailable or unusable for back filler certificate provisioning service.
+        /// </summary>
         private static void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason)
         {
             LogListenerCertificateUnavailableOrUnusableMessage(logger, reason, null);
         }
 
+        /// <summary>
+        /// Coordinates log listener certificate activated successfully for back filler certificate provisioning service.
+        /// </summary>
         private static void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc)
         {
             LogListenerCertificateActivatedSuccessfullyMessage(logger, subject, notAfterUtc, null);
         }
 
+        /// <summary>
+        /// Tracks log certificate issuance failed message for back filler certificate provisioning service.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2708, nameof(LogCertificateIssuanceFailed)),
                 "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
+        /// <summary>
+        /// Tracks log certificate persistence failed message for back filler certificate provisioning service.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2709, nameof(LogCertificatePersistenceFailed)),
                 "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
+        /// <summary>
+        /// Tracks log certificate reload failed message for back filler certificate provisioning service.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2710, nameof(LogCertificateReloadFailed)),
                 "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
+        /// <summary>
+        /// Coordinates log certificate issuance failed for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
             LogCertificateIssuanceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
         }
 
+        /// <summary>
+        /// Coordinates log certificate persistence failed for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
             LogCertificatePersistenceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
         }
 
+        /// <summary>
+        /// Coordinates log certificate reload failed for back filler certificate provisioning service.
+        /// </summary>
         private static void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
             LogCertificateReloadFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);

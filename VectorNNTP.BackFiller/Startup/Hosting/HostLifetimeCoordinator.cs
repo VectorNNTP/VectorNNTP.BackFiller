@@ -1,3 +1,9 @@
+// <copyright file="HostLifetimeCoordinator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: host lifetime coordinator in the startup hosting subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
@@ -22,6 +28,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             Console,
         }
 
+        /// <summary>
+        /// Tracks current environment for host lifetime coordinator.
+        /// </summary>
         private static HostingEnvironment? _currentEnvironment;
 
         /// <summary>
@@ -74,6 +83,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
                 NullLogger.Instance);
         }
 
+        /// <summary>
+        /// Coordinates register readiness hook for host lifetime coordinator.
+        /// </summary>
         private static void RegisterReadinessHook(
             IHostApplicationLifetime hostLifetime,
             TimeSpan gracefulShutdownTimeout,
@@ -101,6 +113,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             SignalReadinessAfterStartupMetrics(NullLogger.Instance);
         }
 
+        /// <summary>
+        /// Coordinates signal readiness after startup metrics for host lifetime coordinator.
+        /// </summary>
         private static void SignalReadinessAfterStartupMetrics(ILogger systemdNotifierLogger)
         {
             ArgumentNullException.ThrowIfNull(systemdNotifierLogger);
@@ -119,6 +134,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             LogHostingEnvironment(NullLogger<HostLifetimeCoordinator>.Instance);
         }
 
+        /// <summary>
+        /// Coordinates log hosting environment for host lifetime coordinator.
+        /// </summary>
         private static void LogHostingEnvironment(ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(logger);
@@ -149,6 +167,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             LogShutdownPolicy(shutdownOptions, NullLogger<HostLifetimeCoordinator>.Instance);
         }
 
+        /// <summary>
+        /// Coordinates log shutdown policy for host lifetime coordinator.
+        /// </summary>
         private static void LogShutdownPolicy(ShutdownOptions shutdownOptions, ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(shutdownOptions);
@@ -171,6 +192,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             LogShutdownPolicy(runtimeOptions, NullLogger<HostLifetimeCoordinator>.Instance);
         }
 
+        /// <summary>
+        /// Coordinates log shutdown policy for host lifetime coordinator.
+        /// </summary>
         private static void LogShutdownPolicy(BackFillerRuntimeOptions runtimeOptions, ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -262,6 +286,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             }
         }
 
+        /// <summary>
+        /// Coordinates is running under systemd for host lifetime coordinator.
+        /// </summary>
         private static bool IsRunningUnderSystemd()
         {
             try
@@ -278,17 +305,26 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             }
         }
 
+        /// <summary>
+        /// Coordinates should publish readiness for host lifetime coordinator.
+        /// </summary>
         private static bool ShouldPublishReadiness(IHostApplicationLifetime hostLifetime)
         {
             ArgumentNullException.ThrowIfNull(hostLifetime);
             return !hostLifetime.ApplicationStopping.IsCancellationRequested;
         }
 
+        /// <summary>
+        /// Coordinates should publish readiness for testing for host lifetime coordinator.
+        /// </summary>
         internal static bool ShouldPublishReadinessForTesting(IHostApplicationLifetime hostLifetime)
         {
             return ShouldPublishReadiness(hostLifetime);
         }
 
+        /// <summary>
+        /// Coordinates is running in container for host lifetime coordinator.
+        /// </summary>
         private static bool IsRunningInContainer()
         {
             try
@@ -320,6 +356,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             }
         }
 
+        /// <summary>
+        /// Coordinates is running as windows service for host lifetime coordinator.
+        /// </summary>
         private static bool IsRunningAsWindowsService()
         {
             try
@@ -332,6 +371,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             }
         }
 
+        /// <summary>
+        /// Coordinates on application started for host lifetime coordinator.
+        /// </summary>
         private static void OnApplicationStarted(TimeSpan gracefulShutdownTimeout, ILogger<HostLifetimeCoordinator> logger)
         {
             ArgumentNullException.ThrowIfNull(logger);
@@ -343,6 +385,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
                 gracefulShutdownTimeout.TotalSeconds);
         }
 
+        /// <summary>
+        /// Coordinates on application stopping for host lifetime coordinator.
+        /// </summary>
         private static void OnApplicationStopping(
             TimeSpan gracefulShutdownTimeout,
             ShutdownCoordinator shutdownCoordinator,
@@ -406,18 +451,33 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Hosting environment: {Environment}")]
+        /// <summary>
+        /// Coordinates log hosting environment detected for host lifetime coordinator.
+        /// </summary>
         private static partial void LogHostingEnvironmentDetected(ILogger logger, HostingEnvironment environment);
 
         [LoggerMessage(EventId = 1002, Level = LogLevel.Information, Message = "systemd detected: Type=notify will expect READY notification; set TimeoutStartSec to allow time for dependencies and hosted service initialization")]
+        /// <summary>
+        /// Coordinates log systemd detected for host lifetime coordinator.
+        /// </summary>
         private static partial void LogSystemdDetected(ILogger logger);
 
         [LoggerMessage(EventId = 1003, Level = LogLevel.Information, Message = "Container environment detected; ensure orchestration platform can monitor process health and exit codes (see EXIT_CODES_AND_SYSTEMD.md)")]
+        /// <summary>
+        /// Coordinates log container detected for host lifetime coordinator.
+        /// </summary>
         private static partial void LogContainerDetected(ILogger logger);
 
         [LoggerMessage(EventId = 1004, Level = LogLevel.Information, Message = "Windows Service detected; ensure graceful shutdown timeout is sufficient for cleanup")]
+        /// <summary>
+        /// Coordinates log windows service detected for host lifetime coordinator.
+        /// </summary>
         private static partial void LogWindowsServiceDetected(ILogger logger);
 
         [LoggerMessage(EventId = 1005, Level = LogLevel.Information, Message = "Shutdown policy: GracePeriodSeconds={GracePeriodSeconds}, StopNewWorkAdmission={StopNewWorkAdmission}, FinishActiveArticles={FinishActiveArticles}, DrainQueuedWork={DrainQueuedWork}")]
+        /// <summary>
+        /// Coordinates log shutdown policy core for host lifetime coordinator.
+        /// </summary>
         private static partial void LogShutdownPolicyCore(
             ILogger logger,
             int gracePeriodSeconds,
@@ -426,29 +486,44 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             bool drainQueuedWork);
 
         [LoggerMessage(EventId = 1006, Level = LogLevel.Information, Message = "Host startup milestone reached (ApplicationStarted); Program.Main will publish readiness after StartAsync completes; hosting environment={Environment}; graceful shutdown timeout={ShutdownTimeout}s")]
+        /// <summary>
+        /// Coordinates log application started for host lifetime coordinator.
+        /// </summary>
         private static partial void LogApplicationStarted(
             ILogger logger,
             HostingEnvironment environment,
             double shutdownTimeout);
 
         [LoggerMessage(EventId = 1007, Level = LogLevel.Information, Message = "Shutdown signal received; establishing shutdown state; hosting environment={Environment}; gracePeriod={GracePeriod}")]
+        /// <summary>
+        /// Coordinates log shutdown signal received for host lifetime coordinator.
+        /// </summary>
         private static partial void LogShutdownSignalReceived(
             ILogger logger,
             HostingEnvironment environment,
             TimeSpan gracePeriod);
 
         [LoggerMessage(EventId = 1008, Level = LogLevel.Debug, Message = "Concurrent lifecycle transition race: attempted Ready->Draining but observed {CurrentState}; treating as benign.")]
+        /// <summary>
+        /// Coordinates log concurrent lifecycle transition race for host lifetime coordinator.
+        /// </summary>
         private static partial void LogConcurrentLifecycleTransitionRace(
             ILogger logger,
             ServiceLifecycle.LifecycleState currentState);
 
         [LoggerMessage(EventId = 1009, Level = LogLevel.Warning, Message = "ApplicationStopping observed but lifecycle already Faulted (state={CurrentState}); proceeding with shutdown.")]
+        /// <summary>
+        /// Coordinates log application stopping already faulted for host lifetime coordinator.
+        /// </summary>
         private static partial void LogApplicationStoppingAlreadyFaulted(
             ILogger logger,
             Exception exception,
             ServiceLifecycle.LifecycleState currentState);
 
         [LoggerMessage(EventId = 1010, Level = LogLevel.Information, Message = "Suppressing readiness publication because shutdown is already in progress.")]
+        /// <summary>
+        /// Coordinates log readiness suppressed due to shutdown for host lifetime coordinator.
+        /// </summary>
         private static partial void LogReadinessSuppressedDueToShutdown(ILogger logger);
     }
 }

@@ -1,11 +1,9 @@
 // <copyright file="BackFillerCertificateStoreTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for back filler certificate store, covering certificate and DNS dependency behavior.
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -15,8 +13,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Covers back filler certificate store behavior and invariants exercised by this test suite.
+    /// </summary>
     public sealed class BackFillerCertificateStoreTests
     {
+        /// <summary>
+        /// Exercises evaluate existing certificate async  when certificate missing  returns unusable and requires renewal behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EvaluateExistingCertificateAsync_WhenCertificateMissing_ReturnsUnusableAndRequiresRenewal()
         {
@@ -35,7 +39,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Exercises evaluate existing certificate async  when valid certificate outside renewal window  returns usable without renewal behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EvaluateExistingCertificateAsync_WhenValidCertificateOutsideRenewalWindow_ReturnsUsableWithoutRenewal()
         {
@@ -58,7 +64,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Exercises evaluate existing certificate async  when certificate inside renewal window  returns requires renewal behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EvaluateExistingCertificateAsync_WhenCertificateInsideRenewalWindow_ReturnsRequiresRenewal()
         {
@@ -81,7 +89,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Exercises evaluate existing certificate async  when certificate fqdn mismatch  returns unusable behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task EvaluateExistingCertificateAsync_WhenCertificateFqdnMismatch_ReturnsUnusable()
         {
@@ -102,7 +112,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Exercises persist issued certificate async  writes loadable pfx and key behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task PersistIssuedCertificateAsync_WritesLoadablePfxAndKey()
         {
@@ -141,7 +153,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Exercises persist issued certificate async  when leaf is ecdsa  writes loadable pfx and key behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public async Task PersistIssuedCertificateAsync_WhenLeafIsEcdsa_WritesLoadablePfxAndKey()
         {
@@ -178,6 +192,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Exercises create lets encrypt options behavior, including the expected result and failure semantics.
+        /// </summary>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir, string fqdn, int renewBeforeExpiryDays = 7)
         {
             _ = Directory.CreateDirectory(tempDir);
@@ -203,6 +220,9 @@ namespace VectorNNTP.Backfiller.Tests
                 CloudFlareZoneId: "zone");
         }
 
+        /// <summary>
+        /// Exercises create and write pfx behavior, including the expected result and failure semantics.
+        /// </summary>
         private static void CreateAndWritePfx(string pfxPath, string password, string fqdn, DateTimeOffset notBeforeUtc, DateTimeOffset notAfterUtc)
         {
             using RSA rsa = RSA.Create(2048);
@@ -224,6 +244,9 @@ namespace VectorNNTP.Backfiller.Tests
             File.WriteAllBytes(pfxPath, pfx);
         }
 
+        /// <summary>
+        /// Exercises create unique temp directory behavior, including the expected result and failure semantics.
+        /// </summary>
         private static string CreateUniqueTempDirectory()
         {
             string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-StoreTests-{Guid.NewGuid():N}");
@@ -231,6 +254,9 @@ namespace VectorNNTP.Backfiller.Tests
             return path;
         }
 
+        /// <summary>
+        /// Exercises delete directory if exists behavior, including the expected result and failure semantics.
+        /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {
             if (!Directory.Exists(path))

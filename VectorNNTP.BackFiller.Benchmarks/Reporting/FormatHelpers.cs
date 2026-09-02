@@ -1,7 +1,19 @@
+// <copyright file="FormatHelpers.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Reporting/FormatHelpers: formats benchmark measurements and topology details for operators and artifacts.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Defines the format Helpers class for benchmark or isolated-regression execution.
+/// </summary>
 internal static class FormatHelpers
 {
+    /// <summary>
+    /// Performs the print RequiredRateComparison operation.
+    /// </summary>
     internal static void PrintRequiredRateComparison(double currentArticlesPerSecond, int articleBytes)
     {
         double bitsPerArticle = articleBytes * 8d;
@@ -28,6 +40,9 @@ internal static class FormatHelpers
         Console.WriteLine($"Current rate / 10 Gbps target ratio: {currentTo10GbpsRatio:F4}");
     }
 
+    /// <summary>
+    /// Performs the build DepthBucketSummary operation.
+    /// </summary>
     internal static string BuildDepthBucketSummary(List<long>[] submitBuckets, List<long>[] completeBuckets)
     {
         string[] labels = ["1-4", "5-8", "9-12", "13-16", ">16"];

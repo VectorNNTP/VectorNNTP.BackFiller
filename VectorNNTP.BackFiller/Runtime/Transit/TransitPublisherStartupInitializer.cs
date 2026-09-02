@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit publisher startup initializer behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
@@ -15,7 +14,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         TransitPublisher transitPublisher,
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Tracks transit publisher for transit publisher startup initializer.
+        /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
+        /// <summary>
+        /// Provides logging for transit publisher startup initializer.
+        /// </summary>
         private readonly ILogger<TransitPublisherStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
@@ -41,9 +46,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
+        /// <summary>
+        /// Coordinates log transit startup initializer beginning for transit publisher startup initializer.
+        /// </summary>
         private static partial void LogTransitStartupInitializerBeginning(ILogger logger);
 
         [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
+        /// <summary>
+        /// Coordinates log transit startup initializer completed for transit publisher startup initializer.
+        /// </summary>
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);
     }
 }

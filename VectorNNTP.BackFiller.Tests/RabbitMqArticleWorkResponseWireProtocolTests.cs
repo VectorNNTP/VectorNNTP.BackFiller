@@ -1,9 +1,9 @@
 // <copyright file="RabbitMqArticleWorkResponseWireProtocolTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Article Processing
-// Focused contract tests for canonical response wire protocol serialization and parsing.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for rabbit mq article work response wire protocol, covering NNTP article and transport behavior; dependency integration and failure handling.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -16,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class RabbitMqArticleWorkResponseWireProtocolTests
     {
+        /// <summary>
+        /// Exercises serialize v1  when success  contains canonical fields and uri null behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull()
         {
@@ -35,7 +38,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("correlationId", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("replyTo", json, StringComparison.OrdinalIgnoreCase);
         }
-
+        /// <summary>
+        /// Exercises serialize v1  when terminal failure  contains error and no uri behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void SerializeV1_WhenTerminalFailure_ContainsErrorAndNoUri()
         {
@@ -54,7 +59,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("\"error\":\"No article with that message-id\"", json, StringComparison.Ordinal);
             Assert.DoesNotContain("\"uri\"", json, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Exercises parse v1  when payload is valid  round trips canonical fields behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ParseV1_WhenPayloadIsValid_RoundTripsCanonicalFields()
         {
@@ -77,7 +84,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(source.Outcome, parsed.Outcome);
             Assert.Equal(source.Error, parsed.Error);
         }
-
+        /// <summary>
+        /// Exercises parse v1  when version unsupported  throws invalid operation exception behavior, including the expected result and failure semantics.
+        /// </summary>
         [Fact]
         public void ParseV1_WhenVersionUnsupported_ThrowsInvalidOperationException()
         {

@@ -1,3 +1,9 @@
+// <copyright file="MySqlConnectionStringUtilities.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: my sql connection string utilities in the vector nntp.back filler configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // MySqlConnectionStringUtilities.cs -- Canonical interpretation of MySQL connection strings.
 //
 // Provides application-level parsing of MySQL connection strings with dual-path architecture
@@ -102,6 +108,9 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class MySqlConnectionStringUtilities
     {
         // MySqlConnector aliases for server/host (official documentation)
+        /// <summary>
+        /// Tracks server aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> ServerAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Server",
@@ -114,6 +123,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for database name
+        /// <summary>
+        /// Tracks database aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> DatabaseAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Database",
@@ -122,6 +134,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for username
+        /// <summary>
+        /// Tracks username aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> UsernameAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "User ID",
@@ -133,6 +148,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for password
+        /// <summary>
+        /// Tracks password aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> PasswordAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Password",
@@ -140,6 +158,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for minimum pool size
+        /// <summary>
+        /// Limits min pool size aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> MinPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Min Pool Size",
@@ -149,6 +170,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for maximum pool size
+        /// <summary>
+        /// Limits max pool size aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> MaxPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Max Pool Size",
@@ -505,6 +529,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
         /// </remarks>
 #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
+        /// <summary>
+        /// Coordinates parse raw key value pairs for my sql connection string utilities.
+        /// </summary>
         private static IReadOnlyList<(string Key, string Value)> ParseRawKeyValuePairs(string connectionString)
 #pragma warning restore CA1859
         {

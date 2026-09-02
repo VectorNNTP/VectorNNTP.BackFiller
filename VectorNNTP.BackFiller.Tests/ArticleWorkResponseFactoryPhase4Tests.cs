@@ -1,9 +1,9 @@
 // <copyright file="ArticleWorkResponseFactoryPhase4Tests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Article Processing
-// Focused Phase 4 tests for deterministic response payload creation semantics.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for article work response factory phase4, covering NNTP article and transport behavior.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -17,6 +17,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ArticleWorkResponseFactoryPhase4Tests
     {
+        /// <summary>
+        /// Exercises create response  maps outcome to canonical payload behavior, including the expected result and failure semantics.
+        /// </summary>
         [Theory]
         [InlineData(0, true, false)]
         [InlineData(2, false, true)]
@@ -67,6 +70,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Exercises create result behavior, including the expected result and failure semantics.
+        /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
             Guid requestId,
@@ -104,14 +110,23 @@ namespace VectorNNTP.Backfiller.Tests
                 UnexpectedException: null);
         }
 
+        /// <summary>
+        /// Covers no op settlement behavior and invariants exercised by this test suite.
+        /// </summary>
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
+            /// <summary>
+            /// Exercises ack async behavior, including the expected result and failure semantics.
+            /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Exercises nack async behavior, including the expected result and failure semantics.
+            /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();

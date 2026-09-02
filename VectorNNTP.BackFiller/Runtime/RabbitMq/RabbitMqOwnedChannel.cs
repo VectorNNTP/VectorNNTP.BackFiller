@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq owned channel behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
@@ -16,6 +15,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </remarks>
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
+        /// <summary>
+        /// Tracks channel for rabbit mq owned channel.
+        /// </summary>
         private readonly IRabbitMqChannel _channel;
 
         /// <summary>
