@@ -7,7 +7,8 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the transit BenchmarkCliOptions record struct for benchmark or isolated-regression execution.
+/// Holds optional command-line overrides and runtime identity expectations for a transit benchmark.
+/// <remarks>All numeric options are parsed as positive integers; omitted values remain <see langword="null"/>.</remarks>
 /// </summary>
 internal readonly record struct TransitBenchmarkCliOptions(
     int? DurationSeconds,
@@ -34,7 +35,10 @@ internal readonly record struct TransitBenchmarkCliOptions(
     string? ExpectedProductionFileVersion = null)
 {
     /// <summary>
-    /// Performs the parse operation.
+    /// Parses <c>--key value</c> and <c>--key=value</c> options using invariant option names.
+    /// <param name="args">Command-line arguments to parse.</param>
+    /// <returns>The parsed options, or the default value when <paramref name="args"/> is empty.</returns>
+    /// <exception cref="ArgumentException">Thrown when an option is unknown, missing a value, or has an invalid value.</exception>
     /// </summary>
     internal static TransitBenchmarkCliOptions Parse(string[] args)
     {

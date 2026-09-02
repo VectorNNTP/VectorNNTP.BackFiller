@@ -264,6 +264,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// Runs NNTP command handling for a single client connection.
     /// </summary>
     /// <param name="client">The connected client.</param>
+    /// <param name="taskId">Identifier assigned to the client session.</param>
     /// <param name="cancellationToken">The server shutdown token.</param>
     /// <returns>A task representing the client session.</returns>
     private async Task HandleClientAsync(TcpClient client, int taskId, CancellationToken cancellationToken)
@@ -723,7 +724,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// </summary>
     /// <param name="writer">The socket-bound protocol writer.</param>
     /// <param name="queueReader">The FIFO response queue reader.</param>
-    /// <param name="cancellationToken">Connection shutdown token.</param>
+    /// <param name="control">Shared control state for quit and connection completion.</param>
+    /// <param name="metrics">Counters updated while responses are transmitted.</param>
     /// <param name="onResponseWritten">Callback invoked after each response is staged.</param>
     /// <returns>A task representing the transmit loop.</returns>
     private static async Task RunTransmitLoopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopControl control, TransmitLoopMetrics metrics, Action onResponseWritten)

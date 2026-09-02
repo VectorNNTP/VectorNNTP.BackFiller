@@ -10,12 +10,20 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks.Execution;
 
 /// <summary>
-/// Defines the measurement RunCoordinator class for benchmark or isolated-regression execution.
+/// Coordinates one bounded measurement interval and its post-measurement drain.
 /// </summary>
 internal static class MeasurementRunCoordinator
 {
     /// <summary>
-    /// Performs the run Async operation.
+    /// Runs the configured workload, then drains outstanding work before returning its result.
+    /// <param name="publisher">Transit publisher used by dispatch workers.</param>
+    /// <param name="config">Validated benchmark configuration.</param>
+    /// <param name="workload">Prepared workload supplied to the measurement engine.</param>
+    /// <param name="runtimeIdentity">Captured runtime identity recorded in the result.</param>
+    /// <param name="benchmarkBuildVersion">Build version recorded in the result.</param>
+    /// <param name="cancellationToken">Token that requests cancellation of the measurement.</param>
+    /// <param name="enableForensicDiagnostics">Whether to collect additional diagnostic snapshots.</param>
+    /// <returns>The completed measurement result.</returns>
     /// </summary>
     internal static async Task<BenchmarkResult> RunAsync(
         TransitPublisher publisher,

@@ -12,12 +12,15 @@ using System.Text;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the runtime IdentityGuard class for benchmark or isolated-regression execution.
+/// Verifies that benchmark execution uses the expected benchmark and production assembly identities.
 /// </summary>
 internal static class RuntimeIdentityGuard
 {
     /// <summary>
-    /// Performs the ensure Matches operation.
+    /// Compares expected build provenance with loaded assemblies and throws on hard-identity mismatches.
+    /// <param name="expected">Expected paths, versions, framework, and architecture.</param>
+    /// <param name="runtimeIdentity">Identity captured from the current process.</param>
+    /// <exception cref="InvalidOperationException">Thrown when required expectations are missing or identities differ.</exception>
     /// </summary>
     internal static void EnsureMatches(RuntimeIdentityExpectation expected, RuntimeExecutionIdentity runtimeIdentity)
     {
