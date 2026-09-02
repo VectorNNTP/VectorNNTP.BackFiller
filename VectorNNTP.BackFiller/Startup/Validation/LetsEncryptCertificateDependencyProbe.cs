@@ -1,4 +1,10 @@
 // <copyright file="LetsEncryptCertificateDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: lets encrypt certificate dependency probe in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="LetsEncryptCertificateDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -20,6 +26,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </remarks>
     internal static class LetsEncryptCertificateDependencyProbe
     {
+        /// <summary>
+        /// Stores the dependency name state used to enforce this component's runtime contract.
+        /// </summary>
         private const string DependencyName = "LetsEncryptCertificate";
 
         /// <summary>

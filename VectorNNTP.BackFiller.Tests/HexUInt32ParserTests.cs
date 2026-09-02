@@ -1,9 +1,9 @@
 // <copyright file="HexUInt32ParserTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Contract tests for strict hexadecimal parsing used by yEnc metadata validation.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for hex u int32 parser.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

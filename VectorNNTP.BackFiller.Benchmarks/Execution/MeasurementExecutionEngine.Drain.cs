@@ -1,10 +1,22 @@
+// <copyright file="MeasurementExecutionEngine.Drain.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/MeasurementExecutionEngine.Drain: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the measurement ExecutionEngine class used by this benchmark or regression-gate component.
+/// </summary>
 internal static partial class MeasurementExecutionEngine
 {
+    /// <summary>
+    /// Executes the drain AndShutdownAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static async Task<BenchmarkResult> DrainAndShutdownAsync(
         BoundedArticleQueue queue,
         MeasurementMetrics metrics,
@@ -150,6 +162,9 @@ internal static partial class MeasurementExecutionEngine
             fixedCountBoundaryTelemetry);
     }
 
+    /// <summary>
+    /// Executes the build BoundarySnapshot operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static FixedCountBoundarySnapshot BuildBoundarySnapshot(
         string phase,
         DateTimeOffset timestampUtc,
@@ -203,6 +218,9 @@ internal static partial class MeasurementExecutionEngine
             Connections: connectionSnapshots);
     }
 
+    /// <summary>
+    /// Executes the build PostMeasurementTerminalizationSummary operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static PostMeasurementTerminalizationSummary BuildPostMeasurementTerminalizationSummary(
         DateTimeOffset measurementEndUtc,
         long measurementEndTick,

@@ -1,11 +1,9 @@
 // <copyright file="MySqlNntpAccountSnapshotProviderProvisioningTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for my sql nntp account snapshot provider provisioning.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -18,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class MySqlNntpAccountSnapshotProviderProvisioningTests
     {
+        /// <summary>
+        /// Verifies the EnsureStartupDependenciesAsync_UsesConfiguredDatabaseAndTableAndAuthoritativeSchema scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_UsesConfiguredDatabaseAndTableAndAuthoritativeSchema()
         {
@@ -52,7 +53,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("KEY `idx_serverid` (`serverid`)", call.createTableSql, StringComparison.Ordinal);
             Assert.Contains(") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;", call.createTableSql, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Verifies the EnsureStartupDependenciesAsync_WhenRepeated_RemainsIdempotentAtProviderBoundary scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_WhenRepeated_RemainsIdempotentAtProviderBoundary()
         {
@@ -74,7 +77,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(MySqlNntpAccountSnapshotProvider.AccountsTableCreateSql, call.createTableSql);
             });
         }
-
+        /// <summary>
+        /// Verifies the EnsureStartupDependenciesAsync_WhenProvisioningFails_PropagatesFailure scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task EnsureStartupDependenciesAsync_WhenProvisioningFails_PropagatesFailure()
         {
@@ -89,7 +94,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             _ = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
         }
-
+        /// <summary>
+        /// Verifies the AccountsTableCreateSql_UsesNewBackfillerTableNameAndNotLegacyName scenario and expected contract.
+        /// </summary>
         [Fact]
         public void AccountsTableCreateSql_UsesNewBackfillerTableNameAndNotLegacyName()
         {
@@ -97,10 +104,16 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("nntpgrabberaccounts", MySqlNntpAccountSnapshotProvider.AccountsTableCreateSql, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Documents the CapturingProvisioningStore test type and its protected contract.
+        /// </summary>
         private sealed class CapturingProvisioningStore : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             internal List<(string databaseName, string tableName, string createTableSql)> Calls { get; } = [];
 
+            /// <summary>
+            /// Verifies the EnsureDatabaseAndTableAsync scenario and expected contract.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 Calls.Add((databaseName, tableName, createTableSql));
@@ -108,8 +121,14 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the DelegateProvisioningStore test type and its protected contract.
+        /// </summary>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
+            /// <summary>
+            /// Verifies the EnsureDatabaseAndTableAsync scenario and expected contract.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return callback(cancellationToken);

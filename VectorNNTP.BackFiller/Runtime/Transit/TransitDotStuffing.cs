@@ -1,4 +1,10 @@
 // <copyright file="TransitDotStuffing.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: transit dot stuffing in the runtime transit subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="TransitDotStuffing.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -8,6 +14,9 @@
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
+    /// <summary>
+    /// Defines the transit dot stuffing algorithm component and its contracts for this subsystem.
+    /// </summary>
     internal enum TransitDotStuffingAlgorithm
     {
         BaselineByteLoop = 0,
@@ -15,13 +24,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         BulkLineOrientedTwoPass = 2,
     }
 
+    /// <summary>
+    /// Performs the transit dot stuff transform result operation while preserving this component's lifecycle and state contracts.
+    /// </summary>
     internal readonly record struct TransitDotStuffTransformResult(
         int BytesWritten,
         int StuffedDotCount,
         bool AppendedTrailingCrlf);
 
+    /// <summary>
+    /// Defines the transit dot stuffing component and its contracts for this subsystem.
+    /// </summary>
     internal static class TransitDotStuffing
     {
+        /// <summary>
+        /// Performs the get required destination length operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
             stuffedDotCount = 0;
@@ -59,6 +77,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return required;
         }
 
+        /// <summary>
+        /// Performs the try dot stuff operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static bool TryDotStuff(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -75,6 +96,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             };
         }
 
+        /// <summary>
+        /// Performs the try dot stuff baseline byte loop operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static bool TryDotStuffBaselineByteLoop(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -129,6 +153,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Performs the try dot stuff bulk line oriented single pass operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static bool TryDotStuffBulkLineOrientedSinglePass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -184,6 +211,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Performs the try dot stuff bulk line oriented two pass operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static bool TryDotStuffBulkLineOrientedTwoPass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,

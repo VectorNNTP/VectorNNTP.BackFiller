@@ -1,4 +1,10 @@
 // <copyright file="CloudflareDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: cloudflare dependency probe in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="CloudflareDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -16,6 +22,9 @@ using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines the cloudflare dependency probe component and its contracts for this subsystem.
+    /// </summary>
     internal static class CloudflareDependencyProbe
     {
         /// <summary>

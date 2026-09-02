@@ -1,11 +1,9 @@
 // <copyright file="LoggingAsyncSinkCorrectnessTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for logging async sink correctness.
 
 using Serilog;
 using Serilog.Events;
@@ -13,8 +11,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Documents the LoggingAsyncSinkCorrectnessTests test type and its protected contract.
+    /// </summary>
     public sealed class LoggingAsyncSinkCorrectnessTests
     {
+        /// <summary>
+        /// Verifies the AsyncSink_BlockWhenFull_EmitsAllSubmittedEvents scenario and expected contract.
+        /// </summary>
         [Fact]
         public Task AsyncSink_BlockWhenFull_EmitsAllSubmittedEvents()
         {
@@ -38,6 +42,9 @@ namespace VectorNNTP.Backfiller.Tests
                     blockWhenFull: true)
                 .CreateLogger();
 
+            /// <summary>
+            /// Stores the TotalEvents fixture value used by these tests.
+            /// </summary>
             const int TotalEvents = 10_000;
 
             for (int i = 0; i < TotalEvents; i++)
@@ -55,7 +62,9 @@ namespace VectorNNTP.Backfiller.Tests
             TryDeleteDirectory(outputDirectory);
             return Task.CompletedTask;
         }
-
+        /// <summary>
+        /// Verifies the AsyncSink_CloseAndFlushAsync_DrainsQueuedEvents scenario and expected contract.
+        /// </summary>
         [Fact]
         public Task AsyncSink_CloseAndFlushAsync_DrainsQueuedEvents()
         {
@@ -83,6 +92,9 @@ namespace VectorNNTP.Backfiller.Tests
                     blockWhenFull: true)
                 .CreateLogger();
 
+            /// <summary>
+            /// Stores the TotalEvents fixture value used by these tests.
+            /// </summary>
             const int TotalEvents = 5_000;
 
             _ = Parallel.For(
@@ -101,6 +113,9 @@ namespace VectorNNTP.Backfiller.Tests
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Verifies the CreateTempOutputDirectory scenario and expected contract.
+        /// </summary>
         private static string CreateTempOutputDirectory()
         {
             string directory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", "LoggingAsyncSink", Guid.NewGuid().ToString("N"));
@@ -108,6 +123,9 @@ namespace VectorNNTP.Backfiller.Tests
             return directory;
         }
 
+        /// <summary>
+        /// Verifies the TryDeleteDirectory scenario and expected contract.
+        /// </summary>
         private static void TryDeleteDirectory(string path)
         {
             try
@@ -123,12 +141,24 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the CountingSink test type and its protected contract.
+        /// </summary>
         private sealed class CountingSink : Serilog.Core.ILogEventSink
         {
+            /// <summary>
+            /// Stores the _count fixture value used by these tests.
+            /// </summary>
             private long _count;
 
+            /// <summary>
+            /// Stores the Count value used by this test fixture.
+            /// </summary>
             public long Count => Interlocked.Read(ref _count);
 
+            /// <summary>
+            /// Verifies the Emit scenario and expected contract.
+            /// </summary>
             public void Emit(LogEvent logEvent)
             {
                 _ = logEvent;

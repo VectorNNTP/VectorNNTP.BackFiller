@@ -1,3 +1,9 @@
+// <copyright file="MySqlNntpAccountSnapshotProvider.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: my sql nntp account snapshot provider in the runtime accounts subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 using System.Collections.Immutable;
 using System.Diagnostics;
 using MySqlConnector;
@@ -10,8 +16,14 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
     /// </summary>
     internal sealed partial class MySqlNntpAccountSnapshotProvider
     {
+        /// <summary>
+        /// Stores the accounts table name state used to enforce this component's runtime contract.
+        /// </summary>
         internal const string AccountsTableName = "nntpbackfilleraccounts";
 
+        /// <summary>
+        /// Stores the accounts table create sql state used to enforce this component's runtime contract.
+        /// </summary>
         internal const string AccountsTableCreateSql = "CREATE TABLE IF NOT EXISTS `nntpbackfilleraccounts` (" +
             "`entryid` char(36) NOT NULL," +
             "`backbone` enum('Abavia','Altopia','BaseIP','Eweka','Elbracht','Giganews','GTT','Highwinds','ItsHosted','Novia','UExpress','UsenetNode1') NOT NULL," +
@@ -27,6 +39,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             "KEY `idx_serverid` (`serverid`)" +
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;";
 
+        /// <summary>
+        /// Stores the accounts query state used to enforce this component's runtime contract.
+        /// </summary>
         private const string AccountsQuery =
             "SELECT " +
             "entryid, " +
@@ -42,16 +57,43 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             "FROM nntpbackfilleraccounts " +
             "WHERE serverid = @ServerId;";
 
+        /// <summary>
+        /// Stores the connection string state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly string _connectionString;
+        /// <summary>
+        /// Stores the database name state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly string _databaseName;
+        /// <summary>
+        /// Stores the server id state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly byte _serverId;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<MySqlNntpAccountSnapshotProvider> _logger;
+        /// <summary>
+        /// Stores the query accounts state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly Func<CancellationToken, Task<List<NntpAccountSnapshot>>> _queryAccounts;
+        /// <summary>
+        /// Stores the startup provisioning store state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IStartupProvisioningStore _startupProvisioningStore;
 
+        /// <summary>
+        /// Stores the refresh in progress state used to enforce this component's runtime contract.
+        /// </summary>
         private int _refreshInProgress;
+        /// <summary>
+        /// Stores the current snapshot state used to enforce this component's runtime contract.
+        /// </summary>
         private volatile NntpAccountSnapshotState _currentSnapshot;
 
+        /// <summary>
+        /// Performs the my sql nntp account snapshot provider operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         public MySqlNntpAccountSnapshotProvider(
             IConfiguration configuration,
             BackFillerRuntimeOptions runtimeOptions,
@@ -79,6 +121,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             _currentSnapshot = NntpAccountSnapshotState.Empty(_serverId);
         }
 
+        /// <summary>
+        /// Performs the my sql nntp account snapshot provider operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal MySqlNntpAccountSnapshotProvider(
             byte serverId,
             ILogger<MySqlNntpAccountSnapshotProvider> logger,
@@ -157,6 +202,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             }
         }
 
+        /// <summary>
+        /// Performs the load and publish snapshot operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task<int> LoadAndPublishSnapshotAsync(CancellationToken cancellationToken)
         {
             List<NntpAccountSnapshot> loadedAccounts = await _queryAccounts(cancellationToken).ConfigureAwait(false);
@@ -170,6 +218,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             return immutableAccounts.Length;
         }
 
+        /// <summary>
+        /// Performs the query accounts operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task<List<NntpAccountSnapshot>> QueryAccountsAsync(CancellationToken cancellationToken)
         {
 #pragma warning disable CA2007
@@ -229,6 +280,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             return accounts;
         }
 
+        /// <summary>
+        /// Performs the parse entry id value operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static Guid ParseEntryIdValue(object rawEntryId)
         {
             return rawEntryId switch
@@ -239,6 +293,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             };
         }
 
+        /// <summary>
+        /// Performs the parse entry id operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static Guid ParseEntryId(string rawEntryId)
         {
             return Guid.TryParse(rawEntryId, out Guid parsed)
@@ -246,6 +303,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                 : throw new InvalidOperationException($"Invalid {AccountsTableName}.entryid value '{rawEntryId}'. Expected GUID format.");
         }
 
+        /// <summary>
+        /// Performs the parse keep alive value operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static byte ParseKeepAliveValue(object rawKeepAlive)
         {
             return rawKeepAlive switch
@@ -263,6 +323,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             };
         }
 
+        /// <summary>
+        /// Performs the parse use ssl operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static bool ParseUseSsl(string rawUseSsl)
         {
             return rawUseSsl switch
@@ -273,30 +336,60 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             };
         }
 
+        /// <summary>
+        /// Defines the istartup provisioning store component and its contracts for this subsystem.
+        /// </summary>
         internal interface IStartupProvisioningStore
         {
+            /// <summary>
+            /// Performs the ensure database and table operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken);
         }
 
+        /// <summary>
+        /// Defines the no op startup provisioning store component and its contracts for this subsystem.
+        /// </summary>
         internal sealed class NoOpStartupProvisioningStore : IStartupProvisioningStore
         {
+            /// <summary>
+            /// Stores the instance state used to enforce this component's runtime contract.
+            /// </summary>
             internal static readonly NoOpStartupProvisioningStore Instance = new();
 
+            /// <summary>
+            /// Performs the no op startup provisioning store operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private NoOpStartupProvisioningStore()
             {
             }
 
+            /// <summary>
+            /// Performs the ensure database and table operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;
             }
         }
 
+        /// <summary>
+        /// Defines the my sql startup provisioning store component and its contracts for this subsystem.
+        /// </summary>
         private sealed class MySqlStartupProvisioningStore : IStartupProvisioningStore
         {
+            /// <summary>
+            /// Stores the connection string state used to enforce this component's runtime contract.
+            /// </summary>
             private readonly string _connectionString;
+            /// <summary>
+            /// Stores the logger state used to enforce this component's runtime contract.
+            /// </summary>
             private readonly ILogger<MySqlNntpAccountSnapshotProvider> _logger;
 
+            /// <summary>
+            /// Performs the my sql startup provisioning store operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             internal MySqlStartupProvisioningStore(string connectionString, ILogger<MySqlNntpAccountSnapshotProvider> logger)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -306,6 +399,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                 _logger = logger;
             }
 
+            /// <summary>
+            /// Performs the ensure database and table operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             public async Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);
@@ -321,6 +417,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                 await EnsureTableExistsAsync(baseBuilder, serverTarget, databaseName, tableName, createTableSql, cancellationToken).ConfigureAwait(false);
             }
 
+            /// <summary>
+            /// Performs the ensure database exists operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private async Task EnsureDatabaseExistsAsync(
                 MySqlConnectionStringBuilder baseBuilder,
                 string serverTarget,
@@ -362,6 +461,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                 }
             }
 
+            /// <summary>
+            /// Performs the ensure table exists operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private async Task EnsureTableExistsAsync(
                 MySqlConnectionStringBuilder baseBuilder,
                 string serverTarget,
@@ -407,30 +509,57 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         [LoggerMessage(EventId = 2000, Level = LogLevel.Information, Message = "Initial NNTP account load starting for ServerId={ServerId}")]
+        /// <summary>
+        /// Performs the log initial account load starting operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogInitialAccountLoadStarting(ILogger logger, byte serverId);
 
         [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Initial NNTP account load succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}")]
+        /// <summary>
+        /// Performs the log initial account load succeeded operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogInitialAccountLoadSucceeded(ILogger logger, byte serverId, int accountCount);
 
         [LoggerMessage(EventId = 2004, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while connecting to server target={ServerTarget}. Startup cannot continue.")]
+        /// <summary>
+        /// Performs the log provisioning connect server failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogProvisioningConnectServerFailed(ILogger logger, string serverTarget, Exception exception);
 
         [LoggerMessage(EventId = 2005, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE DATABASE for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
+        /// <summary>
+        /// Performs the log provisioning create database failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogProvisioningCreateDatabaseFailed(ILogger logger, string serverTarget, string databaseName, Exception exception);
 
         [LoggerMessage(EventId = 2006, Level = LogLevel.Error, Message = "MySQL startup provisioning failed while selecting database for server target={ServerTarget}, database={DatabaseName}. Startup cannot continue.")]
+        /// <summary>
+        /// Performs the log provisioning select database failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogProvisioningSelectDatabaseFailed(ILogger logger, string serverTarget, string databaseName, Exception exception);
 
         [LoggerMessage(EventId = 2007, Level = LogLevel.Error, Message = "MySQL startup provisioning failed during CREATE TABLE for server target={ServerTarget}, database={DatabaseName}, table={TableName}. Startup cannot continue.")]
+        /// <summary>
+        /// Performs the log provisioning create table failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogProvisioningCreateTableFailed(ILogger logger, string serverTarget, string databaseName, string tableName, Exception exception);
 
         [LoggerMessage(EventId = 2100, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh starting for ServerId={ServerId}")]
+        /// <summary>
+        /// Performs the log periodic refresh starting operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogPeriodicRefreshStarting(ILogger logger, byte serverId);
 
         [LoggerMessage(EventId = 2101, Level = LogLevel.Information, Message = "Periodic NNTP account refresh succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}; DurationMs={DurationMs}")]
+        /// <summary>
+        /// Performs the log periodic refresh succeeded operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogPeriodicRefreshSucceeded(ILogger logger, byte serverId, int accountCount, long durationMs);
 
         [LoggerMessage(EventId = 2102, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh skipped because a refresh is already in progress for ServerId={ServerId}")]
+        /// <summary>
+        /// Performs the log periodic refresh skipped in progress operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogPeriodicRefreshSkippedInProgress(ILogger logger, byte serverId);
     }
 }

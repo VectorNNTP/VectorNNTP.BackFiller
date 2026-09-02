@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleParserBenchmarks.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks / Articles / Parsing
@@ -22,6 +22,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
+    /// <summary>
+    /// Represents the nntp ArticleParserBenchmarks class used by this benchmark or regression-gate component.
+    /// </summary>
     public class NntpArticleParserBenchmarks
     {
         /// <summary>
@@ -83,6 +86,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Builds deterministic benchmark fixtures.
         /// </summary>
         [GlobalSetup]
+        /// <summary>
+        /// Executes the setup operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public void Setup()
         {
             _parser = new NntpArticleParser(LocalFqdn);
@@ -177,6 +183,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Baseline = true, Description = "TinyText")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse TinyText operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseTinyText()
         {
             return _parser.Parse(_tinyText).IsAccepted;
@@ -188,6 +197,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "TypicalText")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse TypicalText operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseTypicalText()
         {
             return _parser.Parse(_typicalText).IsAccepted;
@@ -199,6 +211,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "LargeText")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse LargeText operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseLargeText()
         {
             return _parser.Parse(_largeText).IsAccepted;
@@ -210,6 +225,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "YEncSinglePart")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse y EncSinglePart operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseYEncSinglePart()
         {
             return _parser.Parse(_yencSingle).IsAccepted;
@@ -221,6 +239,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "YEncMultiPart")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse y EncMultiPart operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseYEncMultiPart()
         {
             return _parser.Parse(_yencMultipart).IsAccepted;
@@ -232,6 +253,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "MalformedArticle")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse MalformedArticle operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseMalformedArticle()
         {
             return _parser.Parse(_malformed).IsAccepted;
@@ -243,6 +267,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "InvalidDate")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse InvalidDate operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseInvalidDate()
         {
             return _parser.Parse(_invalidDate).IsAccepted;
@@ -254,6 +281,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "LargeHeaderSet")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse LargeHeaderSet operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseLargeHeaderSet()
         {
             return _parser.Parse(_largeHeaderSet).IsAccepted;
@@ -265,6 +295,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Accepted flag for sink prevention.</returns>
         [Benchmark(Description = "LargeBinary")]
         [BenchmarkCategory("ArticleParser")]
+        /// <summary>
+        /// Executes the parse LargeBinary operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public bool ParseLargeBinary()
         {
             return _parser.Parse(_largeBinary).IsAccepted;

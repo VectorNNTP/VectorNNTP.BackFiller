@@ -1,11 +1,9 @@
 // <copyright file="ProgramCommandLineTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for program command line.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup;
@@ -19,11 +17,16 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ProgramCommandLineTests
     {
+        /// <summary>
+        /// Verifies the ProgramCommandLineTests scenario and expected contract.
+        /// </summary>
         public ProgramCommandLineTests()
         {
             BuildInfoService.InitializeBuildInfo(DateTimeOffset.UtcNow);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenNoArguments_ReturnsNull scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TryHandleCommand_WhenNoArguments_ReturnsNull()
         {
@@ -31,14 +34,18 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Null(exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryParseCommandLine_WhenArgsIsNull_ThrowsArgumentNullException scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TryParseCommandLine_WhenArgsIsNull_ThrowsArgumentNullException()
         {
             _ = Assert.Throws<ArgumentNullException>(() =>
                 OperationalCommandParser.TryParseCommandLine(null!, out _, out _));
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenSimpleInformationalCommand_ReturnsSuccess scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("--help")]
         [InlineData("--version")]
@@ -50,7 +57,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenOptionIsNotExactCommand_ReturnsConfigurationFailure scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("--version=x")]
         [InlineData("--versions")]
@@ -61,7 +70,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenArgumentUnknown_ReturnsConfigurationFailure scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("--bogus")]
         [InlineData("foo")]
@@ -71,7 +82,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenUnknownOptionPresentAlongsideValidCommand_ReturnsConfigurationFailure scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("--bogus", "--version")]
         [InlineData("--version", "--bogus")]
@@ -81,7 +94,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenMultipleCommandsSpecified_ReturnsConfigurationFailure scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("--version", "--help")]
         [InlineData("--help", "--diagnostics")]
@@ -92,7 +107,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenConfigurationCommandAndConfigurationUnavailable_ReturnsUnexpectedFailure scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("--dump-config")]
         [InlineData("--validate-config")]
@@ -104,7 +121,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeUnexpectedFailure, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenDumpConfigHasConfiguration_ReturnsSuccess scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TryHandleCommand_WhenDumpConfigHasConfiguration_ReturnsSuccess()
         {
@@ -122,7 +141,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenDumpConfigIncludesUseStagingDirectory_PrintsCleartextValue scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TryHandleCommand_WhenDumpConfigIncludesUseStagingDirectory_PrintsCleartextValue()
         {
@@ -151,7 +172,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Console.SetOut(originalOut);
             }
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenMultipleCommandsAndUnknownOptionArePresent_ReturnsConfigurationFailure scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TryHandleCommand_WhenMultipleCommandsAndUnknownOptionArePresent_ReturnsConfigurationFailure()
         {
@@ -159,7 +182,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
-
+        /// <summary>
+        /// Verifies the TryHandleCommand_WhenArgumentIsEmptyOrWhitespace_ReturnsConfigurationFailure scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("")]
         [InlineData(" ")]
@@ -171,6 +196,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
         }
 
+        /// <summary>
+        /// Verifies the ParseAndMaybeExecute scenario and expected contract.
+        /// </summary>
         private static int? ParseAndMaybeExecute(string[] args, IConfiguration? configuration = null)
         {
             bool parsed = OperationalCommandParser.TryParseCommandLine(args, out OperationalCommand? command, out int? parseErrorExitCode);

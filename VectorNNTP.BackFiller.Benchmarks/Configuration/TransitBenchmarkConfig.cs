@@ -1,7 +1,16 @@
+// <copyright file="TransitBenchmarkConfig.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Configuration/TransitBenchmarkConfig: binds and normalizes benchmark runtime settings.
+
 using Microsoft.Extensions.Configuration;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the benchmark Mode enum used by this benchmark or regression-gate component.
+/// </summary>
 internal enum BenchmarkMode
 {
     Validation,
@@ -10,6 +19,9 @@ internal enum BenchmarkMode
     Forensic,
 }
 
+/// <summary>
+/// Represents the transit BenchmarkConfig record struct used by this benchmark or regression-gate component.
+/// </summary>
 internal readonly record struct TransitBenchmarkConfig(
     BenchmarkMode Mode,
     long BenchmarkInstanceId,
@@ -33,10 +45,22 @@ internal readonly record struct TransitBenchmarkConfig(
     int ProducerQueueTargetArticles,
     RuntimeIdentityExpectation ExpectedRuntimeIdentity)
 {
+    /// <summary>
+    /// Gets or sets the required TransitHostname value used by this component.
+    /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
+    /// <summary>
+    /// Gets or sets the default ArticleTargetBytes value used by this component.
+    /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
+    /// <summary>
+    /// Gets or sets the default WarmupSeconds value used by this component.
+    /// </summary>
     private const int DefaultWarmupSeconds = 10;
 
+    /// <summary>
+    /// Executes the load operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static TransitBenchmarkConfig Load(
             TimeSpan measurementDuration,
             BenchmarkMode mode,
@@ -200,6 +224,9 @@ internal readonly record struct TransitBenchmarkConfig(
             ExpectedRuntimeIdentity: expectedRuntimeIdentity);
     }
 
+    /// <summary>
+    /// Executes the find BackFillerAppSettingsPath operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
         DirectoryInfo? current = new(AppContext.BaseDirectory);

@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqRuntimeOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq runtime options in the vector nntp.back filler configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqRuntimeOptions.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

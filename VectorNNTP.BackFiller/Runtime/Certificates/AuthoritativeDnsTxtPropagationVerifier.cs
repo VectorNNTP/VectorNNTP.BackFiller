@@ -1,4 +1,10 @@
 // <copyright file="AuthoritativeDnsTxtPropagationVerifier.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: authoritative dns txt propagation verifier in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="AuthoritativeDnsTxtPropagationVerifier.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -21,7 +27,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed partial class AuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
     {
+        /// <summary>
+        /// Stores the time provider state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<AuthoritativeDnsTxtPropagationVerifier> _logger;
 
         /// <summary>
@@ -107,6 +119,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             throw new TimeoutException($"Authoritative DNS TXT propagation timeout exceeded for '{normalizedFqdn}'.");
         }
 
+        /// <summary>
+        /// Performs the resolve authoritative name server addresses operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task<IReadOnlyList<IPAddress>> ResolveAuthoritativeNameServerAddressesAsync(string fqdn, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
@@ -148,6 +163,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return [];
         }
 
+        /// <summary>
+        /// Performs the query ns record names from system resolvers operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task<IReadOnlyList<string>> QueryNsRecordNamesFromSystemResolversAsync(string zoneName, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneName);
@@ -184,6 +202,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return [];
         }
 
+        /// <summary>
+        /// Performs the resolve system name servers operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static string[] ResolveSystemNameServers()
         {
             List<string> servers = [];
@@ -222,6 +243,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return [.. servers.Distinct(StringComparer.OrdinalIgnoreCase)];
         }
 
+        /// <summary>
+        /// Performs the query txt contains value operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task<bool> QueryTxtContainsValueAsync(IPAddress nameServer, string fqdn, string expectedTxtValue, CancellationToken cancellationToken)
         {
             byte[] request = DnsWireMessageBuilder.BuildQuery(fqdn, DnsRecordTypeCode.Txt);
@@ -230,6 +254,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return txtValues.Any(value => string.Equals(value, expectedTxtValue, StringComparison.Ordinal));
         }
 
+        /// <summary>
+        /// Performs the send dns udp query operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
         {
             using Socket socket = new(nameServer.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -245,19 +272,31 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return buffer[..result.ReceivedBytes];
         }
 
+        /// <summary>
+        /// Performs the normalize dns name operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static string NormalizeDnsName(string value)
         {
             return value.Trim().TrimEnd('.').ToLowerInvariant();
         }
 
+        /// <summary>
+        /// Defines the dns record type code component and its contracts for this subsystem.
+        /// </summary>
         private enum DnsRecordTypeCode : ushort
         {
             Ns = 2,
             Txt = 16,
         }
 
+        /// <summary>
+        /// Defines the dns wire message builder component and its contracts for this subsystem.
+        /// </summary>
         private static class DnsWireMessageBuilder
         {
+            /// <summary>
+            /// Performs the build query operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             internal static byte[] BuildQuery(string fqdn, DnsRecordTypeCode type)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
@@ -284,6 +323,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return message;
             }
 
+            /// <summary>
+            /// Performs the encode dns name operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static byte[] EncodeDnsName(string fqdn)
             {
                 string[] labels = fqdn.Trim().TrimEnd('.').Split('.', StringSplitOptions.RemoveEmptyEntries);
@@ -299,6 +341,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return ms.ToArray();
             }
 
+            /// <summary>
+            /// Performs the write uint16 operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static void WriteUInt16(byte[] buffer, int offset, ushort value)
             {
                 buffer[offset] = (byte)(value >> 8);
@@ -306,8 +351,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Defines the dns wire message parser component and its contracts for this subsystem.
+        /// </summary>
         private static class DnsWireMessageParser
         {
+            /// <summary>
+            /// Performs the parse ns record names operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
@@ -347,6 +398,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return result;
             }
 
+            /// <summary>
+            /// Performs the parse txt values operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
@@ -395,6 +449,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return values;
             }
 
+            /// <summary>
+            /// Performs the static operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static (int QuestionCount, int AnswerCount, int AuthorityCount, int AdditionalCount) ReadHeaderCounts(byte[] message)
             {
                 if (message.Length < 12)
@@ -409,6 +466,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return (questionCount, answerCount, authorityCount, additionalCount);
             }
 
+            /// <summary>
+            /// Performs the skip name operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static int SkipName(byte[] message, int offset)
             {
                 while (offset < message.Length)
@@ -430,6 +490,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 throw new InvalidOperationException("Invalid DNS name encoding.");
             }
 
+            /// <summary>
+            /// Performs the read name operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static string ReadName(byte[] message, ref int offset)
             {
                 List<string> labels = [];
@@ -479,11 +542,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 throw new InvalidOperationException("Invalid DNS name encoding.");
             }
 
+            /// <summary>
+            /// Performs the read uint16 operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static ushort ReadUInt16(byte[] message, int offset)
             {
                 return (ushort)((message[offset] << 8) | message[offset + 1]);
             }
 
+            /// <summary>
+            /// Performs the read uint16 operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static ushort ReadUInt16(byte[] message, ref int offset)
             {
                 ushort value = ReadUInt16(message, offset);
@@ -491,6 +560,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return value;
             }
 
+            /// <summary>
+            /// Performs the read uint32 operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             private static uint ReadUInt32(byte[] message, ref int offset)
             {
                 uint value = (uint)((message[offset] << 24) |

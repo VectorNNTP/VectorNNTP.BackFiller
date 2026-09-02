@@ -1,12 +1,27 @@
+// <copyright file="BenchmarkWorkloadFactory.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Workload/BenchmarkWorkloadFactory: prepares and drives reproducible benchmark input workloads.
+
 using System.Diagnostics;
 using System.Text;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the benchmark WorkloadFactory class used by this benchmark or regression-gate component.
+/// </summary>
 internal static class BenchmarkWorkloadFactory
 {
+    /// <summary>
+    /// Gets or sets the pre GeneratedMessageIdPoolSize value used by this component.
+    /// </summary>
     private const int PreGeneratedMessageIdPoolSize = 2_000_000;
 
+    /// <summary>
+    /// Executes the prepare BenchmarkWorkload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static PreparedBenchmarkWorkload PrepareBenchmarkWorkload(TransitBenchmarkConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -48,6 +63,9 @@ internal static class BenchmarkWorkloadFactory
         return new PreparedBenchmarkWorkload(messageIds, reusablePayloadTemplate, summary);
     }
 
+    /// <summary>
+    /// Executes the create ReusablePayloadTemplate operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] CreateReusablePayloadTemplate(int targetBytes)
     {
         string headers = "Message-ID: <benchmark-static@usenet.ninja>\r\n" +

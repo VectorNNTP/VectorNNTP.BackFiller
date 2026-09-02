@@ -1,4 +1,10 @@
 // <copyright file="BackboneUsableCapacityState.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: backbone usable capacity state in the vector nntp.back filler control plane subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="BackboneUsableCapacityState.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -39,6 +45,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
     /// </summary>
     internal sealed class BackboneUsableCapacityState : IBackboneUsableCapacityProvider, IBackboneUsableCapacityStateWriter
     {
+        /// <summary>
+        /// Stores the capacity by backbone state used to enforce this component's runtime contract.
+        /// </summary>
         private ImmutableDictionary<string, int> _capacityByBackbone = ImmutableDictionary<string, int>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
 
         /// <inheritdoc/>

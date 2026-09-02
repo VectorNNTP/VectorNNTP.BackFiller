@@ -1,3 +1,9 @@
+// <copyright file="BackFillerOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: back filler options in the vector nntp.back filler configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // BackFillerOptions.cs -- Strongly-typed configuration for BackFiller service settings.
 //
 // Provides validation for BackFiller configuration section including network binding configuration.
@@ -553,7 +559,13 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </remarks>
     internal sealed class ShutdownOptions : IValidatableObject
     {
+        /// <summary>
+        /// Stores the minimum grace period seconds state used to enforce this component's runtime contract.
+        /// </summary>
         internal const int MinimumGracePeriodSeconds = 5;
+        /// <summary>
+        /// Stores the maximum grace period seconds state used to enforce this component's runtime contract.
+        /// </summary>
         internal const int MaximumGracePeriodSeconds = 600;
 
         /// <summary>
@@ -1991,6 +2003,9 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </summary>
     internal static class LetsEncryptValidator
     {
+        /// <summary>
+        /// Stores the email validator state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly EmailAddressAttribute EmailValidator = new();
 
         /// <summary>

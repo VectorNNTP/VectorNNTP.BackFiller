@@ -1,3 +1,9 @@
+// <copyright file="TransitBenchmarkOrchestrator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/TransitBenchmarkOrchestrator: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
@@ -6,8 +12,14 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the transit BenchmarkOrchestrator class used by this benchmark or regression-gate component.
+/// </summary>
 internal static class TransitBenchmarkOrchestrator
 {
+    /// <summary>
+    /// Executes the run CoreAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static async Task RunCoreAsync(
         TransitBenchmarkConfig config,
         RuntimeExecutionIdentity runtimeIdentity,
@@ -125,8 +137,14 @@ internal static class TransitBenchmarkOrchestrator
         writeStructuredResultArtifacts(result, config);
     }
 
+    /// <summary>
+    /// Executes the run SmokeAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
+        /// <summary>
+        /// Gets or sets the smoke Articles value used by this component.
+        /// </summary>
         const int smokeArticles = 5;
 
         for (int i = 0; i < smokeArticles; i++)
@@ -151,6 +169,9 @@ internal static class TransitBenchmarkOrchestrator
         }
     }
 
+    /// <summary>
+    /// Executes the run WarmupAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static async Task RunWarmupAsync(TransitPublisher publisher, TransitBenchmarkConfig config, PreparedBenchmarkWorkload workload, CancellationToken cancellationToken)
     {
         using CancellationTokenSource warmupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -176,6 +197,9 @@ internal static class TransitBenchmarkOrchestrator
         Console.WriteLine($"Warmup complete ({config.WarmupDuration.TotalSeconds:F0}s).");
     }
 
+    /// <summary>
+    /// Executes the build RuntimeOptions operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static BackFillerRuntimeOptions BuildRuntimeOptions(TransitBenchmarkConfig config)
     {
         return new BackFillerRuntimeOptions(

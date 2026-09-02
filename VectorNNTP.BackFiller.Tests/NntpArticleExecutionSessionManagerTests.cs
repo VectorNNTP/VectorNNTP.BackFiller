@@ -1,10 +1,9 @@
 // <copyright file="NntpArticleExecutionSessionManagerTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Articles / Grabber
-// Focused session-manager foundation tests covering lease exclusivity, session reuse,
-// reconnect-on-session-failure behavior, and deterministic lifecycle/disposal guarantees.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for nntp article execution session manager.
 
 using System.Diagnostics;
 using System.Net;
@@ -791,6 +790,9 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task InitializeAsync_WithMultipleConnections_EstablishesConnectionsConcurrently()
         {
+            /// <summary>
+            /// Stores the ConnectionCount fixture value used by these tests.
+            /// </summary>
             const int ConnectionCount = 4;
 
             int[] connectionStartTimes = new int[ConnectionCount];
@@ -833,6 +835,9 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task InitializeAsync_WhenSomeConnectionsFail_SuccessfulSessionsRemainReady()
         {
+            /// <summary>
+            /// Stores the RequestedConnections fixture value used by these tests.
+            /// </summary>
             const int RequestedConnections = 4;
             int connectionAttempt = 0;
 
@@ -1197,6 +1202,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the FakeArticleServer test type and its protected contract.
+        /// </summary>
         private sealed class FakeArticleServer : IAsyncDisposable
         {
             /// <summary>

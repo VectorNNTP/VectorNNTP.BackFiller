@@ -1,4 +1,10 @@
 // <copyright file="CloudflareTxtRecordApi.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: cloudflare txt record api in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="CloudflareTxtRecordApi.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -20,6 +26,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </summary>
     internal sealed class CloudflareTxtRecordApi : ICloudflareTxtRecordApi, IAsyncDisposable
     {
+        /// <summary>
+        /// Stores the client state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly CloudFlareClient _client;
 
         /// <summary>
@@ -143,6 +152,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return ValueTask.CompletedTask;
         }
 
+        /// <summary>
+        /// Performs the build create failure message operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static string BuildCreateFailureMessage(
             string recordName,
             DnsRecordType recordType,
@@ -157,6 +169,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return message.ToString();
         }
 
+        /// <summary>
+        /// Performs the build query failure message operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static string BuildQueryFailureMessage(
             string zoneId,
             string recordName,
@@ -173,6 +188,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return message.ToString();
         }
 
+        /// <summary>
+        /// Performs the build delete failure message operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static string BuildDeleteFailureMessage(
             string recordId,
             IReadOnlyList<ErrorDetails>? messages,
@@ -194,6 +212,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return message.ToString();
         }
 
+        /// <summary>
+        /// Performs the append cloudflare details operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void AppendCloudflareDetails(
             StringBuilder message,
             string recordName,
@@ -216,6 +237,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             AppendCloudflareCollections(message, messages, errors, timing);
         }
 
+        /// <summary>
+        /// Performs the append cloudflare collections operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void AppendCloudflareCollections(
             StringBuilder message,
             IReadOnlyList<ErrorDetails>? messages,

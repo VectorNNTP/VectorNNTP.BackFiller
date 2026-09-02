@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqArticleResultSink.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq article result sink in the articles processing subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqArticleResultSink.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -13,9 +19,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed class RabbitMqArticleResultSink : IArticleWorkResultSink
     {
+        /// <summary>
+        /// Stores the planner state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IArticleWorkDispositionPlanner _planner;
+        /// <summary>
+        /// Stores the response factory state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IArticleWorkResponseFactory _responseFactory;
+        /// <summary>
+        /// Stores the response publisher state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IRabbitMqArticleResponsePublisher _responsePublisher;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
 
         /// <summary>

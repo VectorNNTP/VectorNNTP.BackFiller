@@ -1,11 +1,9 @@
 // <copyright file="BenchmarkDevNullTransitServerTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Contract and behavior tests for the benchmark dev null transit server benchmark component.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
@@ -65,6 +63,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenMultipleSubmissionsAreSent_ConsumesAllPayloadsAndReturnsAccepted()
         {
+            /// <summary>
+            /// Stores the SubmissionCount fixture value used by these tests.
+            /// </summary>
             const int SubmissionCount = 8;
             byte[] payload = Encoding.ASCII.GetBytes("X\r\nY\r\nZ\r\n");
 
@@ -96,7 +97,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenTwoTakethisCommandsArePipelinedInSingleWrite_ConsumesBothAndReturnsTwoAccepted()
         {
+            /// <summary>
+            /// Stores the MessageId1 fixture value used by these tests.
+            /// </summary>
             const string MessageId1 = "<pipe-1@example.com>";
+            /// <summary>
+            /// Stores the MessageId2 fixture value used by these tests.
+            /// </summary>
             const string MessageId2 = "<pipe-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("A\r\nB\r\n");
             byte[] payload2 = Encoding.ASCII.GetBytes("C\r\nD\r\nE\r\n");
@@ -125,11 +132,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(2, server.AcceptedArticles);
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Verifies the FakeServer_WhenTerminatorIsImmediatelyFollowedByNextTakethis_KeepsNextCommandReadable scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenTerminatorIsImmediatelyFollowedByNextTakethis_KeepsNextCommandReadable()
         {
+            /// <summary>
+            /// Stores the MessageId1 fixture value used by these tests.
+            /// </summary>
             const string MessageId1 = "<adjacent-1@example.com>";
+            /// <summary>
+            /// Stores the MessageId2 fixture value used by these tests.
+            /// </summary>
             const string MessageId2 = "<adjacent-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("BodyOne\r\n");
             byte[] payload2 = Encoding.ASCII.GetBytes("BodyTwo\r\n");
@@ -158,11 +173,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(2, server.AcceptedArticles);
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Verifies the FakeServer_WhenTerminatorAndNextCommandArriveInPartialChunks_ParsesWithoutOverflowOrDisconnect scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenTerminatorAndNextCommandArriveInPartialChunks_ParsesWithoutOverflowOrDisconnect()
         {
+            /// <summary>
+            /// Stores the MessageId1 fixture value used by these tests.
+            /// </summary>
             const string MessageId1 = "<partial-1@example.com>";
+            /// <summary>
+            /// Stores the MessageId2 fixture value used by these tests.
+            /// </summary>
             const string MessageId2 = "<partial-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("LineOne\r\nLineTwo");
             byte[] payload2 = Encoding.ASCII.GetBytes("LineThree");
@@ -194,11 +217,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(2, server.AcceptedArticles);
             Assert.Equal(payload1.Length + payload2.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Verifies the FakeServer_WhenCommandsArePipelinedWithMixedCaseAndCheck_ParsesAndRespondsByCommandKind scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenCommandsArePipelinedWithMixedCaseAndCheck_ParsesAndRespondsByCommandKind()
         {
+            /// <summary>
+            /// Stores the CheckMessageId fixture value used by these tests.
+            /// </summary>
             const string CheckMessageId = "<check-1@example.com>";
+            /// <summary>
+            /// Stores the TakeMessageId fixture value used by these tests.
+            /// </summary>
             const string TakeMessageId = "<take-1@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("A\r\nB\r\n");
 
@@ -224,10 +255,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, server.AcceptedArticles);
             Assert.Equal(payload.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Verifies the FakeServer_WhenCommandIsFragmentedAcrossManyWrites_ParsesTakethisAndPayload scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenCommandIsFragmentedAcrossManyWrites_ParsesTakethisAndPayload()
         {
+            /// <summary>
+            /// Stores the MessageId fixture value used by these tests.
+            /// </summary>
             const string MessageId = "<fragmented-1@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("BodyLine1\r\nBodyLine2\r\n");
 
@@ -257,10 +293,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, server.AcceptedArticles);
             Assert.Equal(payload.Length, server.ConsumedArticleBytes);
         }
-
+        /// <summary>
+        /// Verifies the FakeServer_WhenQuitSentAfterTakethisCompletion_ReturnsClosingResponse scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenQuitSentAfterTakethisCompletion_ReturnsClosingResponse()
         {
+            /// <summary>
+            /// Stores the MessageId fixture value used by these tests.
+            /// </summary>
             const string MessageId = "<quit-after-complete@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("Q1\r\nQ2\r\n");
 
@@ -281,11 +322,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Assert.Equal(1, server.AcceptedArticles);
         }
-
+        /// <summary>
+        /// Verifies the FakeServer_WhenQuitArrivesWithPendingTakethis_RespondsWithClosingAndStopsWithoutDrain scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task FakeServer_WhenQuitArrivesWithPendingTakethis_RespondsWithClosingAndStopsWithoutDrain()
         {
+            /// <summary>
+            /// Stores the MessageId1 fixture value used by these tests.
+            /// </summary>
             const string MessageId1 = "<quit-pending-1@example.com>";
+            /// <summary>
+            /// Stores the MessageId2 fixture value used by these tests.
+            /// </summary>
             const string MessageId2 = "<quit-pending-2@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("Body\r\n");
 
@@ -322,7 +371,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("205 closing connection", responses);
             Assert.True(server.AcceptedArticles >= 1);
         }
-
+        /// <summary>
+        /// Verifies the TransitBenchmarkConfigLoad_WhenFakeServerOverridesProvided_AppliesEndpointIdentityAndOverrides scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TransitBenchmarkConfigLoad_WhenFakeServerOverridesProvided_AppliesEndpointIdentityAndOverrides()
         {
@@ -358,6 +409,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.False(config.EndpointUseSsl);
         }
 
+        /// <summary>
+        /// Verifies the PerformStreamingHandshakeAsync scenario and expected contract.
+        /// </summary>
         private static async Task PerformStreamingHandshakeAsync(NetworkStream stream)
         {
             string greeting = await ReadAsciiLineAsync(stream);
@@ -372,17 +426,26 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal("203 Streaming permitted", await ReadAsciiLineAsync(stream));
         }
 
+        /// <summary>
+        /// Verifies the BuildTakethisCommand scenario and expected contract.
+        /// </summary>
         private static string BuildTakethisCommand(string messageId, byte[] payload)
         {
             string body = Encoding.ASCII.GetString(payload);
             return $"TAKETHIS {messageId}\r\n{body}\r\n.\r\n";
         }
 
+        /// <summary>
+        /// Verifies the WriteAsciiLineAsync scenario and expected contract.
+        /// </summary>
         private static async Task WriteAsciiLineAsync(NetworkStream stream, string line)
         {
             await WriteAsciiAsync(stream, line + "\r\n");
         }
 
+        /// <summary>
+        /// Verifies the WriteAsciiAsync scenario and expected contract.
+        /// </summary>
         private static async Task WriteAsciiAsync(NetworkStream stream, string value)
         {
             byte[] bytes = Encoding.ASCII.GetBytes(value);
@@ -390,6 +453,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             await stream.FlushAsync();
         }
 
+        /// <summary>
+        /// Verifies the ReadAsciiLineAsync scenario and expected contract.
+        /// </summary>
         private static async Task<string> ReadAsciiLineAsync(NetworkStream stream)
         {
             List<byte> buffer = [];

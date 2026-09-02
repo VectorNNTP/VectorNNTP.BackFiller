@@ -1,54 +1,102 @@
+// <copyright file="TransitSingleTraceRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Diagnostics/TransitSingleTraceRunner: provides focused diagnostic execution and logging for transit benchmarks.
+
 using System.Net;
 using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the transit SingleTraceRunner class used by this benchmark or regression-gate component.
+/// </summary>
 internal static class TransitSingleTraceRunner
 {
+    /// <summary>
+    /// Gets or sets the small ArticleMinBytes value used by this component.
+    /// </summary>
     private const int SmallArticleMinBytes = 64;
+    /// <summary>
+    /// Gets or sets the small ArticleMaxBytes value used by this component.
+    /// </summary>
     private const int SmallArticleMaxBytes = 1023;
+    /// <summary>
+    /// Gets or sets the large ArticleMinBytes value used by this component.
+    /// </summary>
     private const int LargeArticleMinBytes = 1_048_577;
+    /// <summary>
+    /// Gets or sets the large ArticleMaxBytes value used by this component.
+    /// </summary>
     private const int LargeArticleMaxBytes = 2_097_151;
 
+    /// <summary>
+    /// Represents the i TransitSingleTracePublishExecutor interface used by this benchmark or regression-gate component.
+    /// </summary>
     internal interface ITransitSingleTracePublishExecutor
     {
         ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken);
     }
 
+    /// <summary>
+    /// Represents the single TracePublishBatchResult record used by this benchmark or regression-gate component.
+    /// </summary>
     internal sealed record SingleTracePublishBatchResult(
         IReadOnlyList<string> MessageIds,
         IReadOnlyList<TransitPublishResult> PublishResults,
         int TimeoutCount,
         IReadOnlyList<SingleTraceArticleDescriptor> Articles);
 
+    /// <summary>
+    /// Represents the single TraceArticleDescriptor record used by this benchmark or regression-gate component.
+    /// </summary>
     internal sealed record SingleTraceArticleDescriptor(
         int ArticleIndex,
         string MessageId,
         int ArticleSizeBytes,
         string SizeClass);
 
+    /// <summary>
+    /// Represents the transit PublisherSingleTracePublishExecutor class used by this benchmark or regression-gate component.
+    /// </summary>
     private sealed class TransitPublisherSingleTracePublishExecutor : ITransitSingleTracePublishExecutor
     {
+        /// <summary>
+        /// Gets or sets the _publisher value used by this component.
+        /// </summary>
         private readonly TransitPublisher _publisher;
 
+        /// <summary>
+        /// Executes the transit PublisherSingleTracePublishExecutor operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal TransitPublisherSingleTracePublishExecutor(TransitPublisher publisher)
         {
             ArgumentNullException.ThrowIfNull(publisher);
             _publisher = publisher;
         }
 
+        /// <summary>
+        /// Executes the publish Async operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
         {
             return _publisher.PublishAsync(messageId, articlePayload, cancellationToken);
         }
     }
 
+    /// <summary>
+    /// Executes the resolve RequestedArticleCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static int ResolveRequestedArticleCount(int? measurementArticleCount)
     {
         return measurementArticleCount ?? 1;
     }
 
+    /// <summary>
+    /// Executes the publish SequentiallyAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static Task<SingleTracePublishBatchResult> PublishSequentiallyAsync(
         ITransitSingleTracePublishExecutor publishExecutor,
         int requestedArticleCount,
@@ -65,6 +113,9 @@ internal static class TransitSingleTraceRunner
             cancellationToken);
     }
 
+    /// <summary>
+    /// Executes the publish WithPipelineDepthAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static async Task<SingleTracePublishBatchResult> PublishWithPipelineDepthAsync(
         ITransitSingleTracePublishExecutor publishExecutor,
         int requestedArticleCount,
@@ -199,6 +250,9 @@ internal static class TransitSingleTraceRunner
         return new SingleTracePublishBatchResult(publishedMessageIds, publishResults, timeoutCount, articleDescriptors);
     }
 
+    /// <summary>
+    /// Executes the generate RandomArticleSize operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static (int ArticleSizeBytes, string SizeClass) GenerateRandomArticleSize(Random random)
     {
         ArgumentNullException.ThrowIfNull(random);
@@ -214,6 +268,9 @@ internal static class TransitSingleTraceRunner
         return (largeBytes, "LARGE");
     }
 
+    /// <summary>
+    /// Executes the execute PublishAsync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static async Task<PublishCompletion> ExecutePublishAsync(
         ITransitSingleTracePublishExecutor publishExecutor,
         int articleIndex,
@@ -246,10 +303,19 @@ internal static class TransitSingleTraceRunner
         }
     }
 
+    /// <summary>
+    /// Represents the outstanding PublishOperation record struct used by this benchmark or regression-gate component.
+    /// </summary>
     private readonly record struct OutstandingPublishOperation(int ArticleIndex, Task<PublishCompletion> Task);
 
+    /// <summary>
+    /// Represents the publish Completion record struct used by this benchmark or regression-gate component.
+    /// </summary>
     private readonly record struct PublishCompletion(int ArticleIndex, TransitPublishResult? Result, bool TimedOut);
 
+    /// <summary>
+    /// Executes the run Async operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static async Task RunAsync(
         TransitBenchmarkCliOptions cliOptions,
         int validationSeconds,
@@ -311,6 +377,9 @@ internal static class TransitSingleTraceRunner
         await publisher.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
         SingleTracePublishBatchResult publishBatch = await PublishWithPipelineDepthAsync(
+            /// <summary>
+            /// Executes the transit PublisherSingleTracePublishExecutor operation while preserving the component's benchmark or test-harness contract.
+            /// </summary>
             new TransitPublisherSingleTracePublishExecutor(publisher),
             requestedArticleCount,
             config.ArticleTargetBytes,

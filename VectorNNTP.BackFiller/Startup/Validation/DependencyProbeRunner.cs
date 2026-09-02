@@ -1,4 +1,10 @@
 // <copyright file="DependencyProbeRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: dependency probe runner in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="DependencyProbeRunner.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

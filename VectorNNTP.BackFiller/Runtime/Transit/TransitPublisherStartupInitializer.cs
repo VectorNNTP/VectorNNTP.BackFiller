@@ -1,4 +1,10 @@
 // <copyright file="TransitPublisherStartupInitializer.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: transit publisher startup initializer in the runtime transit subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="TransitPublisherStartupInitializer.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,7 +21,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         TransitPublisher transitPublisher,
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Stores the transit publisher state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<TransitPublisherStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
@@ -41,9 +53,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
+        /// <summary>
+        /// Performs the log transit startup initializer beginning operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogTransitStartupInitializerBeginning(ILogger logger);
 
         [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
+        /// <summary>
+        /// Performs the log transit startup initializer completed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);
     }
 }

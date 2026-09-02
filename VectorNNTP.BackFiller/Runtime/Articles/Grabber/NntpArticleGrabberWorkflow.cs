@@ -1,4 +1,10 @@
 // <copyright file="NntpArticleGrabberWorkflow.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp article grabber workflow in the articles grabber subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpArticleGrabberWorkflow.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

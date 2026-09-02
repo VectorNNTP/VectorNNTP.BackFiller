@@ -1,4 +1,10 @@
 // <copyright file="ProcessBootstrapper.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: process bootstrapper in the vector nntp.back filler startup subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="ProcessBootstrapper.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

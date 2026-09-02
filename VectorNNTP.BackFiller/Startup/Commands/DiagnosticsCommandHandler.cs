@@ -1,4 +1,10 @@
 // <copyright file="DiagnosticsCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: diagnostics command handler in the startup commands subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="DiagnosticsCommandHandler.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

@@ -1,4 +1,10 @@
 // <copyright file="TransitProtocolParser.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: transit protocol parser in the runtime transit subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="TransitProtocolParser.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -18,15 +24,27 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal static class TransitProtocolParser
     {
+        /// <summary>
+        /// Stores the capabilities response code state used to enforce this component's runtime contract.
+        /// </summary>
         private const int CapabilitiesResponseCode = 101;
+        /// <summary>
+        /// Stores the maximum nntp line length bytes state used to enforce this component's runtime contract.
+        /// </summary>
         private const int MaximumNntpLineLengthBytes = 16 * 1024;
 
+        /// <summary>
+        /// Performs the read nntp line operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
             return completedWithoutLine ? throw new InvalidOperationException("NNTP connection closed while awaiting line response.") : line!;
         }
 
+        /// <summary>
+        /// Performs the read nntp line with byte count operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -80,6 +98,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Performs the static operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static (int Code, string ResponseText, string[] Tokens) ParseStatusLine(string line)
         {
             (int code, string responseText) = ParseStatusCodeAndText(line);
@@ -90,6 +111,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return (code, responseText, tokens);
         }
 
+        /// <summary>
+        /// Performs the static operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -112,6 +136,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return (code, responseText);
         }
 
+        /// <summary>
+        /// Performs the validate greeting operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static void ValidateGreeting(string greetingLine)
         {
             (int code, _, _) = ParseStatusLine(greetingLine);
@@ -124,6 +151,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             throw new InvalidOperationException($"Unexpected NNTP greeting response code: {code}.");
         }
 
+        /// <summary>
+        /// Performs the parse capabilities response operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static TransitCapabilitySnapshot ParseCapabilitiesResponse(IReadOnlyList<string> responseLines)
         {
             ArgumentNullException.ThrowIfNull(responseLines);
@@ -179,6 +209,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 SupportsStreaming: supportsStreaming);
         }
 
+        /// <summary>
+        /// Performs the decode line operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static string DecodeLine(ReadOnlySequence<byte> line)
         {
             if (line.IsSingleSegment)

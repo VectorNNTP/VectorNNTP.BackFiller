@@ -1,7 +1,16 @@
+// <copyright file="ValidationLogging.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: validation logging in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 using Serilog;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines the validation logging component and its contracts for this subsystem.
+    /// </summary>
     internal static class ValidationLogging
     {
         /// <summary>

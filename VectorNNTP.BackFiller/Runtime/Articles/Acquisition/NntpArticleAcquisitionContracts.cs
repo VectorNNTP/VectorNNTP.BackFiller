@@ -1,4 +1,10 @@
 // <copyright file="NntpArticleAcquisitionContracts.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp article acquisition contracts in the articles acquisition subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpArticleAcquisitionContracts.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

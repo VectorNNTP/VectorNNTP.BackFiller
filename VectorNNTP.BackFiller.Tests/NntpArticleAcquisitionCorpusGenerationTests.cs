@@ -1,10 +1,9 @@
 // <copyright file="NntpArticleAcquisitionCorpusGenerationTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Articles / Acquisition
-// Development-only corpus fixture-generation tests that download controlled NNTP samples
-// and create deterministic byte-corrupted variants without committing Usenet content.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for nntp article acquisition corpus generation.
 
 using System.Security.Cryptography;
 using System.Text;

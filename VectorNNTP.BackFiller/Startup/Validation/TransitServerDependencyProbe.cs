@@ -1,4 +1,10 @@
 // <copyright file="TransitServerDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: transit server dependency probe in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="TransitServerDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -16,6 +22,9 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines the transit server dependency probe component and its contracts for this subsystem.
+    /// </summary>
     internal static class TransitServerDependencyProbe
     {
         /// <summary>
@@ -178,6 +187,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             }
         }
 
+        /// <summary>
+        /// Performs the read capabilities operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(
             StreamReader reader,
             StreamWriter writer,
@@ -200,6 +212,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             return TransitProtocolParser.ParseCapabilitiesResponse(capabilityLines);
         }
 
+        /// <summary>
+        /// Performs the write nntp command operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task WriteNntpCommandAsync(
             StreamWriter writer,
             string command,
@@ -214,11 +229,17 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Performs the create reader operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static StreamReader CreateReader(Stream stream)
         {
             return new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
         }
 
+        /// <summary>
+        /// Performs the create writer operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static StreamWriter CreateWriter(Stream stream)
         {
             return new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)
@@ -228,11 +249,17 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             };
         }
 
+        /// <summary>
+        /// Performs the create strict tls stream operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static SslStream CreateStrictTlsStream(Stream innerStream, bool leaveInnerStreamOpen)
         {
             return new SslStream(
                 innerStream,
                 leaveInnerStreamOpen,
+                /// <summary>
+                /// Performs the static operation while preserving this component's lifecycle and state contracts.
+                /// </summary>
                 static (_, certificate, _, sslPolicyErrors) =>
                 {
                     _ = certificate;
@@ -240,6 +267,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 });
         }
 
+        /// <summary>
+        /// Performs the authenticate tls operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static async Task AuthenticateTlsAsync(SslStream sslStream, string host, CancellationToken cancellationToken)
         {
             SslClientAuthenticationOptions authOptions = new()

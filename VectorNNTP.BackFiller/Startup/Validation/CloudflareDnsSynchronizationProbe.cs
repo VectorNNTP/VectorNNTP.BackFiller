@@ -26,6 +26,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </remarks>
     internal static class CloudflareDnsSynchronizationProbe
     {
+        /// <summary>
+        /// Stores the dependency name state used to enforce this component's runtime contract.
+        /// </summary>
         private const string DependencyName = "CloudflareDnsSynchronization";
 
         /// <summary>
@@ -536,6 +539,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </summary>
     internal sealed class CloudflareDnsFacade : ICloudflareDnsFacade
     {
+        /// <summary>
+        /// Stores the client state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly CloudFlareClient _client;
 
         /// <summary>

@@ -1,9 +1,9 @@
 // <copyright file="RabbitMqArticleWorkResponseWireProtocolTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Article Processing
-// Focused contract tests for canonical response wire protocol serialization and parsing.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for rabbit mq article work response wire protocol.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -16,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class RabbitMqArticleWorkResponseWireProtocolTests
     {
+        /// <summary>
+        /// Verifies the SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull()
         {
@@ -35,7 +38,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("correlationId", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("replyTo", json, StringComparison.OrdinalIgnoreCase);
         }
-
+        /// <summary>
+        /// Verifies the SerializeV1_WhenTerminalFailure_ContainsErrorAndNoUri scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SerializeV1_WhenTerminalFailure_ContainsErrorAndNoUri()
         {
@@ -54,7 +59,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("\"error\":\"No article with that message-id\"", json, StringComparison.Ordinal);
             Assert.DoesNotContain("\"uri\"", json, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Verifies the ParseV1_WhenPayloadIsValid_RoundTripsCanonicalFields scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ParseV1_WhenPayloadIsValid_RoundTripsCanonicalFields()
         {
@@ -77,7 +84,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(source.Outcome, parsed.Outcome);
             Assert.Equal(source.Error, parsed.Error);
         }
-
+        /// <summary>
+        /// Verifies the ParseV1_WhenVersionUnsupported_ThrowsInvalidOperationException scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ParseV1_WhenVersionUnsupported_ThrowsInvalidOperationException()
         {

@@ -1,11 +1,9 @@
 // <copyright file="MeasurementExecutionEngineDrainLifecycleTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Contract and behavior tests for the measurement execution engine drain lifecycle benchmark component.
 
 using System.Diagnostics;
 using System.Net;
@@ -184,11 +182,26 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// </summary>
         private sealed class DrainLifecycleFakeServer : IAsyncDisposable
         {
+            /// <summary>
+            /// Stores the _listener fixture value used by these tests.
+            /// </summary>
             private readonly TcpListener _listener;
+            /// <summary>
+            /// Documents the _session member and its test-supporting contract.
+            /// </summary>
             private readonly Func<NetworkStream, CancellationToken, Task> _session;
+            /// <summary>
+            /// Stores the _cts fixture value used by these tests.
+            /// </summary>
             private readonly CancellationTokenSource _cts = new();
+            /// <summary>
+            /// Stores the _acceptLoop fixture value used by these tests.
+            /// </summary>
             private readonly Task _acceptLoop;
 
+            /// <summary>
+            /// Verifies the DrainLifecycleFakeServer scenario and expected contract.
+            /// </summary>
             private DrainLifecycleFakeServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {
                 _listener = listener;

@@ -1,7 +1,16 @@
+// <copyright file="BenchmarkResultArtifact.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Artifacts/BenchmarkResultArtifact: writes durable JSON and CSV representations of benchmark measurements.
+
 using System.Globalization;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the benchmark ResultArtifact record struct used by this benchmark or regression-gate component.
+/// </summary>
 internal readonly record struct BenchmarkResultArtifact(
     string BenchmarkBuildVersion,
     string RuntimeAssemblyVersion,
@@ -108,6 +117,9 @@ internal readonly record struct BenchmarkResultArtifact(
     SubmissionPumpFaultSummary SubmissionPumpFault,
     P1GreetingProvenanceSummary? P1GreetingProvenance)
 {
+    /// <summary>
+    /// Executes the from operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static BenchmarkResultArtifact From(BenchmarkResult result, TransitBenchmarkConfig config, int processorCount)
     {
         return new BenchmarkResultArtifact(
@@ -217,6 +229,9 @@ internal readonly record struct BenchmarkResultArtifact(
             P1GreetingProvenance: result.P1GreetingProvenance);
     }
 
+    /// <summary>
+    /// Executes the to Csv operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal string ToCsv()
     {
         string[] headers =
@@ -338,6 +353,9 @@ internal readonly record struct BenchmarkResultArtifact(
 
         return string.Join(',', headers) + Environment.NewLine + string.Join(',', values) + Environment.NewLine;
 
+        /// <summary>
+        /// Executes the escape operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         static string Escape(string value)
         {
             string escaped = value.Replace("\"", "\"\"");

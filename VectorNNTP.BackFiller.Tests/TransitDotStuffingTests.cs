@@ -1,19 +1,23 @@
 // <copyright file="TransitDotStuffingTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for transit dot stuffing.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Documents the TransitDotStuffingTests test type and its protected contract.
+    /// </summary>
     public sealed class TransitDotStuffingTests
     {
+        /// <summary>
+        /// Verifies the PayloadCases scenario and expected contract.
+        /// </summary>
         public static IEnumerable<object[]> PayloadCases()
         {
             yield return ["empty", Array.Empty<byte>()];
@@ -33,7 +37,9 @@ namespace VectorNNTP.Backfiller.Tests
             yield return ["large-random-binary", BuildRandomPayload(512 * 1024, seed: 23)];
             yield return ["payload-2mib", BuildMixedPayload(2_097_152, seed: 29, dotStartEvery: 19, averageLineLength: 300)];
         }
-
+        /// <summary>
+        /// Verifies the TryDotStuff_AllAlgorithms_MatchReference scenario and expected contract.
+        /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
         public void TryDotStuff_AllAlgorithms_MatchReference(string _, byte[] payload)
@@ -53,7 +59,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(expected, destination);
             }
         }
-
+        /// <summary>
+        /// Verifies the TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference scenario and expected contract.
+        /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
         public void TryDotStuff_WithoutTrailingCrlfAppend_MatchesReference(string _, byte[] payload)
@@ -73,7 +81,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(expected, destination);
             }
         }
-
+        /// <summary>
+        /// Verifies the TryDotStuff_WhenDestinationTooSmall_ReturnsFalse scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TryDotStuff_WhenDestinationTooSmall_ReturnsFalse()
         {
@@ -88,6 +98,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Verifies the BuildAllByteValuesPayload scenario and expected contract.
+        /// </summary>
         private static byte[] BuildAllByteValuesPayload()
         {
             byte[] bytes = new byte[256 + 32];
@@ -104,6 +117,9 @@ namespace VectorNNTP.Backfiller.Tests
             return bytes;
         }
 
+        /// <summary>
+        /// Verifies the BuildRandomPayload scenario and expected contract.
+        /// </summary>
         private static byte[] BuildRandomPayload(int size, int seed)
         {
             byte[] data = new byte[size];
@@ -118,6 +134,9 @@ namespace VectorNNTP.Backfiller.Tests
             return data;
         }
 
+        /// <summary>
+        /// Verifies the BuildMixedPayload scenario and expected contract.
+        /// </summary>
         private static byte[] BuildMixedPayload(int size, int seed, int dotStartEvery, int averageLineLength)
         {
             byte[] data = new byte[size];
@@ -160,6 +179,9 @@ namespace VectorNNTP.Backfiller.Tests
             return data;
         }
 
+        /// <summary>
+        /// Verifies the ReferenceDotStuff scenario and expected contract.
+        /// </summary>
         private static byte[] ReferenceDotStuff(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf)
         {
             List<byte> output = new(source.Length + 64);

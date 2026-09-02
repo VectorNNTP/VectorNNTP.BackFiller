@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqArticleProcessingService.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq article processing service in the articles processing subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqArticleProcessingService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -16,10 +22,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class RabbitMqArticleProcessingService : BackgroundService
     {
+        /// <summary>
+        /// Stores the consumer service state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly RabbitMqConsumerService _consumerService;
+        /// <summary>
+        /// Stores the request parser state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IRabbitMqArticleWorkRequestParser _requestParser;
+        /// <summary>
+        /// Stores the processor state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IArticleWorkProcessor _processor;
+        /// <summary>
+        /// Stores the result sink state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<RabbitMqArticleProcessingService> _logger;
 
         /// <summary>
@@ -88,6 +109,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Performs the create linked token source operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static CancellationTokenSource? CreateLinkedTokenSource(CancellationToken hostToken, CancellationToken deliveryToken)
         {
             if (!deliveryToken.CanBeCanceled || deliveryToken == hostToken)

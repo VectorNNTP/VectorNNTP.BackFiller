@@ -1,11 +1,9 @@
 // <copyright file="ShutdownCoordinatorTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for shutdown coordinator.
 
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
@@ -18,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ShutdownCoordinatorTests
     {
+        /// <summary>
+        /// Verifies the SignalGracefulShutdown_FromRunning_TransitionsToGraceful scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalGracefulShutdown_FromRunning_TransitionsToGraceful()
         {
@@ -33,7 +34,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalForcedShutdown_FromRunning_TransitionsToForced scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalForcedShutdown_FromRunning_TransitionsToForced()
         {
@@ -49,7 +52,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalForcedShutdown_FromGraceful_TransitionsToForced scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalForcedShutdown_FromGraceful_TransitionsToForced()
         {
@@ -63,7 +68,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the Dispose_FromForced_TransitionsToCompleted scenario and expected contract.
+        /// </summary>
         [Fact]
         public void Dispose_FromForced_TransitionsToCompleted()
         {
@@ -74,7 +81,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
         }
-
+        /// <summary>
+        /// Verifies the SignalGracefulShutdown_Idempotent_WhenCalledTwice scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalGracefulShutdown_Idempotent_WhenCalledTwice()
         {
@@ -94,7 +103,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalForcedShutdown_Idempotent_WhenCalledTwice scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalForcedShutdown_Idempotent_WhenCalledTwice()
         {
@@ -114,7 +125,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the GraceEscalation_AfterDeadline_TransitionsToForcedAndCancelsForcedToken scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task GraceEscalation_AfterDeadline_TransitionsToForcedAndCancelsForcedToken()
         {
@@ -146,7 +159,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalForcedShutdown_Immediately_CancelsGracefulAndForcedTokens scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalForcedShutdown_Immediately_CancelsGracefulAndForcedTokens()
         {
@@ -159,7 +174,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the ShutdownReasons_AutomaticEscalation_PreservesGracefulAndForcedReasons scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ShutdownReasons_AutomaticEscalation_PreservesGracefulAndForcedReasons()
         {
@@ -179,7 +196,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the ShutdownReasons_ImmediateForced_LeavesGracefulUnknownAndSetsForcedReason scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ShutdownReasons_ImmediateForced_LeavesGracefulUnknownAndSetsForcedReason()
         {
@@ -192,7 +211,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalGracefulShutdown_DoesNotCancelForcedTokenInitially scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalGracefulShutdown_DoesNotCancelForcedTokenInitially()
         {
@@ -205,7 +226,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalGracefulShutdown_CallbackReentrancy_DoesNotDeadlock scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task SignalGracefulShutdown_CallbackReentrancy_DoesNotDeadlock()
         {
@@ -228,7 +251,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the SignalGracefulShutdown_CallbackFailure_DoesNotPreventOtherCallbacks scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalGracefulShutdown_CallbackFailure_DoesNotPreventOtherCallbacks()
         {
@@ -247,7 +272,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the ForcedRace_ImmediateForcedWins_PreservesOperatorReason scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ForcedRace_ImmediateForcedWins_PreservesOperatorReason()
         {
@@ -265,7 +292,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the ForcedRace_TimerWins_PreservesGracePeriodExpiredReason scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ForcedRace_TimerWins_PreservesGracePeriodExpiredReason()
         {
@@ -282,7 +311,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             coordinator.Dispose();
         }
-
+        /// <summary>
+        /// Verifies the ForcedRace_ImmediateAndTimer_ConcurrentFirstWriterWins_NoUnhandledExceptions scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ForcedRace_ImmediateAndTimer_ConcurrentFirstWriterWins_NoUnhandledExceptions()
         {
@@ -314,7 +345,9 @@ namespace VectorNNTP.Backfiller.Tests
                 coordinator.Dispose();
             }
         }
-
+        /// <summary>
+        /// Verifies the DisposalRace_TimerEscalationAndDispose_NoUnhandledExceptions scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task DisposalRace_TimerEscalationAndDispose_NoUnhandledExceptions()
         {
@@ -348,7 +381,9 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
             }
         }
-
+        /// <summary>
+        /// Verifies the DisposalRace_ForcedAndDispose_NoUnhandledExceptions scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task DisposalRace_ForcedAndDispose_NoUnhandledExceptions()
         {

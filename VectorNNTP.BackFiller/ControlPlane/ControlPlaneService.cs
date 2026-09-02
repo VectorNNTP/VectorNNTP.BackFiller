@@ -1,4 +1,10 @@
 // <copyright file="ControlPlaneService.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: control plane service in the vector nntp.back filler control plane subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="ControlPlaneService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -46,7 +52,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
         ILoggerFactory? loggerFactory = null,
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
+        /// <summary>
+        /// Stores the heartbeat interval state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+        /// <summary>
+        /// Stores the refresh interval state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
 
         /// <summary>
@@ -462,6 +474,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
             PublishBackboneUsableCapacitySnapshot();
         }
 
+        /// <summary>
+        /// Performs the publish backbone usable capacity snapshot operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private void PublishBackboneUsableCapacitySnapshot()
         {
             Dictionary<string, int> capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
@@ -490,6 +505,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
             _backboneUsableCapacityStateWriter.PublishSnapshot(capacityByBackbone);
         }
 
+        /// <summary>
+        /// Performs the retire rabbit mq capacity boundary operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
             return _rabbitMqCapacityRetirementCoordinator
@@ -503,14 +521,23 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="Manager">Owned session manager implementing persistent session lifecycle for the account.</param>
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
+            /// <summary>
+            /// Stores the instance state used to enforce this component's runtime contract.
+            /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
+            /// <summary>
+            /// Performs the publish snapshot operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);
             }
         }
 
+        /// <summary>
+        /// Performs the account runtime state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private sealed record AccountRuntimeState(
             NntpAccountSnapshot LastAppliedAccount,
             NntpArticleExecutionSessionManager Manager)

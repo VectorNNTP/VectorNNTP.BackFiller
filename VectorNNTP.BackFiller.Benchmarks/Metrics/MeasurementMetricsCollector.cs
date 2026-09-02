@@ -1,90 +1,312 @@
+// <copyright file="MeasurementMetricsCollector.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/MeasurementMetricsCollector: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the provenance OccurrenceBounds record struct used by this benchmark or regression-gate component.
+/// </summary>
 internal readonly record struct ProvenanceOccurrenceBounds(long FirstTick, long LastTick);
 
+/// <summary>
+/// Represents the measurement Metrics class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class MeasurementMetrics
 {
+    /// <summary>
+    /// Gets or sets the _generatedCount value used by this component.
+    /// </summary>
     private long _generatedCount;
+    /// <summary>
+    /// Gets or sets the _generatedBytes value used by this component.
+    /// </summary>
     private long _generatedBytes;
+    /// <summary>
+    /// Gets or sets the _admittedCount value used by this component.
+    /// </summary>
     private long _admittedCount;
+    /// <summary>
+    /// Gets or sets the _admittedBytes value used by this component.
+    /// </summary>
     private long _admittedBytes;
+    /// <summary>
+    /// Gets or sets the _acceptedCount value used by this component.
+    /// </summary>
     private long _acceptedCount;
+    /// <summary>
+    /// Gets or sets the _acceptedBytes value used by this component.
+    /// </summary>
     private long _acceptedBytes;
+    /// <summary>
+    /// Gets or sets the _rejectedCount value used by this component.
+    /// </summary>
     private long _rejectedCount;
+    /// <summary>
+    /// Gets or sets the _ambiguousCount value used by this component.
+    /// </summary>
     private long _ambiguousCount;
+    /// <summary>
+    /// Gets or sets the _ambiguousOnlyCount value used by this component.
+    /// </summary>
     private long _ambiguousOnlyCount;
+    /// <summary>
+    /// Gets or sets the _failedCount value used by this component.
+    /// </summary>
     private long _failedCount;
+    /// <summary>
+    /// Gets or sets the _unavailableCount value used by this component.
+    /// </summary>
     private long _unavailableCount;
+    /// <summary>
+    /// Gets or sets the _canceledCount value used by this component.
+    /// </summary>
     private long _canceledCount;
+    /// <summary>
+    /// Gets or sets the _completedCount value used by this component.
+    /// </summary>
     private long _completedCount;
 
+    /// <summary>
+    /// Gets or sets the _measurementStartStopwatchTick value used by this component.
+    /// </summary>
     private long _measurementStartStopwatchTick;
+    /// <summary>
+    /// Gets or sets the _measurementEndStopwatchTick value used by this component.
+    /// </summary>
     private long _measurementEndStopwatchTick;
+    /// <summary>
+    /// Gets or sets the _measurementEndUtcTicks value used by this component.
+    /// </summary>
     private long _measurementEndUtcTicks;
+    /// <summary>
+    /// Gets or sets the _measurementBoundarySet value used by this component.
+    /// </summary>
     private long _measurementBoundarySet;
 
+    /// <summary>
+    /// Gets or sets the _provenanceAggregates value used by this component.
+    /// </summary>
     private readonly ProvenanceAggregate[] _provenanceAggregates = new ProvenanceAggregate[Enum.GetValues<TransitPublishProvenance>().Length];
+    /// <summary>
+    /// Executes the _provenanceConnectionGate operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private readonly object _provenanceConnectionGate = new();
+    /// <summary>
+    /// Gets or sets the _provenanceByConnection value used by this component.
+    /// </summary>
     private readonly Dictionary<string, ProvenanceConnectionAggregate> _provenanceByConnection = [];
 
+    /// <summary>
+    /// Gets or sets the _blockedTicks value used by this component.
+    /// </summary>
     private long _blockedTicks;
+    /// <summary>
+    /// Gets or sets the _generationTicks value used by this component.
+    /// </summary>
     private long _generationTicks;
+    /// <summary>
+    /// Gets or sets the _otherActiveTicks value used by this component.
+    /// </summary>
     private long _otherActiveTicks;
+    /// <summary>
+    /// Gets or sets the _activeTicks value used by this component.
+    /// </summary>
     private long _activeTicks;
+    /// <summary>
+    /// Gets or sets the _loopTicks value used by this component.
+    /// </summary>
     private long _loopTicks;
 
+    /// <summary>
+    /// Gets or sets the _peakQueueDepth value used by this component.
+    /// </summary>
     private long _peakQueueDepth;
+    /// <summary>
+    /// Gets or sets the _peakQueueBytes value used by this component.
+    /// </summary>
     private long _peakQueueBytes;
+    /// <summary>
+    /// Gets or sets the _peakInFlight value used by this component.
+    /// </summary>
     private long _peakInFlight;
+    /// <summary>
+    /// Gets or sets the _peakActualPending value used by this component.
+    /// </summary>
     private long _peakActualPending;
+    /// <summary>
+    /// Gets or sets the _minQueueDepth value used by this component.
+    /// </summary>
     private long _minQueueDepth = long.MaxValue;
+    /// <summary>
+    /// Gets or sets the _minQueueBytes value used by this component.
+    /// </summary>
     private long _minQueueBytes = long.MaxValue;
+    /// <summary>
+    /// Gets or sets the _queueDepthSampleCount value used by this component.
+    /// </summary>
     private long _queueDepthSampleCount;
+    /// <summary>
+    /// Gets or sets the _queueDepthSampleSum value used by this component.
+    /// </summary>
     private long _queueDepthSampleSum;
+    /// <summary>
+    /// Gets or sets the _queueBytesSampleSum value used by this component.
+    /// </summary>
     private long _queueBytesSampleSum;
+    /// <summary>
+    /// Gets or sets the _producerQueueWaitTicks value used by this component.
+    /// </summary>
     private long _producerQueueWaitTicks;
 
+    /// <summary>
+    /// Gets or sets the _dispatchQueueWaitTicksTotal value used by this component.
+    /// </summary>
     private long _dispatchQueueWaitTicksTotal;
+    /// <summary>
+    /// Gets or sets the _dispatchQueueWaitTicksMax value used by this component.
+    /// </summary>
     private long _dispatchQueueWaitTicksMax;
+    /// <summary>
+    /// Gets or sets the _dispatchQueueWaitSampleCount value used by this component.
+    /// </summary>
     private long _dispatchQueueWaitSampleCount;
+    /// <summary>
+    /// Gets or sets the _publishTicksTotal value used by this component.
+    /// </summary>
     private long _publishTicksTotal;
+    /// <summary>
+    /// Gets or sets the _lifecycleTicksTotal value used by this component.
+    /// </summary>
     private long _lifecycleTicksTotal;
+    /// <summary>
+    /// Gets or sets the _publishSampleCount value used by this component.
+    /// </summary>
     private long _publishSampleCount;
+    /// <summary>
+    /// Gets or sets the _publishTicksMin value used by this component.
+    /// </summary>
     private long _publishTicksMin = long.MaxValue;
+    /// <summary>
+    /// Gets or sets the _publishTicksMax value used by this component.
+    /// </summary>
     private long _publishTicksMax;
 
+    /// <summary>
+    /// Gets or sets the _socketWriteTicksTotal value used by this component.
+    /// </summary>
     private long _socketWriteTicksTotal;
+    /// <summary>
+    /// Gets or sets the _socketWriteTicksMax value used by this component.
+    /// </summary>
     private long _socketWriteTicksMax;
+    /// <summary>
+    /// Gets or sets the _socketWriteSampleCount value used by this component.
+    /// </summary>
     private long _socketWriteSampleCount;
+    /// <summary>
+    /// Gets or sets the _responseWaitTicksTotal value used by this component.
+    /// </summary>
     private long _responseWaitTicksTotal;
+    /// <summary>
+    /// Gets or sets the _responseWaitTicksMax value used by this component.
+    /// </summary>
     private long _responseWaitTicksMax;
+    /// <summary>
+    /// Gets or sets the _responseWaitSampleCount value used by this component.
+    /// </summary>
     private long _responseWaitSampleCount;
+    /// <summary>
+    /// Gets or sets the _parseCorrelationTicksTotal value used by this component.
+    /// </summary>
     private long _parseCorrelationTicksTotal;
+    /// <summary>
+    /// Gets or sets the _parseCorrelationTicksMax value used by this component.
+    /// </summary>
     private long _parseCorrelationTicksMax;
+    /// <summary>
+    /// Gets or sets the _parseCorrelationSampleCount value used by this component.
+    /// </summary>
     private long _parseCorrelationSampleCount;
+    /// <summary>
+    /// Gets or sets the _totalPublishTicksTotal value used by this component.
+    /// </summary>
     private long _totalPublishTicksTotal;
+    /// <summary>
+    /// Gets or sets the _totalPublishTicksMax value used by this component.
+    /// </summary>
     private long _totalPublishTicksMax;
+    /// <summary>
+    /// Gets or sets the _totalPublishSampleCount value used by this component.
+    /// </summary>
     private long _totalPublishSampleCount;
 
+    /// <summary>
+    /// Executes the _forensicGate operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private readonly object _forensicGate = new();
+    /// <summary>
+    /// Gets or sets the _publishTicksSamples value used by this component.
+    /// </summary>
     private readonly List<long> _publishTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _dispatchWaitTicksSamples value used by this component.
+    /// </summary>
     private readonly List<long> _dispatchWaitTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _socketWriteTicksSamples value used by this component.
+    /// </summary>
     private readonly List<long> _socketWriteTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _responseWaitTicksSamples value used by this component.
+    /// </summary>
     private readonly List<long> _responseWaitTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _parseCorrelationTicksSamples value used by this component.
+    /// </summary>
     private readonly List<long> _parseCorrelationTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _totalPublishTicksSamples value used by this component.
+    /// </summary>
     private readonly List<long> _totalPublishTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _publishBySubmitDepthBucket value used by this component.
+    /// </summary>
     private readonly List<long>[] _publishBySubmitDepthBucket = [[], [], [], [], []];
+    /// <summary>
+    /// Gets or sets the _publishByCompleteDepthBucket value used by this component.
+    /// </summary>
     private readonly List<long>[] _publishByCompleteDepthBucket = [[], [], [], [], []];
+    /// <summary>
+    /// Gets or sets the _connectionSeries value used by this component.
+    /// </summary>
     private readonly Dictionary<int, ConnectionSeriesAggregate> _connectionSeries = [];
+    /// <summary>
+    /// Gets or sets the _connectionPrevious value used by this component.
+    /// </summary>
     private readonly Dictionary<int, ConnectionCounterState> _connectionPrevious = [];
+    /// <summary>
+    /// Gets or sets the _dispatcherSeries value used by this component.
+    /// </summary>
     private readonly List<DispatcherSeriesPoint> _dispatcherSeries = [];
+    /// <summary>
+    /// Gets or sets the _forensicSampleCount value used by this component.
+    /// </summary>
     private int _forensicSampleCount;
 
+    /// <summary>
+    /// Gets or sets the _articleBytes value used by this component.
+    /// </summary>
     private readonly int _articleBytes;
 
+    /// <summary>
+    /// Executes the measurement Metrics operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal MeasurementMetrics(int articleBytes)
     {
         _articleBytes = articleBytes;
@@ -95,8 +317,14 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Gets or sets the in FlightSubmissions value used by this component.
+    /// </summary>
     internal int InFlightSubmissions;
 
+    /// <summary>
+    /// Executes the on Generated operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void OnGenerated(int bytes, TransitBenchmarkCore.ProducerTiming producerTiming, long queueWaitTicks)
     {
         Interlocked.Increment(ref _generatedCount);
@@ -109,16 +337,25 @@ internal sealed class MeasurementMetrics
         Interlocked.Add(ref _producerQueueWaitTicks, queueWaitTicks);
     }
 
+    /// <summary>
+    /// Executes the on Dequeued operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void OnDequeued(long dequeuedTick)
     {
     }
 
+    /// <summary>
+    /// Executes the on Admitted operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void OnAdmitted(int bytes, long dequeuedTick)
     {
         Interlocked.Increment(ref _admittedCount);
         Interlocked.Add(ref _admittedBytes, bytes);
     }
 
+    /// <summary>
+    /// Executes the on PublishResult operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void OnPublishResult(
         TransitPublishResult publishResult,
         int bytes,
@@ -263,6 +500,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Executes the record ConnectionSample operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void RecordConnectionSample(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics, TimeSpan elapsed)
     {
         lock (_forensicGate)
@@ -301,6 +541,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Executes the record DispatcherSample operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void RecordDispatcherSample(TimeSpan elapsed, int inFlight, long dispatchPending, int actualPending, int queueDepth, long queueBytes)
     {
         lock (_forensicGate)
@@ -309,15 +552,42 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Executes the get AdmittedCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetAdmittedCount() => Interlocked.Read(ref _admittedCount);
+    /// <summary>
+    /// Executes the get CompletedCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetCompletedCount() => Interlocked.Read(ref _completedCount);
+    /// <summary>
+    /// Executes the get AcceptedCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetAcceptedCount() => Interlocked.Read(ref _acceptedCount);
+    /// <summary>
+    /// Executes the get RejectedCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetRejectedCount() => Interlocked.Read(ref _rejectedCount);
+    /// <summary>
+    /// Executes the get AmbiguousOnlyCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetAmbiguousOnlyCount() => Interlocked.Read(ref _ambiguousOnlyCount);
+    /// <summary>
+    /// Executes the get FailedCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetFailedCount() => Interlocked.Read(ref _failedCount);
+    /// <summary>
+    /// Executes the get UnavailableCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetUnavailableCount() => Interlocked.Read(ref _unavailableCount);
+    /// <summary>
+    /// Executes the get CanceledCount operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal long GetCanceledCount() => Interlocked.Read(ref _canceledCount);
 
+    /// <summary>
+    /// Executes the mark MeasurementBoundary operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void MarkMeasurementBoundary(DateTimeOffset measurementEndUtc, long measurementEndStopwatchTick)
     {
         Interlocked.Exchange(ref _measurementEndUtcTicks, measurementEndUtc.UtcTicks);
@@ -325,11 +595,17 @@ internal sealed class MeasurementMetrics
         Interlocked.Exchange(ref _measurementBoundarySet, 1);
     }
 
+    /// <summary>
+    /// Executes the mark MeasurementStart operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void MarkMeasurementStart(long measurementStartStopwatchTick)
     {
         Interlocked.Exchange(ref _measurementStartStopwatchTick, measurementStartStopwatchTick);
     }
 
+    /// <summary>
+    /// Executes the capture PostMeasurementReasons operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal PostMeasurementTerminalizationReasons CapturePostMeasurementReasons()
     {
         return new PostMeasurementTerminalizationReasons(
@@ -346,6 +622,9 @@ internal sealed class MeasurementMetrics
             OtherOrUnknown: _provenanceAggregates[(int)TransitPublishProvenance.OtherOrUnknown].PostMeasurementCount);
     }
 
+    /// <summary>
+    /// Executes the capture PostMeasurementOccurrenceBounds operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal ProvenanceOccurrenceBounds CapturePostMeasurementOccurrenceBounds()
     {
         long first = 0;
@@ -375,6 +654,9 @@ internal sealed class MeasurementMetrics
         return new ProvenanceOccurrenceBounds(first, last);
     }
 
+    /// <summary>
+    /// Executes the capture AmbiguityProvenanceSummary operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal AmbiguityProvenanceSummary CaptureAmbiguityProvenanceSummary(DateTimeOffset measurementStartUtc)
     {
         long measurementStartStopwatchTick = Interlocked.Read(ref _measurementStartStopwatchTick);
@@ -406,6 +688,9 @@ internal sealed class MeasurementMetrics
             Connections: connectionSummaries);
     }
 
+    /// <summary>
+    /// Executes the observe Peaks operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void ObservePeaks(int queueDepth, long queueBytes, int inFlight)
     {
         LatencyAggregators.UpdatePeak(ref _peakQueueDepth, queueDepth);
@@ -418,11 +703,17 @@ internal sealed class MeasurementMetrics
         Interlocked.Add(ref _queueBytesSampleSum, queueBytes);
     }
 
+    /// <summary>
+    /// Executes the observe ActualPending operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void ObserveActualPending(int actualPending)
     {
         LatencyAggregators.UpdatePeak(ref _peakActualPending, actualPending);
     }
 
+    /// <summary>
+    /// Executes the capture ForensicSnapshot operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal ForensicSnapshot CaptureForensicSnapshot()
     {
         long publishCount = Math.Max(1, Interlocked.Read(ref _publishSampleCount));
@@ -486,6 +777,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Executes the snapshot operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal MeasurementSnapshot Snapshot()
     {
         long queueDepthSampleCount = Interlocked.Read(ref _queueDepthSampleCount);
@@ -518,6 +812,9 @@ internal sealed class MeasurementMetrics
             ArticleBytes: _articleBytes);
     }
 
+    /// <summary>
+    /// Executes the record ProvenanceClassification operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private void RecordProvenanceClassification(TransitPublishResult publishResult, long completionTick)
     {
         if (publishResult.Status != TransitPublishStatus.Ambiguous)
@@ -553,6 +850,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Executes the normalize Provenance operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static TransitPublishProvenance NormalizeProvenance(TransitPublishResult publishResult)
     {
         if (publishResult.Status == TransitPublishStatus.Canceled && publishResult.Provenance == TransitPublishProvenance.Cancellation)
@@ -567,6 +867,9 @@ internal sealed class MeasurementMetrics
         return publishResult.Provenance;
     }
 
+    /// <summary>
+    /// Executes the to MeasurementOffsetMilliseconds operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static double? ToMeasurementOffsetMilliseconds(DateTimeOffset measurementStartUtc, long measurementStartStopwatchTick, long tick)
     {
         if (tick <= 0)
@@ -583,20 +886,56 @@ internal sealed class MeasurementMetrics
         return (tick - baselineTick) * 1000d / Stopwatch.Frequency;
     }
 
+    /// <summary>
+    /// Represents the provenance Aggregate class used by this benchmark or regression-gate component.
+    /// </summary>
     private sealed class ProvenanceAggregate
     {
+        /// <summary>
+        /// Gets or sets the _count value used by this component.
+        /// </summary>
         private long _count;
+        /// <summary>
+        /// Gets or sets the _beforeMeasurementEndCount value used by this component.
+        /// </summary>
         private long _beforeMeasurementEndCount;
+        /// <summary>
+        /// Gets or sets the _postMeasurementCount value used by this component.
+        /// </summary>
         private long _postMeasurementCount;
+        /// <summary>
+        /// Gets or sets the _firstOccurrenceTick value used by this component.
+        /// </summary>
         private long _firstOccurrenceTick;
+        /// <summary>
+        /// Gets or sets the _lastOccurrenceTick value used by this component.
+        /// </summary>
         private long _lastOccurrenceTick;
 
+        /// <summary>
+        /// Executes the count operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal long Count => Interlocked.Read(ref _count);
+        /// <summary>
+        /// Executes the before MeasurementEndCount operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal long BeforeMeasurementEndCount => Interlocked.Read(ref _beforeMeasurementEndCount);
+        /// <summary>
+        /// Executes the post MeasurementCount operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal long PostMeasurementCount => Interlocked.Read(ref _postMeasurementCount);
+        /// <summary>
+        /// Executes the first OccurrenceTick operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal long FirstOccurrenceTick => Interlocked.Read(ref _firstOccurrenceTick);
+        /// <summary>
+        /// Executes the last OccurrenceTick operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal long LastOccurrenceTick => Interlocked.Read(ref _lastOccurrenceTick);
 
+        /// <summary>
+        /// Executes the record operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void Record(long completionTick, bool isPostMeasurement)
         {
             Interlocked.Increment(ref _count);
@@ -639,23 +978,50 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Represents the provenance ConnectionAggregate class used by this benchmark or regression-gate component.
+    /// </summary>
     private sealed class ProvenanceConnectionAggregate
     {
+        /// <summary>
+        /// Gets or sets the _byProvenance value used by this component.
+        /// </summary>
         private readonly Dictionary<TransitPublishProvenance, ProvenanceAggregate> _byProvenance = [];
+        /// <summary>
+        /// Gets or sets the _states value used by this component.
+        /// </summary>
         private readonly HashSet<TransitConnectionState> _states = [];
+        /// <summary>
+        /// Executes the _gate operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private readonly object _gate = new();
+        /// <summary>
+        /// Gets or sets the _ambiguousCount value used by this component.
+        /// </summary>
         private long _ambiguousCount;
 
+        /// <summary>
+        /// Executes the provenance ConnectionAggregate operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal ProvenanceConnectionAggregate(string connectionId, int? slotIndex)
         {
             ConnectionId = connectionId;
             SlotIndex = slotIndex;
         }
 
+        /// <summary>
+        /// Gets or sets the connection Id value used by this component.
+        /// </summary>
         internal string ConnectionId { get; }
 
+        /// <summary>
+        /// Gets or sets the slot Index value used by this component.
+        /// </summary>
         internal int? SlotIndex { get; }
 
+        /// <summary>
+        /// Executes the record operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void Record(TransitPublishProvenance provenance, long completionTick, bool isPostMeasurement, TransitConnectionState? connectionState, bool isAmbiguous)
         {
             lock (_gate)
@@ -679,6 +1045,9 @@ internal sealed class MeasurementMetrics
             }
         }
 
+        /// <summary>
+        /// Executes the to Summary operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal ProvenanceConnectionSummary ToSummary()
         {
             lock (_gate)

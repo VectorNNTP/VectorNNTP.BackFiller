@@ -1,4 +1,10 @@
 // <copyright file="BackFillerCertificateStore.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: back filler certificate store in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="BackFillerCertificateStore.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -242,6 +248,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Performs the certificate contains dns name operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static bool CertificateContainsDnsName(X509Certificate2 certificate, string expectedDnsName)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -285,6 +294,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return false;
         }
 
+        /// <summary>
+        /// Performs the has server authentication usage operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static bool HasServerAuthenticationUsage(X509Certificate2 certificate)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -300,6 +312,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 .Any(oid => string.Equals(oid.Value, ServerAuthenticationOid, StringComparison.Ordinal));
         }
 
+        /// <summary>
+        /// Performs the build certificate chain operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -339,6 +354,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return false;
         }
 
+        /// <summary>
+        /// Performs the build pfx bundle operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static byte[] BuildPfxBundle(AcmeOrderIssueResult issueResult, string pfxPassword)
         {
             ArgumentNullException.ThrowIfNull(issueResult);
@@ -378,6 +396,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Performs the import certificate private key operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static AsymmetricAlgorithm ImportCertificatePrivateKey(string pem)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pem);
@@ -405,6 +426,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             throw new InvalidOperationException("Certificate private key PEM is not a supported RSA/ECDSA key.");
         }
 
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -415,6 +439,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             await WriteFileAtomicallyAsync(tempPath, targetPath, payload, cancellationToken, logger).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -468,6 +495,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {
             if (string.IsNullOrWhiteSpace(tempPath))

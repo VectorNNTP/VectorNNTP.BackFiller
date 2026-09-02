@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqConsumerSessionFactory.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq consumer session factory in the runtime rabbit mq subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqConsumerSessionFactory.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -37,11 +43,26 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqConsumerSessionFactory : IRabbitMqConsumerSessionFactory
     {
+        /// <summary>
+        /// Stores the connection manager state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
+        /// <summary>
+        /// Stores the topology initializer state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
+        /// <summary>
+        /// Stores the logger factory state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILoggerFactory _loggerFactory;
+        /// <summary>
+        /// Stores the diagnostic correlation id state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly string? _diagnosticCorrelationId;
 
+        /// <summary>
+        /// Performs the rabbit mq consumer session factory operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         public RabbitMqConsumerSessionFactory(
             RabbitMqConnectionManager connectionManager,
             RabbitMqTopologyInitializer topologyInitializer,
@@ -87,26 +108,80 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed partial class RabbitMqConsumerService : BackgroundService, IRabbitMqCapacityRetirementCoordinator
     {
+        /// <summary>
+        /// Stores the reconcile interval state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly TimeSpan ReconcileInterval = TimeSpan.FromSeconds(15);
 
+        /// <summary>
+        /// Stores the account snapshot provider state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider;
+        /// <summary>
+        /// Stores the connection manager state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
+        /// <summary>
+        /// Stores the session factory state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IRabbitMqConsumerSessionFactory _sessionFactory;
+        /// <summary>
+        /// Stores the shutdown coordinator state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
+        /// <summary>
+        /// Stores the consumer options state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly RabbitMqConsumerInfrastructureOptions _consumerOptions;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<RabbitMqConsumerService> _logger;
+        /// <summary>
+        /// Stores the capacity provider state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IBackboneUsableCapacityProvider _capacityProvider;
+        /// <summary>
+        /// Stores the state gate state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly SemaphoreSlim _stateGate = new(1, 1);
+        /// <summary>
+        /// Stores the shutdown cts state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly CancellationTokenSource _shutdownCts = new();
+        /// <summary>
+        /// Stores the session runtimes state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly Dictionary<string, SessionRuntimeState> _sessionRuntimes = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Stores the retiring session runtimes state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly Dictionary<string, RetiringSessionRuntimeState> _retiringSessionRuntimes = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Stores the delivery channel state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly Channel<RabbitMqArticleDelivery> _deliveryChannel;
+        /// <summary>
+        /// Stores the graceful shutdown registration state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IDisposable _gracefulShutdownRegistration;
+        /// <summary>
+        /// Stores the forced shutdown registration state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IDisposable _forcedShutdownRegistration;
 
+        /// <summary>
+        /// Stores the shutdown requested state used to enforce this component's runtime contract.
+        /// </summary>
         private volatile bool _shutdownRequested;
+        /// <summary>
+        /// Stores the callbacks disposed state used to enforce this component's runtime contract.
+        /// </summary>
         private int _callbacksDisposed;
 
+        /// <summary>
+        /// Performs the rabbit mq consumer service operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         public RabbitMqConsumerService(
             BackFillerRuntimeOptions runtimeOptions,
             MySqlNntpAccountSnapshotProvider accountSnapshotProvider,
@@ -118,6 +193,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         {
         }
 
+        /// <summary>
+        /// Performs the rabbit mq consumer service operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         public RabbitMqConsumerService(
             BackFillerRuntimeOptions runtimeOptions,
             MySqlNntpAccountSnapshotProvider accountSnapshotProvider,
@@ -252,6 +330,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
+        /// <summary>
+        /// Performs the execute operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             LogConsumerServiceStarting(_logger, _consumerOptions.DeliveryBufferCapacity, _consumerOptions.PrefetchCount);
@@ -292,12 +373,18 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             LogConsumerServiceStopped(_logger);
         }
 
+        /// <summary>
+        /// Performs the stop operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             OnShutdownSignaled();
             await base.StopAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Performs the on connection replaced operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async void OnConnectionReplaced(object? sender, RabbitMqConnectionReplacedEventArgs args)
         {
             if (_shutdownRequested || !args.IsReplacement)
@@ -338,6 +425,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
+        /// <summary>
+        /// Performs the reconcile sessions operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task ReconcileSessionsAsync(CancellationToken cancellationToken)
         {
             List<RetirementOperation> retirements = [];
@@ -461,6 +551,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             LogConsumerReconcileCompleted(_logger, desiredSessions.Count, activeCount);
         }
 
+        /// <summary>
+        /// Performs the build desired sessions operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(
             NntpAccountSnapshotState snapshot,
             Func<string, bool> hasUsableBackboneCapacity)
@@ -506,12 +599,18 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             return desired;
         }
 
+        /// <summary>
+        /// Performs the resolve backbone usable capacity operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private bool ResolveBackboneUsableCapacity(string backbone)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
             return _capacityProvider.HasUsableCapacityForBackbone(backbone);
         }
 
+        /// <summary>
+        /// Performs the stop all sessions operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task StopAllSessionsAsync(CancellationToken cancellationToken)
         {
             List<RetirementOperation> retirements = [];
@@ -560,6 +659,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
+        /// <summary>
+        /// Performs the on shutdown signaled operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private void OnShutdownSignaled()
         {
             if (_shutdownRequested)
@@ -572,6 +674,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _shutdownCts.Cancel();
         }
 
+        /// <summary>
+        /// Performs the dispose lifecycle callbacks operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private void DisposeLifecycleCallbacks()
         {
             if (Interlocked.Exchange(ref _callbacksDisposed, 1) != 0)
@@ -584,6 +689,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _forcedShutdownRegistration.Dispose();
         }
 
+        /// <summary>
+        /// Performs the execute retirement operation operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task ExecuteRetirementOperationAsync(RetirementOperation operation, CancellationToken cancellationToken, bool cancelAdmittedWork)
         {
             ArgumentNullException.ThrowIfNull(operation);
@@ -637,6 +745,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
+        /// <summary>
+        /// Performs the prune completed retirements no lock operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private void PruneCompletedRetirementsNoLock()
         {
             List<string> completedKeys = [];
@@ -654,6 +765,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
+        /// <summary>
+        /// Performs the requires session replacement operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static bool RequiresSessionReplacement(RabbitMqConsumerSessionIdentity existingIdentity, RabbitMqConsumerSessionIdentity desiredIdentity)
         {
             ArgumentNullException.ThrowIfNull(existingIdentity);
@@ -662,66 +776,135 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             return !string.Equals(existingIdentity.Backbone, desiredIdentity.Backbone, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Performs the session runtime state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private sealed class SessionRuntimeState(RabbitMqConsumerSessionIdentity identity, IRabbitMqConsumerSession session)
         {
+            /// <summary>
+            /// Stores the identity state used to enforce this component's runtime contract.
+            /// </summary>
             internal RabbitMqConsumerSessionIdentity Identity { get; set; } = identity;
 
+            /// <summary>
+            /// Stores the session state used to enforce this component's runtime contract.
+            /// </summary>
             internal IRabbitMqConsumerSession Session { get; } = session;
 
+            /// <summary>
+            /// Stores the desired state used to enforce this component's runtime contract.
+            /// </summary>
             internal bool Desired { get; set; }
         }
 
+        /// <summary>
+        /// Defines the always available backbone capacity provider component and its contracts for this subsystem.
+        /// </summary>
         private sealed class AlwaysAvailableBackboneCapacityProvider : IBackboneUsableCapacityProvider
         {
+            /// <summary>
+            /// Stores the instance state used to enforce this component's runtime contract.
+            /// </summary>
             internal static readonly AlwaysAvailableBackboneCapacityProvider Instance = new();
 
+            /// <summary>
+            /// Performs the has usable capacity for backbone operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             public bool HasUsableCapacityForBackbone(string backbone)
             {
                 return !string.IsNullOrWhiteSpace(backbone);
             }
         }
 
+        /// <summary>
+        /// Performs the retiring session runtime state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private sealed class RetiringSessionRuntimeState(RabbitMqConsumerSessionIdentity identity, Task retirementTask)
         {
+            /// <summary>
+            /// Stores the identity state used to enforce this component's runtime contract.
+            /// </summary>
             internal RabbitMqConsumerSessionIdentity Identity { get; } = identity;
 
+            /// <summary>
+            /// Stores the retirement task state used to enforce this component's runtime contract.
+            /// </summary>
             internal Task RetirementTask { get; } = retirementTask;
         }
 
+        /// <summary>
+        /// Performs the retirement operation operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private sealed class RetirementOperation(string sessionKey, SessionRuntimeState runtime, TaskCompletionSource<bool> completionSource)
         {
+            /// <summary>
+            /// Stores the session key state used to enforce this component's runtime contract.
+            /// </summary>
             internal string SessionKey { get; } = sessionKey;
 
+            /// <summary>
+            /// Stores the runtime state used to enforce this component's runtime contract.
+            /// </summary>
             internal SessionRuntimeState Runtime { get; } = runtime;
 
+            /// <summary>
+            /// Stores the completion source state used to enforce this component's runtime contract.
+            /// </summary>
             internal TaskCompletionSource<bool> CompletionSource { get; } = completionSource;
         }
 
         [LoggerMessage(EventId = 4400, Level = LogLevel.Information, Message = "RabbitMQ consumer service starting. DeliveryBufferCapacity={DeliveryBufferCapacity}, Prefetch={PrefetchCount}")]
+        /// <summary>
+        /// Performs the log consumer service starting operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerServiceStarting(ILogger logger, int deliveryBufferCapacity, ushort? prefetchCount);
 
         [LoggerMessage(EventId = 4401, Level = LogLevel.Information, Message = "RabbitMQ consumer service stopped")]
+        /// <summary>
+        /// Performs the log consumer service stopped operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerServiceStopped(ILogger logger);
 
         [LoggerMessage(EventId = 4402, Level = LogLevel.Warning, Message = "RabbitMQ consumer reconciliation cycle failed unexpectedly")]
+        /// <summary>
+        /// Performs the log consumer service reconcile failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerServiceReconcileFailed(ILogger logger, Exception exception);
 
         [LoggerMessage(EventId = 4403, Level = LogLevel.Warning, Message = "RabbitMQ connection replacement dispatch to consumer sessions failed")]
+        /// <summary>
+        /// Performs the log connection replaced dispatch failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConnectionReplacedDispatchFailed(ILogger logger, Exception exception);
 
         [LoggerMessage(EventId = 4404, Level = LogLevel.Information, Message = "RabbitMQ consumer session created. Backbone={Backbone} Account={Account} Connection={ConnectionNumber}/{ConnectionLimit} SessionKey={SessionKey}")]
+        /// <summary>
+        /// Performs the log consumer session created operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerSessionCreated(ILogger logger, string backbone, string account, int connectionNumber, int connectionLimit, string sessionKey);
 
         [LoggerMessage(EventId = 4405, Level = LogLevel.Information, Message = "RabbitMQ consumer session replaced due to account configuration change. Backbone={Backbone} Account={Account} Connection={ConnectionNumber}/{ConnectionLimit} SessionKey={SessionKey}")]
+        /// <summary>
+        /// Performs the log consumer session replaced operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerSessionReplaced(ILogger logger, string backbone, string account, int connectionNumber, int connectionLimit, string sessionKey);
 
         [LoggerMessage(EventId = 4406, Level = LogLevel.Information, Message = "RabbitMQ consumer session retired. Backbone={Backbone} Account={Account} Connection={ConnectionNumber}/{ConnectionLimit} SessionKey={SessionKey}")]
+        /// <summary>
+        /// Performs the log consumer session retired operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerSessionRetired(ILogger logger, string backbone, string account, int connectionNumber, int connectionLimit, string sessionKey);
 
         [LoggerMessage(EventId = 4407, Level = LogLevel.Information, Message = "RabbitMQ consumer reconciliation completed. DesiredSessions={DesiredSessions} ActiveSessions={ActiveSessions}")]
+        /// <summary>
+        /// Performs the log consumer reconcile completed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerReconcileCompleted(ILogger logger, int desiredSessions, int activeSessions);
 
         [LoggerMessage(EventId = 4408, Level = LogLevel.Warning, Message = "RabbitMQ consumer session stop/dispose failed during service shutdown. SessionKey={SessionKey}")]
+        /// <summary>
+        /// Performs the log consumer session stop failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogConsumerSessionStopFailed(ILogger logger, string sessionKey, Exception exception);
     }
 }

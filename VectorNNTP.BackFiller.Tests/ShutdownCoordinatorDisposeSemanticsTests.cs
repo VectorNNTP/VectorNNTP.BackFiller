@@ -1,11 +1,9 @@
 // <copyright file="ShutdownCoordinatorDisposeSemanticsTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for shutdown coordinator dispose semantics.
 
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using Xunit;
@@ -17,6 +15,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ShutdownCoordinatorDisposeSemanticsTests
     {
+        /// <summary>
+        /// Verifies the Dispose_DuringGracefulShutdown_CompletesWithoutForcedEscalationSignal scenario and expected contract.
+        /// </summary>
         [Fact]
         public void Dispose_DuringGracefulShutdown_CompletesWithoutForcedEscalationSignal()
         {
@@ -27,7 +28,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
         }
-
+        /// <summary>
+        /// Verifies the Dispose_DuringGracefulShutdown_ForcedShutdownTokenBecomesUnusable scenario and expected contract.
+        /// </summary>
         [Fact]
         public void Dispose_DuringGracefulShutdown_ForcedShutdownTokenBecomesUnusable()
         {
@@ -39,7 +42,9 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Throws<ObjectDisposedException>(() =>
                 _ = coordinator.ForcedShutdownToken.IsCancellationRequested);
         }
-
+        /// <summary>
+        /// Verifies the Dispose_DuringGracefulShutdown_PreventsLaterTimerDrivenForcedEscalation scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task Dispose_DuringGracefulShutdown_PreventsLaterTimerDrivenForcedEscalation()
         {
@@ -54,7 +59,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);
         }
-
+        /// <summary>
+        /// Verifies the SignalGracefulShutdown_AfterDispose_IsIgnored scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalGracefulShutdown_AfterDispose_IsIgnored()
         {
@@ -67,7 +74,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.GracefulShutdownReason);
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);
         }
-
+        /// <summary>
+        /// Verifies the SignalForcedShutdown_AfterDispose_IsIgnored scenario and expected contract.
+        /// </summary>
         [Fact]
         public void SignalForcedShutdown_AfterDispose_IsIgnored()
         {

@@ -1,11 +1,9 @@
 // <copyright file="MySqlNntpAccountSnapshotProviderRefreshTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for my sql nntp account snapshot provider refresh.
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +17,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class MySqlNntpAccountSnapshotProviderRefreshTests
     {
+        /// <summary>
+        /// Verifies the RefreshSnapshotAsync_WhenSuccessful_ReplacesSnapshotAtomically scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenSuccessful_ReplacesSnapshotAtomically()
         {
@@ -46,7 +47,9 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Single(provider.CurrentSnapshot.Accounts);
             Assert.Equal(refreshed.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
-
+        /// <summary>
+        /// Verifies the RefreshSnapshotAsync_WhenRefreshFails_PreservesPreviousSnapshot scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenRefreshFails_PreservesPreviousSnapshot()
         {
@@ -73,7 +76,9 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Single(provider.CurrentSnapshot.Accounts);
             Assert.Equal(initial.EntryId, provider.CurrentSnapshot.Accounts[0].EntryId);
         }
-
+        /// <summary>
+        /// Verifies the RefreshSnapshotAsync_WhenConcurrentCallOccurs_SkipsOverlap scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenConcurrentCallOccurs_SkipsOverlap()
         {
@@ -100,7 +105,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.True(firstResult);
         }
-
+        /// <summary>
+        /// Verifies the RefreshSnapshotAsync_WhenCanceled_ThrowsOperationCanceledException scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenCanceled_ThrowsOperationCanceledException()
         {
@@ -118,7 +125,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.RefreshSnapshotAsync(cts.Token));
         }
-
+        /// <summary>
+        /// Verifies the RefreshSnapshotAsync_LogsDoNotContainCredentials scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_LogsDoNotContainCredentials()
         {
@@ -137,7 +146,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("secret", combined, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("password", combined, StringComparison.OrdinalIgnoreCase);
         }
-
+        /// <summary>
+        /// Verifies the RefreshSnapshotAsync_WhenSuccessful_ReturnsSnapshotUsingConfiguredServerId scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenSuccessful_ReturnsSnapshotUsingConfiguredServerId()
         {
@@ -152,6 +163,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal((byte)9, provider.CurrentSnapshot.ServerId);
         }
 
+        /// <summary>
+        /// Verifies the BuildAccount scenario and expected contract.
+        /// </summary>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {
             return new NntpAccountSnapshot(
@@ -167,8 +181,14 @@ namespace VectorNNTP.Backfiller.Tests
                 UseSsl: true);
         }
 
+        /// <summary>
+        /// Documents the TestLogger test type and its protected contract.
+        /// </summary>
         private sealed class TestLogger<T> : ILogger<T>
         {
+            /// <summary>
+            /// Stores the Messages value used by this test fixture.
+            /// </summary>
             internal List<string> Messages { get; } = [];
 
             IDisposable? ILogger.BeginScope<TState>(TState state)

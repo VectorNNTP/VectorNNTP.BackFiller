@@ -1,4 +1,10 @@
 // <copyright file="NntpConnectionLogContext.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp connection log context in the articles acquisition subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpConnectionLogContext.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -18,7 +24,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     /// </remarks>
     internal sealed class NntpConnectionLogContext
     {
+        /// <summary>
+        /// Stores the scope properties state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly KeyValuePair<string, object?>[] _scopeProperties;
+        /// <summary>
+        /// Stores the connection prefix state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly string _connectionPrefix;
 
         /// <summary>
@@ -153,13 +165,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// </summary>
         private sealed class CompositeDisposable : IDisposable
         {
+            /// <summary>
+            /// Stores the disposables state used to enforce this component's runtime contract.
+            /// </summary>
             private readonly IReadOnlyList<IDisposable> _disposables;
 
+            /// <summary>
+            /// Performs the composite disposable operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             internal CompositeDisposable(IReadOnlyList<IDisposable> disposables)
             {
                 _disposables = disposables ?? throw new ArgumentNullException(nameof(disposables));
             }
 
+            /// <summary>
+            /// Performs the dispose operation while preserving this component's lifecycle and state contracts.
+            /// </summary>
             public void Dispose()
             {
                 for (int index = _disposables.Count - 1; index >= 0; index--)

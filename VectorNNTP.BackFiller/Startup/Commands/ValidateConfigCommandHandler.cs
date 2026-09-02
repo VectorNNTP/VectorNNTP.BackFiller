@@ -1,4 +1,10 @@
 // <copyright file="ValidateConfigCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: validate config command handler in the startup commands subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="ValidateConfigCommandHandler.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -65,6 +71,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             }
         }
 
+        /// <summary>
+        /// Performs the build validate config command result operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static ConfigurationValidationResult BuildValidateConfigCommandResult(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

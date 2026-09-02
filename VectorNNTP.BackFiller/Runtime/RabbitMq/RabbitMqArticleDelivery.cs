@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqArticleDelivery.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq article delivery in the runtime rabbit mq subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqArticleDelivery.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

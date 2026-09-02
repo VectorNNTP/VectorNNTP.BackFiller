@@ -1,4 +1,10 @@
 // <copyright file="LetsEncryptCertificateRenewalService.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: lets encrypt certificate renewal service in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="LetsEncryptCertificateRenewalService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,9 +21,21 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </summary>
     internal sealed partial class LetsEncryptCertificateRenewalService : BackgroundService
     {
+        /// <summary>
+        /// Stores the runtime options state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions;
+        /// <summary>
+        /// Stores the provisioning service state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly BackFillerCertificateProvisioningService _provisioningService;
+        /// <summary>
+        /// Stores the shutdown coordinator state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<LetsEncryptCertificateRenewalService> _logger;
 
         /// <summary>
@@ -82,6 +100,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Performs the compute next delay operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static TimeSpan ComputeNextDelay(BackFillerLetsEncryptRuntimeOptions options)
         {
             double hours = options.RenewalCheckIntervalHours;

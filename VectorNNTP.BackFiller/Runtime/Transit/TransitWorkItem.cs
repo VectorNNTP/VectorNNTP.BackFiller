@@ -1,4 +1,10 @@
 // <copyright file="TransitWorkItem.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: transit work item in the runtime transit subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="TransitWorkItem.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,9 +21,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed class TransitWorkItem
     {
+        /// <summary>
+        /// Stores the terminal completion observed state used to enforce this component's runtime contract.
+        /// </summary>
         private int _terminalCompletionObserved;
+        /// <summary>
+        /// Stores the state value state used to enforce this component's runtime contract.
+        /// </summary>
         private int _stateValue = (int)TransitWorkItemState.Queued;
 
+        /// <summary>
+        /// Stores the max attempts state used to enforce this component's runtime contract.
+        /// </summary>
         internal TransitWorkItem(long workItemId, string messageId, byte[] payload, int maxAttempts = 3)
         {
             if (string.IsNullOrWhiteSpace(messageId))
@@ -46,48 +61,114 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             LastEnqueuedUtc = FirstEnqueuedUtc;
         }
 
+        /// <summary>
+        /// Stores the work item id state used to enforce this component's runtime contract.
+        /// </summary>
         internal long WorkItemId { get; }
 
+        /// <summary>
+        /// Stores the message id state used to enforce this component's runtime contract.
+        /// </summary>
         internal string MessageId { get; }
 
+        /// <summary>
+        /// Stores the payload state used to enforce this component's runtime contract.
+        /// </summary>
         internal byte[] Payload { get; }
 
+        /// <summary>
+        /// Stores the payload bytes state used to enforce this component's runtime contract.
+        /// </summary>
         internal int PayloadBytes { get; }
 
+        /// <summary>
+        /// Stores the attempt count state used to enforce this component's runtime contract.
+        /// </summary>
         internal int AttemptCount { get; private set; }
 
+        /// <summary>
+        /// Stores the max attempts state used to enforce this component's runtime contract.
+        /// </summary>
         internal int MaxAttempts { get; }
 
+        /// <summary>
+        /// Stores the first enqueued utc state used to enforce this component's runtime contract.
+        /// </summary>
         internal DateTimeOffset FirstEnqueuedUtc { get; }
 
+        /// <summary>
+        /// Stores the last enqueued utc state used to enforce this component's runtime contract.
+        /// </summary>
         internal DateTimeOffset LastEnqueuedUtc { get; private set; }
 
+        /// <summary>
+        /// Stores the last claimed utc state used to enforce this component's runtime contract.
+        /// </summary>
         internal DateTimeOffset? LastClaimedUtc { get; private set; }
 
+        /// <summary>
+        /// Stores the last failure utc state used to enforce this component's runtime contract.
+        /// </summary>
         internal DateTimeOffset? LastFailureUtc { get; private set; }
 
+        /// <summary>
+        /// Stores the next eligible utc state used to enforce this component's runtime contract.
+        /// </summary>
         internal DateTimeOffset? NextEligibleUtc { get; private set; }
 
+        /// <summary>
+        /// Stores the last failure class state used to enforce this component's runtime contract.
+        /// </summary>
         internal TransitWorkFailureClass? LastFailureClass { get; private set; }
 
+        /// <summary>
+        /// Stores the last transmission uncertainty state used to enforce this component's runtime contract.
+        /// </summary>
         internal TransitTransmissionUncertainty? LastTransmissionUncertainty { get; private set; }
 
+        /// <summary>
+        /// Stores the state state used to enforce this component's runtime contract.
+        /// </summary>
         internal TransitWorkItemState State => (TransitWorkItemState)Volatile.Read(ref _stateValue);
 
+        /// <summary>
+        /// Stores the owner connection id state used to enforce this component's runtime contract.
+        /// </summary>
         internal string? OwnerConnectionId { get; private set; }
 
+        /// <summary>
+        /// Stores the cancel requested state used to enforce this component's runtime contract.
+        /// </summary>
         internal bool CancelRequested { get; private set; }
 
+        /// <summary>
+        /// Stores the terminal status state used to enforce this component's runtime contract.
+        /// </summary>
         internal TransitPublishStatus? TerminalStatus { get; private set; }
 
+        /// <summary>
+        /// Stores the terminal provenance state used to enforce this component's runtime contract.
+        /// </summary>
         internal TransitPublishProvenance? TerminalProvenance { get; private set; }
 
+        /// <summary>
+        /// Stores the last state transition tick state used to enforce this component's runtime contract.
+        /// </summary>
         internal long LastStateTransitionTick { get; private set; }
 
+        /// <summary>
+        /// Stores the completion task state used to enforce this component's runtime contract.
+        /// </summary>
         internal Task<TransitPublishResult> CompletionTask => _completion.Task;
 
+        /// <summary>
+        /// Stores the completion state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly TaskCompletionSource<TransitPublishResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>
+        /// Performs the try mark queued operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryMarkQueued(DateTimeOffset utcNow)
         {
             while (true)
@@ -122,6 +203,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Performs the try revert queued to retry pending operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryRevertQueuedToRetryPending(DateTimeOffset utcNow)
         {
             if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.RetryPending, (int)TransitWorkItemState.Queued)
@@ -136,6 +220,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Performs the mark queued operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal void MarkQueued(DateTimeOffset utcNow)
         {
             if (!TryMarkQueued(utcNow))
@@ -144,6 +231,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Performs the try mark claimed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryMarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
             if (string.IsNullOrWhiteSpace(connectionId))
@@ -164,6 +254,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Performs the mark claimed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal void MarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
             if (!TryMarkClaimed(connectionId, utcNow))
@@ -172,16 +265,25 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Performs the mark staged operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal void MarkStaged()
         {
             _ = TryTransitionState(TransitWorkItemState.Claimed, TransitWorkItemState.Staged);
         }
 
+        /// <summary>
+        /// Performs the mark flushed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal void MarkFlushed()
         {
             _ = TryTransitionState(TransitWorkItemState.Staged, TransitWorkItemState.Flushed);
         }
 
+        /// <summary>
+        /// Performs the mark awaiting response operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal void MarkAwaitingResponse()
         {
             if (State == TransitWorkItemState.AwaitingResponse)
@@ -192,6 +294,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _ = TryTransitionState(TransitWorkItemState.Flushed, TransitWorkItemState.AwaitingResponse);
         }
 
+        /// <summary>
+        /// Performs the try move to retry pending operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryMoveToRetryPending(
             TransitWorkFailureClass failureClass,
             TransitTransmissionUncertainty uncertainty,
@@ -227,11 +332,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Performs the has attempts remaining operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool HasAttemptsRemaining()
         {
             return AttemptCount < MaxAttempts;
         }
 
+        /// <summary>
+        /// Performs the try transition to terminal operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryTransitionToTerminal(TransitPublishStatus status, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
             if (Interlocked.CompareExchange(ref _terminalCompletionObserved, 1, 0) != 0)
@@ -247,11 +358,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Performs the mark cancel requested operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal void MarkCancelRequested()
         {
             CancelRequested = true;
         }
 
+        /// <summary>
+        /// Performs the try complete operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -260,6 +377,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 && _completion.TrySetResult(result);
         }
 
+        /// <summary>
+        /// Performs the try complete operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -267,12 +387,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return TryTransitionToTerminal(result.Status, terminalProvenance, out priorState) && _completion.TrySetResult(result);
         }
 
+        /// <summary>
+        /// Performs the try set completion result operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal bool TrySetCompletionResult(TransitPublishResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
             return _completion.TrySetResult(result);
         }
 
+        /// <summary>
+        /// Performs the try transition state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private bool TryTransitionState(TransitWorkItemState expected, TransitWorkItemState next)
         {
             if (Interlocked.CompareExchange(ref _stateValue, (int)next, (int)expected) != (int)expected)
@@ -284,6 +410,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Performs the is terminal state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static bool IsTerminalState(TransitWorkItemState state)
         {
             return state is TransitWorkItemState.CompletedAccepted
@@ -292,6 +421,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 or TransitWorkItemState.CompletedFailed;
         }
 
+        /// <summary>
+        /// Performs the map terminal state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static TransitWorkItemState MapTerminalState(TransitPublishStatus status)
         {
             return status switch
@@ -303,9 +435,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             };
         }
 
+        /// <summary>
+        /// Stores the is terminal state used to enforce this component's runtime contract.
+        /// </summary>
         internal bool IsTerminal => Volatile.Read(ref _terminalCompletionObserved) == 1;
     }
 
+    /// <summary>
+    /// Defines the transit work item state component and its contracts for this subsystem.
+    /// </summary>
     internal enum TransitWorkItemState
     {
         Queued = 0,
@@ -320,6 +458,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         CompletedCanceled = 9,
     }
 
+    /// <summary>
+    /// Defines the transit work failure class component and its contracts for this subsystem.
+    /// </summary>
     internal enum TransitWorkFailureClass
     {
         ConnectionReset = 0,
@@ -335,6 +476,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         Unknown = 10,
     }
 
+    /// <summary>
+    /// Defines the transit transmission uncertainty component and its contracts for this subsystem.
+    /// </summary>
     internal enum TransitTransmissionUncertainty
     {
         DefinitelyNotSent = 0,

@@ -1,4 +1,10 @@
 // <copyright file="BuildInfoService.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: build info service in the vector nntp.back filler startup subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="BuildInfoService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,6 +21,9 @@ namespace VectorNNTP.Backfiller.Startup
     /// </summary>
     internal static class BuildInfoService
     {
+        /// <summary>
+        /// Stores the build info state used to enforce this component's runtime contract.
+        /// </summary>
         private static BuildInfo? _buildInfo;
 
         /// <summary>

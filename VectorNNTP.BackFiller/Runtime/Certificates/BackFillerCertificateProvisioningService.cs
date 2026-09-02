@@ -1,4 +1,10 @@
 // <copyright file="BackFillerCertificateProvisioningService.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: back filler certificate provisioning service in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="BackFillerCertificateProvisioningService.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -19,11 +25,29 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed class BackFillerCertificateProvisioningService : IDisposable
     {
+        /// <summary>
+        /// Stores the certificate store state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly BackFillerCertificateStore _certificateStore;
+        /// <summary>
+        /// Stores the acme issuer state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IAcmeCertificateIssuer _acmeIssuer;
+        /// <summary>
+        /// Stores the certificate state state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly BackFillerCertificateState _certificateState;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
+        /// <summary>
+        /// Stores the time provider state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
+        /// <summary>
+        /// Stores the provision gate state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly SemaphoreSlim ProvisionGate = new(1, 1);
 
         /// <summary>
@@ -147,6 +171,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Performs the ensure certificate availability core operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task EnsureCertificateAvailabilityCoreAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -184,6 +211,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             await ProvisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Performs the provision new certificate operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private async Task ProvisionNewCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -319,74 +349,116 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 new EventId(2707, nameof(LogListenerCertificateActivatedSuccessfully)),
                 "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}");
 
+        /// <summary>
+        /// Performs the log certificate provisioning disabled operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificateProvisioningDisabled(ILogger logger)
         {
             LogCertificateProvisioningDisabledMessage(logger, null);
         }
 
+        /// <summary>
+        /// Performs the log certificate renewal required with unusable certificate operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason)
         {
             LogCertificateRenewalRequiredWithUnusableCertificateMessage(logger, reason, null);
         }
 
+        /// <summary>
+        /// Performs the log certificate renewal failed using existing certificate operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception)
         {
             LogCertificateRenewalFailedUsingExistingCertificateMessage(logger, exception);
         }
 
+        /// <summary>
+        /// Performs the log using existing listener certificate operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogUsingExistingListenerCertificate(ILogger logger, string reason)
         {
             LogUsingExistingListenerCertificateMessage(logger, reason, null);
         }
 
+        /// <summary>
+        /// Performs the log listener certificate inside renewal window operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogListenerCertificateInsideRenewalWindow(ILogger logger)
         {
             LogListenerCertificateInsideRenewalWindowMessage(logger, null);
         }
 
+        /// <summary>
+        /// Performs the log certificate renewal failed retaining existing certificate operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception)
         {
             LogCertificateRenewalFailedRetainingExistingCertificateMessage(logger, exception);
         }
 
+        /// <summary>
+        /// Performs the log listener certificate unavailable or unusable operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason)
         {
             LogListenerCertificateUnavailableOrUnusableMessage(logger, reason, null);
         }
 
+        /// <summary>
+        /// Performs the log listener certificate activated successfully operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc)
         {
             LogListenerCertificateActivatedSuccessfullyMessage(logger, subject, notAfterUtc, null);
         }
 
+        /// <summary>
+        /// Stores the log certificate issuance failed message state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2708, nameof(LogCertificateIssuanceFailed)),
                 "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
+        /// <summary>
+        /// Stores the log certificate persistence failed message state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2709, nameof(LogCertificatePersistenceFailed)),
                 "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
+        /// <summary>
+        /// Stores the log certificate reload failed message state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2710, nameof(LogCertificateReloadFailed)),
                 "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
+        /// <summary>
+        /// Performs the log certificate issuance failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
             LogCertificateIssuanceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
         }
 
+        /// <summary>
+        /// Performs the log certificate persistence failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
             LogCertificatePersistenceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
         }
 
+        /// <summary>
+        /// Performs the log certificate reload failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
             LogCertificateReloadFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);

@@ -1,4 +1,10 @@
 // <copyright file="NntpArticleAcquisitionSession.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp article acquisition session in the articles acquisition subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpArticleAcquisitionSession.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -151,6 +157,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     options.ConnectTimeout,
                     cancellationToken,
+                    /// <summary>
+                    /// Stores the token state used to enforce this component's runtime contract.
+                    /// </summary>
                     async token =>
                     {
                         await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
@@ -178,6 +187,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
                         cancellationToken,
+                        /// <summary>
+                        /// Stores the token state used to enforce this component's runtime contract.
+                        /// </summary>
                         async token =>
                         {
                             await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
@@ -517,6 +529,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     timeout,
                     cancellationToken,
+                    /// <summary>
+                    /// Stores the token state used to enforce this component's runtime contract.
+                    /// </summary>
                     async token =>
                     {
                         await _stream.WriteAsync(bytes, token).ConfigureAwait(false);

@@ -1,4 +1,10 @@
 // <copyright file="CertificateFileConventions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: certificate file conventions in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="CertificateFileConventions.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -12,7 +18,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </summary>
     internal static class CertificateFileConventions
     {
+        /// <summary>
+        /// Stores the listener pfx file name state used to enforce this component's runtime contract.
+        /// </summary>
         internal const string ListenerPfxFileName = "backfiller-listener.pfx";
+        /// <summary>
+        /// Stores the certificate private key pem file name state used to enforce this component's runtime contract.
+        /// </summary>
         internal const string CertificatePrivateKeyPemFileName = "backfiller-listener.key";
 
         /// <summary>

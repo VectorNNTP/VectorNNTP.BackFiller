@@ -1,11 +1,9 @@
 // <copyright file="FixedArticleLimiterTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Contract and behavior tests for the fixed article limiter benchmark component.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -58,7 +56,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task TryReserveNext_WhenInvokedConcurrently_IsGloballyBoundedToTargetAsync()
         {
+            /// <summary>
+            /// Stores the Target fixture value used by these tests.
+            /// </summary>
             const int Target = 200;
+            /// <summary>
+            /// Stores the Workers fixture value used by these tests.
+            /// </summary>
             const int Workers = 8;
 
             FixedArticleLimiter limiter = new(Target);

@@ -1,3 +1,9 @@
+// <copyright file="TransitDotStuffingBenchmarks.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// TransitDotStuffingBenchmarks: defines the benchmark entry point or scenario for controlled performance validation.
+
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
@@ -13,11 +19,23 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
+/// <summary>
+/// Represents the transit DotStuffingBenchmarks class used by this benchmark or regression-gate component.
+/// </summary>
 public class TransitDotStuffingBenchmarks
 {
+    /// <summary>
+    /// Gets or sets the payload Size value used by this component.
+    /// </summary>
     private const int PayloadSize = 2_097_152;
 
+    /// <summary>
+    /// Gets or sets the _source value used by this component.
+    /// </summary>
     private byte[] _source = null!;
+    /// <summary>
+    /// Gets or sets the _destination value used by this component.
+    /// </summary>
     private byte[] _destination = null!;
 
     [Params(
@@ -26,9 +44,15 @@ public class TransitDotStuffingBenchmarks
         DotPayloadDistribution.Mixed,
         DotPayloadDistribution.LargeLine,
         DotPayloadDistribution.SmallLine)]
+    /// <summary>
+    /// Gets or sets the distribution value used by this component.
+    /// </summary>
     public DotPayloadDistribution Distribution { get; set; }
 
     [GlobalSetup]
+    /// <summary>
+    /// Executes the setup operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void Setup()
     {
         _source = BuildPayload(Distribution, PayloadSize);
@@ -38,6 +62,9 @@ public class TransitDotStuffingBenchmarks
 
     [Benchmark(Baseline = true, Description = "Transform/BaselineByteLoop")]
     [BenchmarkCategory("Transform")]
+    /// <summary>
+    /// Executes the transform _BaselineByteLoop operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int Transform_BaselineByteLoop()
     {
         bool ok = TransitDotStuffing.TryDotStuff(
@@ -56,6 +83,9 @@ public class TransitDotStuffingBenchmarks
 
     [Benchmark(Description = "Transform/BulkSinglePass")]
     [BenchmarkCategory("Transform")]
+    /// <summary>
+    /// Executes the transform _BulkSinglePass operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int Transform_BulkSinglePass()
     {
         bool ok = TransitDotStuffing.TryDotStuff(
@@ -74,6 +104,9 @@ public class TransitDotStuffingBenchmarks
 
     [Benchmark(Description = "Transform/BulkTwoPass")]
     [BenchmarkCategory("Transform")]
+    /// <summary>
+    /// Executes the transform _BulkTwoPass operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int Transform_BulkTwoPass()
     {
         bool ok = TransitDotStuffing.TryDotStuff(
@@ -92,6 +125,9 @@ public class TransitDotStuffingBenchmarks
 
     [Benchmark(Baseline = true, Description = "PipeWriter/BaselineByteLoop")]
     [BenchmarkCategory("PipeWriter")]
+    /// <summary>
+    /// Executes the pipe Writer_BaselineByteLoop operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int PipeWriter_BaselineByteLoop()
     {
         return WriteWithPipeWriter(TransitDotStuffingAlgorithm.BaselineByteLoop);
@@ -99,6 +135,9 @@ public class TransitDotStuffingBenchmarks
 
     [Benchmark(Description = "PipeWriter/BulkSinglePass")]
     [BenchmarkCategory("PipeWriter")]
+    /// <summary>
+    /// Executes the pipe Writer_BulkSinglePass operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int PipeWriter_BulkSinglePass()
     {
         return WriteWithPipeWriter(TransitDotStuffingAlgorithm.BulkLineOrientedSinglePass);
@@ -106,11 +145,17 @@ public class TransitDotStuffingBenchmarks
 
     [Benchmark(Description = "PipeWriter/BulkTwoPass")]
     [BenchmarkCategory("PipeWriter")]
+    /// <summary>
+    /// Executes the pipe Writer_BulkTwoPass operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int PipeWriter_BulkTwoPass()
     {
         return WriteWithPipeWriter(TransitDotStuffingAlgorithm.BulkLineOrientedTwoPass);
     }
 
+    /// <summary>
+    /// Executes the write WithPipeWriter operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private int WriteWithPipeWriter(TransitDotStuffingAlgorithm algorithm)
     {
         int required = TransitDotStuffing.GetRequiredDestinationLength(_source, appendTrailingCrlfWhenMissingLf: true, out _);
@@ -134,6 +179,9 @@ public class TransitDotStuffingBenchmarks
         return result.BytesWritten;
     }
 
+    /// <summary>
+    /// Executes the build Payload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] BuildPayload(DotPayloadDistribution distribution, int size)
     {
         return distribution switch
@@ -147,6 +195,9 @@ public class TransitDotStuffingBenchmarks
         };
     }
 
+    /// <summary>
+    /// Executes the build NormalPayload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] BuildNormalPayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -182,6 +233,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Executes the build DotHeavyPayload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] BuildDotHeavyPayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -204,6 +258,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Executes the build MixedPayload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] BuildMixedPayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -241,6 +298,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Executes the build LargeLinePayload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] BuildLargeLinePayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -264,6 +324,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Executes the build SmallLinePayload operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static byte[] BuildSmallLinePayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -296,6 +359,9 @@ public class TransitDotStuffingBenchmarks
     }
 }
 
+/// <summary>
+/// Represents the dot PayloadDistribution enum used by this benchmark or regression-gate component.
+/// </summary>
 public enum DotPayloadDistribution
 {
     NormalNoDot = 0,

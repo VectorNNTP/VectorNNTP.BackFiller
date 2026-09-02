@@ -1,11 +1,9 @@
 // <copyright file="TransitConnectionDisposalDiagnosticsTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for transit connection disposal diagnostics.
 
 using System.Net.Sockets;
 using System.Reflection;
@@ -20,6 +18,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class TransitConnectionDisposalDiagnosticsTests
     {
+        /// <summary>
+        /// Verifies the DisposeAsync_WhenTransportArtifactDisposeThrows_PropagatesExceptionWithoutLeakingSensitiveHost scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("read-stream", "object-disposed")]
         [InlineData("write-stream", "io")]
@@ -55,7 +56,9 @@ namespace VectorNNTP.Backfiller.Tests
                 entry.Message + string.Join('|', entry.StateValues.Values.Select(static value => value?.ToString() ?? string.Empty))));
             Assert.DoesNotContain("superSecretPassword", rendered, StringComparison.OrdinalIgnoreCase);
         }
-
+        /// <summary>
+        /// Verifies the DisposeAsync_WhenTransportArtifactsDisposeNormally_ClearsFieldsWithoutDiagnosticFailures scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenTransportArtifactsDisposeNormally_ClearsFieldsWithoutDiagnosticFailures()
         {
@@ -88,6 +91,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(provider.Entries, entry => entry.EventId.Id is 2215 or 2216);
         }
 
+        /// <summary>
+        /// Verifies the SetTransportArtifact scenario and expected contract.
+        /// </summary>
         private static void SetTransportArtifact(TransitConnection connection, string artifactName, Stream stream)
         {
             string fieldName = artifactName switch
@@ -110,82 +116,160 @@ namespace VectorNNTP.Backfiller.Tests
             return field.GetValue(connection) as T;
         }
 
+        /// <summary>
+        /// Documents the ThrowingDisposeStream test type and its protected contract.
+        /// </summary>
         private sealed class ThrowingDisposeStream(Exception disposeException) : Stream
         {
+            /// <summary>
+            /// Stores the _disposeException fixture value used by these tests.
+            /// </summary>
             private readonly Exception _disposeException = disposeException;
 
+            /// <summary>
+            /// Stores the CanRead value used by this test fixture.
+            /// </summary>
             public override bool CanRead => false;
+            /// <summary>
+            /// Stores the CanSeek value used by this test fixture.
+            /// </summary>
             public override bool CanSeek => false;
+            /// <summary>
+            /// Stores the CanWrite value used by this test fixture.
+            /// </summary>
             public override bool CanWrite => false;
+            /// <summary>
+            /// Stores the Length value used by this test fixture.
+            /// </summary>
             public override long Length => 0;
+            /// <summary>
+            /// Stores the Position value used by this test fixture.
+            /// </summary>
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
+            /// <summary>
+            /// Verifies the Flush scenario and expected contract.
+            /// </summary>
             public override void Flush()
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Read scenario and expected contract.
+            /// </summary>
             public override int Read(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Seek scenario and expected contract.
+            /// </summary>
             public override long Seek(long offset, SeekOrigin origin)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the SetLength scenario and expected contract.
+            /// </summary>
             public override void SetLength(long value)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Write scenario and expected contract.
+            /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Dispose scenario and expected contract.
+            /// </summary>
             protected override void Dispose(bool disposing)
             {
                 throw _disposeException;
             }
         }
 
+        /// <summary>
+        /// Documents the TrackingDisposeStream test type and its protected contract.
+        /// </summary>
         private sealed class TrackingDisposeStream : Stream
         {
+            /// <summary>
+            /// Stores the DisposeCount value used by this test fixture.
+            /// </summary>
             internal int DisposeCount { get; private set; }
 
+            /// <summary>
+            /// Stores the CanRead value used by this test fixture.
+            /// </summary>
             public override bool CanRead => false;
+            /// <summary>
+            /// Stores the CanSeek value used by this test fixture.
+            /// </summary>
             public override bool CanSeek => false;
+            /// <summary>
+            /// Stores the CanWrite value used by this test fixture.
+            /// </summary>
             public override bool CanWrite => false;
+            /// <summary>
+            /// Stores the Length value used by this test fixture.
+            /// </summary>
             public override long Length => 0;
+            /// <summary>
+            /// Stores the Position value used by this test fixture.
+            /// </summary>
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
+            /// <summary>
+            /// Verifies the Flush scenario and expected contract.
+            /// </summary>
             public override void Flush()
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Read scenario and expected contract.
+            /// </summary>
             public override int Read(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Seek scenario and expected contract.
+            /// </summary>
             public override long Seek(long offset, SeekOrigin origin)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the SetLength scenario and expected contract.
+            /// </summary>
             public override void SetLength(long value)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Write scenario and expected contract.
+            /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
+            /// <summary>
+            /// Verifies the Dispose scenario and expected contract.
+            /// </summary>
             protected override void Dispose(bool disposing)
             {
                 DisposeCount++;
@@ -193,10 +277,19 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the CapturingLoggerProvider test type and its protected contract.
+        /// </summary>
         private sealed class CapturingLoggerProvider
         {
+            /// <summary>
+            /// Stores the _gate fixture value used by these tests.
+            /// </summary>
             private readonly object _gate = new();
 
+            /// <summary>
+            /// Stores the Entries value used by this test fixture.
+            /// </summary>
             internal List<LogEntry> Entries { get; } = [];
 
             internal ILogger<T> CreateLogger<T>()
@@ -204,11 +297,23 @@ namespace VectorNNTP.Backfiller.Tests
                 return new CapturingLogger<T>(Entries, _gate);
             }
 
+            /// <summary>
+            /// Documents the LogEntry test type and its protected contract.
+            /// </summary>
             internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
 
+            /// <summary>
+            /// Documents the CapturingLogger test type and its protected contract.
+            /// </summary>
             private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
             {
+                /// <summary>
+                /// Stores the _entries fixture value used by these tests.
+                /// </summary>
                 private readonly List<LogEntry> _entries = entries;
+                /// <summary>
+                /// Stores the _gate fixture value used by these tests.
+                /// </summary>
                 private readonly object _gate = gate;
 
                 public IDisposable BeginScope<TState>(TState state) where TState : notnull
@@ -216,6 +321,9 @@ namespace VectorNNTP.Backfiller.Tests
                     return NullScope.Instance;
                 }
 
+                /// <summary>
+                /// Verifies the IsEnabled scenario and expected contract.
+                /// </summary>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -239,10 +347,19 @@ namespace VectorNNTP.Backfiller.Tests
                     }
                 }
 
+                /// <summary>
+                /// Documents the NullScope test type and its protected contract.
+                /// </summary>
                 private sealed class NullScope : IDisposable
                 {
+                    /// <summary>
+                    /// Stores the Instance fixture value used by these tests.
+                    /// </summary>
                     internal static readonly NullScope Instance = new();
 
+                    /// <summary>
+                    /// Verifies the Dispose scenario and expected contract.
+                    /// </summary>
                     public void Dispose()
                     {
                     }

@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqOwnedChannel.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq owned channel in the runtime rabbit mq subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqOwnedChannel.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -16,6 +22,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </remarks>
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
+        /// <summary>
+        /// Stores the channel state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IRabbitMqChannel _channel;
 
         /// <summary>

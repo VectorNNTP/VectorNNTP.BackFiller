@@ -1,6 +1,9 @@
 // <copyright file="AcmeCertificateIssuerDns01RecoveryTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
+//
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for acme certificate issuer dns01 recovery.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
@@ -9,8 +12,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Documents the AcmeCertificateIssuerDns01RecoveryTests test type and its protected contract.
+    /// </summary>
     public sealed class AcmeCertificateIssuerDns01RecoveryTests
     {
+        /// <summary>
+        /// Verifies the IssueCertificateAsync_WhenNoExistingTxtRecord_CreatesChallengeAndCleansUp scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenNoExistingTxtRecord_CreatesChallengeAndCleansUp()
         {
@@ -21,7 +30,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, result.Api.DeleteCallCount);
             Assert.Empty(result.Api.Records);
         }
-
+        /// <summary>
+        /// Verifies the IssueCertificateAsync_WhenStaleChallengeRecordExists_DeletesStaleRecordAndCreatesReplacement scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenStaleChallengeRecordExists_DeletesStaleRecordAndCreatesReplacement()
         {
@@ -40,7 +51,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(result.Api.Records, record => record.Content == "unrelated-value");
             Assert.DoesNotContain(result.Api.Records, record => record.Content == "old-value");
         }
-
+        /// <summary>
+        /// Verifies the IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValue scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValue()
         {
@@ -55,7 +68,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0, result.Api.AddCallCount);
             Assert.Equal(0, result.Api.DeleteCallCount);
         }
-
+        /// <summary>
+        /// Verifies the IssueCertificateAsync_WhenIssuanceFails_StillAttemptsCleanup scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenIssuanceFails_StillAttemptsCleanup()
         {
@@ -66,6 +81,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, result.Api.DeleteCallCount);
         }
 
+        /// <summary>
+        /// Verifies the ExecuteScenarioAsync scenario and expected contract.
+        /// </summary>
         private static async Task<RecoveryScenarioResult> ExecuteScenarioAsync(
             IReadOnlyList<CloudflareTxtRecordInfo> initialRecords,
             bool shouldFailValidation,
@@ -104,6 +122,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Verifies the CreateLetsEncryptOptions scenario and expected contract.
+        /// </summary>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir)
         {
             return new BackFillerLetsEncryptRuntimeOptions(
@@ -128,36 +149,78 @@ namespace VectorNNTP.Backfiller.Tests
                 CloudFlareZoneId: "zone");
         }
 
+        /// <summary>
+        /// Documents the RecoveryScenario test type and its protected contract.
+        /// </summary>
         private static class RecoveryScenario
         {
+            /// <summary>
+            /// Stores the Fqdn fixture value used by these tests.
+            /// </summary>
             internal const string Fqdn = "backfiller01.usenet.ninja";
+            /// <summary>
+            /// Stores the ExpectedTxtValue fixture value used by these tests.
+            /// </summary>
             internal const string ExpectedTxtValue = "challenge-value";
         }
 
+        /// <summary>
+        /// Documents the RecoveryScenarioResult test type and its protected contract.
+        /// </summary>
         private sealed record RecoveryScenarioResult(FakeCloudflareTxtRecordApi Api, bool WasSuccessful, Exception? Error);
 
+        /// <summary>
+        /// Documents the FakeCloudflareTxtRecordApi test type and its protected contract.
+        /// </summary>
         private sealed class FakeCloudflareTxtRecordApi : ICloudflareTxtRecordApi
         {
+            /// <summary>
+            /// Stores the _records fixture value used by these tests.
+            /// </summary>
             private readonly List<CloudflareTxtRecordInfo> _records;
+            /// <summary>
+            /// Stores the _throwOnDelete fixture value used by these tests.
+            /// </summary>
             private readonly bool _throwOnDelete;
+            /// <summary>
+            /// Stores the _nextId fixture value used by these tests.
+            /// </summary>
             private int _nextId = 1000;
 
+            /// <summary>
+            /// Verifies the FakeCloudflareTxtRecordApi scenario and expected contract.
+            /// </summary>
             internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete)
             {
                 _records = [.. initialRecords];
                 _throwOnDelete = throwOnDelete;
             }
 
+            /// <summary>
+            /// Stores the Records value used by this test fixture.
+            /// </summary>
             internal IReadOnlyList<CloudflareTxtRecordInfo> Records => _records;
+            /// <summary>
+            /// Stores the AddCallCount value used by this test fixture.
+            /// </summary>
             internal int AddCallCount { get; private set; }
+            /// <summary>
+            /// Stores the DeleteCallCount value used by this test fixture.
+            /// </summary>
             internal int DeleteCallCount { get; private set; }
 
+            /// <summary>
+            /// Verifies the GetTxtRecordsAsync scenario and expected contract.
+            /// </summary>
             public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.FromResult<IReadOnlyList<CloudflareTxtRecordInfo>>([.. _records.Where(record => record.Name == recordName)]);
             }
 
+            /// <summary>
+            /// Verifies the AddTxtRecordAsync scenario and expected contract.
+            /// </summary>
             public Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -167,6 +230,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.FromResult(record);
             }
 
+            /// <summary>
+            /// Verifies the DeleteTxtRecordAsync scenario and expected contract.
+            /// </summary>
             public Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -180,14 +246,23 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the DisposeAsync scenario and expected contract.
+            /// </summary>
             public ValueTask DisposeAsync()
             {
                 return ValueTask.CompletedTask;
             }
         }
 
+        /// <summary>
+        /// Documents the FakeAuthoritativeDnsTxtPropagationVerifier test type and its protected contract.
+        /// </summary>
         private sealed class FakeAuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
         {
+            /// <summary>
+            /// Verifies the WaitForPropagationAsync scenario and expected contract.
+            /// </summary>
             public Task WaitForPropagationAsync(string fqdn, string expectedTxtValue, BackFillerLetsEncryptRuntimeOptions options, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -195,10 +270,22 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the FakeAcmeContextFactory test type and its protected contract.
+        /// </summary>
         private sealed class FakeAcmeContextFactory(bool shouldFailValidation, bool shouldFailFinalize, bool failChallengeAfterCreate)
         {
+            /// <summary>
+            /// Stores the ShouldFailValidation value used by this test fixture.
+            /// </summary>
             private bool ShouldFailValidation { get; } = shouldFailValidation;
+            /// <summary>
+            /// Stores the ShouldFailFinalize value used by this test fixture.
+            /// </summary>
             private bool ShouldFailFinalize { get; } = shouldFailFinalize;
+            /// <summary>
+            /// Stores the FailChallengeAfterCreate value used by this test fixture.
+            /// </summary>
             private bool FailChallengeAfterCreate { get; } = failChallengeAfterCreate;
         }
     }

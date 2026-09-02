@@ -1,4 +1,10 @@
 // <copyright file="ArticleWorkProcessor.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: article work processor in the articles processing subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="ArticleWorkProcessor.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -17,7 +23,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class ArticleWorkProcessor : IArticleWorkProcessor
     {
+        /// <summary>
+        /// Stores the retriever state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IBackboneArticleRetriever _retriever;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<ArticleWorkProcessor> _logger;
 
         /// <summary>
@@ -109,6 +121,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Performs the static operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static (ArticleWorkProcessingOutcome Outcome, ArticleWorkDispositionRecommendation Disposition) Classify(NntpArticleGrabberResult result)
         {
             return result.FailureCode switch

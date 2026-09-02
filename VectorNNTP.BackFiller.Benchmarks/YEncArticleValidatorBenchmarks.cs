@@ -1,5 +1,5 @@
 // <copyright file="YEncArticleValidatorBenchmarks.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks / Articles / YEnc
@@ -21,6 +21,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
+    /// <summary>
+    /// Represents the y EncArticleValidatorBenchmarks class used by this benchmark or regression-gate component.
+    /// </summary>
     public class YEncArticleValidatorBenchmarks
     {
         /// <summary>
@@ -72,6 +75,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Creates deterministic benchmark fixtures.
         /// </summary>
         [GlobalSetup]
+        /// <summary>
+        /// Executes the setup operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public void Setup()
         {
             _validSmall = BuildSinglePartArticle(BuildPayload(512, 7), false);
@@ -100,6 +106,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Baseline = true, Description = "ValidSmall")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate ValidSmall operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateValidSmall() => (int)YEncArticleValidator.Validate(_validSmall).Status;
 
         /// <summary>
@@ -108,6 +117,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "ValidLarge")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate ValidLarge operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateValidLarge() => (int)YEncArticleValidator.Validate(_validLarge).Status;
 
         /// <summary>
@@ -116,6 +128,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "ValidMultipart")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate ValidMultipart operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateValidMultipart() => (int)YEncArticleValidator.Validate(_validMultipart).Status;
 
         /// <summary>
@@ -124,6 +139,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "MalformedMetadata")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate MalformedMetadata operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateMalformedMetadata() => (int)YEncArticleValidator.Validate(_malformedMetadata).Status;
 
         /// <summary>
@@ -132,6 +150,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "CrcMismatch")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate CrcMismatch operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateCrcMismatch() => (int)YEncArticleValidator.Validate(_crcMismatch).Status;
 
         /// <summary>
@@ -140,6 +161,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "InvalidEscape")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate InvalidEscape operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateInvalidEscape() => (int)YEncArticleValidator.Validate(_invalidEscape).Status;
 
         /// <summary>
@@ -148,6 +172,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "ValidNonYEnc")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate Nony Enc operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateNonYEnc() => (int)YEncArticleValidator.Validate(_nonYEnc).Status;
 
         /// <summary>
@@ -156,6 +183,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "DotStuffedValid")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate DotStuffedValid operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateDotStuffedValid() => (int)YEncArticleValidator.Validate(_dotStuffed).Status;
 
         /// <summary>
@@ -164,6 +194,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "MetadataHeavy")]
         [BenchmarkCategory("YEncValidator")]
+        /// <summary>
+        /// Executes the validate MetadataHeavy operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public int ValidateMetadataHeavy() => (int)YEncArticleValidator.Validate(_metadataHeavy).Status;
 
         /// <summary>

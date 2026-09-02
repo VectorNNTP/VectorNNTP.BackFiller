@@ -1,4 +1,10 @@
 // <copyright file="NntpMessageIdValidation.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp message id validation in the articles validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpMessageIdValidation.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

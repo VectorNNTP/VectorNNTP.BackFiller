@@ -1,4 +1,10 @@
 // <copyright file="OperationalCommandExecutor.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: operational command executor in the startup commands subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="OperationalCommandExecutor.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -30,6 +36,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 OperationalCommand.ValidateStartup => ValidateStartupCommandHandler.Handle(configuration),
                 OperationalCommand.Diagnostics => DiagnosticsCommandHandler.Handle(),
                 OperationalCommand.DumpConfig => DumpConfigCommandHandler.Handle(configuration),
+                /// <summary>
+                /// Identifies the _ case in this enum contract.
+                /// </summary>
                 _ => throw new UnreachableException($"Unsupported command enum value: {command}")
             };
         }

@@ -1,9 +1,9 @@
 // <copyright file="ArticleWorkResponseFactoryPhase4Tests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Article Processing
-// Focused Phase 4 tests for deterministic response payload creation semantics.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for article work response factory phase4.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -17,6 +17,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ArticleWorkResponseFactoryPhase4Tests
     {
+        /// <summary>
+        /// Verifies the CreateResponse_MapsOutcomeToCanonicalPayload scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData(0, true, false)]
         [InlineData(2, false, true)]
@@ -67,6 +70,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Verifies the CreateResult scenario and expected contract.
+        /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
             Guid requestId,
@@ -104,14 +110,23 @@ namespace VectorNNTP.Backfiller.Tests
                 UnexpectedException: null);
         }
 
+        /// <summary>
+        /// Documents the NoOpSettlement test type and its protected contract.
+        /// </summary>
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
+            /// <summary>
+            /// Verifies the AckAsync scenario and expected contract.
+            /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the NackAsync scenario and expected contract.
+            /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();

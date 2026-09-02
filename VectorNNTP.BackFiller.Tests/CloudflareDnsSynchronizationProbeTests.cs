@@ -1,11 +1,9 @@
 // <copyright file="CloudflareDnsSynchronizationProbeTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for cloudflare dns synchronization probe.
 
 using System.Net;
 using CloudFlare.Client.Enumerators;
@@ -20,6 +18,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class CloudflareDnsSynchronizationProbeTests
     {
+        /// <summary>
+        /// Stores the GeneratedFqdn fixture value used by these tests.
+        /// </summary>
         private const string GeneratedFqdn = "nntpbackfiller01.usenet.ninja";
 
         /// <summary>
@@ -340,7 +341,13 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         private sealed class FakeCloudflareDnsFacade : ICloudflareDnsFacade
         {
+            /// <summary>
+            /// Stores the _records fixture value used by these tests.
+            /// </summary>
             private readonly List<CloudflareDnsRecordInfo> _records;
+            /// <summary>
+            /// Stores the _nextIdentifier fixture value used by these tests.
+            /// </summary>
             private int _nextIdentifier = 1000;
 
             /// <summary>

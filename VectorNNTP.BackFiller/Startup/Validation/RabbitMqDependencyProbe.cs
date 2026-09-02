@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq dependency probe in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqDependencyProbe.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,6 +21,9 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines the rabbit mq dependency probe component and its contracts for this subsystem.
+    /// </summary>
     internal static class RabbitMqDependencyProbe
     {
         /// <summary>

@@ -1,4 +1,10 @@
 // <copyright file="SerilogConfigurator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: serilog configurator in the startup logging subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="SerilogConfigurator.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,6 +21,9 @@ namespace VectorNNTP.Backfiller.Startup.Logging
     /// </summary>
     internal static class SerilogConfigurator
     {
+        /// <summary>
+        /// Stores the log file prefix state used to enforce this component's runtime contract.
+        /// </summary>
         private const string LogFilePrefix = "vectornntp.backfiller-.log";
 
         /// <summary>
@@ -102,16 +111,25 @@ namespace VectorNNTP.Backfiller.Startup.Logging
             }
         }
 
+        /// <summary>
+        /// Performs the parse minimum level for testing operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static LogEventLevel ParseMinimumLevelForTesting(string? configuredLevel)
         {
             return ParseMinimumLevel(configuredLevel);
         }
 
+        /// <summary>
+        /// Performs the parse microsoft log level for testing operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal static LogLevel ParseMicrosoftLogLevelForTesting(string? configuredLevel)
         {
             return ParseMicrosoftLogLevel(configuredLevel);
         }
 
+        /// <summary>
+        /// Performs the parse minimum level operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static LogEventLevel ParseMinimumLevel(string? configuredLevel)
         {
             return Enum.TryParse(configuredLevel, ignoreCase: true, out LogEventLevel level)
@@ -119,6 +137,9 @@ namespace VectorNNTP.Backfiller.Startup.Logging
                 : LogEventLevel.Information;
         }
 
+        /// <summary>
+        /// Performs the parse microsoft log level operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static LogLevel ParseMicrosoftLogLevel(string? configuredLevel)
         {
             return string.IsNullOrWhiteSpace(configuredLevel)

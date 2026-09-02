@@ -1,11 +1,9 @@
 // <copyright file="TransitBenchmarkCoreTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for transit benchmark core.
 
 using System.Text;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -13,8 +11,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Documents the TransitBenchmarkCoreTests test type and its protected contract.
+    /// </summary>
     public sealed class TransitBenchmarkCoreTests
     {
+        /// <summary>
+        /// Verifies the ProducerTiming_FromRaw_ProducesReconcilableActiveAndBlockedBuckets scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ProducerTiming_FromRaw_ProducesReconcilableActiveAndBlockedBuckets()
         {
@@ -31,7 +35,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(300, timing.ActiveTicks);
             Assert.Equal(timing.LoopTicks, timing.ActiveTicks + timing.BlockedTicks);
         }
-
+        /// <summary>
+        /// Verifies the BoundedArticleQueue_EnforcesByteBudget scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task BoundedArticleQueue_EnforcesByteBudget()
         {
@@ -83,7 +89,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Verifies the ByteBudget_AcquireCanceled_ThrowsOperationCanceled scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ByteBudget_AcquireCanceled_ThrowsOperationCanceled()
         {
@@ -96,7 +104,9 @@ namespace VectorNNTP.Backfiller.Tests
                 await budget.AcquireAsync(1, cts.Token).ConfigureAwait(false);
             });
         }
-
+        /// <summary>
+        /// Verifies the ByteBudget_Dispose_CancelsPendingAcquire scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ByteBudget_Dispose_CancelsPendingAcquire()
         {
@@ -108,7 +118,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending.ConfigureAwait(false));
         }
-
+        /// <summary>
+        /// Verifies the BuildMessageId_ProducesUniqueValidMessageIdAcrossWorkerAndSequence scenario and expected contract.
+        /// </summary>
         [Fact]
         public void BuildMessageId_ProducesUniqueValidMessageIdAcrossWorkerAndSequence()
         {
@@ -127,7 +139,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Verifies the ArticlePayload_Create_ProducesExpectedHeadersAndCrLfTerminatedPayload scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ArticlePayload_Create_ProducesExpectedHeadersAndCrLfTerminatedPayload()
         {
@@ -152,7 +166,9 @@ namespace VectorNNTP.Backfiller.Tests
                 payload.Dispose();
             }
         }
-
+        /// <summary>
+        /// Verifies the ValidateIntRange_WhenWithinRange_ReturnsValue scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData(1, 1, 64, "connections")]
         [InlineData(64, 1, 64, "connections")]
@@ -162,7 +178,9 @@ namespace VectorNNTP.Backfiller.Tests
             int actual = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(value, min, max, option);
             Assert.Equal(value, actual);
         }
-
+        /// <summary>
+        /// Verifies the ValidateIntRange_WhenOutOfRange_Throws scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData(0, 1, 64, "connections")]
         [InlineData(65, 1, 64, "connections")]
@@ -170,7 +188,9 @@ namespace VectorNNTP.Backfiller.Tests
         {
             _ = Assert.Throws<InvalidOperationException>(() => TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(value, min, max, option));
         }
-
+        /// <summary>
+        /// Verifies the ValidateLongRange_WhenWithinRange_ReturnsValue scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData(64L * 1024 * 1024, 64L * 1024 * 1024, 2L * 1024 * 1024 * 1024, "queue-mib")]
         [InlineData(256L * 1024 * 1024, 64L * 1024 * 1024, 2L * 1024 * 1024 * 1024, "queue-mib")]

@@ -1,4 +1,10 @@
 // <copyright file="TransitPublishContracts.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: transit publish contracts in the runtime transit subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="TransitPublishContracts.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -22,6 +28,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         Canceled,
     }
 
+    /// <summary>
+    /// Defines the transit publish provenance component and its contracts for this subsystem.
+    /// </summary>
     internal enum TransitPublishProvenance
     {
         Response400,

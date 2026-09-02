@@ -1,11 +1,9 @@
 // <copyright file="TransitGlobalWorkQueueTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for transit global work queue.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
@@ -17,6 +15,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class TransitGlobalWorkQueueTests
     {
+        /// <summary>
+        /// Verifies the EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting()
         {
@@ -38,7 +39,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(0, queue.QueuedPayloadBytes);
             Assert.Equal(1, queue.InFlightCount);
         }
-
+        /// <summary>
+        /// Verifies the EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity()
         {
@@ -58,7 +61,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, queue.QueuedItemCount);
             Assert.Equal(64, queue.QueuedPayloadBytes);
         }
-
+        /// <summary>
+        /// Verifies the EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes()
         {
@@ -78,7 +83,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, queue.QueuedItemCount);
             Assert.Equal(1, queue.QueuedPayloadBytes);
         }
-
+        /// <summary>
+        /// Verifies the ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay()
         {
@@ -109,7 +116,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotNull(retried);
             Assert.Equal(2, retried!.AttemptCount);
         }
-
+        /// <summary>
+        /// Verifies the TransitWorkItem_TryComplete_AllowsExactlyOneTerminalCompletion scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TransitWorkItem_TryComplete_AllowsExactlyOneTerminalCompletion()
         {
@@ -136,7 +145,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(secondWon);
             Assert.Equal(TransitWorkItemState.CompletedAccepted, item.State);
         }
-
+        /// <summary>
+        /// Verifies the TransitWorkItem_RetryAttemptBudget_IsBoundedToThreeTransmissions scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TransitWorkItem_RetryAttemptBudget_IsBoundedToThreeTransmissions()
         {
@@ -169,7 +180,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(3, item.AttemptCount);
             Assert.False(item.HasAttemptsRemaining());
         }
-
+        /// <summary>
+        /// Verifies the MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation scenario and expected contract.
+        /// </summary>
         [Fact]
         public void MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation()
         {
@@ -179,6 +192,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("in-flight accounting invariant", exception.Message, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Verifies the CreateItem scenario and expected contract.
+        /// </summary>
         private static TransitWorkItem CreateItem(long id, string messageId, int payloadSize)
         {
             byte[] payload = new byte[payloadSize];

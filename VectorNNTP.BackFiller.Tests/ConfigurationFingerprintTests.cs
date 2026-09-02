@@ -1,11 +1,9 @@
 // <copyright file="ConfigurationFingerprintTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for configuration fingerprint.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
@@ -109,6 +107,9 @@ namespace VectorNNTP.Backfiller.Tests
         public void SanitizeConnectionString_RemovesCredentialsUsingAllowlist()
         {
             // Arrange
+            /// <summary>
+            /// Stores the Original fixture value used by these tests.
+            /// </summary>
             const string Original = "Server=db01;Database=NNTP;User ID=foo;Password=secret123;Port=5432";
 
             // Act
@@ -130,6 +131,9 @@ namespace VectorNNTP.Backfiller.Tests
         public void SanitizeConnectionString_HandlesQuotedValuesWithSemicolons()
         {
             // Arrange: Password contains semicolon inside quotes
+            /// <summary>
+            /// Stores the Original fixture value used by these tests.
+            /// </summary>
             const string Original = "Server=db01;Password=\"abc;123\";Database=NNTP";
 
             // Act
@@ -150,6 +154,9 @@ namespace VectorNNTP.Backfiller.Tests
         public void SanitizeConnectionString_WhenMalformed_ReturnsNull()
         {
             // Arrange: Malformed connection string (unbalanced quotes)
+            /// <summary>
+            /// Stores the Malformed fixture value used by these tests.
+            /// </summary>
             const string Malformed = "Server=db01;Password=\"unclosed;Database=NNTP";
 
             // Act
@@ -211,6 +218,9 @@ namespace VectorNNTP.Backfiller.Tests
         public void SanitizeConnectionString_PreservesOperationalProperties()
         {
             // Arrange: Connection string with many operational properties and credentials
+            /// <summary>
+            /// Stores the Original fixture value used by these tests.
+            /// </summary>
             const string Original =
                 "Server=db01.example.com;" +
                 "Port=5432;" +
@@ -287,8 +297,17 @@ namespace VectorNNTP.Backfiller.Tests
         public void SanitizeConnectionString_NormalizesPropertyOrdering()
         {
             // Arrange: Same properties in different orders
+            /// <summary>
+            /// Stores the ConnectionString1 fixture value used by these tests.
+            /// </summary>
             const string ConnectionString1 = "Server=db01;Database=NNTP;Port=5432";
+            /// <summary>
+            /// Stores the ConnectionString2 fixture value used by these tests.
+            /// </summary>
             const string ConnectionString2 = "Port=5432;Database=NNTP;Server=db01";
+            /// <summary>
+            /// Stores the ConnectionString3 fixture value used by these tests.
+            /// </summary>
             const string ConnectionString3 = "Database=NNTP;Port=5432;Server=db01";
 
             // Act
@@ -356,8 +375,17 @@ namespace VectorNNTP.Backfiller.Tests
         public void SanitizeConnectionString_CombinesAliasNormalizationAndOrdering()
         {
             // Arrange: Operationally identical connection strings with different syntax/ordering/passwords
+            /// <summary>
+            /// Stores the Admin1 fixture value used by these tests.
+            /// </summary>
             const string Admin1 = "Server=db01;Database=NNTP;User ID=app;Password=secret1;Port=5432";
+            /// <summary>
+            /// Stores the Admin2 fixture value used by these tests.
+            /// </summary>
             const string Admin2 = "Data Source=db01;Initial Catalog=NNTP;Username=app;Password=secret2;Server Port=5432";
+            /// <summary>
+            /// Stores the Admin3 fixture value used by these tests.
+            /// </summary>
             const string Admin3 = "Port=5432;Host=db01;UID=app;Password=secret3;InitialCatalog=NNTP";
 
             // Act
@@ -422,6 +450,9 @@ namespace VectorNNTP.Backfiller.Tests
         [InlineData("SecretConfiguration", false)]   // "secret" as prefix, not suffix
         [InlineData("TokenBucket", false)]           // "token" as prefix, not suffix
         // Operational/Non-sensitive keys
+        /// <summary>
+        /// Verifies the IsSensitiveConfigurationKey_UsesSegmentBasedMatching scenario and expected contract.
+        /// </summary>
         [InlineData("Database:Host", false)]
         [InlineData("Database:Port", false)]
         [InlineData("Database:Name", false)]
@@ -887,7 +918,13 @@ namespace VectorNNTP.Backfiller.Tests
         public void CalculateConfigurationFingerprint_ConnectionStringPropertyOrderingDoesNotMatter()
         {
             // Arrange: Same properties, different ordering
+            /// <summary>
+            /// Stores the Connection1 fixture value used by these tests.
+            /// </summary>
             const string Connection1 = "Server=db01;Database=NNTP;Port=5432;User ID=app";
+            /// <summary>
+            /// Stores the Connection2 fixture value used by these tests.
+            /// </summary>
             const string Connection2 = "User ID=app;Port=5432;Database=NNTP;Server=db01";
 
             IConfiguration config1 = new ConfigurationBuilder()
@@ -940,9 +977,21 @@ namespace VectorNNTP.Backfiller.Tests
         public void CalculateConfigurationFingerprint_ConnectionStringAliasesAreEquivalent()
         {
             // Arrange: Multiple alias combinations representing the same operational configuration
+            /// <summary>
+            /// Stores the Canonical fixture value used by these tests.
+            /// </summary>
             const string Canonical = "Server=db01;Database=NNTP;Username=app;Port=5432";
+            /// <summary>
+            /// Stores the SqlServerStyle fixture value used by these tests.
+            /// </summary>
             const string SqlServerStyle = "Data Source=db01;Initial Catalog=NNTP;User ID=app;Server Port=5432";
+            /// <summary>
+            /// Stores the PostgresStyle fixture value used by these tests.
+            /// </summary>
             const string PostgresStyle = "Host=db01;Database=NNTP;Username=app;Port=5432";
+            /// <summary>
+            /// Stores the CompactStyle fixture value used by these tests.
+            /// </summary>
             const string CompactStyle = "DataSource=db01;InitialCatalog=NNTP;UID=app;Port=5432";
 
             IConfiguration configCanonical = new ConfigurationBuilder()
@@ -1136,8 +1185,14 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("TryGetPassword", sourceCode, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Verifies the ResolveConfigurationFingerprintSourcePath scenario and expected contract.
+        /// </summary>
         private static string ResolveConfigurationFingerprintSourcePath()
         {
+            /// <summary>
+            /// Stores the SolutionMarker fixture value used by these tests.
+            /// </summary>
             const string SolutionMarker = "VectorNNTP.BackFiller.slnx";
             string? current = AppContext.BaseDirectory;
 

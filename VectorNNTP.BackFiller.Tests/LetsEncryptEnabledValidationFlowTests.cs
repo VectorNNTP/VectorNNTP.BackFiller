@@ -1,11 +1,9 @@
 // <copyright file="LetsEncryptEnabledValidationFlowTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for lets encrypt enabled validation flow.
 
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -17,6 +15,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public class LetsEncryptEnabledValidationFlowTests
     {
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenBindAddressIsOmitted_DoesNotReturnBindAddressErrors scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenBindAddressIsOmitted_DoesNotReturnBindAddressErrors()
         {
@@ -26,7 +27,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:BindAddress", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenBindAddressIsWildcard_DoesNotReturnLocalAssignmentError scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("0.0.0.0")]
         [InlineData("::")]
@@ -40,7 +43,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting.StartsWith("BackFiller:BindAddress", StringComparison.Ordinal)
                 && e.Error.Contains("not assigned to any local network interface", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenBindAddressContainsDuplicate_ReturnsDuplicateBindAddressError scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenBindAddressContainsDuplicate_ReturnsDuplicateBindAddressError()
         {
@@ -52,7 +57,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:BindAddress[1]"
                 && e.Error.Contains("Duplicate bind address", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenBindPortIsOutOfRange_ReturnsBindPortRangeError scenario and expected contract.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("65536")]
@@ -71,7 +78,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:BindPort"
                 && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenLetsEncryptDisabled_DoesNotRequireAcmeSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabled_DoesNotRequireAcmeSettings()
         {
@@ -87,7 +96,9 @@ namespace VectorNNTP.Backfiller.Tests
                 or "BackFiller:LetsEncrypt:RenewalJitterRatio"
                 or "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenLetsEncryptDisabled_IgnoresInvalidAcmeAndRenewalSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabled_IgnoresInvalidAcmeAndRenewalSettings()
         {
@@ -113,7 +124,9 @@ namespace VectorNNTP.Backfiller.Tests
                 or "BackFiller:LetsEncrypt:RenewalJitterRatio"
                 or "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenLetsEncryptDisabled_RequiresCloudflareSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabled_RequiresCloudflareSettings()
         {
@@ -124,7 +137,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:CloudFlareApiToken");
             Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:CloudFlareZoneId");
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenLetsEncryptDisabledAndCloudflareConfigured_IsValidWithInvalidAcmeSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptDisabledAndCloudflareConfigured_IsValidWithInvalidAcmeSettings()
         {
@@ -170,7 +185,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:LetsEncrypt", StringComparison.Ordinal));
             Assert.Empty(errors);
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenLetsEncryptEnabled_RequiresAcmeAndCloudflareSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptEnabled_RequiresAcmeAndCloudflareSettings()
         {
@@ -187,7 +204,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalJitterRatio");
             Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
         }
-
+        /// <summary>
+        /// Verifies the ValidateBackFillerOptions_WhenLetsEncryptEnabledAndConfiguredDomainNamesInvalid_DoesNotUseConfiguredDomainNames scenario and expected contract.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenLetsEncryptEnabledAndConfiguredDomainNamesInvalid_DoesNotUseConfiguredDomainNames()
         {
@@ -203,16 +222,25 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting.StartsWith("BackFiller:LetsEncrypt:DomainNames", StringComparison.Ordinal));
         }
 
+        /// <summary>
+        /// Documents the InvokeValidateBackFillerOptions member and its test-supporting contract.
+        /// </summary>
         private static List<(string Setting, string Error)> InvokeValidateBackFillerOptions(IConfiguration configuration)
         {
             return Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
         }
 
+        /// <summary>
+        /// Verifies the BuildBackFillerConfiguration scenario and expected contract.
+        /// </summary>
         private static IConfiguration BuildBackFillerConfiguration(bool enabled, params string[]? bindAddresses)
         {
             return BuildBackFillerConfigurationWithRawBindPort(enabled, "119", bindAddresses, domainNames: null);
         }
 
+        /// <summary>
+        /// Verifies the BuildBackFillerConfigurationWithRawBindPort scenario and expected contract.
+        /// </summary>
         private static IConfiguration BuildBackFillerConfigurationWithRawBindPort(
             bool enabled,
             string bindPort,

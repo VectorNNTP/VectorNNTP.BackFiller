@@ -1,4 +1,10 @@
 // <copyright file="RuntimeSnapshotFactory.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: runtime snapshot factory in the startup configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RuntimeSnapshotFactory.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

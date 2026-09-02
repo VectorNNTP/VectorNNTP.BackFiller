@@ -1,8 +1,17 @@
+// <copyright file="DatabaseDependencyProbe.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: database dependency probe in the startup validation subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 using MySqlConnector;
 using Serilog;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines the database dependency probe component and its contracts for this subsystem.
+    /// </summary>
     internal static class DatabaseDependencyProbe
     {
         /// <summary>

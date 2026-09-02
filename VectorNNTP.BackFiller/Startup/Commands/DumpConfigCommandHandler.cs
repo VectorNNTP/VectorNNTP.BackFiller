@@ -1,4 +1,10 @@
 // <copyright file="DumpConfigCommandHandler.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: dump config command handler in the startup commands subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="DumpConfigCommandHandler.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -13,12 +19,18 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     /// </summary>
     internal static class DumpConfigCommandHandler
     {
+        /// <summary>
+        /// Stores the dump config included section prefixes state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly string[] DumpConfigIncludedSectionPrefixes =
         [
             "BackFiller",
             "ConnectionStrings"
         ];
 
+        /// <summary>
+        /// Stores the dump config clear text keys state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly HashSet<string> DumpConfigClearTextKeys = new(StringComparer.OrdinalIgnoreCase)
         {
             "BackFiller:Name",

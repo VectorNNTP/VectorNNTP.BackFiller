@@ -1,4 +1,10 @@
 // <copyright file="NntpArticleAcquisitionParserBridge.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp article acquisition parser bridge in the articles acquisition subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpArticleAcquisitionParserBridge.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

@@ -1,11 +1,9 @@
 // <copyright file="RabbitMqConfigurationBindingTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for rabbit mq configuration binding.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Configuration;
@@ -18,6 +16,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class RabbitMqConfigurationBindingTests
     {
+        /// <summary>
+        /// Verifies the BackFillerRabbitMqSection_BindsAllCurrentSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void BackFillerRabbitMqSection_BindsAllCurrentSettings()
         {

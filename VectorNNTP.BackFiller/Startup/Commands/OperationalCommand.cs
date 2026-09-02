@@ -1,4 +1,10 @@
 // <copyright file="OperationalCommand.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: operational command in the startup commands subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="OperationalCommand.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

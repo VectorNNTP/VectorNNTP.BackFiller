@@ -1,12 +1,36 @@
+// <copyright file="ByteBudget.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/ByteBudget: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the byte Budget class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class ByteBudget : IDisposable
 {
+    /// <summary>
+    /// Executes the _gate operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private readonly object _gate = new();
+    /// <summary>
+    /// Executes the _waiters operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private readonly Queue<BudgetWaiter> _waiters = new();
+    /// <summary>
+    /// Gets or sets the _availableBytes value used by this component.
+    /// </summary>
     private long _availableBytes;
+    /// <summary>
+    /// Gets or sets the _disposed value used by this component.
+    /// </summary>
     private bool _disposed;
 
+    /// <summary>
+    /// Executes the byte Budget operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal ByteBudget(long maxBytes)
     {
         if (maxBytes <= 0)
@@ -17,6 +41,9 @@ internal sealed class ByteBudget : IDisposable
         _availableBytes = maxBytes;
     }
 
+    /// <summary>
+    /// Executes the acquire Async operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal ValueTask AcquireAsync(int bytes, CancellationToken cancellationToken)
     {
         if (bytes <= 0)
@@ -46,6 +73,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Executes the release operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal void Release(int bytes)
     {
         if (bytes <= 0)
@@ -96,6 +126,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Executes the cancel Waiter operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private void CancelWaiter(BudgetWaiter waiter)
     {
         lock (_gate)
@@ -104,6 +137,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Executes the throw IfDisposed operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private void ThrowIfDisposed()
     {
         if (_disposed)
@@ -112,6 +148,9 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Executes the dispose operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void Dispose()
     {
         List<BudgetWaiter>? waitersToCancel = null;
@@ -143,21 +182,45 @@ internal sealed class ByteBudget : IDisposable
         }
     }
 
+    /// <summary>
+    /// Represents the budget Waiter class used by this benchmark or regression-gate component.
+    /// </summary>
     private sealed class BudgetWaiter
     {
+        /// <summary>
+        /// Gets or sets the _completion value used by this component.
+        /// </summary>
         private readonly TaskCompletionSource _completion;
+        /// <summary>
+        /// Gets or sets the _registration value used by this component.
+        /// </summary>
         private CancellationTokenRegistration _registration;
 
+        /// <summary>
+        /// Executes the budget Waiter operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal BudgetWaiter(int requestedBytes)
         {
             RequestedBytes = requestedBytes;
             _completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
 
+        /// <summary>
+        /// Gets or sets the requested Bytes value used by this component.
+        /// </summary>
         internal int RequestedBytes { get; }
+        /// <summary>
+        /// Gets or sets the task value used by this component.
+        /// </summary>
         internal Task Task => _completion.Task;
+        /// <summary>
+        /// Gets or sets the is Canceled value used by this component.
+        /// </summary>
         internal bool IsCanceled { get; private set; }
 
+        /// <summary>
+        /// Executes the register Cancellation operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void RegisterCancellation(CancellationToken cancellationToken, ByteBudget budget)
         {
             _registration = cancellationToken.Register(static state =>
@@ -168,17 +231,26 @@ internal sealed class ByteBudget : IDisposable
             }, new CancellationState(budget, this));
         }
 
+        /// <summary>
+        /// Executes the mark Canceled operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void MarkCanceled()
         {
             IsCanceled = true;
         }
 
+        /// <summary>
+        /// Executes the try SetAcquired operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void TrySetAcquired()
         {
             _registration.Dispose();
             _completion.TrySetResult();
         }
 
+        /// <summary>
+        /// Executes the try SetCanceled operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void TrySetCanceled()
         {
             IsCanceled = true;
@@ -186,6 +258,9 @@ internal sealed class ByteBudget : IDisposable
             _completion.TrySetCanceled();
         }
 
+        /// <summary>
+        /// Represents the cancellation State record struct used by this benchmark or regression-gate component.
+        /// </summary>
         private readonly record struct CancellationState(ByteBudget Budget, BudgetWaiter Waiter);
     }
 }

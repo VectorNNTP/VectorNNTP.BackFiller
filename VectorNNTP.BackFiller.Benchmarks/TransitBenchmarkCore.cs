@@ -1,16 +1,31 @@
+// <copyright file="TransitBenchmarkCore.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// TransitBenchmarkCore: defines the benchmark entry point or scenario for controlled performance validation.
+
 using System.Buffers;
 using System.Text;
 using System.Threading.Channels;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the transit BenchmarkCore class used by this benchmark or regression-gate component.
+/// </summary>
 internal static class TransitBenchmarkCore
 {
+    /// <summary>
+    /// Executes the build MessageId operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static string BuildMessageId(long benchmarkInstanceId, int workerId, long sequence, string phase)
     {
         return $"<{phase}-{benchmarkInstanceId:x}-{workerId:x}-{sequence:x}@benchmark.usenet.ninja>";
     }
 
+    /// <summary>
+    /// Executes the stopwatch TicksToMilliseconds operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static double StopwatchTicksToMilliseconds(long ticks)
     {
         if (ticks <= 0)
@@ -21,8 +36,14 @@ internal static class TransitBenchmarkCore
         return ticks * 1000d / System.Diagnostics.Stopwatch.Frequency;
     }
 
+    /// <summary>
+    /// Represents the producer Timing record struct used by this benchmark or regression-gate component.
+    /// </summary>
     internal readonly record struct ProducerTiming(long LoopTicks, long GenerationTicks, long BlockedTicks, long OtherActiveTicks)
     {
+        /// <summary>
+        /// Executes the from Raw operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal static ProducerTiming FromRaw(long loopTicks, long generationTicks, long blockedTicks, long otherActiveTicks)
         {
             long normalizedLoopTicks = Math.Max(0, loopTicks);
@@ -40,16 +61,37 @@ internal static class TransitBenchmarkCore
             return new ProducerTiming(normalizedLoopTicks, normalizedGenerationTicks, normalizedBlockedTicks, normalizedOther);
         }
 
+        /// <summary>
+        /// Gets or sets the active Ticks value used by this component.
+        /// </summary>
         internal long ActiveTicks => GenerationTicks + OtherActiveTicks;
     }
 
+    /// <summary>
+    /// Represents the byte Budget class used by this benchmark or regression-gate component.
+    /// </summary>
     internal sealed class ByteBudget : IDisposable
     {
+        /// <summary>
+        /// Executes the _gate operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private readonly object _gate = new();
+        /// <summary>
+        /// Executes the _waiters operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private readonly Queue<BudgetWaiter> _waiters = new();
+        /// <summary>
+        /// Gets or sets the _availableBytes value used by this component.
+        /// </summary>
         private long _availableBytes;
+        /// <summary>
+        /// Gets or sets the _disposed value used by this component.
+        /// </summary>
         private bool _disposed;
 
+        /// <summary>
+        /// Executes the byte Budget operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal ByteBudget(long maxBytes)
         {
             if (maxBytes <= 0)
@@ -60,6 +102,9 @@ internal static class TransitBenchmarkCore
             _availableBytes = maxBytes;
         }
 
+        /// <summary>
+        /// Executes the acquire Async operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal ValueTask AcquireAsync(int bytes, CancellationToken cancellationToken)
         {
             if (bytes <= 0)
@@ -89,6 +134,9 @@ internal static class TransitBenchmarkCore
             }
         }
 
+        /// <summary>
+        /// Executes the release operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void Release(int bytes)
         {
             if (bytes <= 0)
@@ -139,6 +187,9 @@ internal static class TransitBenchmarkCore
             }
         }
 
+        /// <summary>
+        /// Executes the cancel Waiter operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private void CancelWaiter(BudgetWaiter waiter)
         {
             lock (_gate)
@@ -147,6 +198,9 @@ internal static class TransitBenchmarkCore
             }
         }
 
+        /// <summary>
+        /// Executes the throw IfDisposed operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private void ThrowIfDisposed()
         {
             if (_disposed)
@@ -155,6 +209,9 @@ internal static class TransitBenchmarkCore
             }
         }
 
+        /// <summary>
+        /// Executes the dispose operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public void Dispose()
         {
             List<BudgetWaiter>? waitersToCancel = null;
@@ -186,21 +243,45 @@ internal static class TransitBenchmarkCore
             }
         }
 
+        /// <summary>
+        /// Represents the budget Waiter class used by this benchmark or regression-gate component.
+        /// </summary>
         private sealed class BudgetWaiter
         {
+            /// <summary>
+            /// Gets or sets the _completion value used by this component.
+            /// </summary>
             private readonly TaskCompletionSource _completion;
+            /// <summary>
+            /// Gets or sets the _registration value used by this component.
+            /// </summary>
             private CancellationTokenRegistration _registration;
 
+            /// <summary>
+            /// Executes the budget Waiter operation while preserving the component's benchmark or test-harness contract.
+            /// </summary>
             internal BudgetWaiter(int requestedBytes)
             {
                 RequestedBytes = requestedBytes;
                 _completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             }
 
+            /// <summary>
+            /// Gets or sets the requested Bytes value used by this component.
+            /// </summary>
             internal int RequestedBytes { get; }
+            /// <summary>
+            /// Gets or sets the task value used by this component.
+            /// </summary>
             internal Task Task => _completion.Task;
+            /// <summary>
+            /// Gets or sets the is Canceled value used by this component.
+            /// </summary>
             internal bool IsCanceled { get; private set; }
 
+            /// <summary>
+            /// Executes the register Cancellation operation while preserving the component's benchmark or test-harness contract.
+            /// </summary>
             internal void RegisterCancellation(CancellationToken cancellationToken, ByteBudget budget)
             {
                 _registration = cancellationToken.Register(static state =>
@@ -211,17 +292,26 @@ internal static class TransitBenchmarkCore
                 }, new CancellationState(budget, this));
             }
 
+            /// <summary>
+            /// Executes the mark Canceled operation while preserving the component's benchmark or test-harness contract.
+            /// </summary>
             internal void MarkCanceled()
             {
                 IsCanceled = true;
             }
 
+            /// <summary>
+            /// Executes the try SetAcquired operation while preserving the component's benchmark or test-harness contract.
+            /// </summary>
             internal void TrySetAcquired()
             {
                 _registration.Dispose();
                 _completion.TrySetResult();
             }
 
+            /// <summary>
+            /// Executes the try SetCanceled operation while preserving the component's benchmark or test-harness contract.
+            /// </summary>
             internal void TrySetCanceled()
             {
                 IsCanceled = true;
@@ -229,18 +319,42 @@ internal static class TransitBenchmarkCore
                 _completion.TrySetCanceled();
             }
 
+            /// <summary>
+            /// Represents the cancellation State record struct used by this benchmark or regression-gate component.
+            /// </summary>
             private readonly record struct CancellationState(ByteBudget Budget, BudgetWaiter Waiter);
         }
     }
 
+    /// <summary>
+    /// Represents the bounded ArticleQueue class used by this benchmark or regression-gate component.
+    /// </summary>
     internal sealed class BoundedArticleQueue : IDisposable
     {
+        /// <summary>
+        /// Gets or sets the _channel value used by this component.
+        /// </summary>
         private readonly Channel<QueuedArticle> _channel;
+        /// <summary>
+        /// Gets or sets the _byteBudget value used by this component.
+        /// </summary>
         private readonly ByteBudget _byteBudget;
+        /// <summary>
+        /// Gets or sets the _queuedBytes value used by this component.
+        /// </summary>
         private long _queuedBytes;
+        /// <summary>
+        /// Gets or sets the _queuedCount value used by this component.
+        /// </summary>
         private int _queuedCount;
+        /// <summary>
+        /// Gets or sets the _admissionStopped value used by this component.
+        /// </summary>
         private volatile bool _admissionStopped;
 
+        /// <summary>
+        /// Executes the bounded ArticleQueue operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal BoundedArticleQueue(int maxArticles, long maxResidentBytes)
         {
             _channel = Channel.CreateBounded<QueuedArticle>(new BoundedChannelOptions(maxArticles)
@@ -253,9 +367,18 @@ internal static class TransitBenchmarkCore
             _byteBudget = new ByteBudget(maxResidentBytes);
         }
 
+        /// <summary>
+        /// Executes the current QueuedCount operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal int CurrentQueuedCount => Volatile.Read(ref _queuedCount);
+        /// <summary>
+        /// Executes the current QueuedBytes operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal long CurrentQueuedBytes => Volatile.Read(ref _queuedBytes);
 
+        /// <summary>
+        /// Executes the try WriteAsync operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal async ValueTask<bool> TryWriteAsync(QueuedArticle article, CancellationToken cancellationToken)
         {
             if (_admissionStopped)
@@ -279,6 +402,9 @@ internal static class TransitBenchmarkCore
             }
         }
 
+        /// <summary>
+        /// Executes the try Read operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal bool TryRead(out QueuedArticle article)
         {
             bool success = _channel.Reader.TryRead(out article);
@@ -291,22 +417,34 @@ internal static class TransitBenchmarkCore
             return success;
         }
 
+        /// <summary>
+        /// Executes the wait ToReadAsync operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken)
         {
             return _channel.Reader.WaitToReadAsync(cancellationToken);
         }
 
+        /// <summary>
+        /// Executes the release Reservation operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void ReleaseReservation(int bytes)
         {
             _byteBudget.Release(bytes);
         }
 
+        /// <summary>
+        /// Executes the stop Admission operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal void StopAdmission()
         {
             _admissionStopped = true;
             _channel.Writer.TryComplete();
         }
 
+        /// <summary>
+        /// Executes the dispose operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public void Dispose()
         {
             StopAdmission();
@@ -314,19 +452,37 @@ internal static class TransitBenchmarkCore
         }
     }
 
+    /// <summary>
+    /// Represents the queued Article record struct used by this benchmark or regression-gate component.
+    /// </summary>
     internal readonly record struct QueuedArticle(string MessageId, ArticlePayload Payload);
 
+    /// <summary>
+    /// Represents the article Payload struct used by this benchmark or regression-gate component.
+    /// </summary>
     internal readonly struct ArticlePayload : IDisposable
     {
+        /// <summary>
+        /// Gets or sets the _buffer value used by this component.
+        /// </summary>
         private readonly byte[] _buffer;
+        /// <summary>
+        /// Gets or sets the length value used by this component.
+        /// </summary>
         internal int Length { get; }
 
+        /// <summary>
+        /// Executes the article Payload operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private ArticlePayload(byte[] buffer, int length)
         {
             _buffer = buffer;
             Length = length;
         }
 
+        /// <summary>
+        /// Executes the create operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal static ArticlePayload Create(string messageId, int targetBytes)
         {
             byte[] buffer = ArrayPool<byte>.Shared.Rent(targetBytes + 4096);
@@ -363,13 +519,22 @@ internal static class TransitBenchmarkCore
             return new ArticlePayload(buffer, offset);
         }
 
+        /// <summary>
+        /// Executes the as Memory operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal ReadOnlyMemory<byte> AsMemory() => _buffer.AsMemory(0, Length);
 
+        /// <summary>
+        /// Executes the dispose operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         public void Dispose()
         {
             ArrayPool<byte>.Shared.Return(_buffer, clearArray: false);
         }
 
+        /// <summary>
+        /// Executes the write Ascii operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         private static int WriteAscii(byte[] destination, int offset, string value)
         {
             int written = Encoding.ASCII.GetBytes(value, destination.AsSpan(offset));
@@ -377,8 +542,14 @@ internal static class TransitBenchmarkCore
         }
     }
 
+    /// <summary>
+    /// Represents the transit BenchmarkConfigValidator class used by this benchmark or regression-gate component.
+    /// </summary>
     internal static class TransitBenchmarkConfigValidator
     {
+        /// <summary>
+        /// Executes the validate IntRange operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal static int ValidateIntRange(int value, int min, int max, string optionName)
         {
             if (value < min || value > max)
@@ -389,6 +560,9 @@ internal static class TransitBenchmarkCore
             return value;
         }
 
+        /// <summary>
+        /// Executes the validate LongRange operation while preserving the component's benchmark or test-harness contract.
+        /// </summary>
         internal static long ValidateLongRange(long value, long min, long max, string optionName)
         {
             if (value < min || value > max)

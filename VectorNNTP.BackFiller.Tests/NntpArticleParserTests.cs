@@ -1,10 +1,9 @@
 // <copyright file="NntpArticleParserTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Articles / Parsing
-// Contract tests for the high-performance NNTP article parser covering classification,
-// hostile input handling, date/path normalization, and yEnc validation integration.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for nntp article parser.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.DateParser;

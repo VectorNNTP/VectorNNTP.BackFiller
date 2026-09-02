@@ -1,4 +1,10 @@
 // <copyright file="ArticleWorkProcessingContracts.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: article work processing contracts in the articles processing subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="ArticleWorkProcessingContracts.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -320,6 +326,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed class ArticleWorkResultChannelSink : IArticleWorkResultSink
     {
+        /// <summary>
+        /// Stores the writer state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ChannelWriter<ArticleWorkProcessingResult> _writer;
 
         /// <summary>

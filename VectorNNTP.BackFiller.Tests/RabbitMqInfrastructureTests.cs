@@ -1,11 +1,9 @@
 // <copyright file="RabbitMqInfrastructureTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for rabbit mq infrastructure.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
@@ -22,6 +20,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class RabbitMqInfrastructureTests
     {
+        /// <summary>
+        /// Verifies the BuildConnectionFactory_MapsConfiguredRuntimeSettings scenario and expected contract.
+        /// </summary>
         [Fact]
         public void BuildConnectionFactory_MapsConfiguredRuntimeSettings()
         {
@@ -43,7 +44,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(factory.AutomaticRecoveryEnabled);
             Assert.False(factory.TopologyRecoveryEnabled);
         }
-
+        /// <summary>
+        /// Verifies the BuildSanitizedSnapshot_DoesNotLogPasswordMaterial scenario and expected contract.
+        /// </summary>
         [Fact]
         public void BuildSanitizedSnapshot_DoesNotLogPasswordMaterial()
         {
@@ -55,7 +58,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(snapshot.HasPassword);
             Assert.DoesNotContain(options.Password!, snapshot.ToString(), StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Verifies the TopologyBuilder_BackboneNamespaces_AreIsolated scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TopologyBuilder_BackboneNamespaces_AreIsolated()
         {
@@ -78,7 +83,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.NotEqual(giganews.QueueName, eweka.QueueName);
             Assert.NotEqual(giganews.RoutingKey, eweka.RoutingKey);
         }
-
+        /// <summary>
+        /// Verifies the TopologyBuilder_DeclaresExpectedExchangeAndBindingProperties scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TopologyBuilder_DeclaresExpectedExchangeAndBindingProperties()
         {
@@ -95,7 +102,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal("grabbers.giganews", definition.RoutingKey);
             Assert.Null(definition.BindingArguments);
         }
-
+        /// <summary>
+        /// Verifies the ConnectionManager_WhenConnectionShutdownObserved_AttemptsConnectionReplacement scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ConnectionManager_WhenConnectionShutdownObserved_AttemptsConnectionReplacement()
         {
@@ -126,7 +135,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await manager.DisposeAsync();
         }
-
+        /// <summary>
+        /// Verifies the ConnectionManager_ShutdownPreventsRecoveryReplacement scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ConnectionManager_ShutdownPreventsRecoveryReplacement()
         {
@@ -148,7 +159,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await manager.DisposeAsync();
         }
-
+        /// <summary>
+        /// Verifies the ConnectionManager_CreateOwnedChannelAsync_ReturnsIndependentOwnedChannels scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task ConnectionManager_CreateOwnedChannelAsync_ReturnsIndependentOwnedChannels()
         {
@@ -170,7 +183,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await manager.DisposeAsync();
         }
-
+        /// <summary>
+        /// Verifies the TopologyBuilder_SameBackboneDifferentServerIds_ProduceIdenticalTopologyIdentity scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TopologyBuilder_SameBackboneDifferentServerIds_ProduceIdenticalTopologyIdentity()
         {
@@ -185,7 +200,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(server1.QueueName, server2.QueueName);
             Assert.Equal(server1.RoutingKey, server2.RoutingKey);
         }
-
+        /// <summary>
+        /// Verifies the TopologyBuilder_DeclaresQuorumQueue scenario and expected contract.
+        /// </summary>
         [Fact]
         public void TopologyBuilder_DeclaresQuorumQueue()
         {
@@ -205,7 +222,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(definition.ExchangeAutoDelete);
             Assert.Equal(ExchangeType.Fanout, definition.ExchangeType);
         }
-
+        /// <summary>
+        /// Verifies the TopologyInitializer_CanBeCalledRepeatedly_IdempotentFromInfrastructurePerspective scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task TopologyInitializer_CanBeCalledRepeatedly_IdempotentFromInfrastructurePerspective()
         {
@@ -229,6 +248,9 @@ namespace VectorNNTP.Backfiller.Tests
             await manager.DisposeAsync();
         }
 
+        /// <summary>
+        /// Verifies the WaitForAsync scenario and expected contract.
+        /// </summary>
         private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
         {
             DateTime deadline = DateTime.UtcNow.Add(timeout);
@@ -245,6 +267,9 @@ namespace VectorNNTP.Backfiller.Tests
             return condition();
         }
 
+        /// <summary>
+        /// Verifies the CreateRuntimeOptions scenario and expected contract.
+        /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions()
         {
             return new BackFillerRuntimeOptions(
@@ -269,6 +294,9 @@ namespace VectorNNTP.Backfiller.Tests
                 RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
         }
 
+        /// <summary>
+        /// Verifies the CreateRabbitMqRuntimeOptions scenario and expected contract.
+        /// </summary>
         private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
         {
             return new RabbitMqRuntimeOptions(
@@ -302,14 +330,29 @@ namespace VectorNNTP.Backfiller.Tests
                 ConsumerPrefetchCount: null);
         }
 
+        /// <summary>
+        /// Documents the FakeRabbitMqBrokerConnector test type and its protected contract.
+        /// </summary>
         private sealed class FakeRabbitMqBrokerConnector : IRabbitMqBrokerConnector
         {
+            /// <summary>
+            /// Stores the _connectCallCount fixture value used by these tests.
+            /// </summary>
             private int _connectCallCount;
 
+            /// <summary>
+            /// Stores the ConnectCallCount value used by this test fixture.
+            /// </summary>
             internal int ConnectCallCount => Volatile.Read(ref _connectCallCount);
 
+            /// <summary>
+            /// Stores the LastConnection value used by this test fixture.
+            /// </summary>
             internal FakeRabbitMqBrokerConnection? LastConnection { get; private set; }
 
+            /// <summary>
+            /// Verifies the ConnectAsync scenario and expected contract.
+            /// </summary>
             public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
             {
                 _ = Interlocked.Increment(ref _connectCallCount);
@@ -320,36 +363,84 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the FakeRabbitMqBrokerConnection test type and its protected contract.
+        /// </summary>
         private sealed class FakeRabbitMqBrokerConnection(string host, int port, string virtualHost, string connectionName) : IRabbitMqBrokerConnection
         {
+            /// <summary>
+            /// Stores the _channelCounter fixture value used by these tests.
+            /// </summary>
             private int _channelCounter;
 
+            /// <summary>
+            /// Stores the IsOpen value used by this test fixture.
+            /// </summary>
             public bool IsOpen { get; private set; } = true;
 
+            /// <summary>
+            /// Stores the ChannelCreateCount value used by this test fixture.
+            /// </summary>
             internal int ChannelCreateCount => Volatile.Read(ref _channelCounter);
 
+            /// <summary>
+            /// Stores the EndpointHostName value used by this test fixture.
+            /// </summary>
             public string EndpointHostName { get; } = host;
 
+            /// <summary>
+            /// Stores the EndpointPort value used by this test fixture.
+            /// </summary>
             public int EndpointPort { get; } = port;
 
+            /// <summary>
+            /// Stores the VirtualHost value used by this test fixture.
+            /// </summary>
             public string VirtualHost { get; } = virtualHost;
 
+            /// <summary>
+            /// Stores the ClientProvidedName value used by this test fixture.
+            /// </summary>
             public string ClientProvidedName { get; } = connectionName;
 
+            /// <summary>
+            /// Stores the UnderlyingConnection value used by this test fixture.
+            /// </summary>
             public IConnection UnderlyingConnection => throw new NotSupportedException();
 
+            /// <summary>
+            /// Documents the ConnectionShutdown member and its test-supporting contract.
+            /// </summary>
             public event EventHandler<ShutdownEventArgs>? ConnectionShutdown;
 
+            /// <summary>
+            /// Documents the CallbackException member and its test-supporting contract.
+            /// </summary>
             public event EventHandler<CallbackExceptionEventArgs>? CallbackException;
 
+            /// <summary>
+            /// Documents the ConnectionBlocked member and its test-supporting contract.
+            /// </summary>
             public event EventHandler<ConnectionBlockedEventArgs>? ConnectionBlocked;
 
+            /// <summary>
+            /// Documents the ConnectionUnblocked member and its test-supporting contract.
+            /// </summary>
             public event EventHandler<AsyncEventArgs>? ConnectionUnblocked;
 
+            /// <summary>
+            /// Documents the ConnectionRecoveryError member and its test-supporting contract.
+            /// </summary>
             public event EventHandler<ConnectionRecoveryErrorEventArgs>? ConnectionRecoveryError;
 
+            /// <summary>
+            /// Documents the RecoverySucceeded member and its test-supporting contract.
+            /// </summary>
             public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
+            /// <summary>
+            /// Verifies the CreateChannelAsync scenario and expected contract.
+            /// </summary>
             public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -359,65 +450,104 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.FromResult(channel);
             }
 
+            /// <summary>
+            /// Verifies the DisposeAsync scenario and expected contract.
+            /// </summary>
             public ValueTask DisposeAsync()
             {
                 IsOpen = false;
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the RaiseConnectionShutdown scenario and expected contract.
+            /// </summary>
             internal void RaiseConnectionShutdown()
             {
                 ConnectionShutdown?.Invoke(this, new ShutdownEventArgs(ShutdownInitiator.Peer, 320, "Closed by broker"));
             }
 
+            /// <summary>
+            /// Verifies the RaiseCallbackException scenario and expected contract.
+            /// </summary>
             internal void RaiseCallbackException(Exception exception)
             {
                 CallbackException?.Invoke(this, new CallbackExceptionEventArgs(new Dictionary<string, object>(), exception, default));
             }
 
+            /// <summary>
+            /// Verifies the RaiseConnectionBlocked scenario and expected contract.
+            /// </summary>
             internal void RaiseConnectionBlocked(string reason)
             {
                 ConnectionBlocked?.Invoke(this, new ConnectionBlockedEventArgs(reason));
             }
 
+            /// <summary>
+            /// Verifies the RaiseConnectionUnblocked scenario and expected contract.
+            /// </summary>
             internal void RaiseConnectionUnblocked()
             {
                 ConnectionUnblocked?.Invoke(this, new AsyncEventArgs());
             }
 
+            /// <summary>
+            /// Verifies the RaiseConnectionRecoveryError scenario and expected contract.
+            /// </summary>
             internal void RaiseConnectionRecoveryError(Exception exception)
             {
                 ConnectionRecoveryError?.Invoke(this, new ConnectionRecoveryErrorEventArgs(exception, default));
             }
 
+            /// <summary>
+            /// Verifies the RaiseRecoverySucceeded scenario and expected contract.
+            /// </summary>
             internal void RaiseRecoverySucceeded()
             {
                 RecoverySucceeded?.Invoke(this, new AsyncEventArgs());
             }
         }
 
+        /// <summary>
+        /// Documents the FakeRabbitMqChannel test type and its protected contract.
+        /// </summary>
         private sealed class FakeRabbitMqChannel(int id) : IRabbitMqChannel
         {
+            /// <summary>
+            /// Stores the UnderlyingChannel value used by this test fixture.
+            /// </summary>
             public IChannel UnderlyingChannel => throw new NotSupportedException();
 
+            /// <summary>
+            /// Verifies the ExchangeDeclareAsync scenario and expected contract.
+            /// </summary>
             public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the QueueDeclareAsync scenario and expected contract.
+            /// </summary>
             public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the QueueBindAsync scenario and expected contract.
+            /// </summary>
             public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the BasicQosAsync scenario and expected contract.
+            /// </summary>
             public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -427,6 +557,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the BasicConsumeAsync scenario and expected contract.
+            /// </summary>
             public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -436,6 +569,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.FromResult($"ctag-{id}");
             }
 
+            /// <summary>
+            /// Verifies the BasicCancelAsync scenario and expected contract.
+            /// </summary>
             public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -443,6 +579,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the BasicAckAsync scenario and expected contract.
+            /// </summary>
             public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -451,6 +590,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the BasicNackAsync scenario and expected contract.
+            /// </summary>
             public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -460,6 +602,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the BasicPublishAsync scenario and expected contract.
+            /// </summary>
             public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -471,6 +616,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Verifies the DisposeAsync scenario and expected contract.
+            /// </summary>
             public ValueTask DisposeAsync()
             {
                 _ = id;

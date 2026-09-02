@@ -1,4 +1,10 @@
 // <copyright file="NntpArticleParser.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: nntp article parser in the articles parsing subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NntpArticleParser.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -771,6 +777,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             canonicalPath = string.Create(
                 GetPathLength(fqdn, parts),
                 (fqdn, parts),
+                /// <summary>
+                /// Performs the static operation while preserving this component's lifecycle and state contracts.
+                /// </summary>
                 static (span, state) =>
                 {
                     int offset = 0;

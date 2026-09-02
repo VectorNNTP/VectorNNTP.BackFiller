@@ -1,3 +1,9 @@
+// <copyright file="ServiceLifecycle.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: service lifecycle in the runtime lifecycle subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // ServiceLifecycle.cs -- Explicit application readiness state machine.
 //
 // Tracks the application lifecycle through distinct phases, enabling systemd, load balancers,
@@ -259,14 +265,41 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             }
         }
 
+        /// <summary>
+        /// Stores the sync state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly object _sync = new();
+        /// <summary>
+        /// Stores the time provider state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<ServiceLifecycle> _logger;
+        /// <summary>
+        /// Stores the current state state used to enforce this component's runtime contract.
+        /// </summary>
         private LifecycleState _currentState = LifecycleState.Starting;
+        /// <summary>
+        /// Stores the state entered timestamp state used to enforce this component's runtime contract.
+        /// </summary>
         private long _stateEnteredTimestamp; // Monotonic timestamp from TimeProvider.GetTimestamp()
+        /// <summary>
+        /// Stores the transition history state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly List<StateTransition> _transitionHistory = [];
+        /// <summary>
+        /// Stores the max history size state used to enforce this component's runtime contract.
+        /// </summary>
         private const int MaxHistorySize = 50;
+        /// <summary>
+        /// Stores the is notifying observers state used to enforce this component's runtime contract.
+        /// </summary>
         private bool _isNotifyingObservers; // Prevents transitions during observer notification (reentrancy + concurrency)
+        /// <summary>
+        /// Stores the slow phase warning logged state used to enforce this component's runtime contract.
+        /// </summary>
         private bool _slowPhaseWarningLogged; // One warning per phase
 
         /// <summary>
@@ -530,6 +563,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1100,
             Level = LogLevel.Error,
             Message = "TransitionTo({NewState}) cannot be called while observers are being notified. Observers MUST NOT call TransitionTo() from StateTransitioned handlers (reentrancy forbidden). Concurrent transitions from other threads are also blocked during notification.")]
+        /// <summary>
+        /// Performs the log transition during observer notification rejected operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogTransitionDuringObserverNotificationRejected(
             ILogger logger,
             LifecycleState newState);
@@ -538,6 +574,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1101,
             Level = LogLevel.Warning,
             Message = "State transition ignored: already in {State}")]
+        /// <summary>
+        /// Performs the log state transition ignored already in state operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogStateTransitionIgnoredAlreadyInState(
             ILogger logger,
             LifecycleState state);
@@ -546,6 +585,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1102,
             Level = LogLevel.Error,
             Message = "Invalid state transition: {CurrentState} -> {TargetState} (allowed: {AllowedTransitions})")]
+        /// <summary>
+        /// Performs the log invalid state transition operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogInvalidStateTransition(
             ILogger logger,
             LifecycleState currentState,
@@ -556,6 +598,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1103,
             Level = LogLevel.Information,
             Message = "State transition: {From} -> {To} (reason: {Reason}; elapsed={Elapsed:F2}s)")]
+        /// <summary>
+        /// Performs the log state transition operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogStateTransition(
             ILogger logger,
             LifecycleState from,
@@ -567,6 +612,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1104,
             Level = LogLevel.Error,
             Message = "Lifecycle transition subscriber failed for {From} -> {To} (transition completed successfully)")]
+        /// <summary>
+        /// Performs the log lifecycle transition subscriber failed operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogLifecycleTransitionSubscriberFailed(
             ILogger logger,
             Exception exception,
@@ -577,6 +625,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             EventId = 1105,
             Level = LogLevel.Warning,
             Message = "Slow phase warning: {Phase} has taken {Elapsed:F2}s (threshold: {Threshold:F2}s)")]
+        /// <summary>
+        /// Performs the log slow phase warning exceeded operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSlowPhaseWarningExceeded(
             ILogger logger,
             string phase,

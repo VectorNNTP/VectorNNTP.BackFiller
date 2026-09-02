@@ -1,10 +1,9 @@
 ﻿// <copyright file="NntpArticleGrabberWorkflowTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Articles / Grabber
-// Focused contract tests for reusable-session grabber workflow orchestration that preserves
-// distinct acquisition/parser/yEnc failure semantics and Message-ID correlation boundaries.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for nntp article grabber workflow.
 
 using System.Net;
 using System.Net.Sockets;

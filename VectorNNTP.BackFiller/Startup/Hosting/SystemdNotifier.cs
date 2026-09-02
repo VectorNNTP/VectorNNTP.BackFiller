@@ -1,4 +1,10 @@
 // <copyright file="SystemdNotifier.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: systemd notifier in the startup hosting subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="SystemdNotifier.cs" company="Usenet Ninja">
 // Copyright (c) Chris Knipe <cknipe@opticnetworks.net>. Licensed under the Apache License, Version 2.0 (see LICENSE).
 // </copyright>
 
@@ -41,14 +47,38 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
     /// </remarks>
     internal static partial class SystemdNotifier
     {
+        /// <summary>
+        /// Stores the min status notify interval milliseconds state used to enforce this component's runtime contract.
+        /// </summary>
         private const int MinStatusNotifyIntervalMilliseconds = 5000;
+        /// <summary>
+        /// Stores the max systemd status length state used to enforce this component's runtime contract.
+        /// </summary>
         private const int MaxSystemdStatusLength = 1024;
+        /// <summary>
+        /// Stores the systemd library state unknown state used to enforce this component's runtime contract.
+        /// </summary>
         private const int SystemdLibraryStateUnknown = 0;
+        /// <summary>
+        /// Stores the systemd library state available state used to enforce this component's runtime contract.
+        /// </summary>
         private const int SystemdLibraryStateAvailable = 1;
+        /// <summary>
+        /// Stores the systemd library state unavailable state used to enforce this component's runtime contract.
+        /// </summary>
         private const int SystemdLibraryStateUnavailable = 2;
 
+        /// <summary>
+        /// Stores the status notify gate state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly object StatusNotifyGate = new();
+        /// <summary>
+        /// Stores the last status notify tick count state used to enforce this component's runtime contract.
+        /// </summary>
         private static long _lastStatusNotifyTickCount = -1;
+        /// <summary>
+        /// Stores the systemd library state state used to enforce this component's runtime contract.
+        /// </summary>
         private static int _systemdLibraryState = SystemdLibraryStateUnknown;
 
         #region Systemd Notifications
@@ -331,24 +361,45 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         #endregion
 
         [LoggerMessage(EventId = 1300, Level = LogLevel.Debug, Message = "Notified systemd that service is ready")]
+        /// <summary>
+        /// Performs the log systemd ready notified operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdReadyNotified(ILogger logger);
 
         [LoggerMessage(EventId = 1301, Level = LogLevel.Debug, Message = "Notified systemd that service is stopping")]
+        /// <summary>
+        /// Performs the log systemd stopping notified operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdStoppingNotified(ILogger logger);
 
         [LoggerMessage(EventId = 1302, Level = LogLevel.Debug, Message = "Notified systemd with status: {Status}")]
+        /// <summary>
+        /// Performs the log systemd status notified operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdStatusNotified(ILogger logger, string status);
 
         [LoggerMessage(EventId = 1303, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification failed with result {Result}")]
+        /// <summary>
+        /// Performs the log systemd notification failed result operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdNotificationFailedResult(ILogger logger, string notificationType, int result);
 
         [LoggerMessage(EventId = 1304, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: libsystemd.so.0 not found")]
+        /// <summary>
+        /// Performs the log systemd library not found operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdLibraryNotFound(ILogger logger, string notificationType);
 
         [LoggerMessage(EventId = 1305, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: sd_notify entry point not found")]
+        /// <summary>
+        /// Performs the log systemd entry point not found operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdEntryPointNotFound(ILogger logger, string notificationType);
 
         [LoggerMessage(EventId = 1306, Level = LogLevel.Debug, Message = "Exception during systemd {NotificationType} notification")]
+        /// <summary>
+        /// Performs the log systemd notification exception operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         private static partial void LogSystemdNotificationException(ILogger logger, Exception exception, string notificationType);
     }
 }

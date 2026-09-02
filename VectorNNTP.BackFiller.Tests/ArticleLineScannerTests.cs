@@ -1,9 +1,9 @@
 // <copyright file="ArticleLineScannerTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Boundary and parity tests for SIMD/scalar line scanning in the yEnc subsystem.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for article line scanner.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

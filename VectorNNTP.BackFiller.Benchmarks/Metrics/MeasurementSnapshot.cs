@@ -1,5 +1,14 @@
+// <copyright file="MeasurementSnapshot.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/MeasurementSnapshot: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the measurement Snapshot record struct used by this benchmark or regression-gate component.
+/// </summary>
 internal readonly record struct MeasurementSnapshot(
     long GeneratedCount,
     long GeneratedBytes,

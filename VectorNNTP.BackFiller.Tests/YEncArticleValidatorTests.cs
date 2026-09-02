@@ -1,11 +1,9 @@
 // <copyright file="YEncArticleValidatorTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for y enc article validator.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;
@@ -364,6 +362,9 @@ namespace VectorNNTP.Backfiller.Tests
             YEncArticleValidationResult warmup = YEncArticleValidator.Validate(article);
             Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, warmup.Status);
 
+            /// <summary>
+            /// Stores the Iterations fixture value used by these tests.
+            /// </summary>
             const int Iterations = 16;
             long before = GC.GetAllocatedBytesForCurrentThread();
             YEncArticleValidationStatus lastStatus = YEncArticleValidationStatus.ValidNonYEnc;
@@ -931,6 +932,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <returns>Absolute fixture directory path.</returns>
         private static string ResolveFixtureRoot()
         {
+            /// <summary>
+            /// Stores the SolutionMarker fixture value used by these tests.
+            /// </summary>
             const string SolutionMarker = "VectorNNTP.BackFiller.slnx";
             string? current = AppContext.BaseDirectory;
 

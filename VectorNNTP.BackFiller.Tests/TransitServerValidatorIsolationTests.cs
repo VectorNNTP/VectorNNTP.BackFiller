@@ -1,11 +1,9 @@
 // <copyright file="TransitServerValidatorIsolationTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for transit server validator isolation.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -14,15 +12,26 @@ using Xunit.Abstractions;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Documents the TransitServerValidatorIsolationTests test type and its protected contract.
+    /// </summary>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
+        /// <summary>
+        /// Stores the _out fixture value used by these tests.
+        /// </summary>
         private readonly ITestOutputHelper _out = output;
 
+        /// <summary>
+        /// Verifies the Build scenario and expected contract.
+        /// </summary>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {
             return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         }
-
+        /// <summary>
+        /// Verifies the TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslMissing_DefaultFalse_DirectAndFullPipeline()
         {
@@ -76,7 +85,9 @@ namespace VectorNNTP.Backfiller.Tests
             // No error should be produced for the missing UseSsl setting; it should default to false and not be an error
             Assert.DoesNotContain(configResult.Errors, static e => e.Setting == "BackFiller:TransitServer:UseSsl");
         }
-
+        /// <summary>
+        /// Verifies the TransitServer_UseSslTrue_Port119 scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port119()
         {
@@ -116,7 +127,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(configResult.Warnings, static w =>
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally non-TLS", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Verifies the TransitServer_UseSslFalse_Port563 scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslFalse_Port563()
         {
@@ -153,7 +166,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains(configResult.Warnings, static w =>
                 w.Setting == "BackFiller:TransitServer:Port" && w.Message.Contains("conventionally TLS", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Verifies the TransitServer_UseSslTrue_Port563 scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task TransitServer_UseSslTrue_Port563()
         {

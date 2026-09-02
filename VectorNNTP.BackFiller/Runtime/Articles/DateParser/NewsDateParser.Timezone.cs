@@ -1,4 +1,10 @@
 // <copyright file="NewsDateParser.Timezone.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: news date parser.timezone in the articles date parser subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="NewsDateParser.Timezone.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //

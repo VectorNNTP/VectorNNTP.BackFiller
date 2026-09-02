@@ -1,4 +1,10 @@
 // <copyright file="BackFillerCertificateState.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: back filler certificate state in the runtime certificates subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="BackFillerCertificateState.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -18,7 +24,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed class BackFillerCertificateState : IDisposable
     {
+        /// <summary>
+        /// Stores the gate state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly object _gate = new();
+        /// <summary>
+        /// Stores the current state used to enforce this component's runtime contract.
+        /// </summary>
         private BackFillerCertificateBundle? _current;
 
         /// <summary>

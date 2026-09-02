@@ -1,13 +1,34 @@
+// <copyright file="GeneratorBaselineRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Workload/GeneratorBaselineRunner: prepares and drives reproducible benchmark input workloads.
+
 using System.Diagnostics;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the generator BaselineRunner class used by this benchmark or regression-gate component.
+/// </summary>
 internal static class GeneratorBaselineRunner
 {
+    /// <summary>
+    /// Gets or sets the default ArticleTargetBytes value used by this component.
+    /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
+    /// <summary>
+    /// Gets or sets the default WarmupSeconds value used by this component.
+    /// </summary>
     private const int DefaultWarmupSeconds = 10;
+    /// <summary>
+    /// Gets or sets the default GeneratorMeasurementSeconds value used by this component.
+    /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;
 
+    /// <summary>
+    /// Executes the run Async operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     internal static async Task RunAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         int warmupSeconds = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(

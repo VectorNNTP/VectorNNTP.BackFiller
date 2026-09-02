@@ -1,4 +1,10 @@
 // <copyright file="OperationalCommandParser.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: operational command parser in the startup commands subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="OperationalCommandParser.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -15,6 +21,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     /// </summary>
     internal static class OperationalCommandParser
     {
+        /// <summary>
+        /// Stores the command map state used to enforce this component's runtime contract.
+        /// </summary>
         private static readonly FrozenDictionary<string, OperationalCommand> CommandMap =
             new Dictionary<string, OperationalCommand>(StringComparer.OrdinalIgnoreCase)
             {
@@ -103,6 +112,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 OperationalCommand.ValidateStartup => "--validate-startup",
                 OperationalCommand.Diagnostics => "--diagnostics",
                 OperationalCommand.DumpConfig => "--dump-config",
+                /// <summary>
+                /// Identifies the _ case in this enum contract.
+                /// </summary>
                 _ => throw new System.Diagnostics.UnreachableException($"Unsupported command enum value: {command}")
             };
         }

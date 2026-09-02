@@ -1,4 +1,10 @@
 // <copyright file="BackboneArticleRetriever.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: backbone article retriever in the articles processing subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="BackboneArticleRetriever.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -41,8 +47,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class BackboneArticleRetriever : IBackboneArticleRetriever
     {
+        /// <summary>
+        /// Stores the lease provider state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly IBackboneSessionLeaseProvider _leaseProvider;
+        /// <summary>
+        /// Stores the workflow state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly NntpArticleGrabberWorkflow _workflow;
+        /// <summary>
+        /// Stores the logger state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ILogger<BackboneArticleRetriever> _logger;
 
         /// <summary>

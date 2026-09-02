@@ -1,5 +1,5 @@
 // <copyright file="Program.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks

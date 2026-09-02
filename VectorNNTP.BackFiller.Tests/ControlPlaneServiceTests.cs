@@ -1,11 +1,9 @@
 // <copyright file="ControlPlaneServiceTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Behavior and contract tests for control plane service.
 
 using System.Net;
 using System.Net.Security;
@@ -464,7 +462,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(1, service.GetManagedAccountActiveSessionCount(accountId));
             await service.StopAsync(CancellationToken.None);
         }
-
+        /// <summary>
+        /// Verifies the RefreshAndReconcileOnceAsync_WhenKeepAliveChanges_DoesNotReconnectOrReauthenticate scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenKeepAliveChanges_DoesNotReconnectOrReauthenticate()
         {
@@ -735,7 +735,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await service.StopAsync(CancellationToken.None);
         }
-
+        /// <summary>
+        /// Verifies the StartAsync_PublishesAuthoritativeBackboneCapacitySnapshot scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task StartAsync_PublishesAuthoritativeBackboneCapacitySnapshot()
         {
@@ -768,7 +770,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             await service.StopAsync(CancellationToken.None);
         }
-
+        /// <summary>
+        /// Verifies the RefreshAndReconcileOnceAsync_WhenCapacityDropsToZero_PublishesZeroBackboneCapacitySnapshot scenario and expected contract.
+        /// </summary>
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenCapacityDropsToZero_PublishesZeroBackboneCapacitySnapshot()
         {
@@ -806,12 +810,24 @@ namespace VectorNNTP.Backfiller.Tests
             await service.StopAsync(CancellationToken.None);
         }
 
+        /// <summary>
+        /// Documents the RabbitMqRetirementCall test type and its protected contract.
+        /// </summary>
         private sealed record RabbitMqRetirementCall(Guid AccountId, int RetainConnectionCount);
 
+        /// <summary>
+        /// Documents the TrackingRabbitMqCapacityRetirementCoordinator test type and its protected contract.
+        /// </summary>
         private sealed class TrackingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
         {
+            /// <summary>
+            /// Stores the Calls value used by this test fixture.
+            /// </summary>
             internal List<RabbitMqRetirementCall> Calls { get; } = [];
 
+            /// <summary>
+            /// Verifies the RetireCapacityAsync scenario and expected contract.
+            /// </summary>
             public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -820,11 +836,23 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the BlockingRabbitMqCapacityRetirementCoordinator test type and its protected contract.
+        /// </summary>
         private sealed class BlockingRabbitMqCapacityRetirementCoordinator : IRabbitMqCapacityRetirementCoordinator
         {
+            /// <summary>
+            /// Stores the _release fixture value used by these tests.
+            /// </summary>
             private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            /// <summary>
+            /// Stores the Called value used by this test fixture.
+            /// </summary>
             internal TaskCompletionSource<bool> Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+            /// <summary>
+            /// Verifies the RetireCapacityAsync scenario and expected contract.
+            /// </summary>
             public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -832,15 +860,27 @@ namespace VectorNNTP.Backfiller.Tests
                 await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            /// <summary>
+            /// Verifies the Release scenario and expected contract.
+            /// </summary>
             internal void Release()
             {
                 _ = _release.TrySetResult(true);
             }
         }
 
+        /// <summary>
+        /// Documents the RecordingBackboneUsableCapacityStateWriter test type and its protected contract.
+        /// </summary>
         private sealed class RecordingBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
+            /// <summary>
+            /// Stores the _gate fixture value used by these tests.
+            /// </summary>
             private readonly object _gate = new();
+            /// <summary>
+            /// Documents the _snapshots member and its test-supporting contract.
+            /// </summary>
             private readonly List<Dictionary<string, int>> _snapshots = [];
 
             internal IReadOnlyList<IReadOnlyDictionary<string, int>> Snapshots
@@ -854,6 +894,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Verifies the PublishSnapshot scenario and expected contract.
+            /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);
@@ -865,6 +908,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Verifies the GetLatestCapacity scenario and expected contract.
+            /// </summary>
             internal int GetLatestCapacity(string backbone)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -891,6 +937,9 @@ namespace VectorNNTP.Backfiller.Tests
         {
             ArgumentNullException.ThrowIfNull(condition);
 
+            /// <summary>
+            /// Stores the MaxAttempts fixture value used by these tests.
+            /// </summary>
             const int MaxAttempts = 40;
             for (int attempt = 0; attempt < MaxAttempts; attempt++)
             {
@@ -1008,7 +1057,13 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             private sealed class CapturingLogger(List<CapturedLogEntry> entries, object gate) : ILogger
             {
+                /// <summary>
+                /// Stores the _entries fixture value used by these tests.
+                /// </summary>
                 private readonly List<CapturedLogEntry> _entries = entries;
+                /// <summary>
+                /// Stores the _gate fixture value used by these tests.
+                /// </summary>
                 private readonly object _gate = gate;
 
                 /// <summary>
@@ -1058,6 +1113,9 @@ namespace VectorNNTP.Backfiller.Tests
             /// <typeparam name="T">Category type.</typeparam>
             private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries, object gate) : ILogger<T>
             {
+                /// <summary>
+                /// Stores the _inner fixture value used by these tests.
+                /// </summary>
                 private readonly CapturingLogger _inner = new(entries, gate);
 
                 /// <summary>
@@ -1116,6 +1174,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Documents the FakeNntpServer test type and its protected contract.
+        /// </summary>
         private sealed class FakeNntpServer : IAsyncDisposable
         {
             /// <summary>

@@ -1,3 +1,9 @@
+// <copyright file="Program.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// IsolatedRegressionGate/Program: runs selected tests in isolated vstest processes and emits machine-readable forensic summaries.
+
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
@@ -10,10 +16,19 @@ using Microsoft.VisualStudio.TestPlatform.ObjectModel.Logging;
 
 namespace IsolatedRegressionGate;
 
+/// <summary>
+/// Represents the program class used by this benchmark or regression-gate component.
+/// </summary>
 internal static class Program
 {
+    /// <summary>
+    /// Gets or sets the utility Version value used by this component.
+    /// </summary>
     private const string UtilityVersion = "0.1.0";
 
+    /// <summary>
+    /// Executes the main operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static async Task<int> Main(string[] args)
     {
         GateOptions options = GateOptions.Parse(args);
@@ -237,6 +252,9 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Executes the write AndReturn operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static async Task<int> WriteAndReturn(GateSummary summary, string summaryJsonPath, string summaryMarkdownPath)
     {
         summary.CompletedUtc = DateTimeOffset.UtcNow;
@@ -251,6 +269,9 @@ internal static class Program
         return summary.ExitCode;
     }
 
+    /// <summary>
+    /// Executes the resolve VsTestConsolePath operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static string ResolveVsTestConsolePath()
     {
         string dotnetRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet", "sdk");
@@ -273,6 +294,9 @@ internal static class Program
         return candidate;
     }
 
+    /// <summary>
+    /// Executes the resolve TestAssemblyPath operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static string ResolveTestAssemblyPath(string repoRoot, GateOptions options)
     {
         if (!string.IsNullOrWhiteSpace(options.TestAssemblyPath))
@@ -309,6 +333,9 @@ internal static class Program
         return candidates[0];
     }
 
+    /// <summary>
+    /// Executes the select Cases operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static List<TestCase> SelectCases(IReadOnlyList<TestCase> discovered, GateOptions options, GateSummary summary)
     {
         IEnumerable<TestCase> query = discovered;
@@ -337,6 +364,9 @@ internal static class Program
         return selected;
     }
 
+    /// <summary>
+    /// Executes the build Markdown operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private static string BuildMarkdown(GateSummary summary)
     {
         StringBuilder sb = new();
@@ -417,13 +447,28 @@ internal static class Program
     }
 }
 
+/// <summary>
+/// Represents the discovery EventsCollector class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
 {
+    /// <summary>
+    /// Gets or sets the _cases value used by this component.
+    /// </summary>
     private readonly List<TestCase> _cases = [];
+    /// <summary>
+    /// Executes the _sync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private readonly object _sync = new();
 
+    /// <summary>
+    /// Executes the completion operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public TaskCompletionSource<DiscoverySnapshot> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>
+    /// Executes the handle DiscoveredTests operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleDiscoveredTests(IEnumerable<TestCase>? discoveredTestCases)
     {
         if (discoveredTestCases is null)
@@ -437,6 +482,9 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
         }
     }
 
+    /// <summary>
+    /// Executes the handle DiscoveryComplete operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleDiscoveryComplete(DiscoveryCompleteEventArgs discoveryCompleteEventArgs, IEnumerable<TestCase>? lastChunk)
     {
         lock (_sync)
@@ -453,11 +501,17 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
         }
     }
 
+    /// <summary>
+    /// Executes the handle RawMessage operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleRawMessage(string rawMessage)
     {
         _ = rawMessage;
     }
 
+    /// <summary>
+    /// Executes the handle LogMessage operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleLogMessage(TestMessageLevel level, string? message)
     {
         _ = level;
@@ -465,13 +519,28 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
     }
 }
 
+/// <summary>
+/// Represents the run EventsCollector class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class RunEventsCollector : ITestRunEventsHandler
 {
+    /// <summary>
+    /// Gets or sets the _results value used by this component.
+    /// </summary>
     private readonly List<TestResult> _results = [];
+    /// <summary>
+    /// Executes the _sync operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     private readonly object _sync = new();
 
+    /// <summary>
+    /// Executes the completion operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public TaskCompletionSource<RunSnapshot> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>
+    /// Executes the handle TestRunStatsChange operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleTestRunStatsChange(TestRunChangedEventArgs? testRunChangedArgs)
     {
         if (testRunChangedArgs?.NewTestResults is null)
@@ -485,6 +554,9 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
         }
     }
 
+    /// <summary>
+    /// Executes the handle TestRunComplete operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleTestRunComplete(
         TestRunCompleteEventArgs testRunCompleteArgs,
         TestRunChangedEventArgs? lastChunkArgs,
@@ -506,17 +578,26 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
         }
     }
 
+    /// <summary>
+    /// Executes the launch ProcessWithDebuggerAttached operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public int LaunchProcessWithDebuggerAttached(TestProcessStartInfo testProcessStartInfo)
     {
         _ = testProcessStartInfo;
         return -1;
     }
 
+    /// <summary>
+    /// Executes the handle RawMessage operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleRawMessage(string rawMessage)
     {
         _ = rawMessage;
     }
 
+    /// <summary>
+    /// Executes the handle LogMessage operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public void HandleLogMessage(TestMessageLevel level, string? message)
     {
         _ = level;
@@ -524,9 +605,18 @@ internal sealed class RunEventsCollector : ITestRunEventsHandler
     }
 }
 
+/// <summary>
+/// Represents the discovery Snapshot record used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed record DiscoverySnapshot(IReadOnlyList<TestCase> Cases, bool IsAborted, bool IsFullyDiscovered);
+/// <summary>
+/// Represents the run Snapshot record used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed record RunSnapshot(IReadOnlyList<TestResult> Results, bool Completed, bool IsCanceled, bool IsAborted);
 
+/// <summary>
+/// Represents the gate ExitCode enum used by this benchmark or regression-gate component.
+/// </summary>
 internal enum GateExitCode
 {
     Pass = 0,
@@ -536,20 +626,50 @@ internal enum GateExitCode
     Timeout = 4,
 }
 
+/// <summary>
+/// Represents the selection Exception class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class SelectionException(string message, bool infrastructure) : Exception(message)
 {
+    /// <summary>
+    /// Gets or sets the infrastructure value used by this component.
+    /// </summary>
     public bool Infrastructure { get; } = infrastructure;
 }
 
+/// <summary>
+/// Represents the gate Options class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class GateOptions
 {
+    /// <summary>
+    /// Gets or sets the repo Root value used by this component.
+    /// </summary>
     public string RepoRoot { get; private set; } = ".";
+    /// <summary>
+    /// Gets or sets the project Path value used by this component.
+    /// </summary>
     public string ProjectPath { get; private set; } = "VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj";
+    /// <summary>
+    /// Gets or sets the test AssemblyPath value used by this component.
+    /// </summary>
     public string? TestAssemblyPath { get; private set; }
+    /// <summary>
+    /// Gets or sets the requested Class value used by this component.
+    /// </summary>
     public string? RequestedClass { get; private set; }
+    /// <summary>
+    /// Gets or sets the requested Test value used by this component.
+    /// </summary>
     public string? RequestedTest { get; private set; }
+    /// <summary>
+    /// Gets or sets the timeout Seconds value used by this component.
+    /// </summary>
     public int TimeoutSeconds { get; private set; } = 45;
 
+    /// <summary>
+    /// Executes the parse operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public static GateOptions Parse(string[] args)
     {
         GateOptions options = new();
@@ -593,74 +713,239 @@ internal sealed class GateOptions
     }
 }
 
+/// <summary>
+/// Represents the gate Summary class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class GateSummary
 {
+    /// <summary>
+    /// Gets or sets the utility Version value used by this component.
+    /// </summary>
     public string UtilityVersion { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the runtime value used by this component.
+    /// </summary>
     public string Runtime { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the test SdkVersion value used by this component.
+    /// </summary>
     public string TestSdkVersion { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the platform ObjectModelVersion value used by this component.
+    /// </summary>
     public string? PlatformObjectModelVersion { get; set; }
+    /// <summary>
+    /// Gets or sets the started Utc value used by this component.
+    /// </summary>
     public DateTimeOffset StartedUtc { get; set; }
+    /// <summary>
+    /// Gets or sets the completed Utc value used by this component.
+    /// </summary>
     public DateTimeOffset CompletedUtc { get; set; }
+    /// <summary>
+    /// Gets or sets the vs TestConsolePath value used by this component.
+    /// </summary>
     public string? VsTestConsolePath { get; set; }
+    /// <summary>
+    /// Gets or sets the run Settings value used by this component.
+    /// </summary>
     public string? RunSettings { get; set; }
+    /// <summary>
+    /// Gets or sets the test AssemblyPath value used by this component.
+    /// </summary>
     public string? TestAssemblyPath { get; set; }
+    /// <summary>
+    /// Gets or sets the requested Class value used by this component.
+    /// </summary>
     public string? RequestedClass { get; set; }
+    /// <summary>
+    /// Gets or sets the requested Test value used by this component.
+    /// </summary>
     public string? RequestedTest { get; set; }
+    /// <summary>
+    /// Gets or sets the timeout Seconds value used by this component.
+    /// </summary>
     public int TimeoutSeconds { get; set; }
+    /// <summary>
+    /// Gets or sets the discovery value used by this component.
+    /// </summary>
     public DiscoverySummary? Discovery { get; set; }
+    /// <summary>
+    /// Gets or sets the selection Diagnostics value used by this component.
+    /// </summary>
     public SelectionDiagnostics? SelectionDiagnostics { get; set; }
+    /// <summary>
+    /// Gets or sets the selected Count value used by this component.
+    /// </summary>
     public int SelectedCount { get; set; }
+    /// <summary>
+    /// Gets or sets the selected TestCase value used by this component.
+    /// </summary>
     public TestCaseIdentity? SelectedTestCase { get; set; }
+    /// <summary>
+    /// Gets or sets the execution value used by this component.
+    /// </summary>
     public ExecutionSummary? Execution { get; set; }
+    /// <summary>
+    /// Gets or sets the structured TestResult value used by this component.
+    /// </summary>
     public StructuredResult? StructuredTestResult { get; set; }
+    /// <summary>
+    /// Gets or sets the timeout value used by this component.
+    /// </summary>
     public bool Timeout { get; set; }
+    /// <summary>
+    /// Gets or sets the hang Detected value used by this component.
+    /// </summary>
     public bool HangDetected { get; set; }
+    /// <summary>
+    /// Gets or sets the infrastructure Error value used by this component.
+    /// </summary>
     public bool InfrastructureError { get; set; }
+    /// <summary>
+    /// Gets or sets the reconciliation State value used by this component.
+    /// </summary>
     public string? ReconciliationState { get; set; }
+    /// <summary>
+    /// Gets or sets the exception Type value used by this component.
+    /// </summary>
     public string? ExceptionType { get; set; }
+    /// <summary>
+    /// Gets or sets the exception Stack value used by this component.
+    /// </summary>
     public string? ExceptionStack { get; set; }
+    /// <summary>
+    /// Gets or sets the final Classification value used by this component.
+    /// </summary>
     public string FinalClassification { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the exit Code value used by this component.
+    /// </summary>
     public int ExitCode { get; set; }
 }
 
+/// <summary>
+/// Represents the discovery Summary class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class DiscoverySummary
 {
+    /// <summary>
+    /// Gets or sets the total Discovered value used by this component.
+    /// </summary>
     public int TotalDiscovered { get; set; }
+    /// <summary>
+    /// Gets or sets the is Aborted value used by this component.
+    /// </summary>
     public bool IsAborted { get; set; }
+    /// <summary>
+    /// Gets or sets the is FullyDiscovered value used by this component.
+    /// </summary>
     public bool IsFullyDiscovered { get; set; }
+    /// <summary>
+    /// Gets or sets the cases value used by this component.
+    /// </summary>
     public List<TestCaseIdentity> Cases { get; set; } = [];
 }
 
+/// <summary>
+/// Represents the selection Diagnostics class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class SelectionDiagnostics
 {
+    /// <summary>
+    /// Gets or sets the requested Class value used by this component.
+    /// </summary>
     public string? RequestedClass { get; set; }
+    /// <summary>
+    /// Gets or sets the requested Test value used by this component.
+    /// </summary>
     public string? RequestedTest { get; set; }
+    /// <summary>
+    /// Gets or sets the candidate Count value used by this component.
+    /// </summary>
     public int CandidateCount { get; set; }
+    /// <summary>
+    /// Gets or sets the candidates value used by this component.
+    /// </summary>
     public List<TestCaseIdentity> Candidates { get; set; } = [];
 }
 
+/// <summary>
+/// Represents the execution Summary class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class ExecutionSummary
 {
+    /// <summary>
+    /// Gets or sets the executed ViaTestCaseObjects value used by this component.
+    /// </summary>
     public bool ExecutedViaTestCaseObjects { get; set; }
+    /// <summary>
+    /// Gets or sets the used FilterString value used by this component.
+    /// </summary>
     public string? UsedFilterString { get; set; }
+    /// <summary>
+    /// Gets or sets the executed Count value used by this component.
+    /// </summary>
     public int ExecutedCount { get; set; }
+    /// <summary>
+    /// Gets or sets the received ResultCount value used by this component.
+    /// </summary>
     public int ReceivedResultCount { get; set; }
+    /// <summary>
+    /// Gets or sets the run StartedUtc value used by this component.
+    /// </summary>
     public DateTimeOffset RunStartedUtc { get; set; }
+    /// <summary>
+    /// Gets or sets the elapsed Seconds value used by this component.
+    /// </summary>
     public double ElapsedSeconds { get; set; }
+    /// <summary>
+    /// Gets or sets the complete value used by this component.
+    /// </summary>
     public bool Complete { get; set; }
+    /// <summary>
+    /// Gets or sets the is Canceled value used by this component.
+    /// </summary>
     public bool IsCanceled { get; set; }
+    /// <summary>
+    /// Gets or sets the is Aborted value used by this component.
+    /// </summary>
     public bool IsAborted { get; set; }
+    /// <summary>
+    /// Gets or sets the cancel Requested value used by this component.
+    /// </summary>
     public bool CancelRequested { get; set; }
+    /// <summary>
+    /// Gets or sets the abort Requested value used by this component.
+    /// </summary>
     public bool AbortRequested { get; set; }
 }
 
+/// <summary>
+/// Represents the test CaseIdentity class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class TestCaseIdentity
 {
+    /// <summary>
+    /// Gets or sets the id value used by this component.
+    /// </summary>
     public string? Id { get; set; }
+    /// <summary>
+    /// Gets or sets the fully QualifiedName value used by this component.
+    /// </summary>
     public string FullyQualifiedName { get; set; } = string.Empty;
+    /// <summary>
+    /// Gets or sets the display Name value used by this component.
+    /// </summary>
     public string? DisplayName { get; set; }
+    /// <summary>
+    /// Gets or sets the source value used by this component.
+    /// </summary>
     public string? Source { get; set; }
 
+    /// <summary>
+    /// Executes the from TestCase operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public static TestCaseIdentity FromTestCase(TestCase testCase) => new()
     {
         Id = testCase.Id.ToString(),
@@ -670,14 +955,35 @@ internal sealed class TestCaseIdentity
     };
 }
 
+/// <summary>
+/// Represents the structured Result class used by this benchmark or regression-gate component.
+/// </summary>
 internal sealed class StructuredResult
 {
+    /// <summary>
+    /// Gets or sets the outcome value used by this component.
+    /// </summary>
     public string? Outcome { get; set; }
+    /// <summary>
+    /// Gets or sets the duration value used by this component.
+    /// </summary>
     public string? Duration { get; set; }
+    /// <summary>
+    /// Gets or sets the error Message value used by this component.
+    /// </summary>
     public string? ErrorMessage { get; set; }
+    /// <summary>
+    /// Gets or sets the error StackTrace value used by this component.
+    /// </summary>
     public string? ErrorStackTrace { get; set; }
+    /// <summary>
+    /// Gets or sets the display Name value used by this component.
+    /// </summary>
     public string? DisplayName { get; set; }
 
+    /// <summary>
+    /// Executes the from TestResult operation while preserving the component's benchmark or test-harness contract.
+    /// </summary>
     public static StructuredResult FromTestResult(TestResult result) => new()
     {
         Outcome = result.Outcome.ToString(),

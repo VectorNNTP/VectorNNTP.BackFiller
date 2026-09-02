@@ -1,4 +1,10 @@
 // <copyright file="RabbitMqConsumerSessionContracts.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: rabbit mq consumer session contracts in the runtime rabbit mq subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
+// <copyright file="RabbitMqConsumerSessionContracts.cs" company="Usenet Ninja">
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
@@ -96,13 +102,22 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
+        /// <summary>
+        /// Stores the writer state used to enforce this component's runtime contract.
+        /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
+        /// <summary>
+        /// Performs the rabbit mq delivery channel sink operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
             _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         }
 
+        /// <summary>
+        /// Performs the on delivery operation while preserving this component's lifecycle and state contracts.
+        /// </summary>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
