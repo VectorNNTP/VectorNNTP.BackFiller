@@ -18,7 +18,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     /// </summary>
     private readonly Channel<QueuedArticle> _channel;
     /// <summary>
-    /// Gets or sets the _byteBudget.
+    /// Enforces the queue's resident-byte limit so queued articles cannot exceed the configured payload budget.
     /// </summary>
     private readonly ByteBudget _byteBudget;
     /// <summary>
