@@ -18,10 +18,10 @@ internal static class RuntimeIdentityGuard
 {
     /// <summary>
     /// Compares expected build provenance with loaded assemblies and throws on hard-identity mismatches.
+    /// </summary>
     /// <param name="expected">Expected paths, versions, framework, and architecture.</param>
     /// <param name="runtimeIdentity">Identity captured from the current process.</param>
     /// <exception cref="InvalidOperationException">Thrown when required expectations are missing or identities differ.</exception>
-    /// </summary>
     internal static void EnsureMatches(RuntimeIdentityExpectation expected, RuntimeExecutionIdentity runtimeIdentity)
     {
         if (string.IsNullOrWhiteSpace(expected.ExpectedAssemblyPath) ||
