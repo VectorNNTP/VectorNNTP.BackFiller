@@ -261,10 +261,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the wait for async behavior.
         /// </summary>
-        /// <returns>The value returned by the wait for async helper.</returns>
-        /// <summary>
-        /// Confirms the wait for async behavior.
-        /// </summary>
         /// <param name="condition">The condition used by this test scenario.</param>
         /// <param name="timeout">The timeout used by this test scenario.</param>
         /// <returns>The value returned by the wait for async helper.</returns>
@@ -364,7 +360,7 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class FakeRabbitMqBrokerConnector : IRabbitMqBrokerConnector
         {
             /// <summary>
-            /// Supplies  connect call count for the fixture or scenario under test.
+            /// Supplies the connect call count for the fixture or scenario under test.
             /// </summary>
             private int _connectCallCount;
 
@@ -414,7 +410,7 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class FakeRabbitMqBrokerConnection(string host, int port, string virtualHost, string connectionName) : IRabbitMqBrokerConnection
         {
             /// <summary>
-            /// Supplies  channel counter for the fixture or scenario under test.
+            /// Supplies the channel counter for the fixture or scenario under test.
             /// </summary>
             private int _channelCounter;
 

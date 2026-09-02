@@ -13,6 +13,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
@@ -157,6 +158,67 @@ namespace VectorNNTP.Backfiller.Tests
             string expectedPayloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
             Assert.Contains($"PayloadSha256={expectedPayloadSha256}", warning.Message, StringComparison.Ordinal);
             Assert.Equal("RabbitMQ article-work payload was not valid JSON.", parseResult.Failure?.ResponseText);
+        }
+
+        /// <summary>
+        /// Confirms diagnostic payload logging is bounded while preserving full-payload hashing and parse success behavior.
+        /// </summary>
+        [Fact]
+        public async Task ParseAsync_WhenDiagnosticPayloadLoggingEnabled_LogsBoundedPayloadPreviewsAndFullSha256Async()
+        {
+            const int DiagnosticPreviewLength = 256;
+
+            List<CapturedLogEntry> entries = [];
+            ILogger<RabbitMqArticleWorkRequestParser> logger = new CapturingLogger<RabbitMqArticleWorkRequestParser>(entries);
+            const string correlationId = "corr-diagnostic-preview";
+            RabbitMqArticleWorkRequestParser parser = new(
+                runtimeOptions: CreateRuntimeOptionsWithDiagnosticCorrelationId(correlationId),
+                logger: logger);
+
+            Guid requestId = Guid.NewGuid();
+            string payload = JsonSerializer.Serialize(new
+            {
+                version = 1,
+                requestId,
+                messageId = "<diagnostic-preview@example.com>",
+                backbone = "BackboneA",
+                extra = new string('x', 512),
+            });
+            RabbitMqArticleDelivery delivery = CreateDelivery(payload, correlationId: correlationId, replyTo: "rpc.reply.queue");
+
+            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None);
+
+            Assert.True(parseResult.IsSuccess);
+            Assert.NotNull(parseResult.Request);
+            Assert.Null(parseResult.Failure);
+
+            CapturedLogEntry info = Assert.Single(entries, static entry => entry.Level == LogLevel.Information && entry.Message.Contains("RabbitMQ payload diagnostic parser-entry.", StringComparison.Ordinal));
+
+            string payloadUtf8Preview = ExtractStructuredLogValue(info.Message, "PayloadUtf8");
+            string payloadHexPreview = ExtractStructuredLogValue(info.Message, "PayloadHex");
+            string payloadSha256 = ExtractStructuredLogValue(info.Message, "PayloadSha256");
+
+            string expectedPayloadUtf8Preview = payload[..DiagnosticPreviewLength];
+            string fullPayloadHex = Convert.ToHexString(delivery.Payload.Span);
+            string expectedPayloadHexPreview = fullPayloadHex[..DiagnosticPreviewLength];
+            string expectedPayloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
+
+            Assert.Equal(DiagnosticPreviewLength, payloadUtf8Preview.Length);
+            Assert.Equal(DiagnosticPreviewLength, payloadHexPreview.Length);
+            Assert.Equal(expectedPayloadUtf8Preview, payloadUtf8Preview);
+            Assert.Equal(expectedPayloadHexPreview, payloadHexPreview);
+            Assert.Equal(expectedPayloadSha256, payloadSha256);
+            Assert.DoesNotContain($"PayloadUtf8={payload}", info.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain($"PayloadHex={fullPayloadHex}", info.Message, StringComparison.Ordinal);
+
+            entries.Clear();
+            RabbitMqArticleDelivery unmatchedDelivery = CreateDelivery(payload, correlationId: "corr-not-matching", replyTo: "rpc.reply.queue");
+            RabbitMqArticleWorkParseResult unmatchedResult = await parser.ParseAsync(unmatchedDelivery, CancellationToken.None);
+
+            Assert.True(unmatchedResult.IsSuccess);
+            Assert.DoesNotContain(entries, static entry =>
+                entry.Level == LogLevel.Information
+                && entry.Message.Contains("RabbitMQ payload diagnostic parser-entry.", StringComparison.Ordinal));
         }
         /// <summary>
         /// Confirms the parse async when payload is json array returns invalid request async behavior.
@@ -719,6 +781,93 @@ namespace VectorNNTP.Backfiller.Tests
                 Payload: Encoding.UTF8.GetBytes(payloadText),
                 CancellationToken: CancellationToken.None,
                 Settlement: new NoOpDeliverySettlement());
+        }
+
+        /// <summary>
+        /// Confirms the create runtime options with diagnostic correlation id behavior.
+        /// </summary>
+        /// <param name="diagnosticCorrelationId">The diagnostic correlation id used by this test scenario.</param>
+        /// <returns>The value returned by the create runtime options with diagnostic correlation id helper.</returns>
+        private static BackFillerRuntimeOptions CreateRuntimeOptionsWithDiagnosticCorrelationId(string diagnosticCorrelationId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(diagnosticCorrelationId);
+
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: "backfiller-1.usenet.ninja",
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "usenet.ninja",
+                ValidatedLogDirectory: Path.GetTempPath(),
+                ValidatedCertificateDirectory: Path.GetTempPath(),
+                RabbitMqHosts: ["localhost"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: false,
+                TransitServerHost: "localhost",
+                TransitServerPort: 119,
+                TransitServerUseSsl: false,
+                RabbitMq: CreateRabbitMqRuntimeOptionsWithDiagnosticCorrelationId(diagnosticCorrelationId));
+        }
+
+        /// <summary>
+        /// Confirms the create rabbit mq runtime options with diagnostic correlation id behavior.
+        /// </summary>
+        /// <param name="diagnosticCorrelationId">The diagnostic correlation id used by this test scenario.</param>
+        /// <returns>The value returned by the create rabbit mq runtime options with diagnostic correlation id helper.</returns>
+        private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptionsWithDiagnosticCorrelationId(string diagnosticCorrelationId)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(diagnosticCorrelationId);
+
+            return new RabbitMqRuntimeOptions(
+                Hosts: ["localhost"],
+                Port: 5672,
+                Username: "nntparticles",
+                Password: "super-secret",
+                VirtualHost: "/",
+                EnableSsl: false,
+                ChannelLeaseTimeoutSeconds: 60,
+                RpcTimeoutSeconds: 30,
+                ConnectionBlockedTimeoutSeconds: 30,
+                ChannelPoolSize: 512,
+                MinConnections: 4,
+                MaxConnections: 16,
+                MaxConsecutiveRecoveryFailures: 5,
+                MaxPendingLeaseWaiters: 1024,
+                ConnectionScaleDownIdleSeconds: 300,
+                ScaleDownCooldownSeconds: 30,
+                NetworkRecoveryIntervalSeconds: 5,
+                PoolReconnectBaseDelayMs: 50,
+                PoolReconnectMaxDelayMs: 250,
+                MinimumConnectionLifetimeSeconds: 300,
+                PublishConfirmTimeoutSeconds: 10,
+                MaximumShutdownDrainTimeoutSeconds: 30,
+                DegradedThreshold: 0.75,
+                UnhealthyThreshold: 5,
+                RequestedHeartbeatSeconds: 60,
+                SocketTimeoutSeconds: 30,
+                RequestedChannelMax: 2047,
+                ConsumerPrefetchCount: null,
+                DiagnosticPayloadCorrelationId: diagnosticCorrelationId);
+        }
+
+        /// <summary>
+        /// Confirms the extract structured log value behavior.
+        /// </summary>
+        /// <param name="message">The message used by this test scenario.</param>
+        /// <param name="key">The key used by this test scenario.</param>
+        /// <returns>The value returned by the extract structured log value helper.</returns>
+        private static string ExtractStructuredLogValue(string message, string key)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(message);
+            ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+            string marker = $"{key}=";
+            int start = message.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Expected structured key '{key}' in log message: {message}");
+
+            start += marker.Length;
+            int end = message.IndexOf(' ', start);
+            return end >= 0
+                ? message[start..end]
+                : message[start..];
         }
 
         /// <summary>

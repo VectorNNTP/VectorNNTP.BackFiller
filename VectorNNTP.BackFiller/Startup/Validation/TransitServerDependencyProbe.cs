@@ -27,7 +27,6 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="timeout">The timeout value.</param>
         /// <param name="cancellationToken">The cancellationToken value.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateTransitServerConnectivityAsync(
             BackFillerOptions? backFiller,
             TimeSpan timeout,
@@ -188,6 +187,10 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Handles read capabilities async for transit server dependency probe.
         /// </summary>
+        /// <param name="reader">The stream reader.</param>
+        /// <param name="writer">The stream writer.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous operation. The task result contains the transit capability snapshot.</returns>
         private static async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(
             StreamReader reader,
             StreamWriter writer,
@@ -213,6 +216,10 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Handles write nntp command async for transit server dependency probe.
         /// </summary>
+        /// <param name="writer">The stream writer.</param>
+        /// <param name="command">The NNTP command to write.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         private static async Task WriteNntpCommandAsync(
             StreamWriter writer,
             string command,
@@ -230,6 +237,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Handles create reader for transit server dependency probe.
         /// </summary>
+        /// <param name="stream">The stream to read from.</param>
+        /// <returns>A stream reader for the specified stream.</returns>
         private static StreamReader CreateReader(Stream stream)
         {
             return new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
@@ -238,6 +247,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Handles create writer for transit server dependency probe.
         /// </summary>
+        /// <param name="stream">The stream to write to.</param>
+        /// <returns>A stream writer for the specified stream.</returns>
         private static StreamWriter CreateWriter(Stream stream)
         {
             return new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)
@@ -250,6 +261,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Handles create strict tls stream for transit server dependency probe.
         /// </summary>
+        /// <param name="innerStream">The inner stream to wrap with SSL.</param>
+        /// <param name="leaveInnerStreamOpen">Whether to leave the inner stream open after the SSL stream is disposed.</param>
+        /// <returns>An SSL stream that wraps the specified inner stream.</returns>
         private static SslStream CreateStrictTlsStream(Stream innerStream, bool leaveInnerStreamOpen)
         {
             return new SslStream(
@@ -265,20 +279,38 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Handles authenticate tls async for transit server dependency probe.
         /// </summary>
+        /// <param name="sslStream">The SSL stream to authenticate.</param>
+        /// <param name="host">The target host for the SSL authentication.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         private static async Task AuthenticateTlsAsync(SslStream sslStream, string host, CancellationToken cancellationToken)
         {
-            SslClientAuthenticationOptions authOptions = new()
+            SslClientAuthenticationOptions authOptions = CreateTlsClientAuthenticationOptions(host);
+            await sslStream.AuthenticateAsClientAsync(authOptions, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Handles create tls client authentication options for transit server dependency probe.
+        /// </summary>
+        /// <param name="host">The target host for the SSL authentication.</param>
+        /// <returns>The TLS client authentication options.</returns>
+        internal static SslClientAuthenticationOptions CreateTlsClientAuthenticationOptions(string host)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(host);
+
+            return new SslClientAuthenticationOptions
             {
                 TargetHost = host,
-                EnabledSslProtocols = SslProtocols.None,
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
             };
-
-            await sslStream.AuthenticateAsClientAsync(authOptions, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
         /// Reads a single NNTP response line from the server with cancellation support.
         /// </summary>
+        /// <param name="reader">The stream reader to read from.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The NNTP response line.</returns>
         private static async Task<string> ReadNntpLineAsync(
             StreamReader reader,
             CancellationToken cancellationToken)

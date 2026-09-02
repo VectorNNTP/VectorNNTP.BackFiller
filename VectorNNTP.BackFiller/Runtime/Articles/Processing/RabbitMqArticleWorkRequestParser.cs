@@ -24,7 +24,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// This parser enforces the canonical BackFiller JSON wire protocol and rejects malformed,
     /// ambiguous, or unsupported payloads as invalid requests before provider processing.
     /// </remarks>
-    internal sealed class RabbitMqArticleWorkRequestParser : IRabbitMqArticleWorkRequestParser
+    internal sealed partial class RabbitMqArticleWorkRequestParser : IRabbitMqArticleWorkRequestParser
     {
         /// <summary>
         /// Stores supported version used by rabbit mq article work request parser.
@@ -170,6 +170,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <summary>
         /// Handles should log diagnostic payload for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="correlationId">The correlation identifier.</param>
+        /// <returns><c>true</c> if the diagnostic payload should be logged; otherwise, <c>false</c>.</returns>
         private bool ShouldLogDiagnosticPayload(string? correlationId)
         {
             return !string.IsNullOrWhiteSpace(_diagnosticCorrelationId)
@@ -180,6 +182,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <summary>
         /// Emits the payload diagnostic at parser entry log event for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="logger">The logger.</param>
+        /// <param name="timestampUtc">The timestamp in UTC.</param>
+        /// <param name="correlationId">The correlation identifier.</param>
+        /// <param name="rabbitMqMessageId">The RabbitMQ message identifier.</param>
+        /// <param name="replyTo">The reply-to address.</param>
+        /// <param name="consumerIdentity">The consumer identity.</param>
+        /// <param name="deliveryTag">The delivery tag.</param>
+        /// <param name="payload">The payload.</param>
         private static void LogPayloadDiagnosticAtParserEntry(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -190,12 +200,33 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             ulong deliveryTag,
             ReadOnlyMemory<byte> payload)
         {
-            string payloadUtf8 = Encoding.UTF8.GetString(payload.Span);
-            string payloadHex = Convert.ToHexString(payload.Span);
+            ArgumentNullException.ThrowIfNull(logger);
+
+            if (!logger.IsEnabled(LogLevel.Information))
+            {
+                return;
+            }
+
+            const int DiagnosticPreviewLength = 256;
+
+            string payloadUtf8Full = Encoding.UTF8.GetString(payload.Span);
+            string payloadUtf8Preview = payloadUtf8Full.Length <= DiagnosticPreviewLength
+                ? payloadUtf8Full
+                : payloadUtf8Full[..DiagnosticPreviewLength];
+            if (payloadUtf8Preview.Length > 0
+                && payloadUtf8Preview.Length < payloadUtf8Full.Length
+                && char.IsHighSurrogate(payloadUtf8Preview[^1]))
+            {
+                payloadUtf8Preview = payloadUtf8Preview[..^1];
+            }
+
+            int hexPreviewByteLength = Math.Min(payload.Length, DiagnosticPreviewLength / 2);
+            string payloadHexPreview = Convert.ToHexString(payload.Span[..hexPreviewByteLength]);
+
             string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
 
-            logger.LogInformation(
-                "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc:o} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}",
+            LogPayloadDiagnosticParserEntry(
+                logger,
                 timestampUtc,
                 consumerIdentity,
                 deliveryTag,
@@ -203,14 +234,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 rabbitMqMessageId,
                 replyTo,
                 payload.Length,
-                payloadUtf8,
-                payloadHex,
+                payloadUtf8Preview,
+                payloadHexPreview,
                 payloadSha256);
         }
 
         /// <summary>
         /// Emits the payload diagnostic json exception log event for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="logger">The logger.</param>
+        /// <param name="correlationId">The correlation identifier.</param>
+        /// <param name="deliveryTag">The delivery tag.</param>
+        /// <param name="message">The exception message.</param>
+        /// <param name="path">The JSON path.</param>
+        /// <param name="lineNumber">The line number.</param>
+        /// <param name="bytePositionInLine">The byte position in line.</param> 
         private static void LogPayloadDiagnosticJsonException(
             ILogger logger,
             string? correlationId,
@@ -220,8 +258,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             long? lineNumber,
             long? bytePositionInLine)
         {
-            logger.LogWarning(
-                "RabbitMQ payload diagnostic parser JsonException. CorrelationId={CorrelationId} DeliveryTag={DeliveryTag} JsonExceptionMessage={JsonExceptionMessage} JsonPath={JsonPath} JsonLineNumber={JsonLineNumber} JsonBytePositionInLine={JsonBytePositionInLine}",
+            LogPayloadDiagnosticParserJsonException(
+                logger,
                 correlationId,
                 deliveryTag,
                 message,
@@ -233,20 +271,26 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <summary>
         /// Handles failed for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="delivery">The RabbitMQ article delivery.</param>
+        /// <param name="reason">The reason for the failure.</param>
+        /// <returns>The parse result representing the failure.</returns>
         private RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
         {
-            string payloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                string payloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
 
-            _logger.LogWarning(
-                "RabbitMQ article-work request rejected. Reason={Reason} CorrelationId={CorrelationId} ReplyTo={ReplyTo} RabbitMqMessageId={RabbitMqMessageId} DeliveryTag={DeliveryTag} Backbone={Backbone} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}",
-                reason,
-                delivery.CorrelationId,
-                delivery.ReplyTo,
-                delivery.RabbitMqMessageId,
-                delivery.DeliveryTag,
-                delivery.Backbone,
-                delivery.Payload.Length,
-                payloadSha256);
+                LogArticleWorkRequestRejected(
+                    _logger,
+                    reason,
+                    delivery.CorrelationId,
+                    delivery.ReplyTo,
+                    delivery.RabbitMqMessageId,
+                    delivery.DeliveryTag,
+                    delivery.Backbone,
+                    delivery.Payload.Length,
+                    payloadSha256);
+            }
 
             ArticleWorkProcessingResult result = new(
                 Request: new RabbitMqArticleWorkRequest(
@@ -269,34 +313,36 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <summary>
         /// Handles try read required int32 for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="root">The JSON element root.</param>
+        /// <param name="propertyName">The property name.</param>
+        /// <param name="value">The output value.</param>
+        /// <returns><c>true</c> if the property was successfully read; otherwise, <c>false</c>.</returns>
         private static bool TryReadRequiredInt32(JsonElement root, string propertyName, out int value)
         {
             value = default;
-            if (!root.TryGetProperty(propertyName, out JsonElement property) || property.ValueKind != JsonValueKind.Number)
-            {
-                return false;
-            }
-
-            return property.TryGetInt32(out value);
+            return root.TryGetProperty(propertyName, out JsonElement property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out value);
         }
 
         /// <summary>
         /// Handles try read required guid for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="root">The JSON element root.</param>
+        /// <param name="propertyName">The property name.</param>
+        /// <param name="value">The output value.</param>
+        /// <returns><c>true</c> if the property was successfully read; otherwise, <c>false</c>.</returns>
         private static bool TryReadRequiredGuid(JsonElement root, string propertyName, out Guid value)
         {
             value = Guid.Empty;
-            if (!TryReadRequiredString(root, propertyName, out string? textValue) || string.IsNullOrWhiteSpace(textValue))
-            {
-                return false;
-            }
-
-            return Guid.TryParse(textValue, out value);
+            return TryReadRequiredString(root, propertyName, out string? textValue) && !string.IsNullOrWhiteSpace(textValue) && Guid.TryParse(textValue, out value);
         }
 
         /// <summary>
         /// Handles try read required string for rabbit mq article work request parser.
         /// </summary>
+        /// <param name="root">The JSON element root.</param>
+        /// <param name="propertyName">The property name.</param>
+        /// <param name="value">The output value.</param>
+        /// <returns><c>true</c> if the property was successfully read; otherwise, <c>false</c>.</returns>
         private static bool TryReadRequiredString(JsonElement root, string propertyName, out string? value)
         {
             value = null;
@@ -308,5 +354,77 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             value = property.GetString();
             return value is not null;
         }
+
+        /// <summary>
+        /// Logs a diagnostic entry for a RabbitMQ payload.
+        /// </summary>
+        /// <param name="logger">The logger instance.</param>
+        /// <param name="timestampUtc">The timestamp in UTC.</param>
+        /// <param name="consumerIdentity">The consumer identity.</param>
+        /// <param name="deliveryTag">The delivery tag.</param>
+        /// <param name="correlationId">The correlation ID.</param>
+        /// <param name="rabbitMqMessageId">The RabbitMQ message ID.</param>
+        /// <param name="replyTo">The reply-to address.</param>
+        /// <param name="payloadLength">The payload length.</param>
+        /// <param name="payloadUtf8">The UTF-8 encoded payload.</param>
+        /// <param name="payloadHex">The hexadecimal representation of the payload.</param>
+        /// <param name="payloadSha256">The SHA-256 hash of the payload.</param>
+        [LoggerMessage(EventId = 4300, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}")]
+        private static partial void LogPayloadDiagnosticParserEntry(
+            ILogger logger,
+            DateTimeOffset timestampUtc,
+            string consumerIdentity,
+            ulong deliveryTag,
+            string? correlationId,
+            string? rabbitMqMessageId,
+            string? replyTo,
+            int payloadLength,
+            string payloadUtf8,
+            string payloadHex,
+            string payloadSha256);
+
+        /// <summary>
+        /// Logs a diagnostic entry for a RabbitMQ payload JSON exception.
+        /// </summary>
+        /// <param name="logger">The logger instance.</param>
+        /// <param name="correlationId">The correlation ID.</param>
+        /// <param name="deliveryTag">The delivery tag.</param>
+        /// <param name="jsonExceptionMessage">The JSON exception message.</param>
+        /// <param name="jsonPath">The JSON path.</param>
+        /// <param name="jsonLineNumber">The JSON line number.</param>
+        /// <param name="jsonBytePositionInLine">The JSON byte position in line.</param>
+        [LoggerMessage(EventId = 4301, Level = LogLevel.Warning, Message = "RabbitMQ payload diagnostic parser JsonException. CorrelationId={CorrelationId} DeliveryTag={DeliveryTag} JsonExceptionMessage={JsonExceptionMessage} JsonPath={JsonPath} JsonLineNumber={JsonLineNumber} JsonBytePositionInLine={JsonBytePositionInLine}")]
+        private static partial void LogPayloadDiagnosticParserJsonException(
+            ILogger logger,
+            string? correlationId,
+            ulong deliveryTag,
+            string jsonExceptionMessage,
+            string? jsonPath,
+            long? jsonLineNumber,
+            long? jsonBytePositionInLine);
+
+        /// <summary>
+        /// Logs a diagnostic entry for a rejected RabbitMQ article-work request.
+        /// </summary>
+        /// <param name="logger">The logger instance.</param>
+        /// <param name="reason">The reason for rejection.</param>
+        /// <param name="correlationId">The correlation ID.</param>
+        /// <param name="replyTo">The reply-to address.</param>
+        /// <param name="rabbitMqMessageId">The RabbitMQ message ID.</param>
+        /// <param name="deliveryTag">The delivery tag.</param>
+        /// <param name="backbone">The backbone.</param>
+        /// <param name="payloadLength">The payload length.</param>
+        /// <param name="payloadSha256">The SHA-256 hash of the payload.</param>
+        [LoggerMessage(EventId = 4302, Level = LogLevel.Warning, Message = "RabbitMQ article-work request rejected. Reason={Reason} CorrelationId={CorrelationId} ReplyTo={ReplyTo} RabbitMqMessageId={RabbitMqMessageId} DeliveryTag={DeliveryTag} Backbone={Backbone} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}")]
+        private static partial void LogArticleWorkRequestRejected(
+            ILogger logger,
+            string reason,
+            string? correlationId,
+            string? replyTo,
+            string? rabbitMqMessageId,
+            ulong deliveryTag,
+            string backbone,
+            int payloadLength,
+            string payloadSha256);
     }
 }

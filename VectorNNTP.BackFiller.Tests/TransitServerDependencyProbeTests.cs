@@ -7,7 +7,9 @@
 // Primary responsibility: documents the executable contracts covered by the transit server dependency probe test suite.
 
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Text;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -20,6 +22,20 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class TransitServerDependencyProbeTests
     {
+        /// <summary>
+        /// Confirms transit probe TLS client authentication options enforce TLS 1.2 and TLS 1.3 only.
+        /// </summary>
+        [Fact]
+        public void CreateTlsClientAuthenticationOptions_EnablesTls12AndTls13Only()
+        {
+            SslClientAuthenticationOptions options = TransitServerDependencyProbe.CreateTlsClientAuthenticationOptions("transit.example.net");
+
+            Assert.Equal("transit.example.net", options.TargetHost);
+            Assert.Equal(SslProtocols.Tls12 | SslProtocols.Tls13, options.EnabledSslProtocols);
+            Assert.Equal(SslProtocols.Tls12 | SslProtocols.Tls13, options.EnabledSslProtocols & (SslProtocols.Tls12 | SslProtocols.Tls13));
+            Assert.Equal(SslProtocols.None, options.EnabledSslProtocols & ~(SslProtocols.Tls12 | SslProtocols.Tls13));
+        }
+
         /// <summary>
         /// Confirms the validate transit server connectivity async when start tls advertised but rejected fails validation behavior.
         /// </summary>

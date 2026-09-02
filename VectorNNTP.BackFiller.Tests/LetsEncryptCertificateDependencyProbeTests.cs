@@ -33,7 +33,18 @@ namespace VectorNNTP.Backfiller.Tests
                     .EnsureCertificateAvailabilityAsync(runtimeOptions, CancellationToken.None);
 
                 Assert.False(dep.IsValid);
-                Assert.Contains(dep.FailedDependencies, static f => f.Dependency == "LetsEncryptCertificate");
+                (string Dependency, string Reason) failure = Assert.Single(dep.FailedDependencies);
+                Assert.Equal("LetsEncryptCertificate", failure.Dependency);
+                Assert.StartsWith("TLS certificate provisioning failed: ", failure.Reason, StringComparison.Ordinal);
+
+                string sanitizedSummary = failure.Reason["TLS certificate provisioning failed: ".Length..];
+                Assert.Contains(": ", sanitizedSummary, StringComparison.Ordinal);
+                Assert.Contains("Exception", sanitizedSummary, StringComparison.Ordinal);
+                Assert.DoesNotContain(Environment.NewLine, failure.Reason, StringComparison.Ordinal);
+                Assert.DoesNotContain(" at ", failure.Reason, StringComparison.Ordinal);
+                Assert.DoesNotContain("--- End of stack trace", failure.Reason, StringComparison.Ordinal);
+                Assert.DoesNotContain("LetsEncryptCertificateDependencyProbe.cs", failure.Reason, StringComparison.Ordinal);
+                Assert.DoesNotContain("BackFillerCertificateProvisioningService.cs", failure.Reason, StringComparison.Ordinal);
             }
             finally
             {
