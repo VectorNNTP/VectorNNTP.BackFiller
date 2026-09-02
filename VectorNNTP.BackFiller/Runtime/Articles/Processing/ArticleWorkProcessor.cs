@@ -116,8 +116,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles static for article work processor.
+        /// Maps an NNTP acquisition result to its processing outcome and RabbitMQ disposition recommendation.
         /// </summary>
+        /// <param name="result">Acquisition result to classify.</param>
+        /// <returns>The externally reported outcome and recommended delivery disposition.</returns>
         private static (ArticleWorkProcessingOutcome Outcome, ArticleWorkDispositionRecommendation Disposition) Classify(NntpArticleGrabberResult result)
         {
             return result.FailureCode switch
