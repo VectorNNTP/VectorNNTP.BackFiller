@@ -9,12 +9,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the topology Reporter class used by this benchmark or regression-gate component.
+/// Defines the topology Reporter class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class TopologyReporter
 {
     /// <summary>
-    /// Executes the print ConnectionTopologyDiagnostics operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print ConnectionTopologyDiagnostics operation.
     /// </summary>
     internal static void PrintConnectionTopologyDiagnostics(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics)
     {

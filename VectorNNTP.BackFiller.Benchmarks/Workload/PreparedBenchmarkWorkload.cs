@@ -9,21 +9,21 @@ using System.Diagnostics.CodeAnalysis;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the prepared BenchmarkWorkload class used by this benchmark or regression-gate component.
+/// Defines the prepared BenchmarkWorkload class for benchmark or isolated-regression execution.
 /// </summary>
 internal sealed class PreparedBenchmarkWorkload : IDisposable
 {
     /// <summary>
-    /// Gets or sets the _messageIds value used by this component.
+    /// Gets or sets the _messageIds value.
     /// </summary>
     private readonly string[] _messageIds;
     /// <summary>
-    /// Gets or sets the _nextMessageIndex value used by this component.
+    /// Gets or sets the _nextMessageIndex value.
     /// </summary>
     private int _nextMessageIndex;
 
     /// <summary>
-    /// Executes the prepared BenchmarkWorkload operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the prepared BenchmarkWorkload operation.
     /// </summary>
     internal PreparedBenchmarkWorkload(string[] messageIds, byte[] reusablePayloadBytes, WorkloadPreparationSummary summary)
     {
@@ -33,22 +33,22 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
     }
 
     /// <summary>
-    /// Gets or sets the reusable ArticlePayload value used by this component.
+    /// Gets or sets the reusable ArticlePayload value.
     /// </summary>
     internal ReadOnlyMemory<byte> ReusableArticlePayload { get; }
 
     /// <summary>
-    /// Gets or sets the payload Length value used by this component.
+    /// Gets or sets the payload Length value.
     /// </summary>
     internal int PayloadLength => ReusableArticlePayload.Length;
 
     /// <summary>
-    /// Gets or sets the preparation Summary value used by this component.
+    /// Gets or sets the preparation Summary value.
     /// </summary>
     internal WorkloadPreparationSummary PreparationSummary { get; }
 
     /// <summary>
-    /// Executes the try TakeNextMessageId operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try TakeNextMessageId operation.
     /// </summary>
     internal bool TryTakeNextMessageId([NotNullWhen(true)] out string? messageId)
     {
@@ -64,7 +64,7 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
     }
 
     /// <summary>
-    /// Executes the dispose operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the dispose operation.
     /// </summary>
     public void Dispose()
     {

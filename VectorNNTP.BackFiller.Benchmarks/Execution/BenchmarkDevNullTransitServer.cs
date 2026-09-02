@@ -22,95 +22,95 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
 {
     /// <summary>
-    /// Executes the greeting Bytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the greeting Bytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> GreetingBytes = Encoding.ASCII.GetBytes("200 benchmark dev-null sink ready\r\n");
     /// <summary>
-    /// Executes the capabilities HeaderBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the capabilities HeaderBytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> CapabilitiesHeaderBytes = Encoding.ASCII.GetBytes("101 Capability list:\r\n");
     /// <summary>
-    /// Executes the capabilities StreamingBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the capabilities StreamingBytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> CapabilitiesStreamingBytes = Encoding.ASCII.GetBytes("STREAMING\r\n");
     /// <summary>
-    /// Executes the dot LineBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the dot LineBytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> DotLineBytes = Encoding.ASCII.GetBytes(".\r\n");
     /// <summary>
-    /// Executes the streaming PermittedBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the streaming PermittedBytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> StreamingPermittedBytes = Encoding.ASCII.GetBytes("203 Streaming permitted\r\n");
     /// <summary>
-    /// Executes the quit ResponseBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the quit ResponseBytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> QuitResponseBytes = Encoding.ASCII.GetBytes("205 closing connection\r\n");
     /// <summary>
-    /// Executes the unknown CommandBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the unknown CommandBytes operation.
     /// </summary>
     private static readonly ReadOnlyMemory<byte> UnknownCommandBytes = Encoding.ASCII.GetBytes("500 unknown command\r\n");
     /// <summary>
-    /// Gets or sets the capabilities CommandBytes value used by this component.
+    /// Gets or sets the capabilities CommandBytes value.
     /// </summary>
     private static ReadOnlySpan<byte> CapabilitiesCommandBytes => "CAPABILITIES"u8;
     /// <summary>
-    /// Gets or sets the mode StreamCommandBytes value used by this component.
+    /// Gets or sets the mode StreamCommandBytes value.
     /// </summary>
     private static ReadOnlySpan<byte> ModeStreamCommandBytes => "MODE STREAM"u8;
     /// <summary>
-    /// Gets or sets the quit CommandBytes value used by this component.
+    /// Gets or sets the quit CommandBytes value.
     /// </summary>
     private static ReadOnlySpan<byte> QuitCommandBytes => "QUIT"u8;
     /// <summary>
-    /// Gets or sets the check PrefixBytes value used by this component.
+    /// Gets or sets the check PrefixBytes value.
     /// </summary>
     private static ReadOnlySpan<byte> CheckPrefixBytes => "CHECK "u8;
     /// <summary>
-    /// Gets or sets the takethis PrefixBytes value used by this component.
+    /// Gets or sets the takethis PrefixBytes value.
     /// </summary>
     private static ReadOnlySpan<byte> TakethisPrefixBytes => "TAKETHIS "u8;
     /// <summary>
-    /// Executes the article Terminator operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the article Terminator operation.
     /// </summary>
     private static readonly byte[] ArticleTerminator = "\r\n.\r\n"u8.ToArray();
 
     /// <summary>
-    /// Gets or sets the _listener value used by this component.
+    /// Gets or sets the _listener value.
     /// </summary>
     private readonly TcpListener _listener;
     /// <summary>
-    /// Executes the _clientTasks operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the _clientTasks operation.
     /// </summary>
     private readonly ConcurrentDictionary<int, Task> _clientTasks = new();
     /// <summary>
-    /// Executes the _shutdown operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the _shutdown operation.
     /// </summary>
     private readonly CancellationTokenSource _shutdown = new();
 
     /// <summary>
-    /// Gets or sets the _acceptLoopTask value used by this component.
+    /// Gets or sets the _acceptLoopTask value.
     /// </summary>
     private Task? _acceptLoopTask;
     /// <summary>
-    /// Gets or sets the _clientTaskId value used by this component.
+    /// Gets or sets the _clientTaskId value.
     /// </summary>
     private int _clientTaskId;
 
     /// <summary>
-    /// Gets or sets the _acceptedArticles value used by this component.
+    /// Gets or sets the _acceptedArticles value.
     /// </summary>
     private long _acceptedArticles;
     /// <summary>
-    /// Gets or sets the _consumedArticleBytes value used by this component.
+    /// Gets or sets the _consumedArticleBytes value.
     /// </summary>
     private long _consumedArticleBytes;
     /// <summary>
-    /// Gets or sets the _totalConnections value used by this component.
+    /// Gets or sets the _totalConnections value.
     /// </summary>
     private long _totalConnections;
 
     /// <summary>
-    /// Executes the benchmark DevNullTransitServer operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the benchmark DevNullTransitServer operation.
     /// </summary>
     private BenchmarkDevNullTransitServer(IPAddress listenAddress, int port)
     {
@@ -499,7 +499,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the try ParseCommand operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try ParseCommand operation.
     /// </summary>
     private static bool TryParseCommand(in ReadOnlySequence<byte> line, out ParsedCommand command)
     {
@@ -548,7 +548,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the decode MessageIdOrDefault operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the decode MessageIdOrDefault operation.
     /// </summary>
     private static string DecodeMessageIdOrDefault(in ReadOnlySequence<byte> messageIdBytes)
     {
@@ -559,7 +559,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the ascii EqualsIgnoreCase operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the ascii EqualsIgnoreCase operation.
     /// </summary>
     private static bool AsciiEqualsIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> expected)
     {
@@ -587,7 +587,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the ascii StartsWithIgnoreCase operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the ascii StartsWithIgnoreCase operation.
     /// </summary>
     private static bool AsciiStartsWithIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> prefix)
     {
@@ -620,7 +620,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the try GetLastByte operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try GetLastByte operation.
     /// </summary>
     private static bool TryGetLastByte(in ReadOnlySequence<byte> sequence, out byte value)
     {
@@ -643,7 +643,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the to UpperAsciiInvariant operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the to UpperAsciiInvariant operation.
     /// </summary>
     private static byte ToUpperAsciiInvariant(byte value)
     {
@@ -663,7 +663,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(reader);
 
         /// <summary>
-        /// Gets or sets the terminator Length value used by this component.
+        /// Gets or sets the terminator Length value.
         /// </summary>
         const int terminatorLength = 5; // "\r\n.\r\n"
         byte[] trailingWindow = new byte[terminatorLength];
@@ -788,7 +788,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the send QuitAndStopAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the send QuitAndStopAsync operation.
     /// </summary>
     private static async Task SendQuitAndStopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopMetrics metrics, Action onResponseWritten)
     {
@@ -809,7 +809,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the enqueue Response operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the enqueue Response operation.
     /// </summary>
     private static void EnqueueResponse(ChannelWriter<ResponseWorkItem> writer, in ResponseWorkItem workItem)
     {
@@ -831,7 +831,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the write Response operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the write Response operation.
     /// </summary>
     private static void WriteResponse(PipeWriter writer, in ResponseWorkItem response)
     {
@@ -852,22 +852,22 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Represents the transmit LoopControl class used by this benchmark or regression-gate component.
+    /// Defines the transmit LoopControl class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class TransmitLoopControl
     {
         /// <summary>
-        /// Gets or sets the _quitRequested value used by this component.
+        /// Gets or sets the _quitRequested value.
         /// </summary>
         private int _quitRequested;
 
         /// <summary>
-        /// Executes the is QuitRequested operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the is QuitRequested operation.
         /// </summary>
         internal bool IsQuitRequested => Volatile.Read(ref _quitRequested) == 1;
 
         /// <summary>
-        /// Executes the request Quit operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the request Quit operation.
         /// </summary>
         internal void RequestQuit()
         {
@@ -876,52 +876,52 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Represents the transmit LoopMetrics class used by this benchmark or regression-gate component.
+    /// Defines the transmit LoopMetrics class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class TransmitLoopMetrics
     {
         /// <summary>
-        /// Gets or sets the _flushCount value used by this component.
+        /// Gets or sets the _flushCount value.
         /// </summary>
         private long _flushCount;
         /// <summary>
-        /// Gets or sets the _totalResponsesSent value used by this component.
+        /// Gets or sets the _totalResponsesSent value.
         /// </summary>
         private long _totalResponsesSent;
         /// <summary>
-        /// Gets or sets the _maxResponsesPerFlush value used by this component.
+        /// Gets or sets the _maxResponsesPerFlush value.
         /// </summary>
         private int _maxResponsesPerFlush;
 
         /// <summary>
-        /// Gets or sets the iterations value used by this component.
+        /// Gets or sets the iterations value.
         /// </summary>
         internal long Iterations { get; set; }
 
         /// <summary>
-        /// Executes the flush Count operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the flush Count operation.
         /// </summary>
         internal long FlushCount => Interlocked.Read(ref _flushCount);
 
         /// <summary>
-        /// Executes the total ResponsesSent operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the total ResponsesSent operation.
         /// </summary>
         internal long TotalResponsesSent => Interlocked.Read(ref _totalResponsesSent);
 
         /// <summary>
-        /// Executes the max ResponsesPerFlush operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the max ResponsesPerFlush operation.
         /// </summary>
         internal int MaxResponsesPerFlush => Volatile.Read(ref _maxResponsesPerFlush);
 
         /// <summary>
-        /// Gets or sets the average ResponsesPerFlush value used by this component.
+        /// Gets or sets the average ResponsesPerFlush value.
         /// </summary>
         internal double AverageResponsesPerFlush => FlushCount == 0
             ? 0d
             : (double)TotalResponsesSent / FlushCount;
 
         /// <summary>
-        /// Executes the record Flush operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the record Flush operation.
         /// </summary>
         internal void RecordFlush(int responsesInFlush)
         {
@@ -945,7 +945,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Represents the expected Command enum used by this benchmark or regression-gate component.
+    /// Defines the expected Command enum for benchmark or isolated-regression execution.
     /// </summary>
     private enum ExpectedCommand
     {
@@ -954,7 +954,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Represents the command Kind enum used by this benchmark or regression-gate component.
+    /// Defines the command Kind enum for benchmark or isolated-regression execution.
     /// </summary>
     private enum CommandKind
     {
@@ -967,12 +967,12 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Represents the parsed Command record struct used by this benchmark or regression-gate component.
+    /// Defines the parsed Command record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct ParsedCommand(CommandKind Kind, string MessageId);
 
     /// <summary>
-    /// Represents the response Kind enum used by this benchmark or regression-gate component.
+    /// Defines the response Kind enum for benchmark or isolated-regression execution.
     /// </summary>
     private enum ResponseKind
     {
@@ -982,22 +982,22 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Represents the response WorkItem record struct used by this benchmark or regression-gate component.
+    /// Defines the response WorkItem record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct ResponseWorkItem(ResponseKind Kind, string MessageId)
     {
         /// <summary>
-        /// Executes the takethis operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the takethis operation.
         /// </summary>
         public static ResponseWorkItem Takethis(string messageId) => new(ResponseKind.TakethisAccepted, messageId);
 
         /// <summary>
-        /// Executes the check operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the check operation.
         /// </summary>
         public static ResponseWorkItem Check(string messageId) => new(ResponseKind.CheckSend, messageId);
 
         /// <summary>
-        /// Executes the unknown operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the unknown operation.
         /// </summary>
         public static ResponseWorkItem Unknown() => new(ResponseKind.UnknownCommand, string.Empty);
     }
@@ -1012,11 +1012,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(messageId);
 
         /// <summary>
-        /// Gets or sets the response Prefix value used by this component.
+        /// Gets or sets the response Prefix value.
         /// </summary>
         const string responsePrefix = "238 ";
         /// <summary>
-        /// Gets or sets the response Suffix value used by this component.
+        /// Gets or sets the response Suffix value.
         /// </summary>
         const string responseSuffix = " send article to be transferred\r\n";
 
@@ -1039,11 +1039,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(messageId);
 
         /// <summary>
-        /// Gets or sets the response Prefix value used by this component.
+        /// Gets or sets the response Prefix value.
         /// </summary>
         const string responsePrefix = "239 ";
         /// <summary>
-        /// Gets or sets the response Suffix value used by this component.
+        /// Gets or sets the response Suffix value.
         /// </summary>
         const string responseSuffix = " Article transferred OK\r\n";
 
@@ -1098,7 +1098,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Executes the describe SocketState operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the describe SocketState operation.
     /// </summary>
     private static string DescribeSocketState(TcpClient client)
     {

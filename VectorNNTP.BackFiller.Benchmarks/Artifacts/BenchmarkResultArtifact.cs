@@ -9,7 +9,7 @@ using System.Globalization;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the benchmark ResultArtifact record struct used by this benchmark or regression-gate component.
+/// Defines the benchmark ResultArtifact record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct BenchmarkResultArtifact(
     string BenchmarkBuildVersion,
@@ -118,7 +118,7 @@ internal readonly record struct BenchmarkResultArtifact(
     P1GreetingProvenanceSummary? P1GreetingProvenance)
 {
     /// <summary>
-    /// Executes the from operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the from operation.
     /// </summary>
     internal static BenchmarkResultArtifact From(BenchmarkResult result, TransitBenchmarkConfig config, int processorCount)
     {
@@ -230,7 +230,7 @@ internal readonly record struct BenchmarkResultArtifact(
     }
 
     /// <summary>
-    /// Executes the to Csv operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the to Csv operation.
     /// </summary>
     internal string ToCsv()
     {
@@ -354,7 +354,7 @@ internal readonly record struct BenchmarkResultArtifact(
         return string.Join(',', headers) + Environment.NewLine + string.Join(',', values) + Environment.NewLine;
 
         /// <summary>
-        /// Executes the escape operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the escape operation.
         /// </summary>
         static string Escape(string value)
         {

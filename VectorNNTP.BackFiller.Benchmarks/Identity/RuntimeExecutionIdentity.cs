@@ -9,7 +9,7 @@ using System.Reflection;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the runtime IdentityExpectation record struct used by this benchmark or regression-gate component.
+/// Defines the runtime IdentityExpectation record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct RuntimeIdentityExpectation(
     string? ExpectedAssemblyPath,
@@ -25,7 +25,7 @@ internal readonly record struct RuntimeIdentityExpectation(
     string? ExpectedProductionFileVersion);
 
 /// <summary>
-/// Represents the runtime ExecutionIdentity record struct used by this benchmark or regression-gate component.
+/// Defines the runtime ExecutionIdentity record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct RuntimeExecutionIdentity(
     string RuntimeAssemblyPath,
@@ -45,58 +45,58 @@ internal readonly record struct RuntimeExecutionIdentity(
     string? ProductionDependencyFileVersion);
 
 /// <summary>
-/// Represents the app BuildConfiguration class used by this benchmark or regression-gate component.
+/// Defines the app BuildConfiguration class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class AppBuildConfiguration
 {
     /// <summary>
-    /// Executes the value operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the value operation.
     /// </summary>
     internal static readonly string? Value = AppAssemblyMetadata.GetValue("Configuration")
         ?? typeof(AppBuildConfiguration).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
 }
 
 /// <summary>
-/// Represents the app BuildPlatform class used by this benchmark or regression-gate component.
+/// Defines the app BuildPlatform class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class AppBuildPlatform
 {
     /// <summary>
-    /// Executes the value operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the value operation.
     /// </summary>
     internal static readonly string? Value = AppAssemblyMetadata.GetValue("Platform");
 }
 
 /// <summary>
-/// Represents the app TargetFramework class used by this benchmark or regression-gate component.
+/// Defines the app TargetFramework class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class AppTargetFramework
 {
     /// <summary>
-    /// Executes the value operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the value operation.
     /// </summary>
     internal static readonly string? Value = AppAssemblyMetadata.GetValue("TargetFramework")
         ?? typeof(AppTargetFramework).Assembly.GetCustomAttribute<System.Runtime.Versioning.TargetFrameworkAttribute>()?.FrameworkName;
 }
 
 /// <summary>
-/// Represents the app RuntimeIdentifier class used by this benchmark or regression-gate component.
+/// Defines the app RuntimeIdentifier class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class AppRuntimeIdentifier
 {
     /// <summary>
-    /// Executes the value operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the value operation.
     /// </summary>
     internal static readonly string? Value = AppAssemblyMetadata.GetValue("RuntimeIdentifier");
 }
 
 /// <summary>
-/// Represents the app AssemblyMetadata class used by this benchmark or regression-gate component.
+/// Defines the app AssemblyMetadata class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class AppAssemblyMetadata
 {
     /// <summary>
-    /// Executes the get Value operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the get Value operation.
     /// </summary>
     internal static string? GetValue(string key)
     {

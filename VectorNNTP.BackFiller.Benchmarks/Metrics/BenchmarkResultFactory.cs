@@ -10,12 +10,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the benchmark ResultFactory class used by this benchmark or regression-gate component.
+/// Defines the benchmark ResultFactory class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class BenchmarkResultFactory
 {
     /// <summary>
-    /// Executes the create operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the create operation.
     /// </summary>
     internal static BenchmarkResult Create(
         TransitBenchmarkConfig config,

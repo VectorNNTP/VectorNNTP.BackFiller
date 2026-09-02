@@ -26,7 +26,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
     /// <summary>
-    /// Represents the nntp ArticleAcquisitionBenchmarks class used by this benchmark or regression-gate component.
+    /// Defines the nntp ArticleAcquisitionBenchmarks class for benchmark or isolated-regression execution.
     /// </summary>
     public class NntpArticleAcquisitionBenchmarks
     {
@@ -110,7 +110,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalSetup]
         /// <summary>
-        /// Executes the setup Async operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the setup Async operation.
         /// </summary>
         public async Task SetupAsync()
         {
@@ -139,7 +139,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalCleanup]
         /// <summary>
-        /// Executes the cleanup Async operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the cleanup Async operation.
         /// </summary>
         public async Task CleanupAsync()
         {
@@ -174,7 +174,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Baseline = true)]
         [BenchmarkCategory("SteadyStateArticle")]
         /// <summary>
-        /// Executes the steady StateSmallArticleAsync operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the steady StateSmallArticleAsync operation.
         /// </summary>
         public Task<int> SteadyStateSmallArticleAsync()
         {
@@ -188,7 +188,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark]
         [BenchmarkCategory("SteadyStateArticle")]
         /// <summary>
-        /// Executes the steady StateTypicalArticleAsync operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the steady StateTypicalArticleAsync operation.
         /// </summary>
         public Task<int> SteadyStateTypicalArticleAsync()
         {
@@ -202,7 +202,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark]
         [BenchmarkCategory("SteadyStateArticle")]
         /// <summary>
-        /// Executes the steady StateLargey EncArticleAsync operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the steady StateLargey EncArticleAsync operation.
         /// </summary>
         public Task<int> SteadyStateLargeYEncArticleAsync()
         {
@@ -214,7 +214,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Executes the article OperationsPerMeasuredIteration operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the article OperationsPerMeasuredIteration operation.
         /// </summary>
         public int ArticleOperationsPerMeasuredIteration()
         {
@@ -226,7 +226,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Executes the small ArticleBytes operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the small ArticleBytes operation.
         /// </summary>
         public int SmallArticleBytes()
         {
@@ -238,7 +238,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Executes the typical ArticleBytes operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the typical ArticleBytes operation.
         /// </summary>
         public int TypicalArticleBytes()
         {
@@ -250,7 +250,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Executes the large ArticleBytes operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the large ArticleBytes operation.
         /// </summary>
         public int LargeArticleBytes()
         {
@@ -262,7 +262,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [BenchmarkCategory("Metadata")]
         /// <summary>
-        /// Executes the large y EncArticleBytes operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the large y EncArticleBytes operation.
         /// </summary>
         public int LargeYEncArticleBytes()
         {

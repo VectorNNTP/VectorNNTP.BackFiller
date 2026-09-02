@@ -13,12 +13,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the transit BenchmarkOrchestrator class used by this benchmark or regression-gate component.
+/// Defines the transit BenchmarkOrchestrator class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class TransitBenchmarkOrchestrator
 {
     /// <summary>
-    /// Executes the run CoreAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run CoreAsync operation.
     /// </summary>
     internal static async Task RunCoreAsync(
         TransitBenchmarkConfig config,
@@ -138,12 +138,12 @@ internal static class TransitBenchmarkOrchestrator
     }
 
     /// <summary>
-    /// Executes the run SmokeAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run SmokeAsync operation.
     /// </summary>
     private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
         /// <summary>
-        /// Gets or sets the smoke Articles value used by this component.
+        /// Gets or sets the smoke Articles value.
         /// </summary>
         const int smokeArticles = 5;
 
@@ -170,7 +170,7 @@ internal static class TransitBenchmarkOrchestrator
     }
 
     /// <summary>
-    /// Executes the run WarmupAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run WarmupAsync operation.
     /// </summary>
     private static async Task RunWarmupAsync(TransitPublisher publisher, TransitBenchmarkConfig config, PreparedBenchmarkWorkload workload, CancellationToken cancellationToken)
     {
@@ -198,7 +198,7 @@ internal static class TransitBenchmarkOrchestrator
     }
 
     /// <summary>
-    /// Executes the build RuntimeOptions operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the build RuntimeOptions operation.
     /// </summary>
     internal static BackFillerRuntimeOptions BuildRuntimeOptions(TransitBenchmarkConfig config)
     {

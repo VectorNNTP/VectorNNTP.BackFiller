@@ -9,7 +9,7 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the connection CounterState record struct used by this benchmark or regression-gate component.
+/// Defines the connection CounterState record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct ConnectionCounterState(
     string ConnectionId,
@@ -18,7 +18,7 @@ internal readonly record struct ConnectionCounterState(
     long Completed);
 
 /// <summary>
-/// Represents the dispatcher SeriesPoint record struct used by this benchmark or regression-gate component.
+/// Defines the dispatcher SeriesPoint record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct DispatcherSeriesPoint(
     TimeSpan Elapsed,
@@ -29,57 +29,57 @@ internal readonly record struct DispatcherSeriesPoint(
     long QueueBytes);
 
 /// <summary>
-/// Represents the connection SeriesAggregate class used by this benchmark or regression-gate component.
+/// Defines the connection SeriesAggregate class for benchmark or isolated-regression execution.
 /// </summary>
 internal sealed class ConnectionSeriesAggregate
 {
     /// <summary>
-    /// Gets or sets the _slot value used by this component.
+    /// Gets or sets the _slot value.
     /// </summary>
     private readonly int _slot;
     /// <summary>
-    /// Gets or sets the _pendingSum value used by this component.
+    /// Gets or sets the _pendingSum value.
     /// </summary>
     private double _pendingSum;
     /// <summary>
-    /// Gets or sets the _samples value used by this component.
+    /// Gets or sets the _samples value.
     /// </summary>
     private int _samples;
     /// <summary>
-    /// Gets or sets the _pendingMin value used by this component.
+    /// Gets or sets the _pendingMin value.
     /// </summary>
     private int _pendingMin = int.MaxValue;
     /// <summary>
-    /// Gets or sets the _pendingMax value used by this component.
+    /// Gets or sets the _pendingMax value.
     /// </summary>
     private int _pendingMax;
     /// <summary>
-    /// Gets or sets the _maxInFlight value used by this component.
+    /// Gets or sets the _maxInFlight value.
     /// </summary>
     private int _maxInFlight;
     /// <summary>
-    /// Gets or sets the _failures value used by this component.
+    /// Gets or sets the _failures value.
     /// </summary>
     private long _failures;
     /// <summary>
-    /// Gets or sets the _reconnects value used by this component.
+    /// Gets or sets the _reconnects value.
     /// </summary>
     private long _reconnects;
     /// <summary>
-    /// Gets or sets the _submitRateSum value used by this component.
+    /// Gets or sets the _submitRateSum value.
     /// </summary>
     private double _submitRateSum;
     /// <summary>
-    /// Gets or sets the _completeRateSum value used by this component.
+    /// Gets or sets the _completeRateSum value.
     /// </summary>
     private double _completeRateSum;
     /// <summary>
-    /// Gets or sets the _responseRateSum value used by this component.
+    /// Gets or sets the _responseRateSum value.
     /// </summary>
     private double _responseRateSum;
 
     /// <summary>
-    /// Executes the connection SeriesAggregate operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the connection SeriesAggregate operation.
     /// </summary>
     internal ConnectionSeriesAggregate(int slot)
     {
@@ -87,7 +87,7 @@ internal sealed class ConnectionSeriesAggregate
     }
 
     /// <summary>
-    /// Executes the observe operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the observe operation.
     /// </summary>
     internal void Observe(TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot, double submitRate, double completeRate, double responseRate, long reconnects)
     {
@@ -104,7 +104,7 @@ internal sealed class ConnectionSeriesAggregate
     }
 
     /// <summary>
-    /// Executes the format Line operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the format Line operation.
     /// </summary>
     internal string FormatLine()
     {
@@ -118,12 +118,12 @@ internal sealed class ConnectionSeriesAggregate
 }
 
 /// <summary>
-/// Represents the latency Aggregators class used by this benchmark or regression-gate component.
+/// Defines the latency Aggregators class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class LatencyAggregators
 {
     /// <summary>
-    /// Executes the build ConnectionSeriesSummary operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the build ConnectionSeriesSummary operation.
     /// </summary>
     internal static string BuildConnectionSeriesSummary(Dictionary<int, ConnectionSeriesAggregate> series)
     {
@@ -140,7 +140,7 @@ internal static class LatencyAggregators
     }
 
     /// <summary>
-    /// Executes the build DispatcherSeriesSummary operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the build DispatcherSeriesSummary operation.
     /// </summary>
     internal static string BuildDispatcherSeriesSummary(List<DispatcherSeriesPoint> series)
     {
@@ -160,7 +160,7 @@ internal static class LatencyAggregators
     }
 
     /// <summary>
-    /// Executes the update Peak operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the update Peak operation.
     /// </summary>
     internal static void UpdatePeak(ref long location, long candidate)
     {
@@ -180,7 +180,7 @@ internal static class LatencyAggregators
     }
 
     /// <summary>
-    /// Executes the update Min operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the update Min operation.
     /// </summary>
     internal static void UpdateMin(ref long location, long candidate)
     {

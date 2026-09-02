@@ -23,7 +23,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
     /// <summary>
-    /// Represents the nntp ArticleParserBenchmarks class used by this benchmark or regression-gate component.
+    /// Defines the nntp ArticleParserBenchmarks class for benchmark or isolated-regression execution.
     /// </summary>
     public class NntpArticleParserBenchmarks
     {
@@ -87,7 +87,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalSetup]
         /// <summary>
-        /// Executes the setup operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the setup operation.
         /// </summary>
         public void Setup()
         {
@@ -184,7 +184,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Baseline = true, Description = "TinyText")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse TinyText operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse TinyText operation.
         /// </summary>
         public bool ParseTinyText()
         {
@@ -198,7 +198,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "TypicalText")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse TypicalText operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse TypicalText operation.
         /// </summary>
         public bool ParseTypicalText()
         {
@@ -212,7 +212,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "LargeText")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse LargeText operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse LargeText operation.
         /// </summary>
         public bool ParseLargeText()
         {
@@ -226,7 +226,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "YEncSinglePart")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse y EncSinglePart operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse y EncSinglePart operation.
         /// </summary>
         public bool ParseYEncSinglePart()
         {
@@ -240,7 +240,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "YEncMultiPart")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse y EncMultiPart operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse y EncMultiPart operation.
         /// </summary>
         public bool ParseYEncMultiPart()
         {
@@ -254,7 +254,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "MalformedArticle")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse MalformedArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse MalformedArticle operation.
         /// </summary>
         public bool ParseMalformedArticle()
         {
@@ -268,7 +268,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "InvalidDate")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse InvalidDate operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse InvalidDate operation.
         /// </summary>
         public bool ParseInvalidDate()
         {
@@ -282,7 +282,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "LargeHeaderSet")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse LargeHeaderSet operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse LargeHeaderSet operation.
         /// </summary>
         public bool ParseLargeHeaderSet()
         {
@@ -296,7 +296,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "LargeBinary")]
         [BenchmarkCategory("ArticleParser")]
         /// <summary>
-        /// Executes the parse LargeBinary operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the parse LargeBinary operation.
         /// </summary>
         public bool ParseLargeBinary()
         {

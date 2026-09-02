@@ -14,50 +14,50 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the transit 32 WorkerExperimentRunner class used by this benchmark or regression-gate component.
+/// Defines the transit 32 WorkerExperimentRunner class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class Transit32WorkerExperimentRunner
 {
     /// <summary>
-    /// Gets or sets the article Bytes value used by this component.
+    /// Gets or sets the article Bytes value.
     /// </summary>
     private const int ArticleBytes = 1024 * 1024;
     /// <summary>
-    /// Gets or sets the producer Workers value used by this component.
+    /// Gets or sets the producer Workers value.
     /// </summary>
     private const int ProducerWorkers = 32;
     /// <summary>
-    /// Gets or sets the dispatch Workers value used by this component.
+    /// Gets or sets the dispatch Workers value.
     /// </summary>
     private const int DispatchWorkers = 512;
     /// <summary>
-    /// Gets or sets the queue Articles value used by this component.
+    /// Gets or sets the queue Articles value.
     /// </summary>
     private const int QueueArticles = 1024;
     /// <summary>
-    /// Gets or sets the queue Bytes value used by this component.
+    /// Gets or sets the queue Bytes value.
     /// </summary>
     private const long QueueBytes = 1024L * 1024L * 1024L;
     /// <summary>
-    /// Gets or sets the queue Target value used by this component.
+    /// Gets or sets the queue Target value.
     /// </summary>
     private const int QueueTarget = 512;
     /// <summary>
-    /// Gets or sets the connections value used by this component.
+    /// Gets or sets the connections value.
     /// </summary>
     private const int Connections = 64;
     /// <summary>
-    /// Gets or sets the pipeline Depth value used by this component.
+    /// Gets or sets the pipeline Depth value.
     /// </summary>
     private const int PipelineDepth = 16;
 
     /// <summary>
-    /// Gets or sets the required TransitHostname value used by this component.
+    /// Gets or sets the required TransitHostname value.
     /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
 
     /// <summary>
-    /// Executes the run Async operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run Async operation.
     /// </summary>
     internal static async Task RunAsync(CancellationToken cancellationToken = default)
     {
@@ -75,7 +75,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the run GeneratorOnlyAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run GeneratorOnlyAsync operation.
     /// </summary>
     private static async Task<GeneratorResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int workers, CancellationToken cancellationToken)
     {
@@ -162,7 +162,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the run QueueNoOpAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run QueueNoOpAsync operation.
     /// </summary>
     private static async Task<QueueResult> RunQueueNoOpAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -314,7 +314,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the run RealPipelineAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run RealPipelineAsync operation.
     /// </summary>
     private static async Task<RealPipelineResult> RunRealPipelineAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -591,7 +591,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the warmup GeneratorAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the warmup GeneratorAsync operation.
     /// </summary>
     private static async Task WarmupGeneratorAsync(int warmupSeconds, int workers, CancellationToken cancellationToken)
     {
@@ -624,7 +624,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the build RuntimeOptions operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the build RuntimeOptions operation.
     /// </summary>
     private static BackFillerRuntimeOptions BuildRuntimeOptions(RuntimeConfig runtime)
     {
@@ -650,7 +650,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the load RuntimeConfig operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the load RuntimeConfig operation.
     /// </summary>
     private static RuntimeConfig LoadRuntimeConfig()
     {
@@ -679,7 +679,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the find BackFillerAppSettingsPath operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the find BackFillerAppSettingsPath operation.
     /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
@@ -699,7 +699,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the percentile Us operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the percentile Us operation.
     /// </summary>
     private static double PercentileUs(IEnumerable<long> ticks, double percentile)
     {
@@ -715,24 +715,24 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the print ScalingEfficiency operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print ScalingEfficiency operation.
     /// </summary>
     private static void PrintScalingEfficiency(double current32Rate)
     {
         /// <summary>
-        /// Gets or sets the baseline 1 value used by this component.
+        /// Gets or sets the baseline 1 value.
         /// </summary>
         const double baseline1 = 772.2691;
         /// <summary>
-        /// Gets or sets the baseline 4 value used by this component.
+        /// Gets or sets the baseline 4 value.
         /// </summary>
         const double baseline4 = 2932.5899;
         /// <summary>
-        /// Gets or sets the baseline 8 value used by this component.
+        /// Gets or sets the baseline 8 value.
         /// </summary>
         const double baseline8 = 4264.0247;
         /// <summary>
-        /// Gets or sets the baseline 16 value used by this component.
+        /// Gets or sets the baseline 16 value.
         /// </summary>
         const double baseline16 = 6666.1003;
 
@@ -744,7 +744,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the print GeneratorResult operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print GeneratorResult operation.
     /// </summary>
     private static void PrintGeneratorResult(GeneratorResult result)
     {
@@ -754,7 +754,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the print QueueResult operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print QueueResult operation.
     /// </summary>
     private static void PrintQueueResult(QueueResult result)
     {
@@ -767,7 +767,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the print RealPipelineResult operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print RealPipelineResult operation.
     /// </summary>
     private static void PrintRealPipelineResult(RealPipelineResult result)
     {
@@ -783,7 +783,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the format Distribution operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the format Distribution operation.
     /// </summary>
     private static string FormatDistribution(Dictionary<int, int> distribution)
     {
@@ -796,7 +796,7 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Executes the print FinalSummary operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print FinalSummary operation.
     /// </summary>
     private static void PrintFinalSummary(GeneratorResult exp1, QueueResult exp2, RealPipelineResult exp3)
     {
@@ -813,37 +813,37 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Represents the cpu Sampler class used by this benchmark or regression-gate component.
+    /// Defines the cpu Sampler class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class CpuSampler
     {
         /// <summary>
-        /// Gets or sets the _process value used by this component.
+        /// Gets or sets the _process value.
         /// </summary>
         private readonly Process _process;
         /// <summary>
-        /// Executes the _elapsed operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the _elapsed operation.
         /// </summary>
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
         /// <summary>
-        /// Gets or sets the _cts value used by this component.
+        /// Gets or sets the _cts value.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value used by this component.
+        /// Gets or sets the _task value.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _cpuStart value used by this component.
+        /// Gets or sets the _cpuStart value.
         /// </summary>
         private TimeSpan _cpuStart;
         /// <summary>
-        /// Gets or sets the _peakWorkingSet value used by this component.
+        /// Gets or sets the _peakWorkingSet value.
         /// </summary>
         private long _peakWorkingSet;
 
         /// <summary>
-        /// Executes the cpu Sampler operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the cpu Sampler operation.
         /// </summary>
         internal CpuSampler(Process process)
         {
@@ -852,24 +852,24 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Gets or sets the average CpuPercent value used by this component.
+        /// Gets or sets the average CpuPercent value.
         /// </summary>
         internal double AverageCpuPercent { get; private set; }
         /// <summary>
-        /// Gets or sets the equivalent BusyCores value used by this component.
+        /// Gets or sets the equivalent BusyCores value.
         /// </summary>
         internal double EquivalentBusyCores => AverageCpuPercent / 100d * Environment.ProcessorCount;
         /// <summary>
-        /// Gets or sets the peak WorkingSetBytes value used by this component.
+        /// Gets or sets the peak WorkingSetBytes value.
         /// </summary>
         internal long PeakWorkingSetBytes => _peakWorkingSet;
         /// <summary>
-        /// Gets or sets the total CpuTime value used by this component.
+        /// Gets or sets the total CpuTime value.
         /// </summary>
         internal TimeSpan TotalCpuTime { get; private set; }
 
         /// <summary>
-        /// Executes the start operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the start operation.
         /// </summary>
         internal void Start()
         {
@@ -891,7 +891,7 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Executes the stop operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the stop operation.
         /// </summary>
         internal void Stop()
         {
@@ -918,49 +918,49 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Represents the queue Sampler class used by this benchmark or regression-gate component.
+    /// Defines the queue Sampler class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class QueueSampler
     {
         /// <summary>
-        /// Gets or sets the _queue value used by this component.
+        /// Gets or sets the _queue value.
         /// </summary>
         private readonly TransitBenchmarkCore.BoundedArticleQueue _queue;
         /// <summary>
-        /// Gets or sets the _cts value used by this component.
+        /// Gets or sets the _cts value.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value used by this component.
+        /// Gets or sets the _task value.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _depthSum value used by this component.
+        /// Gets or sets the _depthSum value.
         /// </summary>
         private long _depthSum;
         /// <summary>
-        /// Gets or sets the _byteSum value used by this component.
+        /// Gets or sets the _byteSum value.
         /// </summary>
         private long _byteSum;
         /// <summary>
-        /// Gets or sets the _count value used by this component.
+        /// Gets or sets the _count value.
         /// </summary>
         private long _count;
         /// <summary>
-        /// Gets or sets the _minDepth value used by this component.
+        /// Gets or sets the _minDepth value.
         /// </summary>
         private int _minDepth = int.MaxValue;
         /// <summary>
-        /// Gets or sets the _maxDepth value used by this component.
+        /// Gets or sets the _maxDepth value.
         /// </summary>
         private int _maxDepth;
         /// <summary>
-        /// Gets or sets the _maxBytes value used by this component.
+        /// Gets or sets the _maxBytes value.
         /// </summary>
         private long _maxBytes;
 
         /// <summary>
-        /// Executes the queue Sampler operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the queue Sampler operation.
         /// </summary>
         internal QueueSampler(TransitBenchmarkCore.BoundedArticleQueue queue)
         {
@@ -968,28 +968,28 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Gets or sets the min Depth value used by this component.
+        /// Gets or sets the min Depth value.
         /// </summary>
         internal int MinDepth => _minDepth == int.MaxValue ? 0 : _minDepth;
         /// <summary>
-        /// Gets or sets the max Depth value used by this component.
+        /// Gets or sets the max Depth value.
         /// </summary>
         internal int MaxDepth => _maxDepth;
         /// <summary>
-        /// Executes the average Depth operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average Depth operation.
         /// </summary>
         internal double AverageDepth => _count == 0 ? 0 : (double)_depthSum / _count;
         /// <summary>
-        /// Executes the average Bytes operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average Bytes operation.
         /// </summary>
         internal double AverageBytes => _count == 0 ? 0 : (double)_byteSum / _count;
         /// <summary>
-        /// Gets or sets the max Bytes value used by this component.
+        /// Gets or sets the max Bytes value.
         /// </summary>
         internal long MaxBytes => _maxBytes;
 
         /// <summary>
-        /// Executes the start operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the start operation.
         /// </summary>
         internal void Start()
         {
@@ -1012,7 +1012,7 @@ internal static class Transit32WorkerExperimentRunner
         }
 
         /// <summary>
-        /// Executes the stop operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the stop operation.
         /// </summary>
         internal void Stop()
         {
@@ -1036,16 +1036,16 @@ internal static class Transit32WorkerExperimentRunner
     }
 
     /// <summary>
-    /// Represents the runtime Config record struct used by this benchmark or regression-gate component.
+    /// Defines the runtime Config record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct RuntimeConfig(string Host, int Port, bool UseSsl);
     /// <summary>
-    /// Represents the article StageStamp record struct used by this benchmark or regression-gate component.
+    /// Defines the article StageStamp record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct ArticleStageStamp(long GenerationTicks, long EnqueueEndTick, long DequeueTick);
 
     /// <summary>
-    /// Represents the generator Result record struct used by this benchmark or regression-gate component.
+    /// Defines the generator Result record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct GeneratorResult(
         string Label,
@@ -1066,21 +1066,21 @@ internal static class Transit32WorkerExperimentRunner
         double P99Us)
     {
         /// <summary>
-        /// Gets or sets the articles PerSecond value used by this component.
+        /// Gets or sets the articles PerSecond value.
         /// </summary>
         internal double ArticlesPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Articles / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value used by this component.
+        /// Gets or sets the gbps value.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Executes the allocated BytesPerArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the allocated BytesPerArticle operation.
         /// </summary>
         internal double AllocatedBytesPerArticle => Articles == 0 ? 0 : (double)AllocatedBytes / Articles;
     }
 
     /// <summary>
-    /// Represents the queue Result record struct used by this benchmark or regression-gate component.
+    /// Defines the queue Result record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct QueueResult(
         string Label,
@@ -1107,29 +1107,29 @@ internal static class Transit32WorkerExperimentRunner
         int PeakActualPending)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value used by this component.
+        /// Gets or sets the generated PerSecond value.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the dispatched PerSecond value used by this component.
+        /// Gets or sets the dispatched PerSecond value.
         /// </summary>
         internal double DispatchedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Dispatched / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value used by this component.
+        /// Gets or sets the completed PerSecond value.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value used by this component.
+        /// Gets or sets the gbps value.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Executes the allocated BytesPerArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the allocated BytesPerArticle operation.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
 
     /// <summary>
-    /// Represents the real PipelineResult record struct used by this benchmark or regression-gate component.
+    /// Defines the real PipelineResult record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct RealPipelineResult(
         string Label,
@@ -1167,23 +1167,23 @@ internal static class Transit32WorkerExperimentRunner
         Dictionary<int, int> MaxInFlightDistribution)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value used by this component.
+        /// Gets or sets the generated PerSecond value.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value used by this component.
+        /// Gets or sets the completed PerSecond value.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the accepted PerSecond value used by this component.
+        /// Gets or sets the accepted PerSecond value.
         /// </summary>
         internal double AcceptedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Accepted / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value used by this component.
+        /// Gets or sets the gbps value.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Executes the allocated BytesPerArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the allocated BytesPerArticle operation.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }

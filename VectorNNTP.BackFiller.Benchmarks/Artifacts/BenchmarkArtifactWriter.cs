@@ -9,7 +9,7 @@ using System.Globalization;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the benchmark ArtifactWriter class used by this benchmark or regression-gate component.
+/// Defines the benchmark ArtifactWriter class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class BenchmarkArtifactWriter
 {

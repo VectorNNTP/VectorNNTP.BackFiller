@@ -9,33 +9,33 @@ using System.Threading.Channels;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the bounded ArticleQueue class used by this benchmark or regression-gate component.
+/// Defines the bounded ArticleQueue class for benchmark or isolated-regression execution.
 /// </summary>
 internal sealed class BoundedArticleQueue : IDisposable
 {
     /// <summary>
-    /// Gets or sets the _channel value used by this component.
+    /// Gets or sets the _channel value.
     /// </summary>
     private readonly Channel<QueuedArticle> _channel;
     /// <summary>
-    /// Gets or sets the _byteBudget value used by this component.
+    /// Gets or sets the _byteBudget value.
     /// </summary>
     private readonly ByteBudget _byteBudget;
     /// <summary>
-    /// Gets or sets the _queuedBytes value used by this component.
+    /// Gets or sets the _queuedBytes value.
     /// </summary>
     private long _queuedBytes;
     /// <summary>
-    /// Gets or sets the _queuedCount value used by this component.
+    /// Gets or sets the _queuedCount value.
     /// </summary>
     private int _queuedCount;
     /// <summary>
-    /// Gets or sets the _admissionStopped value used by this component.
+    /// Gets or sets the _admissionStopped value.
     /// </summary>
     private volatile bool _admissionStopped;
 
     /// <summary>
-    /// Executes the bounded ArticleQueue operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the bounded ArticleQueue operation.
     /// </summary>
     internal BoundedArticleQueue(int maxArticles, long maxResidentBytes)
     {
@@ -50,16 +50,16 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Executes the current QueuedCount operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the current QueuedCount operation.
     /// </summary>
     internal int CurrentQueuedCount => Volatile.Read(ref _queuedCount);
     /// <summary>
-    /// Executes the current QueuedBytes operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the current QueuedBytes operation.
     /// </summary>
     internal long CurrentQueuedBytes => Volatile.Read(ref _queuedBytes);
 
     /// <summary>
-    /// Executes the try WriteAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try WriteAsync operation.
     /// </summary>
     internal async ValueTask<bool> TryWriteAsync(QueuedArticle article, CancellationToken cancellationToken)
     {
@@ -85,7 +85,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Executes the try Read operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try Read operation.
     /// </summary>
     internal bool TryRead(out QueuedArticle article)
     {
@@ -100,7 +100,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Executes the wait ToReadAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the wait ToReadAsync operation.
     /// </summary>
     internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken)
     {
@@ -108,7 +108,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Executes the release Reservation operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the release Reservation operation.
     /// </summary>
     internal void ReleaseReservation(int bytes)
     {
@@ -116,7 +116,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Executes the stop Admission operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the stop Admission operation.
     /// </summary>
     internal void StopAdmission()
     {
@@ -125,7 +125,7 @@ internal sealed class BoundedArticleQueue : IDisposable
     }
 
     /// <summary>
-    /// Executes the dispose operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the dispose operation.
     /// </summary>
     public void Dispose()
     {

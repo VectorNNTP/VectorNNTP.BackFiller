@@ -9,12 +9,12 @@ using System.Diagnostics;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the metric MathHelpers class used by this benchmark or regression-gate component.
+/// Defines the metric MathHelpers class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class MetricMathHelpers
 {
     /// <summary>
-    /// Executes the compute PercentileMicroseconds operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the compute PercentileMicroseconds operation.
     /// </summary>
     internal static double ComputePercentileMicroseconds(List<long> sortedLatencyTicks, double percentile)
     {
@@ -32,7 +32,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Executes the classify DepthBucket operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the classify DepthBucket operation.
     /// </summary>
     internal static int ClassifyDepthBucket(int pending)
     {
@@ -44,7 +44,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Executes the percentile Us operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the percentile Us operation.
     /// </summary>
     internal static double PercentileUs(List<long> samples, double percentile)
     {
@@ -60,7 +60,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Executes the ticks ToUs operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the ticks ToUs operation.
     /// </summary>
     internal static double TicksToUs(double ticks)
     {
@@ -73,7 +73,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Executes the normalize Min operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the normalize Min operation.
     /// </summary>
     internal static long NormalizeMin(long value)
     {
@@ -81,7 +81,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Executes the compute Average operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the compute Average operation.
     /// </summary>
     internal static double ComputeAverage(long sum, long count)
     {

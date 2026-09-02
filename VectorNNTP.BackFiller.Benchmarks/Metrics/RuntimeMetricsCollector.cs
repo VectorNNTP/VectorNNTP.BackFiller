@@ -9,53 +9,53 @@ using System.Diagnostics;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the runtime Metrics class used by this benchmark or regression-gate component.
+/// Defines the runtime Metrics class for benchmark or isolated-regression execution.
 /// </summary>
 internal sealed class RuntimeMetrics
 {
     /// <summary>
-    /// Executes the _gate operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the _gate operation.
     /// </summary>
     private readonly object _gate = new();
     /// <summary>
-    /// Gets or sets the _cpuPercentSum value used by this component.
+    /// Gets or sets the _cpuPercentSum value.
     /// </summary>
     private double _cpuPercentSum;
     /// <summary>
-    /// Gets or sets the _hostCpuPercentSum value used by this component.
+    /// Gets or sets the _hostCpuPercentSum value.
     /// </summary>
     private double _hostCpuPercentSum;
     /// <summary>
-    /// Gets or sets the _transitServerCpuPercentSum value used by this component.
+    /// Gets or sets the _transitServerCpuPercentSum value.
     /// </summary>
     private double _transitServerCpuPercentSum;
     /// <summary>
-    /// Gets or sets the _cpuSampleCount value used by this component.
+    /// Gets or sets the _cpuSampleCount value.
     /// </summary>
     private long _cpuSampleCount;
     /// <summary>
-    /// Gets or sets the _lastWorkingSet value used by this component.
+    /// Gets or sets the _lastWorkingSet value.
     /// </summary>
     private long _lastWorkingSet;
     /// <summary>
-    /// Gets or sets the _lastGcHeap value used by this component.
+    /// Gets or sets the _lastGcHeap value.
     /// </summary>
     private long _lastGcHeap;
     /// <summary>
-    /// Gets or sets the _lastAllocated value used by this component.
+    /// Gets or sets the _lastAllocated value.
     /// </summary>
     private long _lastAllocated;
     /// <summary>
-    /// Gets or sets the _peakHostCpuPercent value used by this component.
+    /// Gets or sets the _peakHostCpuPercent value.
     /// </summary>
     private double _peakHostCpuPercent;
     /// <summary>
-    /// Gets or sets the _peakTransitServerCpuPercent value used by this component.
+    /// Gets or sets the _peakTransitServerCpuPercent value.
     /// </summary>
     private double _peakTransitServerCpuPercent;
 
     /// <summary>
-    /// Executes the sample operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the sample operation.
     /// </summary>
     internal void Sample(double cpuPercent, double hostCpuPercent, double transitServerCpuPercent, long workingSet, long gcHeap, long allocated)
     {
@@ -74,7 +74,7 @@ internal sealed class RuntimeMetrics
     }
 
     /// <summary>
-    /// Executes the snapshot operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the snapshot operation.
     /// </summary>
     internal RuntimeSnapshot Snapshot()
     {
@@ -89,38 +89,38 @@ internal sealed class RuntimeMetrics
 }
 
 /// <summary>
-/// Represents the runtime MetricSamplingHelpers class used by this benchmark or regression-gate component.
+/// Defines the runtime MetricSamplingHelpers class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class RuntimeMetricSamplingHelpers
 {
     /// <summary>
-    /// Executes the host CpuGate operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the host CpuGate operation.
     /// </summary>
     private static readonly object HostCpuGate = new();
     /// <summary>
-    /// Gets or sets the _hostCpuLastSampleUtc value used by this component.
+    /// Gets or sets the _hostCpuLastSampleUtc value.
     /// </summary>
     private static DateTime _hostCpuLastSampleUtc;
     /// <summary>
-    /// Gets or sets the _hostCpuLastTotalProcessTicks value used by this component.
+    /// Gets or sets the _hostCpuLastTotalProcessTicks value.
     /// </summary>
     private static long _hostCpuLastTotalProcessTicks;
 
     /// <summary>
-    /// Executes the transit ServerCpuGate operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the transit ServerCpuGate operation.
     /// </summary>
     private static readonly object TransitServerCpuGate = new();
     /// <summary>
-    /// Gets or sets the _transitServerCpuLastSampleUtc value used by this component.
+    /// Gets or sets the _transitServerCpuLastSampleUtc value.
     /// </summary>
     private static DateTime _transitServerCpuLastSampleUtc;
     /// <summary>
-    /// Gets or sets the _transitServerCpuLastTotalTicks value used by this component.
+    /// Gets or sets the _transitServerCpuLastTotalTicks value.
     /// </summary>
     private static long _transitServerCpuLastTotalTicks;
 
     /// <summary>
-    /// Executes the read HostCpuPercent operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the read HostCpuPercent operation.
     /// </summary>
     internal static double ReadHostCpuPercent()
     {
@@ -164,7 +164,7 @@ internal static class RuntimeMetricSamplingHelpers
     }
 
     /// <summary>
-    /// Executes the read TransitServerCpuPercent operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the read TransitServerCpuPercent operation.
     /// </summary>
     internal static double ReadTransitServerCpuPercent()
     {

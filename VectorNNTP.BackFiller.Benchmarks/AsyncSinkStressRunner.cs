@@ -14,29 +14,29 @@ using Serilog.Sinks.Async;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the async SinkStressRunner class used by this benchmark or regression-gate component.
+/// Defines the async SinkStressRunner class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class AsyncSinkStressRunner
 {
     /// <summary>
-    /// Gets or sets the default BufferSize value used by this component.
+    /// Gets or sets the default BufferSize value.
     /// </summary>
     private const int DefaultBufferSize = 10_000;
     /// <summary>
-    /// Gets or sets the producer Counts value used by this component.
+    /// Gets or sets the producer Counts value.
     /// </summary>
     private static readonly int[] ProducerCounts = [1, 2, 4, 8, 16, 32];
     /// <summary>
-    /// Gets or sets the sustained RatesPerSecond value used by this component.
+    /// Gets or sets the sustained RatesPerSecond value.
     /// </summary>
     private static readonly int[] SustainedRatesPerSecond = [1_000, 10_000, 50_000, 100_000];
     /// <summary>
-    /// Executes the sustained Duration operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the sustained Duration operation.
     /// </summary>
     private static readonly TimeSpan SustainedDuration = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// Executes the run AllAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run AllAsync operation.
     /// </summary>
     public static async Task RunAllAsync()
     {
@@ -53,7 +53,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the run BurstMatrixAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run BurstMatrixAsync operation.
     /// </summary>
     private static async Task RunBurstMatrixAsync()
     {
@@ -63,7 +63,7 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
         /// <summary>
-        /// Gets or sets the events PerProducer value used by this component.
+        /// Gets or sets the events PerProducer value.
         /// </summary>
         const int eventsPerProducer = 50_000;
 
@@ -75,7 +75,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the run SustainedMatrixAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run SustainedMatrixAsync operation.
     /// </summary>
     private static async Task RunSustainedMatrixAsync()
     {
@@ -95,7 +95,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the run ShutdownFlushScenarioAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run ShutdownFlushScenarioAsync operation.
     /// </summary>
     private static async Task RunShutdownFlushScenarioAsync()
     {
@@ -103,11 +103,11 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("=== Shutdown Flush Scenario ===");
 
         /// <summary>
-        /// Gets or sets the producer Count value used by this component.
+        /// Gets or sets the producer Count value.
         /// </summary>
         const int producerCount = 8;
         /// <summary>
-        /// Gets or sets the events PerProducer value used by this component.
+        /// Gets or sets the events PerProducer value.
         /// </summary>
         const int eventsPerProducer = 75_000;
 
@@ -122,7 +122,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the run BurstScenarioAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run BurstScenarioAsync operation.
     /// </summary>
     private static async Task<StressScenarioResult> RunBurstScenarioAsync(int producerCount, int eventsPerProducer)
     {
@@ -189,7 +189,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the run SustainedScenarioAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run SustainedScenarioAsync operation.
     /// </summary>
     private static async Task<StressScenarioResult> RunSustainedScenarioAsync(int producerCount, int targetRatePerSecond, TimeSpan duration)
     {
@@ -268,7 +268,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the build ProductionLikeLogger operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the build ProductionLikeLogger operation.
     /// </summary>
     private static Serilog.ILogger BuildProductionLikeLogger(string outputDirectory, SequenceCountingSink countingSink)
     {
@@ -301,7 +301,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the build Result operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the build Result operation.
     /// </summary>
     private static StressScenarioResult BuildResult(
         int producerCount,
@@ -333,7 +333,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the create TempOutputDirectory operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the create TempOutputDirectory operation.
     /// </summary>
     private static string CreateTempOutputDirectory(string scenario)
     {
@@ -343,7 +343,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the try DeleteDirectory operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try DeleteDirectory operation.
     /// </summary>
     private static void TryDeleteDirectory(string path)
     {
@@ -361,7 +361,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Executes the to Microseconds operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the to Microseconds operation.
     /// </summary>
     private static double ToMicroseconds(long ticks)
     {
@@ -369,22 +369,22 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Represents the sequence CountingSink class used by this benchmark or regression-gate component.
+    /// Defines the sequence CountingSink class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class SequenceCountingSink : Serilog.Core.ILogEventSink
     {
         /// <summary>
-        /// Gets or sets the _writtenCount value used by this component.
+        /// Gets or sets the _writtenCount value.
         /// </summary>
         private long _writtenCount;
 
         /// <summary>
-        /// Executes the written Count operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the written Count operation.
         /// </summary>
         public long WrittenCount => Interlocked.Read(ref _writtenCount);
 
         /// <summary>
-        /// Executes the emit operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the emit operation.
         /// </summary>
         public void Emit(LogEvent logEvent)
         {
@@ -394,12 +394,12 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Represents the percentile Set record struct used by this benchmark or regression-gate component.
+    /// Defines the percentile Set record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct PercentileSet(double P50Microseconds, double P95Microseconds, double P99Microseconds, double MaxMicroseconds)
     {
         /// <summary>
-        /// Executes the from operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the from operation.
         /// </summary>
         public static PercentileSet From(IEnumerable<double> values)
         {
@@ -417,7 +417,7 @@ internal static class AsyncSinkStressRunner
         }
 
         /// <summary>
-        /// Executes the percentile operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the percentile operation.
         /// </summary>
         private static double Percentile(double[] ordered, double percentile)
         {
@@ -440,7 +440,7 @@ internal static class AsyncSinkStressRunner
     }
 
     /// <summary>
-    /// Represents the stress ScenarioResult record struct used by this benchmark or regression-gate component.
+    /// Defines the stress ScenarioResult record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct StressScenarioResult(
         int ProducerCount,

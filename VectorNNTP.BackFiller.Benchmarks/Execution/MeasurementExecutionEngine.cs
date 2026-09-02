@@ -10,12 +10,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the measurement ExecutionEngine class used by this benchmark or regression-gate component.
+/// Defines the measurement ExecutionEngine class for benchmark or isolated-regression execution.
 /// </summary>
 internal static partial class MeasurementExecutionEngine
 {
     /// <summary>
-    /// Executes the producer LoopAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the producer LoopAsync operation.
     /// </summary>
     internal static async Task ProducerLoopAsync(
         BoundedArticleQueue queue,
@@ -72,7 +72,7 @@ internal static partial class MeasurementExecutionEngine
     }
 
     /// <summary>
-    /// Executes the dispatch LoopAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the dispatch LoopAsync operation.
     /// </summary>
     internal static async Task DispatchLoopAsync(
         BoundedArticleQueue queue,
@@ -159,7 +159,7 @@ internal static partial class MeasurementExecutionEngine
     }
 
     /// <summary>
-    /// Executes the telemetry LoopAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the telemetry LoopAsync operation.
     /// </summary>
     internal static async Task TelemetryLoopAsync(
         BoundedArticleQueue queue,

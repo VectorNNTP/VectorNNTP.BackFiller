@@ -17,38 +17,38 @@ using VectorNNTP.BackFiller.Benchmarks.Execution;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the transit ServerStressRunner class used by this benchmark or regression-gate component.
+/// Defines the transit ServerStressRunner class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class TransitServerStressRunner
 {
     /// <summary>
-    /// Gets or sets the default ArticleTargetBytes value used by this component.
+    /// Gets or sets the default ArticleTargetBytes value.
     /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
     /// <summary>
-    /// Gets or sets the default WarmupSeconds value used by this component.
+    /// Gets or sets the default WarmupSeconds value.
     /// </summary>
     private const int DefaultWarmupSeconds = 10;
     /// <summary>
-    /// Gets or sets the validation Seconds value used by this component.
+    /// Gets or sets the validation Seconds value.
     /// </summary>
     private const int ValidationSeconds = 10;
     /// <summary>
-    /// Gets or sets the default GeneratorMeasurementSeconds value used by this component.
+    /// Gets or sets the default GeneratorMeasurementSeconds value.
     /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;
 
     /// <summary>
-    /// Executes the runtime Identity operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the runtime Identity operation.
     /// </summary>
     private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
     /// <summary>
-    /// Gets or sets the benchmark BuildVersion value used by this component.
+    /// Gets or sets the benchmark BuildVersion value.
     /// </summary>
     private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
 
     /// <summary>
-    /// Executes the run Async operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run Async operation.
     /// </summary>
     internal static async Task RunAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -57,7 +57,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run ValidationAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run ValidationAsync operation.
     /// </summary>
     internal static async Task RunValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -101,7 +101,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run SaturationAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run SaturationAsync operation.
     /// </summary>
     internal static async Task RunSaturationAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -110,7 +110,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run GeneratorWorkerSweepAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run GeneratorWorkerSweepAsync operation.
     /// </summary>
     internal static async Task RunGeneratorWorkerSweepAsync(CancellationToken cancellationToken = default)
     {
@@ -139,7 +139,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run Forensic32 WorkerAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run Forensic32 WorkerAsync operation.
     /// </summary>
     internal static async Task RunForensic32WorkerAsync(CancellationToken cancellationToken = default)
     {
@@ -160,7 +160,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run GeneratorBaselineAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run GeneratorBaselineAsync operation.
     /// </summary>
     internal static async Task RunGeneratorBaselineAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -168,7 +168,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run SingleTraceAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run SingleTraceAsync operation.
     /// </summary>
     internal static async Task RunSingleTraceAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -181,7 +181,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run CoreAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run CoreAsync operation.
     /// </summary>
     private static Task RunCoreAsync(TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
@@ -216,7 +216,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the run MeasurementAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run MeasurementAsync operation.
     /// </summary>
     private static async Task<BenchmarkResult> RunMeasurementAsync(
         TransitPublisher publisher,
@@ -236,7 +236,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the create TransitPublisherLogger operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the create TransitPublisherLogger operation.
     /// </summary>
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
     {
@@ -247,7 +247,7 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Executes the write StructuredResultArtifacts operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the write StructuredResultArtifacts operation.
     /// </summary>
     private static void WriteStructuredResultArtifacts(BenchmarkResult result, TransitBenchmarkConfig config)
     {
@@ -256,11 +256,11 @@ internal static class TransitServerStressRunner
             config,
             Environment.ProcessorCount,
             /// <summary>
-            /// Executes the from operation while preserving the component's benchmark or test-harness contract.
+            /// Performs the from operation.
             /// </summary>
             static (benchmarkResult, benchmarkConfig, processorCount) => BenchmarkResultArtifact.From(benchmarkResult, benchmarkConfig, processorCount),
             /// <summary>
-            /// Executes the artifact operation while preserving the component's benchmark or test-harness contract.
+            /// Performs the artifact operation.
             /// </summary>
             static artifact => artifact.ToCsv());
     }

@@ -22,7 +22,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
     /// <summary>
-    /// Represents the y EncArticleValidatorBenchmarks class used by this benchmark or regression-gate component.
+    /// Defines the y EncArticleValidatorBenchmarks class for benchmark or isolated-regression execution.
     /// </summary>
     public class YEncArticleValidatorBenchmarks
     {
@@ -76,7 +76,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         [GlobalSetup]
         /// <summary>
-        /// Executes the setup operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the setup operation.
         /// </summary>
         public void Setup()
         {
@@ -107,7 +107,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Baseline = true, Description = "ValidSmall")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate ValidSmall operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate ValidSmall operation.
         /// </summary>
         public int ValidateValidSmall() => (int)YEncArticleValidator.Validate(_validSmall).Status;
 
@@ -118,7 +118,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "ValidLarge")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate ValidLarge operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate ValidLarge operation.
         /// </summary>
         public int ValidateValidLarge() => (int)YEncArticleValidator.Validate(_validLarge).Status;
 
@@ -129,7 +129,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "ValidMultipart")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate ValidMultipart operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate ValidMultipart operation.
         /// </summary>
         public int ValidateValidMultipart() => (int)YEncArticleValidator.Validate(_validMultipart).Status;
 
@@ -140,7 +140,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "MalformedMetadata")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate MalformedMetadata operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate MalformedMetadata operation.
         /// </summary>
         public int ValidateMalformedMetadata() => (int)YEncArticleValidator.Validate(_malformedMetadata).Status;
 
@@ -151,7 +151,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "CrcMismatch")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate CrcMismatch operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate CrcMismatch operation.
         /// </summary>
         public int ValidateCrcMismatch() => (int)YEncArticleValidator.Validate(_crcMismatch).Status;
 
@@ -162,7 +162,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "InvalidEscape")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate InvalidEscape operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate InvalidEscape operation.
         /// </summary>
         public int ValidateInvalidEscape() => (int)YEncArticleValidator.Validate(_invalidEscape).Status;
 
@@ -173,7 +173,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "ValidNonYEnc")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate Nony Enc operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate Nony Enc operation.
         /// </summary>
         public int ValidateNonYEnc() => (int)YEncArticleValidator.Validate(_nonYEnc).Status;
 
@@ -184,7 +184,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "DotStuffedValid")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate DotStuffedValid operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate DotStuffedValid operation.
         /// </summary>
         public int ValidateDotStuffedValid() => (int)YEncArticleValidator.Validate(_dotStuffed).Status;
 
@@ -195,7 +195,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [Benchmark(Description = "MetadataHeavy")]
         [BenchmarkCategory("YEncValidator")]
         /// <summary>
-        /// Executes the validate MetadataHeavy operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the validate MetadataHeavy operation.
         /// </summary>
         public int ValidateMetadataHeavy() => (int)YEncArticleValidator.Validate(_metadataHeavy).Status;
 

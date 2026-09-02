@@ -12,12 +12,12 @@ using System.Text;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the runtime IdentityGuard class used by this benchmark or regression-gate component.
+/// Defines the runtime IdentityGuard class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class RuntimeIdentityGuard
 {
     /// <summary>
-    /// Executes the ensure Matches operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the ensure Matches operation.
     /// </summary>
     internal static void EnsureMatches(RuntimeIdentityExpectation expected, RuntimeExecutionIdentity runtimeIdentity)
     {
@@ -238,7 +238,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Executes the resolve LoadedProductionAssembly operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the resolve LoadedProductionAssembly operation.
     /// </summary>
     private static Assembly? ResolveLoadedProductionAssembly()
     {
@@ -247,7 +247,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Executes the resolve ActualProductionAssemblyPath operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the resolve ActualProductionAssemblyPath operation.
     /// </summary>
     private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
     {
@@ -262,7 +262,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Executes the compute Sha256 operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the compute Sha256 operation.
     /// </summary>
     private static string ComputeSha256(string filePath)
     {
@@ -272,7 +272,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Executes the is UnknownIdentityValue operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the is UnknownIdentityValue operation.
     /// </summary>
     private static bool IsUnknownIdentityValue(string? value)
     {
@@ -280,7 +280,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Executes the normalize TargetFramework operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the normalize TargetFramework operation.
     /// </summary>
     private static string NormalizeTargetFramework(string? value)
     {
@@ -296,7 +296,7 @@ internal static class RuntimeIdentityGuard
         }
 
         /// <summary>
-        /// Gets or sets the prefix value used by this component.
+        /// Gets or sets the prefix value.
         /// </summary>
         const string prefix = ".NETCoreApp,Version=v";
         if (candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))

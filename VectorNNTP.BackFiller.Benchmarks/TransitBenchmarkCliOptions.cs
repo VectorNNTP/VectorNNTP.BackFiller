@@ -7,7 +7,7 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the transit BenchmarkCliOptions record struct used by this benchmark or regression-gate component.
+/// Defines the transit BenchmarkCliOptions record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct TransitBenchmarkCliOptions(
     int? DurationSeconds,
@@ -34,7 +34,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
     string? ExpectedProductionFileVersion = null)
 {
     /// <summary>
-    /// Executes the parse operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the parse operation.
     /// </summary>
     internal static TransitBenchmarkCliOptions Parse(string[] args)
     {
@@ -193,7 +193,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
     }
 
     /// <summary>
-    /// Executes the parse PositiveInt operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the parse PositiveInt operation.
     /// </summary>
     private static int ParsePositiveInt(string key, string raw)
     {
@@ -206,7 +206,7 @@ internal readonly record struct TransitBenchmarkCliOptions(
     }
 
     /// <summary>
-    /// Executes the parse RequiredString operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the parse RequiredString operation.
     /// </summary>
     private static string ParseRequiredString(string key, string raw)
     {

@@ -10,17 +10,17 @@ using System.Text;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the benchmark WorkloadFactory class used by this benchmark or regression-gate component.
+/// Defines the benchmark WorkloadFactory class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class BenchmarkWorkloadFactory
 {
     /// <summary>
-    /// Gets or sets the pre GeneratedMessageIdPoolSize value used by this component.
+    /// Gets or sets the pre GeneratedMessageIdPoolSize value.
     /// </summary>
     private const int PreGeneratedMessageIdPoolSize = 2_000_000;
 
     /// <summary>
-    /// Executes the prepare BenchmarkWorkload operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the prepare BenchmarkWorkload operation.
     /// </summary>
     internal static PreparedBenchmarkWorkload PrepareBenchmarkWorkload(TransitBenchmarkConfig config)
     {
@@ -64,7 +64,7 @@ internal static class BenchmarkWorkloadFactory
     }
 
     /// <summary>
-    /// Executes the create ReusablePayloadTemplate operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the create ReusablePayloadTemplate operation.
     /// </summary>
     private static byte[] CreateReusablePayloadTemplate(int targetBytes)
     {

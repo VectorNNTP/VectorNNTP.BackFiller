@@ -7,7 +7,7 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the workload PreparationSummary record struct used by this benchmark or regression-gate component.
+/// Defines the workload PreparationSummary record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct WorkloadPreparationSummary(
     double PreGenerationDurationMilliseconds,

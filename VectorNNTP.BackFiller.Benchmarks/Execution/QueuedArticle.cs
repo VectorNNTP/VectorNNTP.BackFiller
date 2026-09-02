@@ -7,6 +7,6 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the queued Article record struct used by this benchmark or regression-gate component.
+/// Defines the queued Article record struct for benchmark or isolated-regression execution.
 /// </summary>
 internal readonly record struct QueuedArticle(string MessageId, int PayloadLength);

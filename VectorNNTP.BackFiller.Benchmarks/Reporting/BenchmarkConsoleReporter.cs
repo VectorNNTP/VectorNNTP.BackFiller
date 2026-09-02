@@ -7,12 +7,12 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the benchmark ConsoleReporter class used by this benchmark or regression-gate component.
+/// Defines the benchmark ConsoleReporter class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class BenchmarkConsoleReporter
 {
     /// <summary>
-    /// Executes the print FinalReport operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print FinalReport operation.
     /// </summary>
     internal static void PrintFinalReport(BenchmarkResult result, TransitBenchmarkConfig config)
     {

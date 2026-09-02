@@ -21,69 +21,69 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 /// <summary>
-/// Represents the logging ApiBenchmarks class used by this benchmark or regression-gate component.
+/// Defines the logging ApiBenchmarks class for benchmark or isolated-regression execution.
 /// </summary>
 public partial class LoggingApiBenchmarks
 {
     /// <summary>
-    /// Gets or sets the demo StateValue value used by this component.
+    /// Gets or sets the demo StateValue value.
     /// </summary>
     private static readonly DemoState DemoStateValue = DemoState.Ready;
     /// <summary>
-    /// Executes the demo TimeSpan operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the demo TimeSpan operation.
     /// </summary>
     private static readonly TimeSpan DemoTimeSpan = TimeSpan.FromMilliseconds(1234);
     /// <summary>
-    /// Gets or sets the demo Int value used by this component.
+    /// Gets or sets the demo Int value.
     /// </summary>
     private const int DemoInt = 42;
     /// <summary>
-    /// Gets or sets the demo Long value used by this component.
+    /// Gets or sets the demo Long value.
     /// </summary>
     private const long DemoLong = 123456789L;
     /// <summary>
-    /// Gets or sets the demo Double value used by this component.
+    /// Gets or sets the demo Double value.
     /// </summary>
     private const double DemoDouble = 123.456;
     /// <summary>
-    /// Gets or sets the demo String value used by this component.
+    /// Gets or sets the demo String value.
     /// </summary>
     private const string DemoString = "benchmark-payload";
 
     /// <summary>
-    /// Gets or sets the _precreatedException value used by this component.
+    /// Gets or sets the _precreatedException value.
     /// </summary>
     private Exception _precreatedException = null!;
 
     /// <summary>
-    /// Gets or sets the _sourceGeneratedDebugEnabled value used by this component.
+    /// Gets or sets the _sourceGeneratedDebugEnabled value.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedDebugEnabled = null!;
     /// <summary>
-    /// Gets or sets the _sourceGeneratedDebugDisabled value used by this component.
+    /// Gets or sets the _sourceGeneratedDebugDisabled value.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedDebugDisabled = null!;
     /// <summary>
-    /// Gets or sets the _sourceGeneratedInfoEnabled value used by this component.
+    /// Gets or sets the _sourceGeneratedInfoEnabled value.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedInfoEnabled = null!;
 
     /// <summary>
-    /// Gets or sets the _serilogDebugEnabled value used by this component.
+    /// Gets or sets the _serilogDebugEnabled value.
     /// </summary>
     private Serilog.ILogger _serilogDebugEnabled = null!;
     /// <summary>
-    /// Gets or sets the _serilogDebugDisabled value used by this component.
+    /// Gets or sets the _serilogDebugDisabled value.
     /// </summary>
     private Serilog.ILogger _serilogDebugDisabled = null!;
     /// <summary>
-    /// Gets or sets the _serilogInfoEnabled value used by this component.
+    /// Gets or sets the _serilogInfoEnabled value.
     /// </summary>
     private Serilog.ILogger _serilogInfoEnabled = null!;
 
     [GlobalSetup]
     /// <summary>
-    /// Executes the setup operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the setup operation.
     /// </summary>
     public void Setup()
     {
@@ -100,7 +100,7 @@ public partial class LoggingApiBenchmarks
 
     [GlobalCleanup]
     /// <summary>
-    /// Executes the cleanup operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the cleanup operation.
     /// </summary>
     public void Cleanup()
     {
@@ -116,7 +116,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SourceGenerated", "Disabled")]
     [Benchmark(Description = "Debug LoggerMessage disabled")]
     /// <summary>
-    /// Executes the source Generated_Debug_Disabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the source Generated_Debug_Disabled operation.
     /// </summary>
     public void SourceGenerated_Debug_Disabled()
     {
@@ -133,7 +133,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SourceGenerated", "Enabled")]
     [Benchmark(Description = "Debug LoggerMessage enabled")]
     /// <summary>
-    /// Executes the source Generated_Debug_Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the source Generated_Debug_Enabled operation.
     /// </summary>
     public void SourceGenerated_Debug_Enabled()
     {
@@ -150,7 +150,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SourceGenerated", "Enabled")]
     [Benchmark(Description = "Info LoggerMessage enabled")]
     /// <summary>
-    /// Executes the source Generated_Info_Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the source Generated_Info_Enabled operation.
     /// </summary>
     public void SourceGenerated_Info_Enabled()
     {
@@ -167,7 +167,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SerilogStatic", "Disabled")]
     [Benchmark(Description = "Debug Serilog template disabled")]
     /// <summary>
-    /// Executes the serilog Static_Debug_Disabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the serilog Static_Debug_Disabled operation.
     /// </summary>
     public void SerilogStatic_Debug_Disabled()
     {
@@ -184,7 +184,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SerilogStatic", "Enabled")]
     [Benchmark(Description = "Debug Serilog template enabled")]
     /// <summary>
-    /// Executes the serilog Static_Debug_Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the serilog Static_Debug_Enabled operation.
     /// </summary>
     public void SerilogStatic_Debug_Enabled()
     {
@@ -201,7 +201,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SerilogStatic", "Enabled")]
     [Benchmark(Description = "Info Serilog template enabled")]
     /// <summary>
-    /// Executes the serilog Static_Info_Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the serilog Static_Info_Enabled operation.
     /// </summary>
     public void SerilogStatic_Info_Enabled()
     {
@@ -218,7 +218,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SourceGenerated", "Exception", "Disabled")]
     [Benchmark(Description = "LoggerMessage exception disabled")]
     /// <summary>
-    /// Executes the source Generated_Exception_Disabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the source Generated_Exception_Disabled operation.
     /// </summary>
     public void SourceGenerated_Exception_Disabled()
     {
@@ -231,7 +231,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SourceGenerated", "Exception", "Enabled")]
     [Benchmark(Description = "LoggerMessage exception enabled")]
     /// <summary>
-    /// Executes the source Generated_Exception_Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the source Generated_Exception_Enabled operation.
     /// </summary>
     public void SourceGenerated_Exception_Enabled()
     {
@@ -244,7 +244,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SerilogStatic", "Exception", "Disabled")]
     [Benchmark(Description = "Serilog exception disabled")]
     /// <summary>
-    /// Executes the serilog _Exception_Disabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the serilog _Exception_Disabled operation.
     /// </summary>
     public void Serilog_Exception_Disabled()
     {
@@ -254,7 +254,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("SerilogStatic", "Exception", "Enabled")]
     [Benchmark(Description = "Serilog exception enabled")]
     /// <summary>
-    /// Executes the serilog _Exception_Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the serilog _Exception_Enabled operation.
     /// </summary>
     public void Serilog_Exception_Enabled()
     {
@@ -264,7 +264,7 @@ public partial class LoggingApiBenchmarks
     [BenchmarkCategory("Exception", "Construction")]
     [Benchmark(Description = "Exception construction only")]
     /// <summary>
-    /// Executes the exception _Construction_Only operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the exception _Construction_Only operation.
     /// </summary>
     public Exception Exception_Construction_Only()
     {
@@ -272,7 +272,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Executes the create MelLogger operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the create MelLogger operation.
     /// </summary>
     private static Microsoft.Extensions.Logging.ILogger CreateMelLogger(LogLevel minimumLevel)
     {
@@ -292,7 +292,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Executes the create SerilogLogger operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the create SerilogLogger operation.
     /// </summary>
     private static Serilog.ILogger CreateSerilogLogger(LogEventLevel minimumLevel)
     {
@@ -303,7 +303,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Executes the dispose Logger operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the dispose Logger operation.
     /// </summary>
     private static void DisposeLogger(Microsoft.Extensions.Logging.ILogger logger)
     {
@@ -314,7 +314,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Executes the to SerilogLevel operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the to SerilogLevel operation.
     /// </summary>
     private static LogEventLevel ToSerilogLevel(LogLevel level)
     {
@@ -331,7 +331,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Represents the demo State enum used by this benchmark or regression-gate component.
+    /// Defines the demo State enum for benchmark or isolated-regression execution.
     /// </summary>
     private enum DemoState
     {
@@ -341,12 +341,12 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Represents the null SerilogSink class used by this benchmark or regression-gate component.
+    /// Defines the null SerilogSink class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class NullSerilogSink : Serilog.Core.ILogEventSink
     {
         /// <summary>
-        /// Executes the emit operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the emit operation.
         /// </summary>
         public void Emit(LogEvent logEvent)
         {
@@ -355,7 +355,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Represents the benchmark LoggingMessages class used by this benchmark or regression-gate component.
+    /// Defines the benchmark LoggingMessages class for benchmark or isolated-regression execution.
     /// </summary>
     private static partial class BenchmarkLoggingMessages
     {
@@ -364,7 +364,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Debug,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
         /// <summary>
-        /// Executes the log DemoDebug operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the log DemoDebug operation.
         /// </summary>
         public static partial void LogDemoDebug(
             Microsoft.Extensions.Logging.ILogger logger,
@@ -380,7 +380,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Information,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
         /// <summary>
-        /// Executes the log DemoInformation operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the log DemoInformation operation.
         /// </summary>
         public static partial void LogDemoInformation(
             Microsoft.Extensions.Logging.ILogger logger,
@@ -396,7 +396,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Debug,
             Message = "Exception in benchmark path {Path}")]
         /// <summary>
-        /// Executes the log DemoException operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the log DemoException operation.
         /// </summary>
         public static partial void LogDemoException(
             Microsoft.Extensions.Logging.ILogger logger,

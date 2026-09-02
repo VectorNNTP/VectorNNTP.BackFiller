@@ -9,7 +9,7 @@ using System.Text.Json;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the json ArtifactWriter class used by this benchmark or regression-gate component.
+/// Defines the json ArtifactWriter class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class JsonArtifactWriter
 {
@@ -22,7 +22,7 @@ internal static class JsonArtifactWriter
     }
 
     /// <summary>
-    /// Executes the get ArtifactPath operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the get ArtifactPath operation.
     /// </summary>
     internal static string GetArtifactPath(string baseDirectory, string stamp)
     {
@@ -30,7 +30,7 @@ internal static class JsonArtifactWriter
     }
 
     /// <summary>
-    /// Executes the write ToPath operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the write ToPath operation.
     /// </summary>
     internal static void WriteToPath(string path, string json)
     {

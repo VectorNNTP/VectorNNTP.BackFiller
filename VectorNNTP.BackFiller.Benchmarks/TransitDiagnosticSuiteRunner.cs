@@ -14,21 +14,21 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the transit DiagnosticSuiteRunner class used by this benchmark or regression-gate component.
+/// Defines the transit DiagnosticSuiteRunner class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class TransitDiagnosticSuiteRunner
 {
     /// <summary>
-    /// Gets or sets the required TransitHostname value used by this component.
+    /// Gets or sets the required TransitHostname value.
     /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
     /// <summary>
-    /// Gets or sets the default ArticleTargetBytes value used by this component.
+    /// Gets or sets the default ArticleTargetBytes value.
     /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
 
     /// <summary>
-    /// Executes the run Async operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run Async operation.
     /// </summary>
     internal static async Task RunAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -104,7 +104,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the warmup GeneratorAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the warmup GeneratorAsync operation.
     /// </summary>
     private static async Task WarmupGeneratorAsync(int warmupSeconds, int articleBytes, int workerCount, CancellationToken cancellationToken)
     {
@@ -137,7 +137,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the run GeneratorOnlyAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run GeneratorOnlyAsync operation.
     /// </summary>
     private static async Task<GenerationOnlyResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int workerCount, CancellationToken cancellationToken)
     {
@@ -227,7 +227,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the run GeneratorQueueAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run GeneratorQueueAsync operation.
     /// </summary>
     private static async Task<QueuePipelineResult> RunGeneratorQueueAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int queueArticles, long queueBytes, CancellationToken cancellationToken)
     {
@@ -360,7 +360,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the run GeneratorQueueDispatchNoOpAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run GeneratorQueueDispatchNoOpAsync operation.
     /// </summary>
     private static async Task<QueuePipelineResult> RunGeneratorQueueDispatchNoOpAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int queueArticles, long queueBytes, int dispatchWorkers, CancellationToken cancellationToken)
     {
@@ -488,7 +488,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the run RealPublisherInstrumentedAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run RealPublisherInstrumentedAsync operation.
     /// </summary>
     private static async Task<EndToEndResult> RunRealPublisherInstrumentedAsync(
         string label,
@@ -519,7 +519,7 @@ internal static class TransitDiagnosticSuiteRunner
 
         await using TransitPublisher publisher = new(
             /// <summary>
-            /// Executes the back FillerRuntimeOptions operation while preserving the component's benchmark or test-harness contract.
+            /// Performs the back FillerRuntimeOptions operation.
             /// </summary>
             new BackFillerRuntimeOptions(
                 CanonicalBackFillerFqdn: "benchmark.backfiller.usenet.ninja",
@@ -702,7 +702,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the run ParallelGeneratorSweepAsync operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run ParallelGeneratorSweepAsync operation.
     /// </summary>
     private static async Task<List<GenerationOnlyResult>> RunParallelGeneratorSweepAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, CancellationToken cancellationToken)
     {
@@ -731,7 +731,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the load RuntimeConfig operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the load RuntimeConfig operation.
     /// </summary>
     private static RuntimeConfig LoadRuntimeConfig()
     {
@@ -761,7 +761,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the find BackFillerAppSettingsPath operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the find BackFillerAppSettingsPath operation.
     /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
@@ -782,7 +782,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the compute PercentileMicroseconds operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the compute PercentileMicroseconds operation.
     /// </summary>
     private static double ComputePercentileMicroseconds(IEnumerable<long> ticks, double percentile)
     {
@@ -798,7 +798,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the print GenerationResult operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print GenerationResult operation.
     /// </summary>
     private static void PrintGenerationResult(GenerationOnlyResult result)
     {
@@ -807,7 +807,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the print QueuePipelineResult operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print QueuePipelineResult operation.
     /// </summary>
     private static void PrintQueuePipelineResult(QueuePipelineResult result)
     {
@@ -818,7 +818,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the print EndToEndResult operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print EndToEndResult operation.
     /// </summary>
     private static void PrintEndToEndResult(EndToEndResult result)
     {
@@ -830,7 +830,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Executes the print Summary operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the print Summary operation.
     /// </summary>
     private static void PrintSummary(GenerationOnlyResult test1, QueuePipelineResult test2, QueuePipelineResult test3, EndToEndResult test4, List<GenerationOnlyResult> test5, int articleBytes)
     {
@@ -877,37 +877,37 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Represents the cpu Sampler class used by this benchmark or regression-gate component.
+    /// Defines the cpu Sampler class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class CpuSampler
     {
         /// <summary>
-        /// Gets or sets the _process value used by this component.
+        /// Gets or sets the _process value.
         /// </summary>
         private readonly Process _process;
         /// <summary>
-        /// Executes the _elapsed operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the _elapsed operation.
         /// </summary>
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
         /// <summary>
-        /// Gets or sets the _cts value used by this component.
+        /// Gets or sets the _cts value.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value used by this component.
+        /// Gets or sets the _task value.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _cpuStart value used by this component.
+        /// Gets or sets the _cpuStart value.
         /// </summary>
         private TimeSpan _cpuStart;
         /// <summary>
-        /// Gets or sets the _peakWorkingSet value used by this component.
+        /// Gets or sets the _peakWorkingSet value.
         /// </summary>
         private long _peakWorkingSet;
 
         /// <summary>
-        /// Executes the cpu Sampler operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the cpu Sampler operation.
         /// </summary>
         internal CpuSampler(Process process)
         {
@@ -916,24 +916,24 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Gets or sets the average CpuPercent value used by this component.
+        /// Gets or sets the average CpuPercent value.
         /// </summary>
         internal double AverageCpuPercent { get; private set; }
         /// <summary>
-        /// Gets or sets the equivalent BusyCores value used by this component.
+        /// Gets or sets the equivalent BusyCores value.
         /// </summary>
         internal double EquivalentBusyCores => AverageCpuPercent / 100d * Environment.ProcessorCount;
         /// <summary>
-        /// Gets or sets the peak WorkingSetBytes value used by this component.
+        /// Gets or sets the peak WorkingSetBytes value.
         /// </summary>
         internal long PeakWorkingSetBytes => _peakWorkingSet;
         /// <summary>
-        /// Gets or sets the total CpuTime value used by this component.
+        /// Gets or sets the total CpuTime value.
         /// </summary>
         internal TimeSpan TotalCpuTime { get; private set; }
 
         /// <summary>
-        /// Executes the start operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the start operation.
         /// </summary>
         internal void Start()
         {
@@ -955,7 +955,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Executes the stop operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the stop operation.
         /// </summary>
         internal void Stop()
         {
@@ -982,41 +982,41 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Represents the queue DepthSampler class used by this benchmark or regression-gate component.
+    /// Defines the queue DepthSampler class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class QueueDepthSampler
     {
         /// <summary>
-        /// Gets or sets the _queue value used by this component.
+        /// Gets or sets the _queue value.
         /// </summary>
         private readonly TransitBenchmarkCore.BoundedArticleQueue _queue;
         /// <summary>
-        /// Gets or sets the _cts value used by this component.
+        /// Gets or sets the _cts value.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value used by this component.
+        /// Gets or sets the _task value.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _sum value used by this component.
+        /// Gets or sets the _sum value.
         /// </summary>
         private long _sum;
         /// <summary>
-        /// Gets or sets the _count value used by this component.
+        /// Gets or sets the _count value.
         /// </summary>
         private long _count;
         /// <summary>
-        /// Gets or sets the _min value used by this component.
+        /// Gets or sets the _min value.
         /// </summary>
         private int _min = int.MaxValue;
         /// <summary>
-        /// Gets or sets the _max value used by this component.
+        /// Gets or sets the _max value.
         /// </summary>
         private int _max;
 
         /// <summary>
-        /// Executes the queue DepthSampler operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the queue DepthSampler operation.
         /// </summary>
         internal QueueDepthSampler(TransitBenchmarkCore.BoundedArticleQueue queue)
         {
@@ -1024,20 +1024,20 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Gets or sets the min Depth value used by this component.
+        /// Gets or sets the min Depth value.
         /// </summary>
         internal int MinDepth => _min == int.MaxValue ? 0 : _min;
         /// <summary>
-        /// Gets or sets the max Depth value used by this component.
+        /// Gets or sets the max Depth value.
         /// </summary>
         internal int MaxDepth => _max;
         /// <summary>
-        /// Executes the average Depth operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average Depth operation.
         /// </summary>
         internal double AverageDepth => _count == 0 ? 0 : (double)_sum / _count;
 
         /// <summary>
-        /// Executes the start operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the start operation.
         /// </summary>
         internal void Start()
         {
@@ -1057,7 +1057,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Executes the stop operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the stop operation.
         /// </summary>
         internal void Stop()
         {
@@ -1081,62 +1081,62 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Represents the stage Tracker class used by this benchmark or regression-gate component.
+    /// Defines the stage Tracker class for benchmark or isolated-regression execution.
     /// </summary>
     private sealed class StageTracker
     {
         /// <summary>
-        /// Executes the _stamps operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the _stamps operation.
         /// </summary>
         private readonly ConcurrentDictionary<string, StageStamp> _stamps = new(StringComparer.Ordinal);
         /// <summary>
-        /// Gets or sets the _generationTicks value used by this component.
+        /// Gets or sets the _generationTicks value.
         /// </summary>
         private long _generationTicks;
         /// <summary>
-        /// Gets or sets the _queueWaitTicks value used by this component.
+        /// Gets or sets the _queueWaitTicks value.
         /// </summary>
         private long _queueWaitTicks;
         /// <summary>
-        /// Gets or sets the _dispatchWaitTicks value used by this component.
+        /// Gets or sets the _dispatchWaitTicks value.
         /// </summary>
         private long _dispatchWaitTicks;
         /// <summary>
-        /// Gets or sets the _publishTicks value used by this component.
+        /// Gets or sets the _publishTicks value.
         /// </summary>
         private long _publishTicks;
         /// <summary>
-        /// Gets or sets the _lifecycleTicks value used by this component.
+        /// Gets or sets the _lifecycleTicks value.
         /// </summary>
         private long _lifecycleTicks;
         /// <summary>
-        /// Gets or sets the _count value used by this component.
+        /// Gets or sets the _count value.
         /// </summary>
         private long _count;
 
         /// <summary>
-        /// Executes the average GenerationUs operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average GenerationUs operation.
         /// </summary>
         internal double AverageGenerationUs => _count == 0 ? 0 : _generationTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Executes the average QueueWaitUs operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average QueueWaitUs operation.
         /// </summary>
         internal double AverageQueueWaitUs => _count == 0 ? 0 : _queueWaitTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Executes the average DispatchWaitUs operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average DispatchWaitUs operation.
         /// </summary>
         internal double AverageDispatchWaitUs => _count == 0 ? 0 : _dispatchWaitTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Executes the average PublishUs operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average PublishUs operation.
         /// </summary>
         internal double AveragePublishUs => _count == 0 ? 0 : _publishTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Executes the average LifecycleUs operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the average LifecycleUs operation.
         /// </summary>
         internal double AverageLifecycleUs => _count == 0 ? 0 : _lifecycleTicks * 1_000_000d / (Stopwatch.Frequency * _count);
 
         /// <summary>
-        /// Executes the record Produced operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the record Produced operation.
         /// </summary>
         internal void RecordProduced(string messageId, long generationTicks, long enqueueTicks, long enqueueEndTick)
         {
@@ -1144,7 +1144,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Executes the record Dequeued operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the record Dequeued operation.
         /// </summary>
         internal void RecordDequeued(string messageId, long dequeueTick)
         {
@@ -1155,7 +1155,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Executes the record PublishStart operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the record PublishStart operation.
         /// </summary>
         internal void RecordPublishStart(string messageId, long publishStart)
         {
@@ -1166,7 +1166,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Executes the record PublishEnd operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the record PublishEnd operation.
         /// </summary>
         internal void RecordPublishEnd(string messageId, long publishEndTick, bool accepted)
         {
@@ -1190,7 +1190,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Executes the peak ActualPending operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the peak ActualPending operation.
         /// </summary>
         internal int PeakActualPending(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics)
         {
@@ -1198,18 +1198,18 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Represents the stage Stamp record struct used by this benchmark or regression-gate component.
+        /// Defines the stage Stamp record struct for benchmark or isolated-regression execution.
         /// </summary>
         private readonly record struct StageStamp(long GenerationTicks, long EnqueueTicks, long EnqueueEndTick, long DequeueTick, long PublishStartTick);
     }
 
     /// <summary>
-    /// Represents the runtime Config record struct used by this benchmark or regression-gate component.
+    /// Defines the runtime Config record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct RuntimeConfig(string Host, int Port, bool UseSsl);
 
     /// <summary>
-    /// Represents the generation OnlyResult record struct used by this benchmark or regression-gate component.
+    /// Defines the generation OnlyResult record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct GenerationOnlyResult(
         string Label,
@@ -1231,21 +1231,21 @@ internal static class TransitDiagnosticSuiteRunner
         TimeSpan CpuTime)
     {
         /// <summary>
-        /// Gets or sets the articles PerSecond value used by this component.
+        /// Gets or sets the articles PerSecond value.
         /// </summary>
         internal double ArticlesPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Articles / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value used by this component.
+        /// Gets or sets the gbps value.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Executes the allocated BytesPerArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the allocated BytesPerArticle operation.
         /// </summary>
         internal double AllocatedBytesPerArticle => Articles == 0 ? 0 : (double)AllocatedBytes / Articles;
     }
 
     /// <summary>
-    /// Represents the queue PipelineResult record struct used by this benchmark or regression-gate component.
+    /// Defines the queue PipelineResult record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct QueuePipelineResult(
         string Label,
@@ -1276,29 +1276,29 @@ internal static class TransitDiagnosticSuiteRunner
         double AvgPublishUs)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value used by this component.
+        /// Gets or sets the generated PerSecond value.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the dispatched PerSecond value used by this component.
+        /// Gets or sets the dispatched PerSecond value.
         /// </summary>
         internal double DispatchedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Dispatched / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value used by this component.
+        /// Gets or sets the completed PerSecond value.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value used by this component.
+        /// Gets or sets the gbps value.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Executes the allocated BytesPerArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the allocated BytesPerArticle operation.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
 
     /// <summary>
-    /// Represents the end ToEndResult record struct used by this benchmark or regression-gate component.
+    /// Defines the end ToEndResult record struct for benchmark or isolated-regression execution.
     /// </summary>
     private readonly record struct EndToEndResult(
         string Label,
@@ -1328,23 +1328,23 @@ internal static class TransitDiagnosticSuiteRunner
         int ActiveConnections)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value used by this component.
+        /// Gets or sets the generated PerSecond value.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value used by this component.
+        /// Gets or sets the completed PerSecond value.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the accepted PerSecond value used by this component.
+        /// Gets or sets the accepted PerSecond value.
         /// </summary>
         internal double AcceptedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Accepted / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value used by this component.
+        /// Gets or sets the gbps value.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Executes the allocated BytesPerArticle operation while preserving the component's benchmark or test-harness contract.
+        /// Performs the allocated BytesPerArticle operation.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }

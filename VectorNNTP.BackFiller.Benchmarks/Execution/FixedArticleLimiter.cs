@@ -7,21 +7,21 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the fixed ArticleLimiter class used by this benchmark or regression-gate component.
+/// Defines the fixed ArticleLimiter class for benchmark or isolated-regression execution.
 /// </summary>
 internal sealed class FixedArticleLimiter
 {
     /// <summary>
-    /// Gets or sets the _targetCount value used by this component.
+    /// Gets or sets the _targetCount value.
     /// </summary>
     private readonly int _targetCount;
     /// <summary>
-    /// Gets or sets the _issuedCount value used by this component.
+    /// Gets or sets the _issuedCount value.
     /// </summary>
     private int _issuedCount;
 
     /// <summary>
-    /// Executes the fixed ArticleLimiter operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the fixed ArticleLimiter operation.
     /// </summary>
     internal FixedArticleLimiter(int targetCount)
     {
@@ -34,7 +34,7 @@ internal sealed class FixedArticleLimiter
     }
 
     /// <summary>
-    /// Executes the try ReserveNext operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the try ReserveNext operation.
     /// </summary>
     internal bool TryReserveNext()
     {

@@ -10,12 +10,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks.Execution;
 
 /// <summary>
-/// Represents the measurement RunCoordinator class used by this benchmark or regression-gate component.
+/// Defines the measurement RunCoordinator class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class MeasurementRunCoordinator
 {
     /// <summary>
-    /// Executes the run Async operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the run Async operation.
     /// </summary>
     internal static async Task<BenchmarkResult> RunAsync(
         TransitPublisher publisher,

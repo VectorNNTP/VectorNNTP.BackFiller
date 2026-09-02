@@ -10,17 +10,17 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the transit PublisherBenchmarkLogger class used by this benchmark or regression-gate component.
+/// Defines the transit PublisherBenchmarkLogger class for benchmark or isolated-regression execution.
 /// </summary>
 internal sealed class TransitPublisherBenchmarkLogger : ILogger<TransitPublisher>
 {
     /// <summary>
-    /// Gets or sets the _inner value used by this component.
+    /// Gets or sets the _inner value.
     /// </summary>
     private readonly ILogger _inner;
 
     /// <summary>
-    /// Executes the transit PublisherBenchmarkLogger operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the transit PublisherBenchmarkLogger operation.
     /// </summary>
     internal TransitPublisherBenchmarkLogger(ILogger inner)
     {
@@ -37,7 +37,7 @@ internal sealed class TransitPublisherBenchmarkLogger : ILogger<TransitPublisher
     }
 
     /// <summary>
-    /// Executes the is Enabled operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the is Enabled operation.
     /// </summary>
     public bool IsEnabled(LogLevel logLevel)
     {
@@ -65,7 +65,7 @@ internal sealed class TransitPublisherBenchmarkLogger : ILogger<TransitPublisher
     }
 
     /// <summary>
-    /// Executes the should SuppressAccepted239 Spam operation while preserving the component's benchmark or test-harness contract.
+    /// Performs the should SuppressAccepted239 Spam operation.
     /// </summary>
     private static bool ShouldSuppressAccepted239Spam(EventId eventId, LogLevel level, string message)
     {

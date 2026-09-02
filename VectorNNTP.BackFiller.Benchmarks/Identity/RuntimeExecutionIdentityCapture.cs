@@ -12,7 +12,7 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Represents the runtime ExecutionIdentityCapture class used by this benchmark or regression-gate component.
+/// Defines the runtime ExecutionIdentityCapture class for benchmark or isolated-regression execution.
 /// </summary>
 internal static class RuntimeExecutionIdentityCapture
 {
