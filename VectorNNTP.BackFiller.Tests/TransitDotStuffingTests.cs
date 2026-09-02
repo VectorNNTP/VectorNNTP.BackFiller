@@ -12,13 +12,18 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers transit dot stuffing behavior and invariants exercised by this test suite.
+        /// Verifies the transit dot stuffing tests scenario and its documented contract.
     /// </summary>
     public sealed class TransitDotStuffingTests
     {
         /// <summary>
-        /// Verifies the payload cases behavior and expected contract.
+        /// Verifies the payload cases scenario and its documented contract.
         /// </summary>
+        /// <returns>The payload cases value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the payload cases scenario and its documented contract.
+        /// </summary>
+        /// <returns>The payload cases value produced for the requested scenario.</returns>
         public static IEnumerable<object[]> PayloadCases()
         {
             yield return ["empty", Array.Empty<byte>()];
@@ -39,7 +44,7 @@ namespace VectorNNTP.Backfiller.Tests
             yield return ["payload-2mib", BuildMixedPayload(2_097_152, seed: 29, dotStartEvery: 19, averageLineLength: 300)];
         }
         /// <summary>
-        /// Exercises try dot stuff  all algorithms  match reference behavior, including the expected result and failure semantics.
+        /// Verifies the try dot stuff all algorithms match reference scenario and its documented contract.
         /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
@@ -61,7 +66,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Exercises try dot stuff  without trailing crlf append  matches reference behavior, including the expected result and failure semantics.
+        /// Verifies the try dot stuff without trailing crlf append matches reference scenario and its documented contract.
         /// </summary>
         [Theory]
         [MemberData(nameof(PayloadCases))]
@@ -83,7 +88,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
         /// <summary>
-        /// Exercises try dot stuff  when destination too small  returns false behavior, including the expected result and failure semantics.
+        /// Verifies the try dot stuff when destination too small returns false scenario and its documented contract.
         /// </summary>
         [Fact]
         public void TryDotStuff_WhenDestinationTooSmall_ReturnsFalse()
@@ -100,8 +105,13 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the build all byte values payload behavior and expected contract.
+        /// Verifies the build all byte values payload scenario and its documented contract.
         /// </summary>
+        /// <returns>The build all byte values payload value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the build all byte values payload scenario and its documented contract.
+        /// </summary>
+        /// <returns>The build all byte values payload value produced for the requested scenario.</returns>
         private static byte[] BuildAllByteValuesPayload()
         {
             byte[] bytes = new byte[256 + 32];
@@ -119,8 +129,15 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the build random payload behavior and expected contract.
+        /// Verifies the build random payload scenario and its documented contract.
         /// </summary>
+        /// <returns>The build random payload value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the build random payload scenario and its documented contract.
+        /// </summary>
+        /// <param name="size">The size supplied to the helper.</param>
+        /// <param name="seed">The seed supplied to the helper.</param>
+        /// <returns>The build random payload value produced for the requested scenario.</returns>
         private static byte[] BuildRandomPayload(int size, int seed)
         {
             byte[] data = new byte[size];
@@ -136,8 +153,17 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the build mixed payload behavior and expected contract.
+        /// Verifies the build mixed payload scenario and its documented contract.
         /// </summary>
+        /// <returns>The build mixed payload value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the build mixed payload scenario and its documented contract.
+        /// </summary>
+        /// <param name="size">The size supplied to the helper.</param>
+        /// <param name="seed">The seed supplied to the helper.</param>
+        /// <param name="dotStartEvery">The dot start every supplied to the helper.</param>
+        /// <param name="averageLineLength">The average line length supplied to the helper.</param>
+        /// <returns>The build mixed payload value produced for the requested scenario.</returns>
         private static byte[] BuildMixedPayload(int size, int seed, int dotStartEvery, int averageLineLength)
         {
             byte[] data = new byte[size];
@@ -181,8 +207,15 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the reference dot stuff behavior and expected contract.
+        /// Verifies the reference dot stuff scenario and its documented contract.
         /// </summary>
+        /// <returns>The reference dot stuff value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the reference dot stuff scenario and its documented contract.
+        /// </summary>
+        /// <param name="source">The source supplied to the helper.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">The append trailing crlf when missing lf supplied to the helper.</param>
+        /// <returns>The reference dot stuff value produced for the requested scenario.</returns>
         private static byte[] ReferenceDotStuff(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf)
         {
             List<byte> output = new(source.Length + 64);

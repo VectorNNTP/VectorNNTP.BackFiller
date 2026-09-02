@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Focused tests for logging async sink correctness, covering the covered test contracts.
+// Focused tests for logging async sink correctness, covering configuration, runtime, and failure-handling contracts exercised by the tests.
 // Primary responsibility: documents the executable contracts covered by the logging async sink correctness test suite.
 
 using Serilog;
@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers logging async sink correctness behavior and invariants exercised by this test suite.
+        /// Verifies the logging async sink correctness tests scenario and its documented contract.
     /// </summary>
     public sealed class LoggingAsyncSinkCorrectnessTests
     {
         /// <summary>
-        /// Exercises async sink  block when full  emits all submitted events behavior, including the expected result and failure semantics.
+        /// Verifies the async sink block when full emits all submitted events scenario and its documented contract.
         /// </summary>
         [Fact]
         public Task AsyncSink_BlockWhenFull_EmitsAllSubmittedEvents()
@@ -61,7 +61,7 @@ namespace VectorNNTP.Backfiller.Tests
             return Task.CompletedTask;
         }
         /// <summary>
-        /// Exercises async sink  close and flush async  drains queued events behavior, including the expected result and failure semantics.
+        /// Verifies the async sink close and flush async drains queued events scenario and its documented contract.
         /// </summary>
         [Fact]
         public Task AsyncSink_CloseAndFlushAsync_DrainsQueuedEvents()
@@ -112,8 +112,13 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create temp output directory behavior and expected contract.
+        /// Verifies the create temp output directory scenario and its documented contract.
         /// </summary>
+        /// <returns>The create temp output directory value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create temp output directory scenario and its documented contract.
+        /// </summary>
+        /// <returns>The create temp output directory value produced for the requested scenario.</returns>
         private static string CreateTempOutputDirectory()
         {
             string directory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", "LoggingAsyncSink", Guid.NewGuid().ToString("N"));
@@ -122,7 +127,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the try delete directory behavior and expected contract.
+        /// Verifies the try delete directory scenario and its documented contract.
         /// </summary>
         private static void TryDeleteDirectory(string path)
         {
@@ -140,7 +145,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers counting sink behavior and invariants exercised by this test suite.
+        /// Verifies the counting sink scenario and its documented contract.
         /// </summary>
         private sealed class CountingSink : Serilog.Core.ILogEventSink
         {
@@ -155,7 +160,7 @@ namespace VectorNNTP.Backfiller.Tests
             public long Count => Interlocked.Read(ref _count);
 
             /// <summary>
-        /// Verifies the emit behavior and expected contract.
+        /// Verifies the emit scenario and its documented contract.
             /// </summary>
             public void Emit(LogEvent logEvent)
             {

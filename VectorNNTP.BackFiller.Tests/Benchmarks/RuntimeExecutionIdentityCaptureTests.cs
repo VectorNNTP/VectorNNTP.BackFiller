@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Focused tests for runtime execution identity capture, covering the covered test contracts.
+// Focused tests for runtime execution identity capture, covering configuration, runtime, and failure-handling contracts exercised by the tests.
 // Primary responsibility: documents the executable contracts covered by the runtime execution identity capture test suite.
 
 using System.Reflection;

@@ -19,7 +19,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     public sealed class RuntimeIdentityGuardTests
     {
         /// <summary>
-        /// Exercises ensure matches  when benchmark and production dependency match  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when benchmark and production dependency match does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenBenchmarkAndProductionDependencyMatch_DoesNotThrow()
@@ -36,7 +36,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             RuntimeIdentityGuard.EnsureMatches(expected, runtimeIdentity);
         }
         /// <summary>
-        /// Exercises ensure matches  when benchmark assembly path differs  throws with benchmark assembly label behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when benchmark assembly path differs throws with benchmark assembly label scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenBenchmarkAssemblyPathDiffers_ThrowsWithBenchmarkAssemblyLabel()
@@ -56,7 +56,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("EXECUTING BENCHMARK ASSEMBLY", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises ensure matches  when production dependency is copied but binary identical  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when production dependency is copied but binary identical does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenProductionDependencyIsCopiedButBinaryIdentical_DoesNotThrow()
@@ -84,7 +84,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
         }
         /// <summary>
-        /// Exercises ensure matches  when production binary differs but versions match  throws with binary identity details behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when production binary differs but versions match throws with binary identity details scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenProductionBinaryDiffersButVersionsMatch_ThrowsWithBinaryIdentityDetails()
@@ -121,7 +121,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
         }
         /// <summary>
-        /// Exercises ensure matches  when production assembly version differs  throws behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when production assembly version differs throws scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenProductionAssemblyVersionDiffers_Throws()
@@ -139,7 +139,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("ProductionAssemblyVersion", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises ensure matches  when production file version differs  throws behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when production file version differs throws scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenProductionFileVersionDiffers_Throws()
@@ -157,7 +157,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("ProductionFileVersion", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises ensure matches  when target framework differs  throws behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when target framework differs throws scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenTargetFrameworkDiffers_Throws()
@@ -176,7 +176,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("TargetFramework", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises ensure matches  when architecture differs  throws behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when architecture differs throws scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenArchitectureDiffers_Throws()
@@ -195,7 +195,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("Architecture", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises ensure matches  when expected production artifact missing  throws clearly behavior, including the expected result and failure semantics.
+        /// Verifies the ensure matches when expected production artifact missing throws clearly scenario and its documented contract.
         /// </summary>
         [Fact]
         public void EnsureMatches_WhenExpectedProductionArtifactMissing_ThrowsClearly()
@@ -217,7 +217,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create runtime identity behavior and expected contract.
+        /// Verifies the create runtime identity scenario and its documented contract.
         /// </summary>
         private static RuntimeExecutionIdentity CreateRuntimeIdentity(
             string runtimeAssemblyPath = @"C:\bench\VectorNNTP.BackFiller.Benchmarks.dll",
@@ -246,7 +246,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create expectation behavior and expected contract.
+        /// Verifies the create expectation scenario and its documented contract.
         /// </summary>
         private static RuntimeIdentityExpectation CreateExpectation(
             string expectedAssemblyPath = @"C:\bench\VectorNNTP.BackFiller.Benchmarks.dll",
@@ -273,16 +273,26 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the get loaded production assembly version behavior and expected contract.
+        /// Verifies the get loaded production assembly version scenario and its documented contract.
         /// </summary>
+        /// <returns>The get loaded production assembly version value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the get loaded production assembly version scenario and its documented contract.
+        /// </summary>
+        /// <returns>The get loaded production assembly version value produced for the requested scenario.</returns>
         private static string GetLoadedProductionAssemblyVersion()
         {
             return typeof(TransitPublisher).Assembly.GetName().Version?.ToString() ?? "(unknown)";
         }
 
         /// <summary>
-        /// Verifies the get loaded production file version behavior and expected contract.
+        /// Verifies the get loaded production file version scenario and its documented contract.
         /// </summary>
+        /// <returns>The get loaded production file version value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the get loaded production file version scenario and its documented contract.
+        /// </summary>
+        /// <returns>The get loaded production file version value produced for the requested scenario.</returns>
         private static string GetLoadedProductionFileVersion()
         {
             return typeof(TransitPublisher).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "(unknown)";

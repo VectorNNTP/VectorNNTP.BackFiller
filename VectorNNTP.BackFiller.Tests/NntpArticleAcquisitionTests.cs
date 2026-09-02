@@ -993,6 +993,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="messageId">Message-ID value.</param>
         /// <param name="body">Body text.</param>
         /// <returns>Article bytes.</returns>
+        /// <summary>
+        /// Verifies the build article bytes scenario and its documented contract.
+        /// </summary>
+        /// <param name="messageId">The message id supplied to the helper.</param>
+        /// <param name="body">The body supplied to the helper.</param>
+        /// <returns>The build article bytes value produced for the requested scenario.</returns>
         private static byte[] BuildArticleBytes(string messageId, string body)
         {
             return BuildArticleBytes(messageId, Encoding.ASCII.GetBytes(body));
@@ -1004,6 +1010,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="messageId">Message-ID value.</param>
         /// <param name="body">Body bytes.</param>
         /// <returns>Article bytes.</returns>
+        /// <summary>
+        /// Verifies the build article bytes scenario and its documented contract.
+        /// </summary>
+        /// <param name="messageId">The message id supplied to the helper.</param>
+        /// <param name="body">The body supplied to the helper.</param>
+        /// <returns>The build article bytes value produced for the requested scenario.</returns>
         private static byte[] BuildArticleBytes(string messageId, byte[] body)
         {
             byte[] headers = Encoding.ASCII.GetBytes(
@@ -1077,6 +1089,15 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="session">Session callback.</param>
             /// <param name="transport">Transport mode.</param>
             /// <param name="serverCertificate">TLS server certificate for implicit TLS mode.</param>
+        /// <summary>
+        /// Verifies the r scenario and its documented contract.
+        /// </summary>
+        /// <param name="listener">The listener supplied to the helper.</param>
+        /// <param name="Stream">The stream supplied to the helper.</param>
+        /// <param name="session">The session supplied to the helper.</param>
+        /// <param name="transport">The transport supplied to the helper.</param>
+        /// <param name="serverCertificate">The server certificate supplied to the helper.</param>
+        /// <returns>The r value produced for the requested scenario.</returns>
             private FakeArticleServer(TcpListener listener, Func<Stream, Task> session, ConnectionTransport transport, X509Certificate2? serverCertificate)
             {
                 _listener = listener;
@@ -1096,6 +1117,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="session">Session callback.</param>
             /// <returns>Started server.</returns>
+        /// <summary>
+        /// Verifies the start async scenario and its documented contract.
+        /// </summary>
+        /// <param name="NetworkStream">The network stream supplied to the helper.</param>
+        /// <param name="session">The session supplied to the helper.</param>
+        /// <returns>The start async value produced for the requested scenario.</returns>
             internal static async Task<FakeArticleServer> StartAsync(Func<NetworkStream, Task> session)
             {
                 ArgumentNullException.ThrowIfNull(session);
@@ -1113,6 +1140,14 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="transport">Transport mode.</param>
             /// <param name="serverCertificate">TLS server certificate required for implicit TLS mode.</param>
             /// <returns>Started server.</returns>
+        /// <summary>
+        /// Verifies the start with transport async scenario and its documented contract.
+        /// </summary>
+        /// <param name="Stream">The stream supplied to the helper.</param>
+        /// <param name="session">The session supplied to the helper.</param>
+        /// <param name="transport">The transport supplied to the helper.</param>
+        /// <param name="serverCertificate">The server certificate supplied to the helper.</param>
+        /// <returns>The start with transport async value produced for the requested scenario.</returns>
             internal static async Task<FakeArticleServer> StartWithTransportAsync(Func<Stream, Task> session, ConnectionTransport transport, X509Certificate2? serverCertificate)
             {
                 ArgumentNullException.ThrowIfNull(session);
@@ -1133,6 +1168,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// Creates acquisition endpoint for this server.
             /// </summary>
             /// <returns>Endpoint descriptor.</returns>
+        /// <summary>
+        /// Verifies the create endpoint scenario and its documented contract.
+        /// </summary>
+        /// <param name="useSsl">The use ssl supplied to the helper.</param>
+        /// <param name="host">The host supplied to the helper.</param>
+        /// <returns>The create endpoint value produced for the requested scenario.</returns>
             internal NntpArticleAcquisitionEndpoint CreateEndpoint(bool useSsl = false, string host = "127.0.0.1")
             {
                 return new NntpArticleAcquisitionEndpoint(host, Port, UseSsl: useSsl, Username: null, Password: null);
@@ -1144,6 +1185,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Stream.</param>
             /// <param name="expected">Expected line.</param>
             /// <returns>Completion task.</returns>
+        /// <summary>
+        /// Verifies the expect ascii line async scenario and its documented contract.
+        /// </summary>
+        /// <param name="stream">The stream supplied to the helper.</param>
+        /// <param name="expected">The expected supplied to the helper.</param>
+        /// <returns>The expect ascii line async value produced for the requested scenario.</returns>
             internal static async Task ExpectAsciiLineAsync(Stream stream, string expected)
             {
                 string line = await ReadAsciiLineAsync(stream, CancellationToken.None).ConfigureAwait(false);
@@ -1156,6 +1203,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Stream.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
             /// <returns>Line text.</returns>
+        /// <summary>
+        /// Verifies the read ascii line async scenario and its documented contract.
+        /// </summary>
+        /// <param name="stream">The stream supplied to the helper.</param>
+        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
+        /// <returns>The read ascii line async value produced for the requested scenario.</returns>
             internal static async Task<string> ReadAsciiLineAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> bytes = [];
@@ -1191,6 +1244,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Stream.</param>
             /// <param name="line">Line text.</param>
             /// <returns>Completion task.</returns>
+        /// <summary>
+        /// Verifies the write ascii line async scenario and its documented contract.
+        /// </summary>
+        /// <param name="stream">The stream supplied to the helper.</param>
+        /// <param name="line">The line supplied to the helper.</param>
+        /// <returns>The write ascii line async value produced for the requested scenario.</returns>
             internal static async Task WriteAsciiLineAsync(Stream stream, string line)
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
@@ -1204,6 +1263,12 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">Stream.</param>
             /// <param name="bytes">Bytes.</param>
             /// <returns>Completion task.</returns>
+        /// <summary>
+        /// Verifies the write bytes async scenario and its documented contract.
+        /// </summary>
+        /// <param name="stream">The stream supplied to the helper.</param>
+        /// <param name="bytes">The bytes supplied to the helper.</param>
+        /// <returns>The write bytes async value produced for the requested scenario.</returns>
             internal static async Task WriteBytesAsync(Stream stream, byte[] bytes)
             {
                 await stream.WriteAsync(bytes, CancellationToken.None).ConfigureAwait(false);
@@ -1214,6 +1279,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Disposes fake server.
             /// </summary>
             /// <returns>Completion task.</returns>
+        /// <summary>
+        /// Verifies the dispose async scenario and its documented contract.
+        /// </summary>
+        /// <returns>The dispose async value produced for the requested scenario.</returns>
             public async ValueTask DisposeAsync()
             {
                 _shutdown.Cancel();
@@ -1234,6 +1303,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Accept loop body.
             /// </summary>
             /// <returns>Completion task.</returns>
+        /// <summary>
+        /// Verifies the accept loop async scenario and its documented contract.
+        /// </summary>
+        /// <returns>The accept loop async value produced for the requested scenario.</returns>
             private async Task AcceptLoopAsync()
             {
                 try
@@ -1280,6 +1353,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="Level">Log level.</param>
         /// <param name="Message">Rendered message text.</param>
+        /// <summary>
+        /// Verifies the captured log entry scenario and its documented contract.
+        /// </summary>
+        /// <param name="Level">The level supplied to the helper.</param>
+        /// <param name="Message">The message supplied to the helper.</param>
+        /// <returns>The captured log entry value produced for the requested scenario.</returns>
         private sealed record CapturedLogEntry(LogLevel Level, string Message);
 
         /// <summary>
@@ -1328,6 +1407,12 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 /// <param name="entries">Entry list.</param>
                 /// <param name="gate">Lock gate.</param>
+        /// <summary>
+        /// Verifies the r scenario and its documented contract.
+        /// </summary>
+        /// <param name="entries">The entries supplied to the helper.</param>
+        /// <param name="gate">The gate supplied to the helper.</param>
+        /// <returns>The r value produced for the requested scenario.</returns>
                 internal CapturingLogger(List<CapturedLogEntry> entries, object gate)
                 {
                     _entries = entries;
@@ -1351,6 +1436,11 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 /// <param name="logLevel">Log level.</param>
                 /// <returns>Always true for tests.</returns>
+        /// <summary>
+        /// Verifies the is enabled scenario and its documented contract.
+        /// </summary>
+        /// <param name="logLevel">The log level supplied to the helper.</param>
+        /// <returns>The is enabled value produced for the requested scenario.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;

@@ -130,6 +130,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="buffer">Input buffer to scan.</param>
         /// <param name="startOffset">Scan start offset.</param>
         /// <returns>Detected terminator index or -1 when no terminator is found.</returns>
+        /// <summary>
+        /// Verifies the index of cr lf scalar reference scenario and its documented contract.
+        /// </summary>
+        /// <param name="buffer">The buffer supplied to the helper.</param>
+        /// <param name="startOffset">The start offset supplied to the helper.</param>
+        /// <returns>The index of cr lf scalar reference value produced for the requested scenario.</returns>
         private static int IndexOfCrLfScalarReference(ReadOnlySpan<byte> buffer, int startOffset)
         {
             if ((uint)startOffset >= (uint)buffer.Length)
@@ -157,6 +163,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Builds deterministic input that stresses CR/LF patterns across SIMD block boundaries.
         /// </summary>
         /// <returns>Boundary-focused test buffer.</returns>
+        /// <summary>
+        /// Verifies the build boundary heavy buffer scenario and its documented contract.
+        /// </summary>
+        /// <returns>The build boundary heavy buffer value produced for the requested scenario.</returns>
         private static byte[] BuildBoundaryHeavyBuffer()
         {
             List<byte> data = new(768);

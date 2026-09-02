@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class MySqlNntpAccountSnapshotProviderMappingTests
     {
         /// <summary>
-        /// Exercises parse use ssl  when y  returns true behavior, including the expected result and failure semantics.
+        /// Verifies the parse use ssl when y returns true scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseUseSsl_WhenY_ReturnsTrue()
@@ -27,7 +27,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(result);
         }
         /// <summary>
-        /// Exercises parse use ssl  when n  returns false behavior, including the expected result and failure semantics.
+        /// Verifies the parse use ssl when n returns false scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseUseSsl_WhenN_ReturnsFalse()
@@ -37,7 +37,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.False(result);
         }
         /// <summary>
-        /// Exercises parse keep alive value  when null database value  throws invalid operation exception behavior, including the expected result and failure semantics.
+        /// Verifies the parse keep alive value when null database value throws invalid operation exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseKeepAliveValue_WhenNullDatabaseValue_ThrowsInvalidOperationException()
@@ -49,7 +49,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("NULL", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises parse keep alive value  when out of range  throws overflow exception behavior, including the expected result and failure semantics.
+        /// Verifies the parse keep alive value when out of range throws overflow exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseKeepAliveValue_WhenOutOfRange_ThrowsOverflowException()
@@ -57,7 +57,7 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Throws<OverflowException>(() => MySqlNntpAccountSnapshotProvider.ParseKeepAliveValue(1000));
         }
         /// <summary>
-        /// Exercises parse use ssl  when unexpected  throws invalid operation exception behavior, including the expected result and failure semantics.
+        /// Verifies the parse use ssl when unexpected throws invalid operation exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseUseSsl_WhenUnexpected_ThrowsInvalidOperationException()
@@ -68,7 +68,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("nntpbackfilleraccounts.usessl", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises parse entry id  when guid  returns guid behavior, including the expected result and failure semantics.
+        /// Verifies the parse entry id when guid returns guid scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseEntryId_WhenGuid_ReturnsGuid()
@@ -80,7 +80,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(expected, actual);
         }
         /// <summary>
-        /// Exercises parse entry id  when invalid  throws invalid operation exception behavior, including the expected result and failure semantics.
+        /// Verifies the parse entry id when invalid throws invalid operation exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseEntryId_WhenInvalid_ThrowsInvalidOperationException()
@@ -91,7 +91,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("nntpbackfilleraccounts.entryid", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises parse entry id value  when guid object  returns guid behavior, including the expected result and failure semantics.
+        /// Verifies the parse entry id value when guid object returns guid scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseEntryIdValue_WhenGuidObject_ReturnsGuid()
@@ -103,7 +103,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(expected, actual);
         }
         /// <summary>
-        /// Exercises parse entry id value  when guid string object  returns guid behavior, including the expected result and failure semantics.
+        /// Verifies the parse entry id value when guid string object returns guid scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseEntryIdValue_WhenGuidStringObject_ReturnsGuid()
@@ -115,7 +115,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(expected, actual);
         }
         /// <summary>
-        /// Exercises parse entry id value  when invalid guid string  throws invalid operation exception behavior, including the expected result and failure semantics.
+        /// Verifies the parse entry id value when invalid guid string throws invalid operation exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseEntryIdValue_WhenInvalidGuidString_ThrowsInvalidOperationException()
@@ -126,7 +126,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Contains("nntpbackfilleraccounts.entryid", ex.Message, StringComparison.Ordinal);
         }
         /// <summary>
-        /// Exercises parse entry id value  when unsupported type  throws invalid operation exception behavior, including the expected result and failure semantics.
+        /// Verifies the parse entry id value when unsupported type throws invalid operation exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public void ParseEntryIdValue_WhenUnsupportedType_ThrowsInvalidOperationException()

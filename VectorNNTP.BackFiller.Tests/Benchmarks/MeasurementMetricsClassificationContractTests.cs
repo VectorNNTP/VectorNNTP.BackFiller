@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Covers measurement metrics classification contract behavior and invariants exercised by this test suite.
+        /// Verifies the measurement metrics classification contract tests scenario and its documented contract.
     /// </summary>
     public sealed class MeasurementMetricsClassificationContractTests
     {
         /// <summary>
-        /// Exercises on publish result  classifies statuses into accepted rejected and ambiguous contracts behavior, including the expected result and failure semantics.
+        /// Verifies the on publish result classifies statuses into accepted rejected and ambiguous contracts scenario and its documented contract.
         /// </summary>
         [Fact]
         public void OnPublishResult_ClassifiesStatusesIntoAcceptedRejectedAndAmbiguousContracts()

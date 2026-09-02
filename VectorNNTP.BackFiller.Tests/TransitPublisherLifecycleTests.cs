@@ -18,12 +18,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers transit publisher lifecycle behavior and invariants exercised by this test suite.
+        /// Verifies the transit publisher lifecycle tests scenario and its documented contract.
     /// </summary>
     public sealed class TransitPublisherLifecycleTests
     {
         /// <summary>
-        /// Exercises dispose async  before initialize  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async before initialize does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_BeforeInitialize_DoesNotThrow()
@@ -36,7 +36,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
         /// <summary>
-        /// Exercises dispose async  when partially initialized worker array contains null entries  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async when partially initialized worker array contains null entries does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenPartiallyInitializedWorkerArrayContainsNullEntries_DoesNotThrow()
@@ -56,7 +56,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
         /// <summary>
-        /// Exercises dispose async  after initialize  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async after initialize does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_AfterInitialize_DoesNotThrow()
@@ -70,7 +70,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
         /// <summary>
-        /// Exercises dispose async  when called repeatedly  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async when called repeatedly does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenCalledRepeatedly_DoesNotThrow()
@@ -84,7 +84,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
         /// <summary>
-        /// Exercises initialize async  when canceled before start  dispose async  does not throw behavior, including the expected result and failure semantics.
+        /// Verifies the initialize async when canceled before start dispose async does not throw scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task InitializeAsync_WhenCanceledBeforeStart_DisposeAsync_DoesNotThrow()
@@ -100,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Equal(TransitConnectionState.Disconnected, publisher.CurrentState);
         }
         /// <summary>
-        /// Exercises host startup failure  before transit initialization  dispose does not mask original exception behavior, including the expected result and failure semantics.
+        /// Verifies the host startup failure before transit initialization dispose does not mask original exception scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task HostStartupFailure_BeforeTransitInitialization_DisposeDoesNotMaskOriginalException()
@@ -122,8 +122,15 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create publisher behavior and expected contract.
+        /// Verifies the create publisher scenario and its documented contract.
         /// </summary>
+        /// <returns>The create publisher value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create publisher scenario and its documented contract.
+        /// </summary>
+        /// <param name="port">The port supplied to the helper.</param>
+        /// <param name="connectionPoolSize">The connection pool size supplied to the helper.</param>
+        /// <returns>The create publisher value produced for the requested scenario.</returns>
         private static TransitPublisher CreatePublisher(int port, int connectionPoolSize)
         {
             return new TransitPublisher(
@@ -135,8 +142,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create runtime options behavior and expected contract.
+        /// Verifies the create runtime options scenario and its documented contract.
         /// </summary>
+        /// <returns>The create runtime options value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create runtime options scenario and its documented contract.
+        /// </summary>
+        /// <param name="port">The port supplied to the helper.</param>
+        /// <returns>The create runtime options value produced for the requested scenario.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int port)
         {
             return new BackFillerRuntimeOptions(
@@ -159,21 +172,33 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers failing startup hosted service behavior and invariants exercised by this test suite.
+        /// Verifies the failing startup hosted service scenario and its documented contract.
         /// </summary>
         private sealed class FailingStartupHostedService : IHostedService
         {
             /// <summary>
-        /// Verifies the start async behavior and expected contract.
+        /// Verifies the start async scenario and its documented contract.
             /// </summary>
+        /// <returns>The start async value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the start async scenario and its documented contract.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
+        /// <returns>The start async value produced for the requested scenario.</returns>
             public Task StartAsync(CancellationToken cancellationToken)
             {
                 throw new InvalidOperationException("Synthetic startup failure");
             }
 
             /// <summary>
-        /// Verifies the stop async behavior and expected contract.
+        /// Verifies the stop async scenario and its documented contract.
             /// </summary>
+        /// <returns>The stop async value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the stop async scenario and its documented contract.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
+        /// <returns>The stop async value produced for the requested scenario.</returns>
             public Task StopAsync(CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;

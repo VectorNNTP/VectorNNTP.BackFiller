@@ -104,6 +104,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Returns a value indicating whether local corpus generation is enabled.
         /// </summary>
         /// <returns><see langword="true"/> when generation is enabled; otherwise <see langword="false"/>.</returns>
+        /// <summary>
+        /// Verifies the is corpus generation enabled scenario and its documented contract.
+        /// </summary>
+        /// <returns>The is corpus generation enabled value produced for the requested scenario.</returns>
         private static bool IsCorpusGenerationEnabled()
         {
             string? enabled = Environment.GetEnvironmentVariable(EnableCorpusGenerationEnvironmentVariable);
@@ -114,6 +118,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Reads required endpoint configuration from environment variables.
         /// </summary>
         /// <returns>Endpoint descriptor for remote acquisition.</returns>
+        /// <summary>
+        /// Verifies the read endpoint from environment scenario and its documented contract.
+        /// </summary>
+        /// <returns>The read endpoint from environment value produced for the requested scenario.</returns>
         private static NntpArticleAcquisitionEndpoint ReadEndpointFromEnvironment()
         {
             string host = Environment.GetEnvironmentVariable(CorpusHostEnvironmentVariable)
@@ -136,6 +144,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="environmentVariableName">Environment variable name.</param>
         /// <returns>Message-ID array.</returns>
+        /// <summary>
+        /// Verifies the read required message ids scenario and its documented contract.
+        /// </summary>
+        /// <param name="environmentVariableName">The environment variable name supplied to the helper.</param>
+        /// <returns>The read required message ids value produced for the requested scenario.</returns>
         private static string[] ReadRequiredMessageIds(string environmentVariableName)
         {
             string raw = Environment.GetEnvironmentVariable(environmentVariableName)
@@ -201,6 +214,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="validDirectory">Directory containing valid yEnc fixtures.</param>
         /// <param name="corruptDirectory">Target directory for corrupted fixtures.</param>
+        /// <summary>
+        /// Verifies the build deterministic corrupt variants scenario and its documented contract.
+        /// </summary>
+        /// <param name="validDirectory">The valid directory supplied to the helper.</param>
+        /// <param name="corruptDirectory">The corrupt directory supplied to the helper.</param>
         private static void BuildDeterministicCorruptVariants(string validDirectory, string corruptDirectory)
         {
             string[] files = Directory.GetFiles(validDirectory, "*.nntp", SearchOption.TopDirectoryOnly);
@@ -221,6 +239,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="source">Valid source fixture bytes.</param>
         /// <param name="seed">Deterministic seed value derived from file index.</param>
         /// <returns>Corrupted fixture bytes.</returns>
+        /// <summary>
+        /// Verifies the corrupt deterministically scenario and its documented contract.
+        /// </summary>
+        /// <param name="source">The source supplied to the helper.</param>
+        /// <param name="seed">The seed supplied to the helper.</param>
+        /// <returns>The corrupt deterministically value produced for the requested scenario.</returns>
         private static byte[] CorruptDeterministically(byte[] source, int seed)
         {
             byte[] output = new byte[source.Length + 16];
@@ -247,6 +271,13 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="yEncCount">Number of yEnc source Message-IDs.</param>
         /// <param name="plainCount">Number of plain source Message-IDs.</param>
         /// <returns>README markdown content.</returns>
+        /// <summary>
+        /// Verifies the build corpus readme scenario and its documented contract.
+        /// </summary>
+        /// <param name="endpoint">The endpoint supplied to the helper.</param>
+        /// <param name="yEncCount">The y enc count supplied to the helper.</param>
+        /// <param name="plainCount">The plain count supplied to the helper.</param>
+        /// <returns>The build corpus readme value produced for the requested scenario.</returns>
         private static string BuildCorpusReadme(NntpArticleAcquisitionEndpoint endpoint, int yEncCount, int plainCount)
         {
             return $"""

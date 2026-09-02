@@ -30,6 +30,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Provides fixture cases expected to validate successfully.
         /// </summary>
         /// <returns>Fixture name and expected validation status name pairs.</returns>
+        /// <summary>
+        /// Verifies the valid fixture cases scenario and its documented contract.
+        /// </summary>
+        /// <returns>The valid fixture cases value produced for the requested scenario.</returns>
         public static IEnumerable<object[]> ValidFixtureCases()
         {
             yield return ["test_regular.yenc", nameof(YEncArticleValidationStatus.ValidMultiPart)];
@@ -44,6 +48,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Provides fixture cases expected to fail validation or classify as non-yEnc.
         /// </summary>
         /// <returns>Fixture name and expected validation status name pairs.</returns>
+        /// <summary>
+        /// Verifies the invalid fixture cases scenario and its documented contract.
+        /// </summary>
+        /// <returns>The invalid fixture cases value produced for the requested scenario.</returns>
         public static IEnumerable<object[]> InvalidFixtureCases()
         {
             yield return ["test_bad_crc_end.yenc", nameof(YEncArticleValidationStatus.CrcMismatch)];
@@ -60,6 +68,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="fixtureName">Fixture file name to validate.</param>
         /// <param name="expectedStatusName">Expected terminal validation status name.</param>
+        /// <summary>
+        /// Verifies the validate when fixture is valid returns expected success status scenario and its documented contract.
+        /// </summary>
+        /// <param name="fixtureName">The fixture name supplied to the helper.</param>
+        /// <param name="expectedStatusName">The expected status name supplied to the helper.</param>
         [Theory]
         [MemberData(nameof(ValidFixtureCases))]
         public void Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(string fixtureName, string expectedStatusName)
@@ -89,6 +102,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="fixtureName">Fixture file name to validate.</param>
         /// <param name="expectedStatusName">Expected terminal validation status name.</param>
+        /// <summary>
+        /// Verifies the validate when fixture is invalid or non yenc returns expected status scenario and its documented contract.
+        /// </summary>
+        /// <param name="fixtureName">The fixture name supplied to the helper.</param>
+        /// <param name="expectedStatusName">The expected status name supplied to the helper.</param>
         [Theory]
         [MemberData(nameof(InvalidFixtureCases))]
         public void Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(string fixtureName, string expectedStatusName)
@@ -707,6 +725,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Verifies that payload lines starting with control-like stems are treated as payload bytes and not rejected by stem heuristics.
         /// </summary>
         /// <param name="payloadLine">Payload line inserted before the real trailer.</param>
+        /// <summary>
+        /// Verifies the validate when payload line starts with control stem does not fail with invalid metadata scenario and its documented contract.
+        /// </summary>
+        /// <param name="payloadLine">The payload line supplied to the helper.</param>
         [Theory]
         [InlineData("=ybegin")]
         [InlineData("=ypart")]
@@ -921,6 +943,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="fixtureName">Fixture file name under the SABCTools fixture directory.</param>
         /// <returns>Raw fixture bytes.</returns>
+        /// <summary>
+        /// Verifies the load fixture bytes scenario and its documented contract.
+        /// </summary>
+        /// <param name="fixtureName">The fixture name supplied to the helper.</param>
+        /// <returns>The load fixture bytes value produced for the requested scenario.</returns>
         private static ReadOnlySpan<byte> LoadFixtureBytes(string fixtureName)
         {
             string path = Path.Combine(FixtureRoot, fixtureName);
@@ -931,6 +958,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Resolves the fixture directory by walking upward from the test base directory to the solution marker.
         /// </summary>
         /// <returns>Absolute fixture directory path.</returns>
+        /// <summary>
+        /// Verifies the resolve fixture root scenario and its documented contract.
+        /// </summary>
+        /// <returns>The resolve fixture root value produced for the requested scenario.</returns>
         private static string ResolveFixtureRoot()
         {
             /// <summary>
@@ -966,6 +997,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="decodedPayload">Decoded bytes to encode and place between <c>=ybegin</c> and <c>=yend</c>.</param>
         /// <param name="includeDotStuffedLeadingDotLine">Whether to apply NNTP dot-stuffing to encoded line starts.</param>
         /// <returns>Raw article bytes with transport framing and yEnc metadata.</returns>
+        /// <summary>
+        /// Verifies the build single part article scenario and its documented contract.
+        /// </summary>
+        /// <param name="decodedPayload">The decoded payload supplied to the helper.</param>
+        /// <param name="includeDotStuffedLeadingDotLine">The include dot stuffed leading dot line supplied to the helper.</param>
+        /// <returns>The build single part article value produced for the requested scenario.</returns>
         private static byte[] BuildSinglePartArticle(byte[] decodedPayload, bool includeDotStuffedLeadingDotLine)
         {
             byte[] encodedPayload = EncodeYEnc(decodedPayload);
@@ -994,6 +1031,14 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="end">Declared part end offset (inclusive).</param>
         /// <param name="malformedYPart">Whether to intentionally emit malformed <c>=ypart</c> metadata for negative tests.</param>
         /// <returns>Raw multipart article bytes.</returns>
+        /// <summary>
+        /// Verifies the build multi part article scenario and its documented contract.
+        /// </summary>
+        /// <param name="decodedPayload">The decoded payload supplied to the helper.</param>
+        /// <param name="begin">The begin supplied to the helper.</param>
+        /// <param name="end">The end supplied to the helper.</param>
+        /// <param name="malformedYPart">The malformed ypart supplied to the helper.</param>
+        /// <returns>The build multi part article value produced for the requested scenario.</returns>
         private static byte[] BuildMultiPartArticle(byte[] decodedPayload, int begin, int end, bool malformedYPart)
         {
             byte[] encodedPayload = EncodeYEnc(decodedPayload);
@@ -1018,6 +1063,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="decoded">Decoded input bytes to encode.</param>
         /// <returns>Encoded payload bytes with CRLF line wrapping.</returns>
+        /// <summary>
+        /// Verifies the encode yenc scenario and its documented contract.
+        /// </summary>
+        /// <param name="decoded">The decoded supplied to the helper.</param>
+        /// <returns>The encode yenc value produced for the requested scenario.</returns>
         private static byte[] EncodeYEnc(byte[] decoded)
         {
             List<byte> output = new(decoded.Length + (decoded.Length / 32));
@@ -1062,6 +1112,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="payload">Encoded payload bytes before dot-stuffing.</param>
         /// <returns>Dot-stuffed payload bytes.</returns>
+        /// <summary>
+        /// Verifies the dot stuff line starts scenario and its documented contract.
+        /// </summary>
+        /// <param name="payload">The payload supplied to the helper.</param>
+        /// <returns>The dot stuff line starts value produced for the requested scenario.</returns>
         private static byte[] DotStuffLineStarts(byte[] payload)
         {
             List<byte> output = new(payload.Length + 32);
@@ -1087,6 +1142,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="payload">Decoded payload bytes.</param>
         /// <returns>CRC-32 value using polynomial <c>0xEDB88320</c>.</returns>
+        /// <summary>
+        /// Verifies the crc32 scenario and its documented contract.
+        /// </summary>
+        /// <param name="payload">The payload supplied to the helper.</param>
+        /// <returns>The crc32 value produced for the requested scenario.</returns>
         private static uint Crc32(byte[] payload)
         {
             uint crc = 0xFFFFFFFFu;
@@ -1104,6 +1164,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="size">Requested payload size in bytes.</param>
         /// <param name="seed">Random seed controlling generated sequence.</param>
         /// <returns>Generated payload bytes.</returns>
+        /// <summary>
+        /// Verifies the build payload scenario and its documented contract.
+        /// </summary>
+        /// <param name="size">The size supplied to the helper.</param>
+        /// <param name="seed">The seed supplied to the helper.</param>
+        /// <returns>The build payload value produced for the requested scenario.</returns>
         private static byte[] BuildPayload(int size, int seed)
         {
             byte[] payload = new byte[size];
@@ -1117,6 +1183,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="article">Synthetic article bytes that include NNTP framing and yEnc control lines.</param>
         /// <returns>Zero-based offset to first encoded payload byte.</returns>
+        /// <summary>
+        /// Verifies the find payload offset scenario and its documented contract.
+        /// </summary>
+        /// <param name="article">The article supplied to the helper.</param>
+        /// <returns>The find payload offset value produced for the requested scenario.</returns>
         private static int FindPayloadOffset(byte[] article)
         {
             int beginIndex = IndexOfAscii(article, "=ybegin ");
@@ -1139,6 +1210,13 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="search">ASCII token to find.</param>
         /// <param name="replacement">Replacement ASCII text inserted at token location.</param>
         /// <returns>Mutated buffer copy.</returns>
+        /// <summary>
+        /// Verifies the replace ascii in copy scenario and its documented contract.
+        /// </summary>
+        /// <param name="buffer">The buffer supplied to the helper.</param>
+        /// <param name="search">The search supplied to the helper.</param>
+        /// <param name="replacement">The replacement supplied to the helper.</param>
+        /// <returns>The replace ascii in copy value produced for the requested scenario.</returns>
         private static byte[] ReplaceAsciiInCopy(byte[] buffer, string search, string replacement)
         {
             byte[] searchBytes = System.Text.Encoding.ASCII.GetBytes(search);
@@ -1167,6 +1245,13 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="search">Exact ASCII token to replace.</param>
         /// <param name="replacement">Replacement token with matching length.</param>
         /// <returns>Mutated buffer copy.</returns>
+        /// <summary>
+        /// Verifies the replace exact token in copy scenario and its documented contract.
+        /// </summary>
+        /// <param name="buffer">The buffer supplied to the helper.</param>
+        /// <param name="search">The search supplied to the helper.</param>
+        /// <param name="replacement">The replacement supplied to the helper.</param>
+        /// <returns>The replace exact token in copy value produced for the requested scenario.</returns>
         private static byte[] ReplaceExactTokenInCopy(byte[] buffer, string search, string replacement)
         {
             byte[] source = (byte[])buffer.Clone();
@@ -1186,6 +1271,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="payloadLine">Payload line without CRLF terminator.</param>
         /// <returns>Decoded bytes for CRC generation in dot-stuffing tests.</returns>
+        /// <summary>
+        /// Verifies the decode literal payload line scenario and its documented contract.
+        /// </summary>
+        /// <param name="payloadLine">The payload line supplied to the helper.</param>
+        /// <returns>The decode literal payload line value produced for the requested scenario.</returns>
         private static byte[] DecodeLiteralPayloadLine(string payloadLine)
         {
             ReadOnlySpan<byte> line = System.Text.Encoding.ASCII.GetBytes(payloadLine);
@@ -1218,6 +1308,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// </summary>
         /// <param name="segments">Segments to concatenate.</param>
         /// <returns>Single concatenated buffer.</returns>
+        /// <summary>
+        /// Verifies the concatenate scenario and its documented contract.
+        /// </summary>
+        /// <param name="segments">The segments supplied to the helper.</param>
+        /// <returns>The concatenate value produced for the requested scenario.</returns>
         private static byte[] Concatenate(params byte[][] segments)
         {
             int total = 0;
@@ -1243,6 +1338,12 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="buffer">Buffer to search.</param>
         /// <param name="token">ASCII token text.</param>
         /// <returns>Zero-based index of first occurrence, or -1 when not found.</returns>
+        /// <summary>
+        /// Verifies the index of ascii scenario and its documented contract.
+        /// </summary>
+        /// <param name="buffer">The buffer supplied to the helper.</param>
+        /// <param name="token">The token supplied to the helper.</param>
+        /// <returns>The index of ascii value produced for the requested scenario.</returns>
         private static int IndexOfAscii(byte[] buffer, string token)
         {
             byte[] bytes = System.Text.Encoding.ASCII.GetBytes(token);
@@ -1258,6 +1359,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Builds the CRC-32 lookup table used by test helper checksum generation.
         /// </summary>
         /// <returns>Initialized 256-entry lookup table.</returns>
+        /// <summary>
+        /// Verifies the create crc table scenario and its documented contract.
+        /// </summary>
+        /// <returns>The create crc table value produced for the requested scenario.</returns>
         private static uint[] CreateCrcTable()
         {
             uint[] table = new uint[256];

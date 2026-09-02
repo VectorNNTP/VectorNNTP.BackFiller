@@ -17,7 +17,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     public sealed class TransitBenchmarkCliOptionsTests
     {
         /// <summary>
-        /// Exercises parse  when article count provided  parses expected value behavior, including the expected result and failure semantics.
+        /// Verifies the parse when article count provided parses expected value scenario and its documented contract.
         /// </summary>
         [Fact]
         public void Parse_WhenArticleCountProvided_ParsesExpectedValue()

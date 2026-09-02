@@ -16,7 +16,7 @@ using VectorNNTP.BackFiller.Benchmarks;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Covers benchmark contract test helper behavior and invariants exercised by this test suite.
+        /// Verifies the benchmark contract test helper scenario and its documented contract.
     /// </summary>
     internal static class BenchmarkContractTestHelper
     {
@@ -37,7 +37,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             ?? throw new InvalidOperationException("BenchmarkResultFactory.Create was not found.");
 
         /// <summary>
-        /// Verifies the create config behavior and expected contract.
+        /// Verifies the create config scenario and its documented contract.
         /// </summary>
         internal static TransitBenchmarkConfig CreateConfig(
             double measurementSeconds = 10,
@@ -71,8 +71,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create workload preparation behavior and expected contract.
+        /// Verifies the create workload preparation scenario and its documented contract.
         /// </summary>
+        /// <returns>The create workload preparation value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create workload preparation scenario and its documented contract.
+        /// </summary>
+        /// <returns>The create workload preparation value produced for the requested scenario.</returns>
         internal static WorkloadPreparationSummary CreateWorkloadPreparation()
         {
             return new WorkloadPreparationSummary(
@@ -85,7 +90,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create measurement snapshot behavior and expected contract.
+        /// Verifies the create measurement snapshot scenario and its documented contract.
         /// </summary>
         internal static MeasurementSnapshot CreateMeasurementSnapshot(
             long generatedCount = 100,
@@ -132,8 +137,16 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create runtime metrics with snapshot values behavior and expected contract.
+        /// Verifies the create runtime metrics with snapshot values scenario and its documented contract.
         /// </summary>
+        /// <returns>The create runtime metrics with snapshot values value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create runtime metrics with snapshot values scenario and its documented contract.
+        /// </summary>
+        /// <param name="workingSetBytes">The working set bytes supplied to the helper.</param>
+        /// <param name="gcHeapBytes">The gc heap bytes supplied to the helper.</param>
+        /// <param name="allocatedBytes">The allocated bytes supplied to the helper.</param>
+        /// <returns>The create runtime metrics with snapshot values value produced for the requested scenario.</returns>
         internal static RuntimeMetrics CreateRuntimeMetricsWithSnapshotValues(long workingSetBytes, long gcHeapBytes, long allocatedBytes)
         {
             RuntimeMetrics runtime = new();
@@ -148,8 +161,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create measurement metrics with forensic sample behavior and expected contract.
+        /// Verifies the create measurement metrics with forensic sample scenario and its documented contract.
         /// </summary>
+        /// <returns>The create measurement metrics with forensic sample value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create measurement metrics with forensic sample scenario and its documented contract.
+        /// </summary>
+        /// <returns>The create measurement metrics with forensic sample value produced for the requested scenario.</returns>
         internal static MeasurementMetrics CreateMeasurementMetricsWithForensicSample()
         {
             MeasurementMetrics metrics = new(articleBytes: 1_000_000);
@@ -181,7 +199,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the invoke create benchmark result behavior and expected contract.
+        /// Verifies the invoke create benchmark result scenario and its documented contract.
         /// </summary>
         internal static BenchmarkResult InvokeCreateBenchmarkResult(
             TransitBenchmarkConfig config,
@@ -227,8 +245,13 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Verifies the create publisher for contracts behavior and expected contract.
+        /// Verifies the create publisher for contracts scenario and its documented contract.
         /// </summary>
+        /// <returns>The create publisher for contracts value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create publisher for contracts scenario and its documented contract.
+        /// </summary>
+        /// <returns>The create publisher for contracts value produced for the requested scenario.</returns>
         private static TransitPublisher CreatePublisherForContracts()
         {
             BackFillerRuntimeOptions runtimeOptions = new(

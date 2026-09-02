@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Covers benchmark artifact contract behavior and invariants exercised by this test suite.
+        /// Verifies the benchmark artifact contract tests scenario and its documented contract.
     /// </summary>
     public sealed class BenchmarkArtifactContractTests
     {
         /// <summary>
-        /// Exercises benchmark result artifact  from  maps core benchmark and config values without reinterpretation behavior, including the expected result and failure semantics.
+        /// Verifies the benchmark result artifact from maps core benchmark and config values without reinterpretation scenario and its documented contract.
         /// </summary>
         [Fact]
         public void BenchmarkResultArtifact_From_MapsCoreBenchmarkAndConfigValuesWithoutReinterpretation()
@@ -93,7 +93,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(8 * (result.AverageCpuPercent / 100d), artifact.EquivalentBusyCores);
         }
         /// <summary>
-        /// Exercises json artifact writer  serialize  contains expected contract shape and property names behavior, including the expected result and failure semantics.
+        /// Verifies the json artifact writer serialize contains expected contract shape and property names scenario and its documented contract.
         /// </summary>
         [Fact]
         public void JsonArtifactWriter_Serialize_ContainsExpectedContractShapeAndPropertyNames()
@@ -154,7 +154,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(root.TryGetProperty("FixedCountBoundaryTelemetry", out _));
         }
         /// <summary>
-        /// Exercises benchmark result artifact  to csv  preserves header order escaping and newline contract behavior, including the expected result and failure semantics.
+        /// Verifies the benchmark result artifact to csv preserves header order escaping and newline contract scenario and its documented contract.
         /// </summary>
         [Fact]
         public void BenchmarkResultArtifact_ToCsv_PreservesHeaderOrderEscapingAndNewlineContract()

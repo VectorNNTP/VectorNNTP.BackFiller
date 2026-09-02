@@ -19,7 +19,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ArticleWorkResponseFactoryPhase4Tests
     {
         /// <summary>
-        /// Exercises create response  maps outcome to canonical payload behavior, including the expected result and failure semantics.
+        /// Verifies the create response maps outcome to canonical payload scenario and its documented contract.
         /// </summary>
         [Theory]
         [InlineData(0, true, false)]
@@ -72,7 +72,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create result behavior and expected contract.
+        /// Verifies the create result scenario and its documented contract.
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
@@ -112,13 +112,19 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers no op settlement behavior and invariants exercised by this test suite.
+        /// Verifies the no op settlement scenario and its documented contract.
         /// </summary>
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-        /// Verifies the ack async behavior and expected contract.
+        /// Verifies the ack async scenario and its documented contract.
             /// </summary>
+        /// <returns>The ack async value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the ack async scenario and its documented contract.
+        /// </summary>
+        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
+        /// <returns>The ack async value produced for the requested scenario.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -126,8 +132,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Verifies the nack async behavior and expected contract.
+        /// Verifies the nack async scenario and its documented contract.
             /// </summary>
+        /// <returns>The nack async value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the nack async scenario and its documented contract.
+        /// </summary>
+        /// <param name="requeue">The requeue supplied to the helper.</param>
+        /// <param name="cancellationToken">The cancellation token supplied to the helper.</param>
+        /// <returns>The nack async value produced for the requested scenario.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();

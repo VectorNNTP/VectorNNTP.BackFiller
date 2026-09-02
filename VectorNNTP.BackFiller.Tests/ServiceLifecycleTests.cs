@@ -36,6 +36,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Stopped represents orderly shutdown. Once reached, the service lifecycle is complete.
         /// No state transitions should be permitted from Stopped (including self-transitions).
         /// </remarks>
+        /// <summary>
+        /// Verifies the stopped rejects all transitions scenario and its documented contract.
+        /// </summary>
+        /// <param name="targetState">The target state supplied to the helper.</param>
         [Theory]
         [InlineData(ServiceLifecycle.LifecycleState.Starting)]
         [InlineData(ServiceLifecycle.LifecycleState.Validating)]
@@ -77,6 +81,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Once reached, the service lifecycle is complete and diagnostic state is preserved.
         /// No state transitions should be permitted from Faulted (including self-transitions).
         /// </remarks>
+        /// <summary>
+        /// Verifies the faulted rejects all transitions scenario and its documented contract.
+        /// </summary>
+        /// <param name="targetState">The target state supplied to the helper.</param>
         [Theory]
         [InlineData(ServiceLifecycle.LifecycleState.Starting)]
         [InlineData(ServiceLifecycle.LifecycleState.Validating)]
@@ -194,6 +202,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// orchestration rollback, or operator intervention. It is distinct from standard
         /// systemd SIGTERM shutdown, which is one-way.
         /// </remarks>
+        /// <summary>
+        /// Verifies the drain cancellation allows ready to draining to ready scenario and its documented contract.
+        /// </summary>
         [Fact]
         public void DrainCancellation_AllowsReadyToDrainingToReady()
         {
@@ -391,6 +402,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Tests the scenario: 100 concurrent readers + 1 transition writer.
         /// Ensures no exceptions, no corrupted history, and consistent final state.
         /// </remarks>
+        /// <summary>
+        /// Verifies the concurrent readers with single writer no corruption scenario and its documented contract.
+        /// </summary>
+        /// <returns>The concurrent readers with single writer no corruption value produced for the requested scenario.</returns>
         [Fact]
         public async Task ConcurrentReaders_WithSingleWriter_NoCorruption()
         {
@@ -483,6 +498,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <remarks>
         /// Ensures concurrent transitions don't affect previously-retrieved history snapshots.
         /// </remarks>
+        /// <summary>
+        /// Verifies the transition history returns snapshot not live collection scenario and its documented contract.
+        /// </summary>
         [Fact]
         public void TransitionHistory_ReturnsSnapshot_NotLiveCollection()
         {
@@ -527,6 +545,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// completes successfully, and Subscribers B and C still execute.</para>
         /// <para>This validates the exception isolation design documented in ServiceLifecycle.</para>
         /// </remarks>
+        /// <summary>
+        /// Verifies the subscriber exceptions are isolated transition completes scenario and its documented contract.
+        /// </summary>
         [Fact]
         public void SubscriberExceptions_AreIsolated_TransitionCompletes()
         {
@@ -689,6 +710,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// valid per the state machine rules. This proves the rejection comes from the reentrancy guard,
         /// not from ordinary transition validation.</para>
         /// </remarks>
+        /// <summary>
+        /// Verifies the reentrant transition from subscriber throws invalid operation exception scenario and its documented contract.
+        /// </summary>
         [Fact]
         public void ReentrantTransition_FromSubscriber_ThrowsInvalidOperationException()
         {

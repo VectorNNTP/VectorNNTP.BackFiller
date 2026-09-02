@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ShutdownCoordinatorResourceOwnershipTests
     {
         /// <summary>
-        /// Exercises signal forced shutdown  from graceful  disposes grace period escalation source behavior, including the expected result and failure semantics.
+        /// Verifies the signal forced shutdown from graceful disposes grace period escalation source scenario and its documented contract.
         /// </summary>
         [Fact]
         public void SignalForcedShutdown_FromGraceful_DisposesGracePeriodEscalationSource()

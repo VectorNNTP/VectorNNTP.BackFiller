@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers lets encrypt certificate dependency probe behavior and invariants exercised by this test suite.
+        /// Verifies the lets encrypt certificate dependency probe tests scenario and its documented contract.
     /// </summary>
     public sealed class LetsEncryptCertificateDependencyProbeTests
     {
         /// <summary>
-        /// Exercises ensure certificate availability async  when acme account key missing  returns certificate dependency failure behavior, including the expected result and failure semantics.
+        /// Verifies the ensure certificate availability async when acme account key missing returns certificate dependency failure scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenAcmeAccountKeyMissing_ReturnsCertificateDependencyFailure()
@@ -42,8 +42,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create runtime options behavior and expected contract.
+        /// Verifies the create runtime options scenario and its documented contract.
         /// </summary>
+        /// <returns>The create runtime options value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create runtime options scenario and its documented contract.
+        /// </summary>
+        /// <param name="certDir">The cert dir supplied to the helper.</param>
+        /// <returns>The create runtime options value produced for the requested scenario.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(string certDir)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
@@ -90,8 +96,13 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the create unique temp directory behavior and expected contract.
+        /// Verifies the create unique temp directory scenario and its documented contract.
         /// </summary>
+        /// <returns>The create unique temp directory value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the create unique temp directory scenario and its documented contract.
+        /// </summary>
+        /// <returns>The create unique temp directory value produced for the requested scenario.</returns>
         private static string CreateUniqueTempDirectory()
         {
             string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-LetsEncryptProbeTests-{Guid.NewGuid():N}");
@@ -100,7 +111,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the delete directory if exists behavior and expected contract.
+        /// Verifies the delete directory if exists scenario and its documented contract.
         /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {

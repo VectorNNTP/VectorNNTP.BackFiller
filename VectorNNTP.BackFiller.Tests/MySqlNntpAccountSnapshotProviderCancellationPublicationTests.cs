@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class MySqlNntpAccountSnapshotProviderCancellationPublicationTests
     {
         /// <summary>
-        /// Exercises refresh snapshot async  when canceled after query completes  does not publish and throws cancellation behavior, including the expected result and failure semantics.
+        /// Verifies the refresh snapshot async when canceled after query completes does not publish and throws cancellation scenario and its documented contract.
         /// </summary>
         [Fact]
         public async Task RefreshSnapshotAsync_WhenCanceledAfterQueryCompletes_DoesNotPublishAndThrowsCancellation()
@@ -68,8 +68,14 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the build account behavior and expected contract.
+        /// Verifies the build account scenario and its documented contract.
         /// </summary>
+        /// <returns>The build account value produced for the requested scenario.</returns>
+        /// <summary>
+        /// Verifies the build account scenario and its documented contract.
+        /// </summary>
+        /// <param name="entryId">The entry id supplied to the helper.</param>
+        /// <returns>The build account value produced for the requested scenario.</returns>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {
             return new NntpAccountSnapshot(
