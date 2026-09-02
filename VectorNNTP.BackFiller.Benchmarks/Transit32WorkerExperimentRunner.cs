@@ -58,7 +58,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs Async.
-
     /// </summary>
     internal static async Task RunAsync(CancellationToken cancellationToken = default)
     {
@@ -77,7 +76,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs GeneratorOnlyAsync.
-
     /// </summary>
     private static async Task<GeneratorResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int workers, CancellationToken cancellationToken)
     {
@@ -165,7 +163,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs QueueNoOpAsync.
-
     /// </summary>
     private static async Task<QueueResult> RunQueueNoOpAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -318,7 +315,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs RealPipelineAsync.
-
     /// </summary>
     private static async Task<RealPipelineResult> RunRealPipelineAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -629,7 +625,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Builds RuntimeOptions.
-
     /// </summary>
     private static BackFillerRuntimeOptions BuildRuntimeOptions(RuntimeConfig runtime)
     {
@@ -777,7 +772,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Formats Distribution.
-
     /// </summary>
     private static string FormatDistribution(Dictionary<int, int> distribution)
     {

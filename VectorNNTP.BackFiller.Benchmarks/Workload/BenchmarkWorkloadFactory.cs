@@ -65,7 +65,6 @@ internal static class BenchmarkWorkloadFactory
 
     /// <summary>
     /// Creates ReusablePayloadTemplate.
-
     /// </summary>
     private static byte[] CreateReusablePayloadTemplate(int targetBytes)
     {

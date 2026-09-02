@@ -275,7 +275,6 @@ public partial class LoggingApiBenchmarks
 
     /// <summary>
     /// Creates MelLogger.
-
     /// </summary>
     private static Microsoft.Extensions.Logging.ILogger CreateMelLogger(LogLevel minimumLevel)
     {
@@ -296,7 +295,6 @@ public partial class LoggingApiBenchmarks
 
     /// <summary>
     /// Creates SerilogLogger.
-
     /// </summary>
     private static Serilog.ILogger CreateSerilogLogger(LogEventLevel minimumLevel)
     {
@@ -319,7 +317,6 @@ public partial class LoggingApiBenchmarks
 
     /// <summary>
     /// Converts to SerilogLevel.
-
     /// </summary>
     private static LogEventLevel ToSerilogLevel(LogLevel level)
     {

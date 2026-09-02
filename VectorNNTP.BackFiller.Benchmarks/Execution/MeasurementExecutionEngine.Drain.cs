@@ -164,7 +164,6 @@ internal static partial class MeasurementExecutionEngine
 
     /// <summary>
     /// Builds BoundarySnapshot.
-
     /// </summary>
     private static FixedCountBoundarySnapshot BuildBoundarySnapshot(
         string phase,
@@ -221,7 +220,6 @@ internal static partial class MeasurementExecutionEngine
 
     /// <summary>
     /// Builds PostMeasurementTerminalizationSummary.
-
     /// </summary>
     private static PostMeasurementTerminalizationSummary BuildPostMeasurementTerminalizationSummary(
         DateTimeOffset measurementEndUtc,

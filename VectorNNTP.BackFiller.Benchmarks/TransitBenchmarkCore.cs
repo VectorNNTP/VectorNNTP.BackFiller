@@ -17,7 +17,6 @@ internal static class TransitBenchmarkCore
 {
     /// <summary>
     /// Builds MessageId.
-
     /// </summary>
     internal static string BuildMessageId(long benchmarkInstanceId, int workerId, long sequence, string phase)
     {
@@ -44,7 +43,6 @@ internal static class TransitBenchmarkCore
     {
         /// <summary>
         /// Creates a value from Raw.
-
         /// </summary>
         internal static ProducerTiming FromRaw(long loopTicks, long generationTicks, long blockedTicks, long otherActiveTicks)
         {
@@ -437,7 +435,6 @@ internal static class TransitBenchmarkCore
 
         /// <summary>
         /// Stops Admission.
-
         /// </summary>
         internal void StopAdmission()
         {
@@ -537,7 +534,6 @@ internal static class TransitBenchmarkCore
 
         /// <summary>
         /// Writes Ascii.
-
         /// </summary>
         private static int WriteAscii(byte[] destination, int offset, string value)
         {

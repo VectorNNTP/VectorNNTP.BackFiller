@@ -49,7 +49,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs Async.
-
     /// </summary>
     internal static async Task RunAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -59,7 +58,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs ValidationAsync.
-
     /// </summary>
     internal static async Task RunValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -104,7 +102,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs SaturationAsync.
-
     /// </summary>
     internal static async Task RunSaturationAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -114,7 +111,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs GeneratorWorkerSweepAsync.
-
     /// </summary>
     internal static async Task RunGeneratorWorkerSweepAsync(CancellationToken cancellationToken = default)
     {
@@ -144,7 +140,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs Forensic32 WorkerAsync.
-
     /// </summary>
     internal static async Task RunForensic32WorkerAsync(CancellationToken cancellationToken = default)
     {
@@ -166,7 +161,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs GeneratorBaselineAsync.
-
     /// </summary>
     internal static async Task RunGeneratorBaselineAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -175,7 +169,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs SingleTraceAsync.
-
     /// </summary>
     internal static async Task RunSingleTraceAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -189,7 +182,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs CoreAsync.
-
     /// </summary>
     private static Task RunCoreAsync(TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
@@ -225,7 +217,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Runs MeasurementAsync.
-
     /// </summary>
     private static async Task<BenchmarkResult> RunMeasurementAsync(
         TransitPublisher publisher,
@@ -246,7 +237,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Creates TransitPublisherLogger.
-
     /// </summary>
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
     {
@@ -258,7 +248,6 @@ internal static class TransitServerStressRunner
 
     /// <summary>
     /// Writes StructuredResultArtifacts.
-
     /// </summary>
     private static void WriteStructuredResultArtifacts(BenchmarkResult result, TransitBenchmarkConfig config)
     {

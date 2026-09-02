@@ -121,7 +121,6 @@ internal static class RuntimeMetricSamplingHelpers
 
     /// <summary>
     /// Reads HostCpuPercent.
-
     /// </summary>
     internal static double ReadHostCpuPercent()
     {
@@ -166,7 +165,6 @@ internal static class RuntimeMetricSamplingHelpers
 
     /// <summary>
     /// Reads TransitServerCpuPercent.
-
     /// </summary>
     internal static double ReadTransitServerCpuPercent()
     {

@@ -198,7 +198,6 @@ internal readonly record struct TransitBenchmarkCliOptions(
 
     /// <summary>
     /// Parses PositiveInt.
-
     /// </summary>
     private static int ParsePositiveInt(string key, string raw)
     {
@@ -212,7 +211,6 @@ internal readonly record struct TransitBenchmarkCliOptions(
 
     /// <summary>
     /// Parses RequiredString.
-
     /// </summary>
     private static string ParseRequiredString(string key, string raw)
     {

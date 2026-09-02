@@ -105,7 +105,6 @@ internal sealed class ConnectionSeriesAggregate
 
     /// <summary>
     /// Formats Line.
-
     /// </summary>
     internal string FormatLine()
     {
@@ -125,7 +124,6 @@ internal static class LatencyAggregators
 {
     /// <summary>
     /// Builds ConnectionSeriesSummary.
-
     /// </summary>
     internal static string BuildConnectionSeriesSummary(Dictionary<int, ConnectionSeriesAggregate> series)
     {
@@ -143,7 +141,6 @@ internal static class LatencyAggregators
 
     /// <summary>
     /// Builds DispatcherSeriesSummary.
-
     /// </summary>
     internal static string BuildDispatcherSeriesSummary(List<DispatcherSeriesPoint> series)
     {
@@ -164,7 +161,6 @@ internal static class LatencyAggregators
 
     /// <summary>
     /// Updates Peak.
-
     /// </summary>
     internal static void UpdatePeak(ref long location, long candidate)
     {
@@ -185,7 +181,6 @@ internal static class LatencyAggregators
 
     /// <summary>
     /// Updates Min.
-
     /// </summary>
     internal static void UpdateMin(ref long location, long candidate)
     {

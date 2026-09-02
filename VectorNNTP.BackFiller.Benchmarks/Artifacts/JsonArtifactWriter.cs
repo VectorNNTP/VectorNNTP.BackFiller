@@ -23,7 +23,6 @@ internal static class JsonArtifactWriter
 
     /// <summary>
     /// Gets ArtifactPath.
-
     /// </summary>
     internal static string GetArtifactPath(string baseDirectory, string stamp)
     {
@@ -32,7 +31,6 @@ internal static class JsonArtifactWriter
 
     /// <summary>
     /// Writes ToPath.
-
     /// </summary>
     internal static void WriteToPath(string path, string json)
     {

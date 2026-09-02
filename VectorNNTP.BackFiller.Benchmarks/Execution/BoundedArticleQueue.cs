@@ -117,7 +117,6 @@ internal sealed class BoundedArticleQueue : IDisposable
 
     /// <summary>
     /// Stops Admission.
-
     /// </summary>
     internal void StopAdmission()
     {

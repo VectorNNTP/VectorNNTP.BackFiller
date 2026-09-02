@@ -645,7 +645,6 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
 
     /// <summary>
     /// Converts to UpperAsciiInvariant.
-
     /// </summary>
     private static byte ToUpperAsciiInvariant(byte value)
     {
@@ -832,7 +831,6 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
 
     /// <summary>
     /// Writes Response.
-
     /// </summary>
     private static void WriteResponse(PipeWriter writer, in ResponseWorkItem response)
     {

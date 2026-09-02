@@ -242,7 +242,6 @@ internal static class RuntimeIdentityGuard
 
     /// <summary>
     /// Resolves LoadedProductionAssembly.
-
     /// </summary>
     private static Assembly? ResolveLoadedProductionAssembly()
     {
@@ -252,7 +251,6 @@ internal static class RuntimeIdentityGuard
 
     /// <summary>
     /// Resolves ActualProductionAssemblyPath.
-
     /// </summary>
     private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
     {
@@ -268,7 +266,6 @@ internal static class RuntimeIdentityGuard
 
     /// <summary>
     /// Computes Sha256.
-
     /// </summary>
     private static string ComputeSha256(string filePath)
     {
@@ -287,7 +284,6 @@ internal static class RuntimeIdentityGuard
 
     /// <summary>
     /// Normalizes TargetFramework.
-
     /// </summary>
     private static string NormalizeTargetFramework(string? value)
     {

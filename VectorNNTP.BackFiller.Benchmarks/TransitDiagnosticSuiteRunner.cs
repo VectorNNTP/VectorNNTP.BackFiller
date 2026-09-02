@@ -29,7 +29,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Runs Async.
-
     /// </summary>
     internal static async Task RunAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -139,7 +138,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Runs GeneratorOnlyAsync.
-
     /// </summary>
     private static async Task<GenerationOnlyResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int workerCount, CancellationToken cancellationToken)
     {
@@ -230,7 +228,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Runs GeneratorQueueAsync.
-
     /// </summary>
     private static async Task<QueuePipelineResult> RunGeneratorQueueAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int queueArticles, long queueBytes, CancellationToken cancellationToken)
     {
@@ -364,7 +361,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Runs GeneratorQueueDispatchNoOpAsync.
-
     /// </summary>
     private static async Task<QueuePipelineResult> RunGeneratorQueueDispatchNoOpAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int queueArticles, long queueBytes, int dispatchWorkers, CancellationToken cancellationToken)
     {
@@ -493,7 +489,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Runs RealPublisherInstrumentedAsync.
-
     /// </summary>
     private static async Task<EndToEndResult> RunRealPublisherInstrumentedAsync(
         string label,
@@ -705,7 +700,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Runs ParallelGeneratorSweepAsync.
-
     /// </summary>
     private static async Task<List<GenerationOnlyResult>> RunParallelGeneratorSweepAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, CancellationToken cancellationToken)
     {
@@ -786,7 +780,6 @@ internal static class TransitDiagnosticSuiteRunner
 
     /// <summary>
     /// Computes PercentileMicroseconds.
-
     /// </summary>
     private static double ComputePercentileMicroseconds(IEnumerable<long> ticks, double percentile)
     {
