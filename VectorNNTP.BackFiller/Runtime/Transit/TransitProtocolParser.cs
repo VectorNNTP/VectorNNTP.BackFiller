@@ -107,8 +107,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles static for transit protocol parser.
+        /// Parses and validates the numeric code and text of an NNTP status line.
         /// </summary>
+        /// <param name="line">NNTP status line to parse.</param>
+        /// <returns>The three-digit status code and trailing response text.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the line is empty or has an invalid code or separator.</exception>
         internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
         {
             if (string.IsNullOrWhiteSpace(line))
