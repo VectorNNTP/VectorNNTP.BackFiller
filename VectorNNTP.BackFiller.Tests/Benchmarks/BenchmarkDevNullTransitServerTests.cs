@@ -49,7 +49,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
@@ -79,7 +79,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             for (int i = 0; i < SubmissionCount; i++)
             {
                 string messageId = $"<devnull-batch-{i + 1}@example.com>";
-                TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+                TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
                 Assert.Equal(TransitPublishStatus.Accepted, result.Status);
                 Assert.Equal(239, result.ResponseCode);
                 Assert.Equal(messageId, result.MessageId);

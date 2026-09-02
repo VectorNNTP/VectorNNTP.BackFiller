@@ -37,6 +37,71 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
+        /// Confirms the validate transit server streaming session async when writer creation fails propagates exception behavior.
+        /// </summary>
+        [Fact]
+        public async Task ValidateTransitServerStreamingSessionAsync_WhenWriterCreationFails_PropagatesException()
+        {
+            using ReadableNonWritableStream stream = new();
+
+            await Assert.ThrowsAsync<ArgumentException>(async () =>
+                await TransitServerDependencyProbe.ValidateTransitServerStreamingSessionAsync(
+                    stream,
+                    "transit.example.net",
+                    negotiateStartTls: false,
+                    CancellationToken.None).ConfigureAwait(false));
+        }
+
+        /// <summary>
+        /// Confirms the validate transit server connectivity async when capabilities exceed line limit fails validation behavior.
+        /// </summary>
+        [Fact]
+        public async Task ValidateTransitServerConnectivityAsync_WhenCapabilitiesExceedLineLimit_FailsValidation()
+        {
+            using CancellationTokenSource testTimeout = new(TimeSpan.FromSeconds(10));
+
+            ProbeNntpServer serverInstance = await ProbeNntpServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await ProbeNntpServer.WriteLineAsync(stream, "200 transit ready", cancellationToken).ConfigureAwait(false);
+
+                string firstCommand = await ProbeNntpServer.ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(firstCommand, "CAPABILITIES", StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                await ProbeNntpServer.WriteLineAsync(stream, "101 Capability list:", cancellationToken).ConfigureAwait(false);
+                for (int i = 0; i < 1024; i++)
+                {
+                    await ProbeNntpServer.WriteLineAsync(stream, $"X-CAPABILITY-{i}", cancellationToken).ConfigureAwait(false);
+                }
+            });
+
+            await using (serverInstance.ConfigureAwait(false))
+            {
+                BackFillerOptions options = new()
+                {
+                    TransitServer = new TransitServerOptions
+                    {
+                        Host = IPAddress.Loopback.ToString(),
+                        Port = serverInstance.Port,
+                        UseSsl = false,
+                    },
+                };
+
+                DependencyValidationResult result = await TransitServerDependencyProbe.ValidateTransitServerConnectivityAsync(
+                    options,
+                    TimeSpan.FromSeconds(3),
+                    testTimeout.Token).ConfigureAwait(false);
+
+                Assert.False(result.IsValid);
+                Assert.Contains(result.FailedDependencies, static failure =>
+                    failure.Dependency == "TransitServer"
+                    && failure.Reason.Contains("returned more than 1024 capability lines without terminating '.'", StringComparison.Ordinal));
+            }
+        }
+
+        /// <summary>
         /// Confirms the validate transit server connectivity async when start tls advertised but rejected fails validation behavior.
         /// </summary>
         [Fact]
@@ -108,6 +173,91 @@ namespace VectorNNTP.Backfiller.Tests
                 Assert.Contains(result.FailedDependencies, static failure =>
                         failure.Dependency == "TransitServer"
                         && failure.Reason.Contains("STARTTLS negotiation rejected", StringComparison.Ordinal));
+            }
+        }
+
+        /// <summary>
+        /// Confirms the readable non writable stream behavior.
+        /// </summary>
+        private sealed class ReadableNonWritableStream : Stream
+        {
+            /// <summary>
+            /// Confirms can read behavior.
+            /// </summary>
+            public override bool CanRead => true;
+
+            /// <summary>
+            /// Confirms can seek behavior.
+            /// </summary>
+            public override bool CanSeek => false;
+
+            /// <summary>
+            /// Confirms can write behavior.
+            /// </summary>
+            public override bool CanWrite => false;
+
+            /// <summary>
+            /// Confirms length behavior.
+            /// </summary>
+            public override long Length => 0;
+
+            /// <summary>
+            /// Confirms position behavior.
+            /// </summary>
+            public override long Position
+            {
+                get => 0;
+                set => throw new NotSupportedException();
+            }
+
+            /// <summary>
+            /// Confirms the flush behavior.
+            /// </summary>
+            public override void Flush()
+            {
+            }
+
+            /// <summary>
+            /// Confirms the read behavior.
+            /// </summary>
+            /// <param name="buffer">The buffer used by this test scenario.</param>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="count">The count used by this test scenario.</param>
+            /// <returns>The value returned by the read helper.</returns>
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                return 0;
+            }
+
+            /// <summary>
+            /// Confirms the seek behavior.
+            /// </summary>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="origin">The origin used by this test scenario.</param>
+            /// <returns>The value returned by the seek helper.</returns>
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                throw new NotSupportedException();
+            }
+
+            /// <summary>
+            /// Confirms the set length behavior.
+            /// </summary>
+            /// <param name="value">The value used by this test scenario.</param>
+            public override void SetLength(long value)
+            {
+                throw new NotSupportedException();
+            }
+
+            /// <summary>
+            /// Confirms the write behavior.
+            /// </summary>
+            /// <param name="buffer">The buffer used by this test scenario.</param>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="count">The count used by this test scenario.</param>
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
             }
         }
 

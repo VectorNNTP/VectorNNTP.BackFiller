@@ -16,17 +16,26 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines transit server dependency probe and its transit server dependency probe contract.
+    /// Performs startup dependency checks against the configured transit server endpoint.
     /// </summary>
+    /// <remarks>
+    /// The probe validates TCP reachability, optional TLS client authentication, NNTP greeting parsing,
+    /// CAPABILITIES negotiation, STREAM/STREAMING availability for TAKETHIS publishing, MODE STREAM acceptance,
+    /// and graceful QUIT handling.
+    /// </remarks>
     internal static class TransitServerDependencyProbe
     {
         /// <summary>
-        /// Validates TransitServer endpoint reachability, NNTP greeting semantics, and streaming capability.
+        /// Executes the transit-server startup probe and returns categorized validation failures.
         /// </summary>
-        /// <param name="backFiller">The backFiller value.</param>
-        /// <param name="timeout">The timeout value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="backFiller">Application configuration containing transit server host, port, and TLS mode.</param>
+        /// <param name="timeout">Maximum probe duration before the linked timeout token cancels the operation.</param>
+        /// <param name="cancellationToken">External cancellation token for startup shutdown/abort.</param>
+        /// <returns>
+        /// A validation result containing startup dependency failures. When host/port are not configured,
+        /// the probe returns without adding failures.
+        /// </returns>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
         internal static async Task<DependencyValidationResult> ValidateTransitServerConnectivityAsync(
             BackFillerOptions? backFiller,
             TimeSpan timeout,
@@ -102,13 +111,25 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Validates NNTP stream-mode semantics for a connected TransitServer session.
+        /// Validates NNTP streaming-session behavior over an already connected transport stream.
         /// </summary>
-        /// <param name="stream">Connected transport stream.</param>
-        /// <param name="host">Transit host for TLS target validation when STARTTLS is negotiated.</param>
-        /// <param name="negotiateStartTls">Whether STARTTLS should be negotiated when advertised by CAPABILITIES.</param>
-        /// <param name="cancellationToken">Cancellation token for network operations.</param>
-        /// <returns>A task that completes when greeting, capability checks, MODE STREAM, and QUIT exchange succeed.</returns>
+        /// <param name="stream">Connected network or TLS transport stream used for NNTP command exchange.</param>
+        /// <param name="host">Target host name used when STARTTLS upgrades the session to TLS.</param>
+        /// <param name="negotiateStartTls">
+        /// <see langword="true"/> to negotiate STARTTLS when advertised by CAPABILITIES; otherwise validation continues
+        /// on the current stream mode.
+        /// </param>
+        /// <param name="cancellationToken">Cancellation token for line reads, command writes, and optional TLS upgrade.</param>
+        /// <returns>A task that completes after greeting, capability checks, MODE STREAM, and QUIT all succeed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="stream"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when STARTTLS, STREAM/STREAMING capability requirements, MODE STREAM, or QUIT responses are invalid.
+        /// </exception>
+        /// <remarks>
+        /// When STARTTLS is negotiated successfully, this method rebuilds its reader/writer over the upgraded TLS stream
+        /// and re-issues CAPABILITIES to validate post-upgrade server capabilities.
+        /// </remarks>
         internal static async Task ValidateTransitServerStreamingSessionAsync(
             Stream stream,
             string host,
@@ -120,11 +141,14 @@ namespace VectorNNTP.Backfiller.Startup.Validation
 
             Stream activeStream = stream;
             SslStream? startTlsStream = null;
-            StreamReader reader = CreateReader(activeStream);
-            StreamWriter writer = CreateWriter(activeStream);
+            StreamReader? reader = null;
+            StreamWriter? writer = null;
 
             try
             {
+                reader = CreateReader(activeStream);
+                writer = CreateWriter(activeStream);
+
                 string greetingLine = await ReadNntpLineAsync(reader, cancellationToken).ConfigureAwait(false);
                 TransitProtocolParser.ValidateGreeting(greetingLine);
 
@@ -178,48 +202,57 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             }
             finally
             {
-                writer.Dispose();
-                reader.Dispose();
+                writer?.Dispose();
+                reader?.Dispose();
                 startTlsStream?.Dispose();
             }
         }
 
         /// <summary>
-        /// Handles read capabilities async for transit server dependency probe.
+        /// Sends CAPABILITIES and parses the multi-line response into a capability snapshot.
         /// </summary>
-        /// <param name="reader">The stream reader.</param>
-        /// <param name="writer">The stream writer.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains the transit capability snapshot.</returns>
+        /// <param name="reader">Reader used to consume capability response lines.</param>
+        /// <param name="writer">Writer used to send the CAPABILITIES command.</param>
+        /// <param name="cancellationToken">Cancellation token for command and response I/O.</param>
+        /// <returns>The parsed transit capability snapshot.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when the server does not terminate the capability listing within the configured safety bound.
+        /// </exception>
         private static async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(
             StreamReader reader,
             StreamWriter writer,
             CancellationToken cancellationToken)
         {
+            const int MaxCapabilityLines = 1024;
+
             await WriteNntpCommandAsync(writer, "CAPABILITIES", cancellationToken).ConfigureAwait(false);
 
             List<string> capabilityLines = [];
-            while (true)
+            for (int i = 0; i < MaxCapabilityLines; i++)
             {
                 string line = await ReadNntpLineAsync(reader, cancellationToken).ConfigureAwait(false);
                 capabilityLines.Add(line);
 
                 if (line == ".")
                 {
-                    break;
+                    return TransitProtocolParser.ParseCapabilitiesResponse(capabilityLines);
                 }
             }
 
-            return TransitProtocolParser.ParseCapabilitiesResponse(capabilityLines);
+            throw new InvalidOperationException(
+                $"Transit server returned more than {MaxCapabilityLines} capability lines without terminating '.'.");
         }
 
         /// <summary>
-        /// Handles write nntp command async for transit server dependency probe.
+        /// Writes a single NNTP command line using ASCII encoding and CRLF termination.
         /// </summary>
-        /// <param name="writer">The stream writer.</param>
-        /// <param name="command">The NNTP command to write.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A task that represents the asynchronous operation.</returns>
+        /// <param name="writer">Writer bound to the active transport stream.</param>
+        /// <param name="command">NNTP command verb and arguments without line termination.</param>
+        /// <param name="cancellationToken">Cancellation token for write and flush operations.</param>
+        /// <returns>A task that completes after the command line has been flushed to the stream.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="writer"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="command"/> is null, empty, or whitespace.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
         private static async Task WriteNntpCommandAsync(
             StreamWriter writer,
             string command,
@@ -235,20 +268,20 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Handles create reader for transit server dependency probe.
+        /// Creates an ASCII stream reader for NNTP response parsing without BOM detection.
         /// </summary>
-        /// <param name="stream">The stream to read from.</param>
-        /// <returns>A stream reader for the specified stream.</returns>
+        /// <param name="stream">Underlying transport stream to read from.</param>
+        /// <returns>A reader that leaves the underlying stream open when disposed.</returns>
         private static StreamReader CreateReader(Stream stream)
         {
             return new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
         }
 
         /// <summary>
-        /// Handles create writer for transit server dependency probe.
+        /// Creates an ASCII stream writer configured for explicit flush control and CRLF line semantics.
         /// </summary>
-        /// <param name="stream">The stream to write to.</param>
-        /// <returns>A stream writer for the specified stream.</returns>
+        /// <param name="stream">Underlying transport stream to write to.</param>
+        /// <returns>A writer that leaves the underlying stream open when disposed.</returns>
         private static StreamWriter CreateWriter(Stream stream)
         {
             return new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)
@@ -259,11 +292,13 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Handles create strict tls stream for transit server dependency probe.
+        /// Wraps a transport stream in an <see cref="SslStream"/> that enforces strict policy-error validation.
         /// </summary>
-        /// <param name="innerStream">The inner stream to wrap with SSL.</param>
-        /// <param name="leaveInnerStreamOpen">Whether to leave the inner stream open after the SSL stream is disposed.</param>
-        /// <returns>An SSL stream that wraps the specified inner stream.</returns>
+        /// <param name="innerStream">Transport stream to wrap for TLS client authentication.</param>
+        /// <param name="leaveInnerStreamOpen">
+        /// Whether disposing the returned <see cref="SslStream"/> should keep <paramref name="innerStream"/> open.
+        /// </param>
+        /// <returns>An SSL stream configured to reject certificates with any <see cref="SslPolicyErrors"/> value.</returns>
         private static SslStream CreateStrictTlsStream(Stream innerStream, bool leaveInnerStreamOpen)
         {
             return new SslStream(
@@ -277,12 +312,12 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Handles authenticate tls async for transit server dependency probe.
+        /// Authenticates the client side of the TLS session using this probe's transport security policy.
         /// </summary>
-        /// <param name="sslStream">The SSL stream to authenticate.</param>
-        /// <param name="host">The target host for the SSL authentication.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A task that represents the asynchronous operation.</returns>
+        /// <param name="sslStream">TLS stream to authenticate as a client.</param>
+        /// <param name="host">Target host name used for SNI and certificate host validation.</param>
+        /// <param name="cancellationToken">Cancellation token for the TLS handshake operation.</param>
+        /// <returns>A task that completes after TLS client authentication succeeds.</returns>
         private static async Task AuthenticateTlsAsync(SslStream sslStream, string host, CancellationToken cancellationToken)
         {
             SslClientAuthenticationOptions authOptions = CreateTlsClientAuthenticationOptions(host);
@@ -290,10 +325,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Handles create tls client authentication options for transit server dependency probe.
+        /// Builds TLS client-authentication options for transit-server probe handshakes.
         /// </summary>
-        /// <param name="host">The target host for the SSL authentication.</param>
-        /// <returns>The TLS client authentication options.</returns>
+        /// <param name="host">Target host name used by TLS client authentication.</param>
+        /// <returns>Authentication options restricted to TLS 1.2 and TLS 1.3.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
         internal static SslClientAuthenticationOptions CreateTlsClientAuthenticationOptions(string host)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(host);
@@ -306,11 +342,13 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Reads a single NNTP response line from the server with cancellation support.
+        /// Reads one NNTP response line and fails fast if the remote endpoint closes unexpectedly.
         /// </summary>
-        /// <param name="reader">The stream reader to read from.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>The NNTP response line.</returns>
+        /// <param name="reader">Reader bound to the active transit session stream.</param>
+        /// <param name="cancellationToken">Cancellation token for asynchronous line read.</param>
+        /// <returns>The next NNTP response line from the server.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the server closes the connection before returning a line.</exception>
         private static async Task<string> ReadNntpLineAsync(
             StreamReader reader,
             CancellationToken cancellationToken)

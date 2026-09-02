@@ -8,6 +8,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipelines;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -20,8 +21,16 @@ using System.Threading.Channels;
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// Manages one outbound NNTP transit connection lifecycle and per-connection response correlation.
+    /// Owns one outbound NNTP transit session, including transport establishment, protocol negotiation,
+    /// TAKETHIS submission, and response correlation for work assigned to this connection.
     /// </summary>
+    /// <remarks>
+    /// The connection transitions through explicit lifecycle states from TCP connect, greeting, capability discovery,
+    /// optional TLS activation, and MODE STREAM enablement before entering publishing readiness.
+    /// In-flight submissions are tracked by Message-ID and send order so asynchronous response lines can be mapped
+    /// back to the originating work item. Disposal settles unresolved owned work as ambiguous and releases transport,
+    /// pipe, channel, and synchronization resources owned by this instance.
+    /// </remarks>
     internal sealed partial class TransitConnection : IAsyncDisposable
     {
         /// <summary>
@@ -65,14 +74,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Stores server certificate validation callback used by transit connection.
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
-        /// <summary>
-        /// Stores pipeline depth used by transit connection.
-        /// </summary>
-        private readonly int _pipelineDepth;
-        /// <summary>
-        /// Stores write batch coalesce microseconds used by transit connection.
-        /// </summary>
-        private readonly int _writeBatchCoalesceMicroseconds;
         /// <summary>
         /// Configures response progress timeout for transit connection.
         /// </summary>
@@ -172,21 +173,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private readonly ConcurrentDictionary<long, long> _completionEnqueuedTicks = new();
 
         /// <summary>
-        /// Stores capabilities used by transit connection.
-        /// </summary>
-        private TransitCapabilitySnapshot _capabilities = new(SupportsStartTls: false, SupportsStreaming: false);
-        /// <summary>
-        /// Stores tls active used by transit connection.
-        /// </summary>
-        private bool _tlsActive;
-        /// <summary>
         /// Stores streaming mode negotiated used by transit connection.
         /// </summary>
         private bool _streamingModeNegotiated;
-        /// <summary>
-        /// Stores state used by transit connection.
-        /// </summary>
-        private TransitConnectionState _state = TransitConnectionState.Disconnected;
 
         /// <summary>
         /// Stores shutdown requested used by transit connection.
@@ -262,16 +251,30 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private long _lastDefinitiveResponseProgressTick;
 
         /// <summary>
-        /// Handles trace stamp for transit connection.
+        /// Formats a trace stamp used by low-level diagnostic console output.
         /// </summary>
+        /// <returns>An ISO-8601 UTC timestamp with managed thread and task identifiers.</returns>
         private static string TraceStamp()
         {
             return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
         }
 
         /// <summary>
-        /// Handles transit connection for transit connection.
+        /// Initializes a transit connection configuration using platform-default server certificate validation.
         /// </summary>
+        /// <param name="host">DNS name or IP address of the remote transit server.</param>
+        /// <param name="port">TCP port used for the outbound transit session.</param>
+        /// <param name="useSsl">
+        /// <see langword="true"/> to start the session over TLS immediately; otherwise plaintext is used until
+        /// optional STARTTLS negotiation.
+        /// </param>
+        /// <param name="logger">Logger used for state, capability, and fault events emitted by this connection.</param>
+        /// <param name="perConnectionPipelineDepth">Maximum number of work items expected to be pipelined per batch on this connection.</param>
+        /// <param name="writeBatchCoalesceMicroseconds">Validation input for configured write coalescing window in microseconds.</param>
+        /// <param name="expectedBatchIntentCountProvider">Reserved provider for batch-intent accounting in the global queue architecture.</param>
+        /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
+        /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
+        /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
         internal TransitConnection(
             string host,
             int port,
@@ -299,8 +302,36 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles transit connection for transit connection.
+        /// Initializes a transit connection with explicit server certificate validation policy.
         /// </summary>
+        /// <param name="host">DNS name or IP address of the remote transit server.</param>
+        /// <param name="port">TCP port used for the outbound transit session.</param>
+        /// <param name="useSsl">
+        /// <see langword="true"/> to start the session over TLS immediately; otherwise plaintext is used until
+        /// optional STARTTLS negotiation.
+        /// </param>
+        /// <param name="logger">Logger used for state, capability, and fault events emitted by this connection.</param>
+        /// <param name="serverCertificateValidationCallback">
+        /// Optional TLS certificate validator. When <see langword="null"/>, platform-default certificate and host-name
+        /// validation is used.
+        /// </param>
+        /// <param name="perConnectionPipelineDepth">Maximum number of work items expected to be pipelined per batch on this connection.</param>
+        /// <param name="writeBatchCoalesceMicroseconds">Validation input for configured write coalescing window in microseconds.</param>
+        /// <param name="expectedBatchIntentCountProvider">Reserved provider for batch-intent accounting in the global queue architecture.</param>
+        /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
+        /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
+        /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// Thrown when <paramref name="port"/>, <paramref name="perConnectionPipelineDepth"/>,
+        /// <paramref name="writeBatchCoalesceMicroseconds"/>, <paramref name="responseProgressTimeout"/>, or
+        /// <paramref name="responseProgressCheckInterval"/> is outside the accepted range.
+        /// </exception>
+        /// <remarks>
+        /// This constructor validates configuration values and stores immutable connection settings. Network I/O,
+        /// protocol negotiation, and state transition to publishing readiness occur in <see cref="InitializeAsync(CancellationToken)"/>.
+        /// </remarks>
         internal TransitConnection(
             string host,
             int port,
@@ -353,8 +384,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _useSsl = useSsl;
             _logger = logger;
             _serverCertificateValidationCallback = serverCertificateValidationCallback;
-            _pipelineDepth = perConnectionPipelineDepth;
-            _writeBatchCoalesceMicroseconds = writeBatchCoalesceMicroseconds;
+            PipelineDepth = perConnectionPipelineDepth;
             _responseProgressTimeout = effectiveResponseProgressTimeout;
             _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
             _timingCollector = timingCollector;
@@ -362,46 +392,54 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Stores connection id used by transit connection.
+        /// Gets a stable identifier used to correlate logs and diagnostics for this connection instance.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>A random GUID formatted as a lowercase 32-character hex string without separators.</value>
         internal string ConnectionId { get; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
-        /// Stores current state used by transit connection.
+        /// Gets the current lifecycle state of the connection state machine.
         /// </summary>
-        internal TransitConnectionState CurrentState => _state;
+        /// <value>The most recent <see cref="TransitConnectionState"/> assigned by internal transition logic.</value>
+        internal TransitConnectionState CurrentState { get; private set; } = TransitConnectionState.Disconnected;
 
         /// <summary>
-        /// Stores is tls active used by transit connection.
+        /// Gets a value indicating whether transport I/O currently runs over an authenticated <see cref="SslStream"/>.
         /// </summary>
-        internal bool IsTlsActive => _tlsActive;
+        /// <value><see langword="true"/> after TLS activation succeeds; otherwise <see langword="false"/>.</value>
+        internal bool IsTlsActive { get; private set; }
 
         /// <summary>
-        /// Stores capabilities used by transit connection.
+        /// Gets the most recently negotiated capability snapshot for this session.
         /// </summary>
-        internal TransitCapabilitySnapshot Capabilities => _capabilities;
+        /// <value>
+        /// Capability flags discovered during CAPABILITIES negotiation. The value is reset during failed initialization
+        /// cleanup and refreshed after STARTTLS renegotiation.
+        /// </value>
+        internal TransitCapabilitySnapshot Capabilities { get; private set; } = new(SupportsStartTls: false, SupportsStreaming: false);
 
         /// <summary>
-        /// Limits outstanding submission count for transit connection.
+        /// Gets the number of in-flight submissions currently awaiting definitive settlement on this connection.
         /// </summary>
+        /// <value>The current count of entries in the pending Message-ID map.</value>
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
 
         /// <summary>
-        /// Stores pipeline depth used by transit connection.
+        /// Gets the configured per-connection pipeline depth used by upstream scheduling and diagnostics.
         /// </summary>
-        internal int PipelineDepth => _pipelineDepth;
+        /// <value>A positive integer validated at construction time.</value>
+        internal int PipelineDepth { get; }
 
         /// <summary>
-        /// Stores is response loop faulted used by transit connection.
+        /// Gets a value indicating whether the response loop has recorded a terminal fault.
         /// </summary>
-        /// <param name="_responseLoopFaulted">The _responseLoopFaulted value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <value><see langword="true"/> once fault signaling succeeds; otherwise <see langword="false"/>.</value>
         internal bool IsResponseLoopFaulted => Volatile.Read(ref _responseLoopFaulted) == 1;
 
         /// <summary>
-        /// Handles throw if response loop faulted for transit connection.
+        /// Throws when the response loop has faulted and pending responses can no longer be completed normally.
         /// </summary>
+        /// <exception cref="IOException">Thrown when a response-loop fault was recorded for this connection.</exception>
         internal void ThrowIfResponseLoopFaulted()
         {
             if (!IsResponseLoopFaulted)
@@ -414,10 +452,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles is recorded response loop fault for transit connection.
+        /// Determines whether an observed exception corresponds to the response-loop fault captured by this connection.
         /// </summary>
-        /// <param name="exception">The exception value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <param name="exception">Exception to compare against the recorded response-loop failure.</param>
+        /// <returns>
+        /// <see langword="true"/> when the supplied exception is the recorded fault instance, one of its inner exceptions,
+        /// or an <see cref="InvalidOperationException"/> with the same message as the recorded invalid-operation fault.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="exception"/> is <see langword="null"/>.</exception>
         internal bool IsRecordedResponseLoopFault(Exception exception)
         {
             ArgumentNullException.ThrowIfNull(exception);
@@ -452,26 +494,46 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles notify materialization reservation changed for transit connection.
+        /// Receives reservation-change notifications from the dispatcher integration point.
         /// </summary>
+        /// <remarks>
+        /// In the current global-queue architecture this callback is intentionally a no-op and exists only to preserve
+        /// compatibility with higher-level publisher orchestration hooks.
+        /// </remarks>
         internal static void NotifyMaterializationReservationChanged()
         {
             // Intentionally no-op in global queue architecture.
         }
 
         /// <summary>
-        /// Handles record reconnect event for transit connection.
+        /// Receives reconnect notifications from publisher orchestration.
         /// </summary>
+        /// <remarks>
+        /// The method is intentionally a no-op for the current architecture where reconnect accounting is maintained
+        /// outside this connection class.
+        /// </remarks>
         internal static void RecordReconnectEvent()
         {
             // Intentionally no-op in global queue architecture.
         }
 
         /// <summary>
-        /// Handles initialize async for transit connection.
+        /// Establishes transport connectivity and negotiates protocol readiness for TAKETHIS publishing.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Token used to cancel connect, negotiation, and initialization stage waits.</param>
+        /// <returns>A task that completes when the connection reaches <see cref="TransitConnectionState.Ready"/>.</returns>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when greeting/capability/mode-stream protocol responses are invalid for a publishing-ready session.
+        /// </exception>
+        /// <exception cref="TransitConnectionLifecycleException">
+        /// Thrown when initialization exceeds the configured response-progress timeout.
+        /// </exception>
+        /// <remarks>
+        /// The method performs TCP connect, optional immediate TLS, greeting validation, CAPABILITIES negotiation,
+        /// optional STARTTLS upgrade with capability renegotiation, and MODE STREAM activation. On any failure,
+        /// partially initialized resources are cleaned up and state is reset to <see cref="TransitConnectionState.Disconnected"/>.
+        /// </remarks>
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -491,7 +553,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _transportStream = _tcpClient.GetStream();
                 _readStream = _transportStream;
                 _writeStream = _transportStream;
-                _tlsActive = false;
+                IsTlsActive = false;
                 _streamingModeNegotiated = false;
 
                 if (_useSsl)
@@ -515,14 +577,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 TransitionState(TransitConnectionState.CapabilitiesNegotiation);
                 Console.WriteLine($"[TRACE-RI-64] {TraceStamp()} Connection.Initialize CAPABILITIES-START connectionId={ConnectionId}");
-                _capabilities = await AwaitInitializationStageAsync(
+                Capabilities = await AwaitInitializationStageAsync(
                     ReadCapabilitiesAsync,
                     "CAPABILITIES exchange",
                     cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
-                LogTransitCapabilities(_logger, ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
+                Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={Capabilities.SupportsStreaming}");
+                LogTransitCapabilities(_logger, ConnectionId, Capabilities.SupportsStartTls, Capabilities.SupportsStreaming);
 
-                if (!_useSsl && _capabilities.SupportsStartTls)
+                if (!_useSsl && Capabilities.SupportsStartTls)
                 {
                     TransitionState(TransitConnectionState.StartingTls);
                     await AwaitInitializationStageAsync(
@@ -536,15 +598,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                     TransitionState(TransitConnectionState.CapabilitiesNegotiation);
                     Console.WriteLine($"[TRACE-RI-64A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-START connectionId={ConnectionId}");
-                    _capabilities = await AwaitInitializationStageAsync(
+                    Capabilities = await AwaitInitializationStageAsync(
                         ReadCapabilitiesAsync,
                         "CAPABILITIES exchange (post-STARTTLS)",
                         cancellationToken).ConfigureAwait(false);
-                    Console.WriteLine($"[TRACE-RI-65A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-COMPLETE connectionId={ConnectionId} supportsStreaming={_capabilities.SupportsStreaming}");
-                    LogTransitCapabilities(_logger, ConnectionId, _capabilities.SupportsStartTls, _capabilities.SupportsStreaming);
+                    Console.WriteLine($"[TRACE-RI-65A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-COMPLETE connectionId={ConnectionId} supportsStreaming={Capabilities.SupportsStreaming}");
+                    LogTransitCapabilities(_logger, ConnectionId, Capabilities.SupportsStartTls, Capabilities.SupportsStreaming);
                 }
 
-                if (!_capabilities.SupportsStreaming)
+                if (!Capabilities.SupportsStreaming)
                 {
                     throw new InvalidOperationException("Transit server does not advertise STREAMING capability.");
                 }
@@ -565,9 +627,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 _streamingModeNegotiated = true;
                 TransitionState(TransitConnectionState.Ready);
-                Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={_state}");
+                Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={CurrentState}");
                 _ = Interlocked.Increment(ref _readyTransitionCount);
-                LogTransitConnectionReady(_logger, ConnectionId, _tlsActive);
+                LogTransitConnectionReady(_logger, ConnectionId, IsTlsActive);
 
                 _responseLoopCancellation = new CancellationTokenSource();
                 _responseProgressWatchdogCancellation = CancellationTokenSource.CreateLinkedTokenSource(_responseLoopCancellation.Token);
@@ -592,8 +654,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles cleanup initialization failure async for transit connection.
+        /// Best-effort cleanup path used after initialization failures.
         /// </summary>
+        /// <returns>A task that completes after transport, pipe, loop, and state artifacts are reset.</returns>
+        /// <remarks>
+        /// This method intentionally swallows expected disposal and completion exceptions while tearing down partially
+        /// initialized resources so the caller can rethrow the original initialization failure.
+        /// </remarks>
         private async Task CleanupInitializationFailureAsync()
         {
             try
@@ -657,19 +724,30 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _responseLoopCancellation = null;
             _responseProgressWatchdogCancellation = null;
 
-            _tlsActive = false;
+            IsTlsActive = false;
             _streamingModeNegotiated = false;
-            _capabilities = new TransitCapabilitySnapshot(SupportsStartTls: false, SupportsStreaming: false);
+            Capabilities = new TransitCapabilitySnapshot(SupportsStartTls: false, SupportsStreaming: false);
 
             TransitionState(TransitConnectionState.Disconnected);
         }
 
         /// <summary>
-        /// Handles process batch async for transit connection.
+        /// Stages and flushes a batch of claimed work items to the active transport and marks them awaiting responses.
         /// </summary>
-        /// <param name="items">The items value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="items">Claimed work items to register as pending and serialize as TAKETHIS frames.</param>
+        /// <param name="cancellationToken">Token used to cancel admission, write-gate wait, and flush operations.</param>
+        /// <returns>A value task that completes after all items are staged, flushed, and registered for response correlation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="items"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when the connection is not in a publishing-ready state or when duplicate Message-IDs are submitted in flight.
+        /// </exception>
+        /// <exception cref="TransitConnectionLifecycleException">
+        /// Thrown when the protocol writer is unavailable, completed, or disposed during frame staging/flush.
+        /// </exception>
+        /// <remarks>
+        /// Pending registration and frame writes are serialized with <c>_writeGate</c>. When tokenless correlation mode is active,
+        /// admission and send-order mutation are additionally protected by <c>_tokenlessCorrelationGate</c>.
+        /// </remarks>
         internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitWorkItem> items, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(items);
@@ -774,11 +852,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try take completed for transit connection.
+        /// Attempts to dequeue one completed work/result pair from the completion channel.
         /// </summary>
-        /// <param name="item">The item value.</param>
-        /// <param name="result">The result value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <param name="item">When this method returns <see langword="true"/>, receives the completed work item.</param>
+        /// <param name="result">When this method returns <see langword="true"/>, receives the publish result for <paramref name="item"/>.</param>
+        /// <returns><see langword="true"/> when a completion was available; otherwise <see langword="false"/>.</returns>
         internal bool TryTakeCompleted(out TransitWorkItem item, out TransitPublishResult result)
         {
             if (_completedQueue.Reader.TryRead(out CompletedWork? completed) && completed is not null)
@@ -801,10 +879,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles wait for completed async for transit connection.
+        /// Asynchronously waits until a completion is available to read from the completion channel.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Token used to cancel the wait operation.</param>
+        /// <returns>
+        /// A value indicating whether data is available to read. The value is <see langword="false"/> when the channel
+        /// has completed and no further completions will arrive.
+        /// </returns>
+        /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
+        /// <exception cref="IOException">Thrown when the underlying response loop faulted before completions were drained.</exception>
         internal async ValueTask<bool> WaitForCompletedAsync(CancellationToken cancellationToken)
         {
             try
@@ -818,22 +901,32 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles submit takethis async for transit connection.
+        /// Submits one article for TAKETHIS publication on this connection and awaits correlation with a server response.
         /// </summary>
-        /// <param name="messageId">The messageId value.</param>
-        /// <param name="articlePayload">The articlePayload value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <param name="publishAsyncEnterTick">The publishAsyncEnterTick value.</param>
-        /// <param name="dispatcherAssignedTick">The dispatcherAssignedTick value.</param>
-        /// <param name="onWriteIntentMaterialized">The onWriteIntentMaterialized value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="messageId">RFC-style Message-ID token used for protocol framing and response correlation.</param>
+        /// <param name="articlePayload">Article payload bytes ending with LF; framing and dot-stuffing are applied during staging.</param>
+        /// <param name="publishAsyncEnterTick">Caller-provided timing marker for publish-entry telemetry.</param>
+        /// <param name="dispatcherAssignedTick">Caller-provided timing marker for dispatcher-assignment telemetry.</param>
+        /// <param name="onWriteIntentMaterialized">Optional callback invoked after write intent has been staged for this submission.</param>
+        /// <param name="cancellationToken">Token used to cancel submission admission and completion wait.</param>
+        /// <returns>
+        /// A publish result containing protocol status, response metadata, provenance, and timing stamps for this submission.
+        /// </returns>
+        /// <exception cref="ArgumentException">
+        /// Thrown when <paramref name="messageId"/> is invalid or when <paramref name="articlePayload"/> is empty or does not end with LF.
+        /// </exception>
+        /// <exception cref="OperationCanceledException">May be observed from underlying operations when cancellation races with settlement.</exception>
+        /// <remarks>
+        /// If the connection is not ready, the method returns an <see cref="TransitPublishStatus.Unavailable"/> result instead of throwing.
+        /// If cancellation occurs after a definitive settlement has already completed, the settled result is returned.
+        /// </remarks>
         internal async ValueTask<TransitPublishResult> SubmitTakethisAsync(
             string messageId,
             ReadOnlyMemory<byte> articlePayload,
-            CancellationToken cancellationToken,
             long publishAsyncEnterTick,
             long dispatcherAssignedTick,
-            Action? onWriteIntentMaterialized = null)
+            Action? onWriteIntentMaterialized = null,
+            CancellationToken cancellationToken = default)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
 
@@ -852,7 +945,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new ArgumentException("Article payload must end with LF to preserve byte integrity during TAKETHIS framing.", nameof(articlePayload));
             }
 
-            if (Volatile.Read(ref _shutdownRequested) == 1 || (_state != TransitConnectionState.Ready && _state != TransitConnectionState.Publishing) || !_streamingModeNegotiated)
+            if (Volatile.Read(ref _shutdownRequested) == 1 || (CurrentState != TransitConnectionState.Ready && CurrentState != TransitConnectionState.Publishing) || !_streamingModeNegotiated)
             {
                 _ = Interlocked.Increment(ref _submissionsUnavailable);
                 return new TransitPublishResult(
@@ -864,7 +957,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     T1DispatcherAssignedTick: dispatcherAssignedTick,
                     Provenance: TransitPublishProvenance.Unavailable,
                     ProvenanceConnectionId: ConnectionId,
-                    ProvenanceConnectionState: _state,
+                    ProvenanceConnectionState: CurrentState,
                     ProvenanceTick: Stopwatch.GetTimestamp());
             }
 
@@ -893,7 +986,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         T1DispatcherAssignedTick: dispatcherAssignedTick,
                         Provenance: TransitPublishProvenance.Failed,
                         ProvenanceConnectionId: ConnectionId,
-                        ProvenanceConnectionState: _state,
+                        ProvenanceConnectionState: CurrentState,
                         ProvenanceTick: Stopwatch.GetTimestamp());
                 }
 
@@ -934,7 +1027,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     T1DispatcherAssignedTick: dispatcherAssignedTick,
                     Provenance: TransitPublishProvenance.Preemption,
                     ProvenanceConnectionId: ConnectionId,
-                    ProvenanceConnectionState: _state,
+                    ProvenanceConnectionState: CurrentState,
                     ProvenanceTick: Stopwatch.GetTimestamp());
             }
             finally
@@ -944,28 +1037,36 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles drain outstanding owned work for retry for transit connection.
+        /// Drains all currently pending work items owned by this connection for upstream retry orchestration.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns>A snapshot list of drained work items removed from local pending-correlation state.</returns>
+        /// <remarks>
+        /// Draining acknowledges send-order entries for removed items and transfers ownership of retry decisions
+        /// to the caller.
+        /// </remarks>
         internal IReadOnlyList<TransitWorkItem> DrainOutstandingOwnedWorkForRetry()
         {
-            IReadOnlyList<TransitWorkItem> drained = [.. DrainOwnedPendingWork(static _ => true).Select(static pending => pending.WorkItem)];
+            List<TransitWorkItem> drained = [.. DrainOwnedPendingWork(static _ => true).Select(static pending => pending.WorkItem)];
             // Console.WriteLine($"[TRACE-RI-79] {TraceStamp()} DrainOutstandingOwnedWorkForRetry connectionId={ConnectionId} count={drained.Count} items=[{string.Join(",", drained.Select(static x => $"{x.WorkItemId}:{x.State}:{x.AttemptCount}"))}]");
             return drained;
         }
 
         /// <summary>
-        /// Handles drain outstanding direct submit pending work for transit connection.
+        /// Drains only pending entries that still have registered direct-submit completion sources.
         /// </summary>
-        private IReadOnlyList<PendingOwnedWork> DrainOutstandingDirectSubmitPendingWork()
+        /// <returns>Removed pending entries that were associated with direct-submit callers.</returns>
+        private List<PendingOwnedWork> DrainOutstandingDirectSubmitPendingWork()
         {
             return DrainOwnedPendingWork(pending => _directSubmitCompletions.ContainsKey(pending.WorkItem.WorkItemId));
         }
 
         /// <summary>
-        /// Handles drain owned pending work for transit connection.
+        /// Drains pending entries that match a supplied predicate and removes their send-order tracking.
         /// </summary>
-        private IReadOnlyList<PendingOwnedWork> DrainOwnedPendingWork(Func<PendingOwnedWork, bool> shouldDrain)
+        /// <param name="shouldDrain">Predicate that determines whether a pending entry should be removed.</param>
+        /// <returns>Removed pending entries in the order they were discovered during dictionary traversal.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="shouldDrain"/> is <see langword="null"/>.</exception>
+        private List<PendingOwnedWork> DrainOwnedPendingWork(Func<PendingOwnedWork, bool> shouldDrain)
         {
             ArgumentNullException.ThrowIfNull(shouldDrain);
 
@@ -988,9 +1089,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles capture diagnostics snapshot for transit connection.
+        /// Captures a point-in-time diagnostics snapshot for this connection instance.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns>
+        /// A diagnostics record containing lifecycle state, transport endpoints, aggregate counters, and sampled
+        /// outstanding publish-operation data.
+        /// </returns>
         internal TransitConnectionDiagnosticsSnapshot CaptureDiagnosticsSnapshot()
         {
             OutstandingPublishOperationSnapshot[] outstanding = [.. _pendingByMessageId.Values
@@ -1034,8 +1138,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 ConnectionId: ConnectionId,
                 Host: _host,
                 Port: _port,
-                CurrentState: _state,
-                IsTlsActive: _tlsActive,
+                CurrentState: CurrentState,
+                IsTlsActive: IsTlsActive,
                 SocketOpenCount: Interlocked.Read(ref _socketOpenCount),
                 ReadyTransitionCount: Interlocked.Read(ref _readyTransitionCount),
                 SubmissionsStarted: Interlocked.Read(ref _submissionsStarted),
@@ -1072,17 +1176,25 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles capture first p1 greeting provenance snapshot for transit connection.
+        /// Captures provenance data for the first greeting phase (P1) when enabled by instrumentation.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns>
+        /// The captured provenance snapshot, or <see langword="null"/> when no snapshot is available in the current build/runtime path.
+        /// </returns>
         internal static P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
             return null;
         }
 
         /// <summary>
-        /// Handles response loop async for transit connection.
+        /// Reads response lines from the server and settles pending submissions as responses arrive.
         /// </summary>
+        /// <param name="cancellationToken">Token used to stop the background response loop.</param>
+        /// <returns>A task representing the response-loop lifetime.</returns>
+        /// <remarks>
+        /// This loop maps NNTP response lines to Message-IDs, records timing and counters, enqueues completion notifications,
+        /// and signals terminal faults through <see cref="TrySignalResponseLoopFault(Exception, bool)"/>.
+        /// </remarks>
         private async Task ResponseLoopAsync(CancellationToken cancellationToken)
         {
             try
@@ -1144,8 +1256,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles response progress watchdog loop async for transit connection.
+        /// Monitors definitive-response progress while submissions are outstanding and faults the connection on prolonged stalls.
         /// </summary>
+        /// <param name="cancellationToken">Token used to stop the watchdog loop.</param>
+        /// <returns>A task representing the watchdog-loop lifetime.</returns>
+        /// <remarks>
+        /// The watchdog checks progress at <c>_responseProgressCheckInterval</c> and signals a fault when the elapsed time
+        /// since the last definitive response exceeds <c>_responseProgressTimeout</c> while pending work exists.
+        /// </remarks>
         private async Task ResponseProgressWatchdogLoopAsync(CancellationToken cancellationToken)
         {
             try
@@ -1191,8 +1309,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try signal response loop fault for transit connection.
+        /// Records and propagates the first terminal response-loop failure for this connection.
         /// </summary>
+        /// <param name="ex">The failure that triggered fault signaling.</param>
+        /// <param name="cancelResponseLoop"><see langword="true"/> to request cancellation of the response loop after fault signaling.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="ex"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// Fault signaling is single-shot. After the first signal, state transitions to <see cref="TransitConnectionState.Faulted"/>,
+        /// direct-submit pending work is settled as ambiguous, and the completion channel is completed with the captured exception.
+        /// </remarks>
         private void TrySignalResponseLoopFault(Exception ex, bool cancelResponseLoop)
         {
             ArgumentNullException.ThrowIfNull(ex);
@@ -1225,8 +1350,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles map takethis response for transit connection.
+        /// Parses one NNTP TAKETHIS response line into a publish result payload.
         /// </summary>
+        /// <param name="responseLine">Raw server response line read from the transport.</param>
+        /// <param name="responseAvailableTick">Timestamp captured when the response line became available to parse.</param>
+        /// <returns>
+        /// A mapped publish result when the response line is non-empty; otherwise <see langword="null"/>.
+        /// </returns>
+        /// <exception cref="InvalidOperationException">Thrown when Message-ID correlation cannot be resolved safely for the response.</exception>
         private TransitPublishResult? MapTakethisResponse(string responseLine, long responseAvailableTick)
         {
             if (string.IsNullOrWhiteSpace(responseLine))
@@ -1255,16 +1386,28 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 T5ResponseParsedTick: Stopwatch.GetTimestamp(),
                 Provenance: code == 400 ? TransitPublishProvenance.Response400 : TransitPublishProvenance.OtherOrUnknown,
                 ProvenanceConnectionId: ConnectionId,
-                ProvenanceConnectionState: _state,
+                ProvenanceConnectionState: CurrentState,
                 ProvenanceTick: responseAvailableTick);
         }
 
         /// <summary>
-        /// Handles resolve response message id for transit connection.
+        /// Resolves the Message-ID used to correlate a response with pending submission state.
         /// </summary>
+        /// <param name="code">Parsed NNTP status code.</param>
+        /// <param name="responseText">Text component following the status code.</param>
+        /// <param name="responseLine">Original response line for diagnostic exception context.</param>
+        /// <returns>The correlated Message-ID token.</returns>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when a Message-ID token is missing and FIFO fallback correlation is unsafe or impossible.
+        /// </exception>
+        /// <remarks>
+        /// For specific tokenless success responses (<c>239 Article transferred OK</c>), FIFO fallback correlation is permitted
+        /// only when exactly one submission is outstanding.
+        /// </remarks>
         private string ResolveResponseMessageId(int code, string responseText, string responseLine)
         {
-            if (TryResolveLeadingMessageIdToken(responseText, out string? messageId))
+            if (TryResolveLeadingMessageIdToken(responseText, out string? messageId)
+                && messageId is not null)
             {
                 return messageId;
             }
@@ -1304,9 +1447,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try resolve leading message id token for transit connection.
+        /// Attempts to parse a leading Message-ID token from response text.
         /// </summary>
-        private static bool TryResolveLeadingMessageIdToken(string responseText, out string? messageId)
+        /// <param name="responseText">Status text segment from a parsed NNTP response line.</param>
+        /// <param name="messageId">When this method returns <see langword="true"/>, receives the parsed leading Message-ID token.</param>
+        /// <returns><see langword="true"/> when a leading <c>&lt;...&gt;</c> token is present; otherwise <see langword="false"/>.</returns>
+        private static bool TryResolveLeadingMessageIdToken(string responseText, [NotNullWhen(true)] out string? messageId)
         {
             messageId = null;
 
@@ -1333,8 +1479,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles acknowledge send order for transit connection.
+        /// Advances the send-order queue past the specified Message-ID once that submission is settled.
         /// </summary>
+        /// <param name="messageId">Message-ID that has been correlated and should be acknowledged in send order.</param>
         private void AcknowledgeSendOrder(string messageId)
         {
             while (_pendingBySendOrder.TryPeek(out string? queued))
@@ -1350,8 +1497,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles stage takethis frame for transit connection.
+        /// Writes one complete TAKETHIS frame into the pipe writer, including command line, dot-stuffed payload, and terminator.
         /// </summary>
+        /// <param name="writer">Destination protocol writer for staged bytes.</param>
+        /// <param name="messageId">Message-ID token appended to the TAKETHIS command.</param>
+        /// <param name="articlePayload">Raw article bytes to dot-stuff before framing termination.</param>
+        /// <returns>Total number of bytes staged for this frame.</returns>
         private int StageTakethisFrame(PipeWriter writer, string messageId, ReadOnlyMemory<byte> articlePayload)
         {
             int commandLength = WriteTakethisCommand(writer, messageId);
@@ -1372,8 +1523,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles write takethis command for transit connection.
+        /// Writes the ASCII TAKETHIS command prefix and Message-ID token into the destination writer.
         /// </summary>
+        /// <param name="writer">Destination protocol writer.</param>
+        /// <param name="messageId">Message-ID token to append after the command verb.</param>
+        /// <returns>Number of bytes written for the command line excluding trailing CRLF.</returns>
         private static int WriteTakethisCommand(PipeWriter writer, string messageId)
         {
             int messageIdByteCount = Encoding.ASCII.GetByteCount(messageId);
@@ -1388,8 +1542,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles write dot stuffed article for transit connection.
+        /// Dot-stuffs article payload bytes and stages the transformed payload into the destination writer.
         /// </summary>
+        /// <param name="writer">Destination protocol writer.</param>
+        /// <param name="payload">Original article bytes prior to NNTP dot-stuffing transformation.</param>
+        /// <returns>Metrics describing bytes staged and transformation counters for timing instrumentation.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the destination span cannot accommodate the computed transform.</exception>
         private static DotStuffWriteMetrics WriteDotStuffedArticle(PipeWriter writer, ReadOnlyMemory<byte> payload)
         {
             ReadOnlySpan<byte> source = payload.Span;
@@ -1416,8 +1574,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles write bytes for transit connection.
+        /// Copies an already prepared byte span into the destination writer and advances the writer cursor.
         /// </summary>
+        /// <param name="writer">Destination protocol writer.</param>
+        /// <param name="bytes">Bytes to stage without additional transformation.</param>
         private static void WriteBytes(PipeWriter writer, ReadOnlySpan<byte> bytes)
         {
             Span<byte> destination = writer.GetSpan(bytes.Length);
@@ -1426,8 +1586,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles read line async for transit connection.
+        /// Reads one NNTP line from the current protocol reader and updates received-byte accounting.
         /// </summary>
+        /// <param name="cancellationToken">Token used to cancel the read operation.</param>
+        /// <returns>The decoded NNTP response line without trailing CRLF.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the protocol reader has not been initialized.</exception>
         private async ValueTask<string> ReadLineAsync(CancellationToken cancellationToken)
         {
             PipeReader reader = _reader ?? throw new InvalidOperationException("Transit protocol reader is not initialized.");
@@ -1437,8 +1600,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles await initialization stage async for transit connection.
+        /// Executes one initialization stage with linked cancellation and per-stage timeout enforcement.
         /// </summary>
+        /// <param name="operation">Asynchronous stage operation to execute.</param>
+        /// <param name="stageName">Stage label used for diagnostics and timeout error messages.</param>
+        /// <param name="cancellationToken">External initialization cancellation token.</param>
+        /// <returns>A task that completes when the stage operation completes within timeout.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="operation"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="stageName"/> is null, empty, or whitespace.</exception>
+        /// <exception cref="TransitConnectionLifecycleException">Thrown when the stage exceeds the configured initialization timeout.</exception>
         private async Task AwaitInitializationStageAsync(
             Func<CancellationToken, Task> operation,
             string stageName,
@@ -1468,6 +1638,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Executes one value-producing initialization stage with linked cancellation and per-stage timeout enforcement.
+        /// </summary>
+        /// <typeparam name="T">Result type produced by the stage operation.</typeparam>
+        /// <param name="operation">Asynchronous stage operation to execute.</param>
+        /// <param name="stageName">Stage label used for diagnostics and timeout error messages.</param>
+        /// <param name="cancellationToken">External initialization cancellation token.</param>
+        /// <returns>The value produced by <paramref name="operation"/> when it completes within timeout.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="operation"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="stageName"/> is null, empty, or whitespace.</exception>
+        /// <exception cref="TransitConnectionLifecycleException">Thrown when the stage exceeds the configured initialization timeout.</exception>
         private async Task<T> AwaitInitializationStageAsync<T>(
             Func<CancellationToken, Task<T>> operation,
             string stageName,
@@ -1499,8 +1680,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles read capabilities lines async for transit connection.
+        /// Reads CAPABILITIES response lines until the NNTP terminator line is encountered.
         /// </summary>
+        /// <param name="cancellationToken">Token used to cancel response reading.</param>
+        /// <returns>The ordered response lines including the terminal <c>.</c> line.</returns>
         private async Task<IReadOnlyList<string>> ReadCapabilitiesLinesAsync(CancellationToken cancellationToken)
         {
             List<string> responseLines = [];
@@ -1518,8 +1701,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles read capabilities async for transit connection.
+        /// Issues CAPABILITIES and parses the server response into a capability snapshot.
         /// </summary>
+        /// <param name="cancellationToken">Token used to cancel command write and response read operations.</param>
+        /// <returns>The parsed capability snapshot for the current transport mode.</returns>
         private async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(CancellationToken cancellationToken)
         {
             await WriteCommandAsync("CAPABILITIES", cancellationToken).ConfigureAwait(false);
@@ -1528,8 +1713,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles write command async for transit connection.
+        /// Writes an ASCII NNTP command line to the active write stream and flushes it.
         /// </summary>
+        /// <param name="command">Command verb and arguments without trailing CRLF.</param>
+        /// <param name="cancellationToken">Token used to cancel stream write and flush operations.</param>
+        /// <returns>A task that completes when the command has been flushed to the transport stream.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the transport write stream is not initialized.</exception>
         private async Task WriteCommandAsync(string command, CancellationToken cancellationToken)
         {
             Stream writeStream = _writeStream ?? throw new InvalidOperationException("Transit transport write stream is not initialized.");
@@ -1540,8 +1729,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles start tls async for transit connection.
+        /// Negotiates STARTTLS on an established plaintext session, then upgrades transport streams to TLS.
         /// </summary>
+        /// <param name="cancellationToken">Token used to cancel command/response exchange and TLS authentication.</param>
+        /// <returns>A task that completes when the TLS upgrade succeeds.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the server does not return status code <c>382</c> for STARTTLS.</exception>
         private async Task StartTlsAsync(CancellationToken cancellationToken)
         {
             await WriteCommandAsync("STARTTLS", cancellationToken).ConfigureAwait(false);
@@ -1557,8 +1749,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles upgrade to tls async for transit connection.
+        /// Wraps the current transport stream in an <see cref="SslStream"/> and authenticates as an NNTP TLS client.
         /// </summary>
+        /// <param name="cancellationToken">Token used to cancel TLS client authentication.</param>
+        /// <returns>A task that completes after stream replacement and TLS activation state updates.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no transport stream is available to upgrade.</exception>
+        /// <remarks>
+        /// TLS protocol negotiation is restricted to TLS 1.2 and TLS 1.3. When no explicit
+        /// <c>RemoteCertificateValidationCallback</c> is provided, platform-default certificate validation is used.
+        /// </remarks>
         private async Task UpgradeToTlsAsync(CancellationToken cancellationToken)
         {
             if (_transportStream is null)
@@ -1566,29 +1765,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new InvalidOperationException("Transit transport stream is not initialized.");
             }
 
-            RemoteCertificateValidationCallback certificateValidationCallback = _serverCertificateValidationCallback
-                ?? ((object _, X509Certificate? _, X509Chain? _, SslPolicyErrors _) => true);
+            SslStream sslStream = _serverCertificateValidationCallback is null
+                ? new SslStream(_transportStream, leaveInnerStreamOpen: true)
+                : new SslStream(_transportStream, leaveInnerStreamOpen: true, _serverCertificateValidationCallback);
 
             SslClientAuthenticationOptions options = new()
             {
                 TargetHost = _host,
                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                RemoteCertificateValidationCallback = certificateValidationCallback,
             };
 
-            SslStream sslStream = new(_transportStream, leaveInnerStreamOpen: true, certificateValidationCallback);
+            if (_serverCertificateValidationCallback is not null)
+            {
+                options.RemoteCertificateValidationCallback = _serverCertificateValidationCallback;
+            }
             await sslStream.AuthenticateAsClientAsync(options, cancellationToken).ConfigureAwait(false);
 
             _readStream = sslStream;
             _writeStream = sslStream;
             _transportStream = sslStream;
-            _tlsActive = true;
+            IsTlsActive = true;
         }
 
         /// <summary>
-        /// Handles observe max concurrent submissions for transit connection.
+        /// Atomically raises the recorded peak concurrent-submission counter when a new maximum is observed.
         /// </summary>
+        /// <param name="currentConcurrent">Current in-flight submission count observed by the caller.</param>
         private void ObserveMaxConcurrentSubmissions(int currentConcurrent)
         {
             while (true)
@@ -1607,8 +1810,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles update max batch size for transit connection.
+        /// Atomically raises the recorded peak writer batch size when a larger batch is observed.
         /// </summary>
+        /// <param name="batchSize">Number of work items staged in the current batch.</param>
         private void UpdateMaxBatchSize(int batchSize)
         {
             while (true)
@@ -1627,8 +1831,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles record submission result for transit connection.
+        /// Updates per-status submission counters for settled publish outcomes.
         /// </summary>
+        /// <param name="status">Settled publish status to account for.</param>
+        /// <remarks>
+        /// <see cref="TransitPublishStatus.Queued"/> and <see cref="TransitPublishStatus.Canceled"/> are intentionally
+        /// not counted in aggregate acceptance/rejection/failure/ambiguity totals.
+        /// </remarks>
         private void RecordSubmissionResult(TransitPublishStatus status)
         {
             switch (status)
@@ -1648,22 +1857,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 case TransitPublishStatus.Unavailable:
                     _ = Interlocked.Increment(ref _submissionsUnavailable);
                     break;
+                case TransitPublishStatus.Queued:
+                case TransitPublishStatus.Canceled:
+                    break;
+                default:
+                    break;
             }
         }
 
         /// <summary>
-        /// Handles transition state for transit connection.
+        /// Assigns a new lifecycle state and emits the corresponding state-transition log event.
         /// </summary>
+        /// <param name="state">Next lifecycle state for this connection instance.</param>
         private void TransitionState(TransitConnectionState state)
         {
-            _state = state;
+            CurrentState = state;
             LogTransitStateTransition(_logger, ConnectionId, state);
         }
 
         /// <summary>
-        /// Handles dispose async for transit connection.
+        /// Shuts down the connection, settles unresolved owned work, and releases all owned resources.
         /// </summary>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <returns>A value task representing asynchronous disposal and teardown completion.</returns>
+        /// <remarks>
+        /// Disposal is idempotent. The first call requests shutdown, cancels background loops, optionally sends QUIT,
+        /// settles remaining pending work as ambiguous, completes channels/pipes, disposes transport artifacts, and
+        /// transitions state to <see cref="TransitConnectionState.Disconnected"/>.
+        /// </remarks>
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _shutdownRequested, 1) != 0)
@@ -1671,7 +1891,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return;
             }
 
-            TransitConnectionState stateBeforeShutdown = _state;
+            TransitConnectionState stateBeforeShutdown = CurrentState;
 
             try
             {
@@ -1772,8 +1992,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles settle unresolved owned work during dispose for transit connection.
+        /// Settles all remaining owned pending work as ambiguous during shutdown.
         /// </summary>
+        /// <remarks>
+        /// This path enqueues completion notifications because ownership remains with this connection during disposal.
+        /// </remarks>
         private void SettleUnresolvedOwnedWorkDuringDispose()
         {
             IReadOnlyList<PendingOwnedWork> unresolved = DrainOwnedPendingWork(static _ => true);
@@ -1781,8 +2004,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles settle unresolved direct submit work for fault for transit connection.
+        /// Settles direct-submit pending work as ambiguous when a response-loop fault occurs.
         /// </summary>
+        /// <param name="ex">Fault that determines ambiguity provenance classification.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="ex"/> is <see langword="null"/>.</exception>
         private void SettleUnresolvedDirectSubmitWorkForFault(Exception ex)
         {
             ArgumentNullException.ThrowIfNull(ex);
@@ -1805,8 +2030,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles settle pending as ambiguous for transit connection.
+        /// Creates ambiguous publish results for unresolved pending work and settles associated completion paths.
         /// </summary>
+        /// <param name="unresolved">Pending work entries to settle.</param>
+        /// <param name="provenance">Provenance classification to stamp on each ambiguous result.</param>
+        /// <param name="responseText">Response text used in synthesized ambiguous results.</param>
+        /// <param name="enqueueCompletion">
+        /// <see langword="true"/> to enqueue completion-channel entries; otherwise only direct-submit completions are signaled.
+        /// </param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="unresolved"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="responseText"/> is null, empty, or whitespace.</exception>
         private void SettlePendingAsAmbiguous(
             IReadOnlyList<PendingOwnedWork> unresolved,
             TransitPublishProvenance provenance,
@@ -1834,7 +2067,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     T6ResponseCorrelatedTick: settledAtTick,
                     Provenance: provenance,
                     ProvenanceConnectionId: ConnectionId,
-                    ProvenanceConnectionState: _state,
+                    ProvenanceConnectionState: CurrentState,
                     ProvenanceTick: settledAtTick);
 
                 RecordSubmissionResult(ambiguous.Status);
@@ -1853,8 +2086,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try complete direct submit for transit connection.
+        /// Completes a pending direct-submit completion source when one is registered for the specified work item.
         /// </summary>
+        /// <param name="workItemId">Work-item identifier used as the direct-submit completion key.</param>
+        /// <param name="result">Result value to publish to the waiting direct-submit caller.</param>
         private void TryCompleteDirectSubmit(long workItemId, TransitPublishResult result)
         {
             if (_directSubmitCompletions.TryRemove(workItemId, out TaskCompletionSource<TransitPublishResult>? directCompletion))
@@ -1864,7 +2099,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Defines transit connection diagnostics snapshot and its transit connection contract.
+        /// Immutable diagnostics payload describing connection state, counters, and sampled publish pipeline data.
         /// </summary>
         internal sealed record TransitConnectionDiagnosticsSnapshot(
             string ConnectionId,
@@ -1890,7 +2125,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             OutstandingPublishOperationSnapshot[] OutstandingOperations);
 
         /// <summary>
-        /// Defines p1 greeting provenance snapshot and its transit connection contract.
+        /// Immutable provenance payload for analyzing first-greeting (P1) lifecycle timing and event ordering.
         /// </summary>
         internal sealed record P1GreetingProvenanceSnapshot(
             string ConnectionId,
@@ -1916,7 +2151,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             P1GreetingLifecycleEventRecord[] LifecycleEvents);
 
         /// <summary>
-        /// Defines p1 greeting provenance lifecycle event and its transit connection contract.
+        /// Enumerates lifecycle markers captured while collecting first-greeting provenance data.
         /// </summary>
         internal enum P1GreetingProvenanceLifecycleEvent
         {
@@ -1933,7 +2168,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Defines struct and its transit connection contract.
+        /// One timestamped lifecycle event entry within a <see cref="P1GreetingProvenanceSnapshot"/>.
         /// </summary>
         internal readonly record struct P1GreetingLifecycleEventRecord(
             P1GreetingProvenanceLifecycleEvent Event,
@@ -1941,7 +2176,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int AttemptId);
 
         /// <summary>
-        /// Defines struct and its transit connection contract.
+        /// Detailed per-operation timing sample captured for pipeline diagnostics.
         /// </summary>
         internal readonly record struct DiagnosticOperationRecord(
             string MessageId,
@@ -1976,7 +2211,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long LogicalOutstandingAheadAtResponse);
 
         /// <summary>
-        /// Defines struct and its transit connection contract.
+        /// Snapshot of one currently outstanding publish operation and its known pipeline milestones.
         /// </summary>
         internal readonly record struct OutstandingPublishOperationSnapshot(
             string MessageId,
@@ -1994,7 +2229,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             string LikelyAwaitingPath);
 
         /// <summary>
-        /// Defines struct and its transit connection contract.
+        /// Aggregate pipeline statistics derived from connection-level publish activity.
         /// </summary>
         internal readonly record struct PipeliningDiagnosticSummary(
             long MaxPendingDepth,
@@ -2016,52 +2251,52 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int SampledOperationCount);
 
         /// <summary>
-        /// Defines pending owned work and its transit connection contract.
+        /// Mutable correlation entry that pairs a pending work item with send/response timing milestones.
         /// </summary>
         private sealed class PendingOwnedWork
         {
             /// <summary>
-            /// Handles pending owned work for transit connection.
+            /// Initializes a new pending-work correlation entry.
             /// </summary>
-            /// <param name="workItem">The workItem value.</param>
+            /// <param name="workItem">Work item currently owned by this connection and awaiting settlement.</param>
             internal PendingOwnedWork(TransitWorkItem workItem)
             {
                 WorkItem = workItem;
             }
 
             /// <summary>
-            /// Stores work item used by transit connection.
+            /// Gets the pending work item associated with this correlation entry.
             /// </summary>
             internal TransitWorkItem WorkItem { get; }
 
             /// <summary>
-            /// Stores t2 socket write begin tick used by transit connection.
+            /// Timestamp marking the beginning of socket write staging for this work item.
             /// </summary>
             internal long T2SocketWriteBeginTick;
 
             /// <summary>
-            /// Stores t3 socket write end tick used by transit connection.
+            /// Timestamp marking completion of socket write staging for this work item.
             /// </summary>
             internal long T3SocketWriteEndTick;
 
             /// <summary>
-            /// Stores t6 response correlated tick used by transit connection.
+            /// Timestamp marking correlation of a server response for this work item.
             /// </summary>
             internal long T6ResponseCorrelatedTick;
 
             /// <summary>
-            /// Stores send sequence used by transit connection.
+            /// Monotonic send-sequence assigned during frame staging.
             /// </summary>
             internal long SendSequence;
         }
 
         /// <summary>
-        /// Defines completed work and its transit connection contract.
+        /// Immutable completion tuple pairing a settled work item with its publish result.
         /// </summary>
         private sealed record CompletedWork(TransitWorkItem WorkItem, TransitPublishResult Result);
 
         /// <summary>
-        /// Defines struct and its transit connection contract.
+        /// Metrics emitted by payload dot-stuff staging for instrumentation.
         /// </summary>
         private readonly record struct DotStuffWriteMetrics(
             int BytesWritten,
@@ -2070,7 +2305,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long StuffedDotEvents);
 
         /// <summary>
-        /// Defines transit connection lifecycle failure and its transit connection contract.
+        /// Classifies lifecycle failures raised by transit-connection initialization and submission helpers.
         /// </summary>
         internal enum TransitConnectionLifecycleFailure
         {
@@ -2081,15 +2316,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Defines transit connection lifecycle exception and its transit connection contract.
+        /// Exception type used to surface classified transit-connection lifecycle failures.
         /// </summary>
         internal sealed class TransitConnectionLifecycleException : InvalidOperationException
         {
             /// <summary>
-            /// Handles transit connection lifecycle exception for transit connection.
+            /// Initializes a new lifecycle exception with a message derived from the supplied failure classification.
             /// </summary>
-            /// <param name="failure">The failure value.</param>
-            /// <param name="stageName">The stageName value.</param>
+            /// <param name="failure">Lifecycle failure classification that determines the base exception message.</param>
+            /// <param name="stageName">Optional stage label used by timeout failure messages.</param>
             internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure, string? stageName = null)
                 : base(failure switch
                 {
@@ -2104,7 +2339,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             /// <summary>
-            /// Stores failure used by transit connection.
+            /// Gets the lifecycle failure classification associated with this exception instance.
             /// </summary>
             internal TransitConnectionLifecycleFailure Failure { get; }
         }

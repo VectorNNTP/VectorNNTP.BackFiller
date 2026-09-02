@@ -184,7 +184,7 @@ namespace VectorNNTP.Backfiller.Tests
             initCts.Cancel();
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
 
-            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             using CancellationTokenSource observeTimeout = new(TimeSpan.FromSeconds(10));
             await publishObserved.Task.WaitAsync(observeTimeout.Token);
@@ -358,7 +358,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitPublisher>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync("<compress-ignored@example.com>", new byte[] { (byte)'N', (byte)'\n' }, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync("<compress-ignored@example.com>", new byte[] { (byte)'N', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
@@ -511,6 +511,36 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
         /// <summary>
+        /// Confirms the initialize async when use ssl true without a validation callback rejects an untrusted certificate behavior.
+        /// </summary>
+        [Fact]
+        public async Task InitializeAsync_WhenUseSslTrueWithoutValidationCallback_RejectsUntrustedCertificate()
+        {
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                using SslStream sslStream = new(stream, leaveInnerStreamOpen: false);
+                SslServerAuthenticationOptions serverOptions = new()
+                {
+                    ServerCertificate = _tlsFixture.ServerCertificate,
+                    ClientCertificateRequired = false,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                };
+
+                await sslStream.AuthenticateAsServerAsync(serverOptions, cancellationToken);
+            });
+
+            await using TransitConnection connection = new(
+                host: IPAddress.Loopback.ToString(),
+                port: server.Port,
+                useSsl: true,
+                NullLogger<TransitPublisher>.Instance);
+
+            Exception ex = await Record.ExceptionAsync(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.NotNull(ex);
+            Assert.True(ex is AuthenticationException or IOException);
+        }
+        /// <summary>
         /// Confirms the initialize async when use ssl true and compression advertised uses tls without compression behavior.
         /// </summary>
         [Fact]
@@ -560,7 +590,7 @@ namespace VectorNNTP.Backfiller.Tests
                 _tlsFixture.ServerCertificateValidationCallback);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync("<ssl-uncompressed@example.com>", payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync("<ssl-uncompressed@example.com>", payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.True(connection.IsTlsActive);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
@@ -660,7 +690,7 @@ namespace VectorNNTP.Backfiller.Tests
                 _tlsFixture.ServerCertificateValidationCallback);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync("<starttls-uncompressed@example.com>", payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync("<starttls-uncompressed@example.com>", payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.True(connection.IsTlsActive);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
@@ -753,7 +783,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitPublisher>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync("<uncompressed@example.com>", new byte[] { (byte)'Z', (byte)'\n' }, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync("<uncompressed@example.com>", new byte[] { (byte)'Z', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitConnectionState.Ready, connection.CurrentState);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);

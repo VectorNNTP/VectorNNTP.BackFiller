@@ -62,7 +62,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
@@ -103,7 +103,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Rejected, result.Status);
             Assert.Equal(439, result.ResponseCode);
@@ -144,7 +144,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
             Assert.Equal(400, result.ResponseCode);
@@ -185,7 +185,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
@@ -236,8 +236,8 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> first = connection.SubmitTakethisAsync(messageA, payloadA, CancellationToken.None, 0L, 0L).AsTask();
-            Task<TransitPublishResult> second = connection.SubmitTakethisAsync(messageB, payloadB, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> first = connection.SubmitTakethisAsync(messageA, payloadA, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
+            Task<TransitPublishResult> second = connection.SubmitTakethisAsync(messageB, payloadB, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             TransitPublishResult[] results = await Task.WhenAll(first, second);
 
@@ -292,7 +292,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult>[] submissions = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask())];
+            Task<TransitPublishResult>[] submissions = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask())];
 
             TransitPublishResult[] results = await Task.WhenAll(submissions);
 
@@ -339,8 +339,8 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> firstTask = connection.SubmitTakethisAsync(messageId, firstPayload, CancellationToken.None, 0L, 0L).AsTask();
-            TransitPublishResult secondResult = await connection.SubmitTakethisAsync(messageId, secondPayload, CancellationToken.None, 0L, 0L);
+            Task<TransitPublishResult> firstTask = connection.SubmitTakethisAsync(messageId, firstPayload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
+            TransitPublishResult secondResult = await connection.SubmitTakethisAsync(messageId, secondPayload, 0L, 0L, cancellationToken: CancellationToken.None);
             TransitPublishResult firstResult = await firstTask;
 
             Assert.Equal(TransitPublishStatus.Failed, secondResult.Status);
@@ -395,13 +395,13 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> firstTask = connection.SubmitTakethisAsync(firstMessageId, firstPayload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> firstTask = connection.SubmitTakethisAsync(firstMessageId, firstPayload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             using CancellationTokenSource firstObservedTimeout = new(TimeSpan.FromSeconds(10));
             await firstTakethisObserved.Task.WaitAsync(firstObservedTimeout.Token);
 
             using CancellationTokenSource canceledAdmissionCts = new();
-            Task<TransitPublishResult> secondTask = connection.SubmitTakethisAsync(secondMessageId, secondPayload, canceledAdmissionCts.Token, 0L, 0L).AsTask();
+            Task<TransitPublishResult> secondTask = connection.SubmitTakethisAsync(secondMessageId, secondPayload, 0L, 0L, cancellationToken: canceledAdmissionCts.Token).AsTask();
             canceledAdmissionCts.Cancel();
 
             TransitPublishResult secondResult = await secondTask;
@@ -448,7 +448,7 @@ namespace VectorNNTP.Backfiller.Tests
             await connection.InitializeAsync(CancellationToken.None);
 
             ArgumentException ex = await Assert.ThrowsAsync<ArgumentException>(async () =>
-                await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L));
+                await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None));
 
             Assert.Contains("must end with LF", ex.Message, StringComparison.Ordinal);
         }
@@ -482,7 +482,7 @@ namespace VectorNNTP.Backfiller.Tests
             await connection.InitializeAsync(CancellationToken.None);
 
             ArgumentException ex = await Assert.ThrowsAsync<ArgumentException>(async () =>
-                await connection.SubmitTakethisAsync("<bad\r\nmsg@example.com>", payload, CancellationToken.None, 0L, 0L));
+                await connection.SubmitTakethisAsync("<bad\r\nmsg@example.com>", payload, 0L, 0L, cancellationToken: CancellationToken.None));
 
             Assert.Contains("must not contain CR or LF", ex.Message, StringComparison.Ordinal);
         }
@@ -520,7 +520,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
             Assert.Equal(messageId, result.MessageId);
@@ -561,7 +561,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
             TransitPublishResult result = await connection
-                .SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L)
+                .SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None)
                 .AsTask()
                 .WaitAsync(completionTimeout.Token);
 
@@ -602,7 +602,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
@@ -648,8 +648,8 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> firstPublish = connection.SubmitTakethisAsync(firstMessageId, firstPayload, CancellationToken.None, 0L, 0L).AsTask();
-            Task<TransitPublishResult> secondPublish = connection.SubmitTakethisAsync(secondMessageId, secondPayload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> firstPublish = connection.SubmitTakethisAsync(firstMessageId, firstPayload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
+            Task<TransitPublishResult> secondPublish = connection.SubmitTakethisAsync(secondMessageId, secondPayload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             TransitPublishResult[] results = await Task.WhenAll(firstPublish, secondPublish);
 
@@ -691,7 +691,7 @@ namespace VectorNNTP.Backfiller.Tests
             await connection.InitializeAsync(CancellationToken.None);
 
             using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(2));
-            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
             TransitPublishResult result = await publishTask.WaitAsync(completionTimeout.Token);
 
             Assert.Equal(TransitPublishStatus.Rejected, result.Status);
@@ -748,9 +748,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Task<TransitPublishResult>[] publishTasks =
             [
-                connection.SubmitTakethisAsync(messageIds[0], new byte[] { (byte)'A', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
-                connection.SubmitTakethisAsync(messageIds[1], new byte[] { (byte)'B', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
-                connection.SubmitTakethisAsync(messageIds[2], new byte[] { (byte)'C', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+                connection.SubmitTakethisAsync(messageIds[0], new byte[] { (byte)'A', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask(),
+                connection.SubmitTakethisAsync(messageIds[1], new byte[] { (byte)'B', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask(),
+                connection.SubmitTakethisAsync(messageIds[2], new byte[] { (byte)'C', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask(),
             ];
 
             using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
@@ -819,7 +819,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             using CancellationTokenSource responseTimeout = new(TimeSpan.FromSeconds(5));
             await responseCorrelated.Task.WaitAsync(responseTimeout.Token);
@@ -891,7 +891,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
             await takethisObserved.Task.WaitAsync(observedTimeout.Token);
@@ -1010,9 +1010,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Task<TransitPublishResult>[] submissions =
             [
-                connection.SubmitTakethisAsync(messageIds[0], new byte[] { (byte)'A', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
-                connection.SubmitTakethisAsync(messageIds[1], new byte[] { (byte)'B', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
-                connection.SubmitTakethisAsync(messageIds[2], new byte[] { (byte)'C', (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask(),
+                connection.SubmitTakethisAsync(messageIds[0], new byte[] { (byte)'A', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask(),
+                connection.SubmitTakethisAsync(messageIds[1], new byte[] { (byte)'B', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask(),
+                connection.SubmitTakethisAsync(messageIds[2], new byte[] { (byte)'C', (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask(),
             ];
 
             using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(5));
@@ -1111,7 +1111,7 @@ namespace VectorNNTP.Backfiller.Tests
                 NullLogger<TransitConnection>.Instance);
 
             await connection.InitializeAsync(CancellationToken.None);
-            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult result = await connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
 
@@ -1202,7 +1202,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult>[] tasks = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask())];
+            Task<TransitPublishResult>[] tasks = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask())];
 
             TransitPublishResult[] results = await Task.WhenAll(tasks);
 
@@ -1249,8 +1249,8 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult> firstTask = connection.SubmitTakethisAsync(firstMessageId, payload, CancellationToken.None, 0L, 0L).AsTask();
-            Task<TransitPublishResult> secondTask = connection.SubmitTakethisAsync(secondMessageId, payload, CancellationToken.None, 0L, 0L).AsTask();
+            Task<TransitPublishResult> firstTask = connection.SubmitTakethisAsync(firstMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
+            Task<TransitPublishResult> secondTask = connection.SubmitTakethisAsync(secondMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
             TransitPublishResult[] results = await Task.WhenAll(firstTask, secondTask);
 
@@ -1299,8 +1299,8 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            TransitPublishResult first = await connection.SubmitTakethisAsync(firstMessageId, payload, CancellationToken.None, 0L, 0L);
-            TransitPublishResult second = await connection.SubmitTakethisAsync(secondMessageId, payload, CancellationToken.None, 0L, 0L);
+            TransitPublishResult first = await connection.SubmitTakethisAsync(firstMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
+            TransitPublishResult second = await connection.SubmitTakethisAsync(secondMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None);
 
             Assert.Equal(TransitPublishStatus.Accepted, first.Status);
             Assert.Equal(TransitPublishStatus.Accepted, second.Status);
@@ -1347,7 +1347,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult>[] tasks = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask())];
+            Task<TransitPublishResult>[] tasks = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask())];
 
             TransitPublishResult[] results = await Task.WhenAll(tasks);
 
@@ -1395,7 +1395,7 @@ namespace VectorNNTP.Backfiller.Tests
 
             await connection.InitializeAsync(CancellationToken.None);
 
-            Task<TransitPublishResult>[] submissions = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, CancellationToken.None, 0L, 0L).AsTask())];
+            Task<TransitPublishResult>[] submissions = [.. messageIds.Select((id, index) => connection.SubmitTakethisAsync(id, new byte[] { (byte)index, (byte)'\n' }, 0L, 0L, cancellationToken: CancellationToken.None).AsTask())];
 
             TransitPublishResult[] results = await Task.WhenAll(submissions);
             TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = connection.CaptureDiagnosticsSnapshot();
