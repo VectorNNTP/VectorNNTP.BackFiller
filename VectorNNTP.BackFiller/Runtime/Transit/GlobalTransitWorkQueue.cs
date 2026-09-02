@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Transit
-// Implements the global transit work queue responsibilities for this subsystem boundary.
+// Implements the global transit work queue behavior.
 
 using System.Collections.Concurrent;
 using System.Threading.Channels;
@@ -16,63 +16,63 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal sealed class GlobalTransitWorkQueue
     {
         /// <summary>
-        /// Stores the ready queue state used to enforce this component's runtime contract.
+        /// Tracks ready queue for global transit work queue.
         /// </summary>
         private readonly Channel<TransitWorkItem> _readyQueue;
         /// <summary>
-        /// Stores the scheduled retries state used to enforce this component's runtime contract.
+        /// Tracks scheduled retries for global transit work queue.
         /// </summary>
         private readonly ConcurrentQueue<ScheduledRetry> _scheduledRetries = new();
         /// <summary>
-        /// Stores the retry scheduled signal state used to enforce this component's runtime contract.
+        /// Tracks retry scheduled signal for global transit work queue.
         /// </summary>
         private readonly SemaphoreSlim _retryScheduledSignal = new(0);
         /// <summary>
-        /// Stores the admission gate state used to enforce this component's runtime contract.
+        /// Tracks admission gate for global transit work queue.
         /// </summary>
         private readonly object _admissionGate = new();
         /// <summary>
-        /// Stores the claim gate state used to enforce this component's runtime contract.
+        /// Tracks claim gate for global transit work queue.
         /// </summary>
         private readonly object _claimGate = new();
 
         /// <summary>
-        /// Stores the max queued item count state used to enforce this component's runtime contract.
+        /// Limits max queued item count for global transit work queue.
         /// </summary>
         private readonly int _maxQueuedItemCount;
         /// <summary>
-        /// Stores the max queued payload bytes state used to enforce this component's runtime contract.
+        /// Limits max queued payload bytes for global transit work queue.
         /// </summary>
         private readonly long _maxQueuedPayloadBytes;
 
         /// <summary>
-        /// Stores the queued item count state used to enforce this component's runtime contract.
+        /// Limits queued item count for global transit work queue.
         /// </summary>
         private long _queuedItemCount;
         /// <summary>
-        /// Stores the queued payload bytes state used to enforce this component's runtime contract.
+        /// Stores queued payload bytes for global transit work queue.
         /// </summary>
         private long _queuedPayloadBytes;
         /// <summary>
-        /// Stores the retry pending count state used to enforce this component's runtime contract.
+        /// Limits retry pending count for global transit work queue.
         /// </summary>
         private long _retryPendingCount;
         /// <summary>
-        /// Stores the in flight count state used to enforce this component's runtime contract.
+        /// Limits in flight count for global transit work queue.
         /// </summary>
         private long _inFlightCount;
         /// <summary>
-        /// Stores the admission wait count state used to enforce this component's runtime contract.
+        /// Limits admission wait count for global transit work queue.
         /// </summary>
         private long _admissionWaitCount;
 
         /// <summary>
-        /// Stores the admission frozen state used to enforce this component's runtime contract.
+        /// Tracks admission frozen for global transit work queue.
         /// </summary>
         private volatile bool _admissionFrozen;
 
         /// <summary>
-        /// Performs the global transit work queue operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates global transit work queue for global transit work queue.
         /// </summary>
         internal GlobalTransitWorkQueue(int maxQueuedItemCount, long maxQueuedPayloadBytes)
         {
@@ -97,37 +97,37 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Stores the queued item count state used to enforce this component's runtime contract.
+        /// Limits queued item count for global transit work queue.
         /// </summary>
         internal long QueuedItemCount => Interlocked.Read(ref _queuedItemCount);
 
         /// <summary>
-        /// Stores the queued payload bytes state used to enforce this component's runtime contract.
+        /// Stores queued payload bytes for global transit work queue.
         /// </summary>
         internal long QueuedPayloadBytes => Interlocked.Read(ref _queuedPayloadBytes);
 
         /// <summary>
-        /// Stores the retry pending count state used to enforce this component's runtime contract.
+        /// Limits retry pending count for global transit work queue.
         /// </summary>
         internal long RetryPendingCount => Interlocked.Read(ref _retryPendingCount);
 
         /// <summary>
-        /// Stores the in flight count state used to enforce this component's runtime contract.
+        /// Limits in flight count for global transit work queue.
         /// </summary>
         internal long InFlightCount => Interlocked.Read(ref _inFlightCount);
 
         /// <summary>
-        /// Stores the admission wait count state used to enforce this component's runtime contract.
+        /// Limits admission wait count for global transit work queue.
         /// </summary>
         internal long AdmissionWaitCount => Interlocked.Read(ref _admissionWaitCount);
 
         /// <summary>
-        /// Stores the is admission frozen state used to enforce this component's runtime contract.
+        /// Tracks is admission frozen for global transit work queue.
         /// </summary>
         internal bool IsAdmissionFrozen => _admissionFrozen;
 
         /// <summary>
-        /// Performs the enqueue operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates enqueue async for global transit work queue.
         /// </summary>
         internal async ValueTask EnqueueAsync(TransitWorkItem item, CancellationToken cancellationToken)
         {
@@ -175,7 +175,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try claim operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try claim for global transit work queue.
         /// </summary>
         internal bool TryClaim(string connectionId, out TransitWorkItem? item)
         {
@@ -208,7 +208,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the wait for work operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates wait for work async for global transit work queue.
         /// </summary>
         internal async ValueTask<bool> WaitForWorkAsync(CancellationToken cancellationToken)
         {
@@ -245,7 +245,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the schedule retry operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates schedule retry async for global transit work queue.
         /// </summary>
         internal async ValueTask<bool> ScheduleRetryAsync(
             TransitWorkItem item,
@@ -286,7 +286,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the drain eligible retries operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates drain eligible retries async for global transit work queue.
         /// </summary>
         internal async ValueTask DrainEligibleRetriesAsync(CancellationToken cancellationToken)
         {
@@ -329,7 +329,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark in flight terminal operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark in flight terminal for global transit work queue.
         /// </summary>
         internal void MarkInFlightTerminal()
         {
@@ -349,7 +349,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark queued terminal operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark queued terminal for global transit work queue.
         /// </summary>
         internal void MarkQueuedTerminal(int payloadBytes)
         {
@@ -357,7 +357,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark retry pending terminal operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark retry pending terminal for global transit work queue.
         /// </summary>
         internal void MarkRetryPendingTerminal()
         {
@@ -365,7 +365,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the freeze admission operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates freeze admission for global transit work queue.
         /// </summary>
         internal void FreezeAdmission()
         {
@@ -373,7 +373,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the capture snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates capture snapshot for global transit work queue.
         /// </summary>
         internal GlobalTransitWorkQueueSnapshot CaptureSnapshot()
         {
@@ -389,7 +389,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the can admit operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates can admit for global transit work queue.
         /// </summary>
         private bool CanAdmit(int payloadBytes)
         {
@@ -399,7 +399,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the wait for capacity operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates wait for capacity async for global transit work queue.
         /// </summary>
         private static Task WaitForCapacityAsync(CancellationToken cancellationToken)
         {
@@ -407,7 +407,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the decrement queued ownership operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates decrement queued ownership for global transit work queue.
         /// </summary>
         private void DecrementQueuedOwnership(int payloadBytes)
         {
@@ -441,7 +441,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the decrement retry pending ownership operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates decrement retry pending ownership for global transit work queue.
         /// </summary>
         private void DecrementRetryPendingOwnership()
         {
@@ -461,13 +461,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the scheduled retry operation while preserving this component's lifecycle and state contracts.
+        /// Defines struct and its global transit work queue contract.
         /// </summary>
         private readonly record struct ScheduledRetry(TransitWorkItem Item, DateTimeOffset NotBeforeUtc);
     }
 
     /// <summary>
-    /// Performs the global transit work queue snapshot operation while preserving this component's lifecycle and state contracts.
+    /// Defines global transit work queue snapshot and its global transit work queue contract.
     /// </summary>
     internal sealed record GlobalTransitWorkQueueSnapshot(
         int MaxQueuedItemCount,

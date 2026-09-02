@@ -18,23 +18,23 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
     {
         /// <summary>
-        /// Stores the connection manager state used to enforce this component's runtime contract.
+        /// Tracks connection manager for rabbit mq article response publisher.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
         /// <summary>
-        /// Stores the options state used to enforce this component's runtime contract.
+        /// Tracks options for rabbit mq article response publisher.
         /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for rabbit mq article response publisher.
         /// </summary>
         private readonly ILogger<RabbitMqArticleResponsePublisher> _logger;
         /// <summary>
-        /// Stores the publish gate state used to enforce this component's runtime contract.
+        /// Tracks publish gate for rabbit mq article response publisher.
         /// </summary>
         private readonly SemaphoreSlim _publishGate = new(1, 1);
         /// <summary>
-        /// Stores the owned publish channel state used to enforce this component's runtime contract.
+        /// Tracks owned publish channel for rabbit mq article response publisher.
         /// </summary>
         private RabbitMqOwnedChannel? _ownedPublishChannel;
 
@@ -186,7 +186,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Performs the get or create publish channel operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates get or create publish channel async for rabbit mq article response publisher.
         /// </summary>
         private async Task<RabbitMqOwnedChannel?> GetOrCreatePublishChannelAsync(string backbone, CancellationToken cancellationToken)
         {
@@ -216,7 +216,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Performs the reset publish channel operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates reset publish channel async for rabbit mq article response publisher.
         /// </summary>
         private async ValueTask ResetPublishChannelAsync()
         {

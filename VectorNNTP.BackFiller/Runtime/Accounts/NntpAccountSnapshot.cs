@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Accounts
-// Implements the nntp account snapshot responsibilities for this subsystem boundary.
+// Implements the nntp account snapshot behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Accounts
 {

@@ -41,7 +41,7 @@ namespace VectorNNTP.Backfiller
         private const string UnknownValue = "unknown";
 
         /// <summary>
-        /// Stores the metadata token separators state used to enforce this component's runtime contract.
+        /// Tracks metadata token separators for build info.
         /// </summary>
         private static readonly char[] MetadataTokenSeparators = ['.', '-', '_'];
 

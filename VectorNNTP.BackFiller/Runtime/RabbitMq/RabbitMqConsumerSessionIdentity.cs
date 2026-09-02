@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq consumer session identity responsibilities for this subsystem boundary.
+// Implements the rabbit mq consumer session identity behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {

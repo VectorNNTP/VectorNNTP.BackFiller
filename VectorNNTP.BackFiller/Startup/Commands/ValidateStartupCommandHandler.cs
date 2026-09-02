@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the validate startup command handler responsibilities for this subsystem boundary.
+// Implements the validate startup command handler behavior.
 
 using Serilog;
 

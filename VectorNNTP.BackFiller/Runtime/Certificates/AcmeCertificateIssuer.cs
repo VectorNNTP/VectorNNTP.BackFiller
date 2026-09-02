@@ -604,25 +604,25 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
         [LoggerMessage(EventId = 2800, Level = LogLevel.Information, Message = "ACME order created for generated BackFiller FQDN {Fqdn}")]
         /// <summary>
-        /// Performs the log acme order created operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log acme order created for acme certificate issuer.
         /// </summary>
         private static partial void LogAcmeOrderCreated(ILogger logger, string fqdn);
 
         [LoggerMessage(EventId = 2801, Level = LogLevel.Information, Message = "ACME DNS-01 TXT record created for {RecordName}; RecordId={RecordId}")]
         /// <summary>
-        /// Performs the log dns txt record created operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log dns txt record created for acme certificate issuer.
         /// </summary>
         private static partial void LogDnsTxtRecordCreated(ILogger logger, string recordName, string recordId);
 
         [LoggerMessage(EventId = 2802, Level = LogLevel.Information, Message = "ACME DNS-01 TXT record removed for {RecordName}; RecordId={RecordId}")]
         /// <summary>
-        /// Performs the log dns txt record removed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log dns txt record removed for acme certificate issuer.
         /// </summary>
         private static partial void LogDnsTxtRecordRemoved(ILogger logger, string recordName, string recordId);
 
         [LoggerMessage(EventId = 2803, Level = LogLevel.Warning, Message = "ACME DNS-01 TXT record cleanup failed for {RecordName}; RecordId={RecordId}")]
         /// <summary>
-        /// Performs the log dns txt record cleanup failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log dns txt record cleanup failed for acme certificate issuer.
         /// </summary>
         private static partial void LogDnsTxtRecordCleanupFailed(ILogger logger, Exception exception, string recordName, string recordId);
     }

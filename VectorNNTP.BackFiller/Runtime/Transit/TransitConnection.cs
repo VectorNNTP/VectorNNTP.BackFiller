@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Transit
-// Implements the transit connection responsibilities for this subsystem boundary.
+// Implements the transit connection behavior.
 
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -25,136 +25,136 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal sealed partial class TransitConnection : IAsyncDisposable
     {
         /// <summary>
-        /// Stores the cr lf bytes state used to enforce this component's runtime contract.
+        /// Stores cr lf bytes for transit connection.
         /// </summary>
         private static readonly byte[] CrLfBytes = "\r\n"u8.ToArray();
         /// <summary>
-        /// Stores the dot terminator bytes state used to enforce this component's runtime contract.
+        /// Stores dot terminator bytes for transit connection.
         /// </summary>
         private static readonly byte[] DotTerminatorBytes = ".\r\n"u8.ToArray();
         /// <summary>
-        /// Stores the takethis prefix bytes state used to enforce this component's runtime contract.
+        /// Stores takethis prefix bytes for transit connection.
         /// </summary>
         private static readonly byte[] TakethisPrefixBytes = "TAKETHIS "u8.ToArray();
         /// <summary>
-        /// Stores the default response progress timeout state used to enforce this component's runtime contract.
+        /// Configures default response progress timeout for transit connection.
         /// </summary>
         private static readonly TimeSpan DefaultResponseProgressTimeout = TimeSpan.FromSeconds(30);
         /// <summary>
-        /// Stores the default response progress check interval state used to enforce this component's runtime contract.
+        /// Configures default response progress check interval for transit connection.
         /// </summary>
         private static readonly TimeSpan DefaultResponseProgressCheckInterval = TimeSpan.FromMilliseconds(250);
 
         /// <summary>
-        /// Stores the host state used to enforce this component's runtime contract.
+        /// Tracks host for transit connection.
         /// </summary>
         private readonly string _host;
         /// <summary>
-        /// Stores the port state used to enforce this component's runtime contract.
+        /// Tracks port for transit connection.
         /// </summary>
         private readonly int _port;
         /// <summary>
-        /// Stores the use ssl state used to enforce this component's runtime contract.
+        /// Tracks use ssl for transit connection.
         /// </summary>
         private readonly bool _useSsl;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for transit connection.
         /// </summary>
         private readonly ILogger _logger;
         /// <summary>
-        /// Stores the server certificate validation callback state used to enforce this component's runtime contract.
+        /// Tracks server certificate validation callback for transit connection.
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
         /// <summary>
-        /// Stores the pipeline depth state used to enforce this component's runtime contract.
+        /// Tracks pipeline depth for transit connection.
         /// </summary>
         private readonly int _pipelineDepth;
         /// <summary>
-        /// Stores the write batch coalesce microseconds state used to enforce this component's runtime contract.
+        /// Tracks write batch coalesce microseconds for transit connection.
         /// </summary>
         private readonly int _writeBatchCoalesceMicroseconds;
         /// <summary>
-        /// Stores the response progress timeout state used to enforce this component's runtime contract.
+        /// Configures response progress timeout for transit connection.
         /// </summary>
         private readonly TimeSpan _responseProgressTimeout;
         /// <summary>
-        /// Stores the response progress check interval state used to enforce this component's runtime contract.
+        /// Configures response progress check interval for transit connection.
         /// </summary>
         private readonly TimeSpan _responseProgressCheckInterval;
         /// <summary>
-        /// Stores the timing collector state used to enforce this component's runtime contract.
+        /// Tracks timing collector for transit connection.
         /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
 
         /// <summary>
-        /// Stores the write gate state used to enforce this component's runtime contract.
+        /// Tracks write gate for transit connection.
         /// </summary>
         private readonly SemaphoreSlim _writeGate = new(1, 1);
         /// <summary>
-        /// Stores the tokenless correlation gate state used to enforce this component's runtime contract.
+        /// Tracks tokenless correlation gate for transit connection.
         /// </summary>
         private readonly SemaphoreSlim _tokenlessCorrelationGate = new(1, 1);
 
         /// <summary>
-        /// Stores the tcp client state used to enforce this component's runtime contract.
+        /// Tracks tcp client for transit connection.
         /// </summary>
         private TcpClient? _tcpClient;
         /// <summary>
-        /// Stores the transport stream state used to enforce this component's runtime contract.
+        /// Tracks transport stream for transit connection.
         /// </summary>
         private Stream? _transportStream;
         /// <summary>
-        /// Stores the read stream state used to enforce this component's runtime contract.
+        /// Tracks read stream for transit connection.
         /// </summary>
         private Stream? _readStream;
         /// <summary>
-        /// Stores the write stream state used to enforce this component's runtime contract.
+        /// Tracks write stream for transit connection.
         /// </summary>
         private Stream? _writeStream;
         /// <summary>
-        /// Stores the reader state used to enforce this component's runtime contract.
+        /// Tracks reader for transit connection.
         /// </summary>
         private PipeReader? _reader;
         /// <summary>
-        /// Stores the writer state used to enforce this component's runtime contract.
+        /// Tracks writer for transit connection.
         /// </summary>
         private PipeWriter? _writer;
 
         /// <summary>
-        /// Stores the response loop cancellation state used to enforce this component's runtime contract.
+        /// Tracks response loop cancellation for transit connection.
         /// </summary>
         private CancellationTokenSource? _responseLoopCancellation;
         /// <summary>
-        /// Stores the response loop task state used to enforce this component's runtime contract.
+        /// Tracks response loop task for transit connection.
         /// </summary>
         private Task? _responseLoopTask;
         /// <summary>
-        /// Stores the response progress watchdog cancellation state used to enforce this component's runtime contract.
+        /// Tracks response progress watchdog cancellation for transit connection.
         /// </summary>
         private CancellationTokenSource? _responseProgressWatchdogCancellation;
         /// <summary>
-        /// Stores the response progress watchdog task state used to enforce this component's runtime contract.
+        /// Tracks response progress watchdog task for transit connection.
         /// </summary>
         private Task? _responseProgressWatchdogTask;
         /// <summary>
-        /// Stores the response loop fault state used to enforce this component's runtime contract.
+        /// Tracks response loop fault for transit connection.
         /// </summary>
         private ExceptionDispatchInfo? _responseLoopFault;
         /// <summary>
-        /// Stores the response loop faulted state used to enforce this component's runtime contract.
+        /// Tracks response loop faulted for transit connection.
         /// </summary>
         private int _responseLoopFaulted;
 
         /// <summary>
-        /// Stores the pending by message id state used to enforce this component's runtime contract.
+        /// Tracks pending by message id for transit connection.
         /// </summary>
         private readonly ConcurrentDictionary<string, PendingOwnedWork> _pendingByMessageId = new(StringComparer.Ordinal);
         /// <summary>
-        /// Stores the pending by send order state used to enforce this component's runtime contract.
+        /// Tracks pending by send order for transit connection.
         /// </summary>
         private readonly ConcurrentQueue<string> _pendingBySendOrder = new();
         /// <summary>
-        /// Stores the completed queue state used to enforce this component's runtime contract.
+        /// Tracks completed queue for transit connection.
         /// </summary>
         private readonly Channel<CompletedWork> _completedQueue = Channel.CreateUnbounded<CompletedWork>(new UnboundedChannelOptions
         {
@@ -163,106 +163,106 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             AllowSynchronousContinuations = false,
         });
         /// <summary>
-        /// Stores the direct submit completions state used to enforce this component's runtime contract.
+        /// Tracks direct submit completions for transit connection.
         /// </summary>
         private readonly ConcurrentDictionary<long, TaskCompletionSource<TransitPublishResult>> _directSubmitCompletions = new();
         /// <summary>
-        /// Stores the completion enqueued ticks state used to enforce this component's runtime contract.
+        /// Tracks completion enqueued ticks for transit connection.
         /// </summary>
         private readonly ConcurrentDictionary<long, long> _completionEnqueuedTicks = new();
 
         /// <summary>
-        /// Stores the capabilities state used to enforce this component's runtime contract.
+        /// Tracks capabilities for transit connection.
         /// </summary>
         private TransitCapabilitySnapshot _capabilities = new(SupportsStartTls: false, SupportsStreaming: false);
         /// <summary>
-        /// Stores the tls active state used to enforce this component's runtime contract.
+        /// Tracks tls active for transit connection.
         /// </summary>
         private bool _tlsActive;
         /// <summary>
-        /// Stores the streaming mode negotiated state used to enforce this component's runtime contract.
+        /// Tracks streaming mode negotiated for transit connection.
         /// </summary>
         private bool _streamingModeNegotiated;
         /// <summary>
-        /// Stores the state state used to enforce this component's runtime contract.
+        /// Tracks state for transit connection.
         /// </summary>
         private TransitConnectionState _state = TransitConnectionState.Disconnected;
 
         /// <summary>
-        /// Stores the shutdown requested state used to enforce this component's runtime contract.
+        /// Tracks shutdown requested for transit connection.
         /// </summary>
         private int _shutdownRequested;
         /// <summary>
-        /// Stores the tokenless success mode enabled state used to enforce this component's runtime contract.
+        /// Tracks tokenless success mode enabled for transit connection.
         /// </summary>
         private int _tokenlessSuccessModeEnabled;
         /// <summary>
-        /// Stores the bytes transmitted state used to enforce this component's runtime contract.
+        /// Stores bytes transmitted for transit connection.
         /// </summary>
         private long _bytesTransmitted;
         /// <summary>
-        /// Stores the bytes received state used to enforce this component's runtime contract.
+        /// Stores bytes received for transit connection.
         /// </summary>
         private long _bytesReceived;
         /// <summary>
-        /// Stores the socket open count state used to enforce this component's runtime contract.
+        /// Limits socket open count for transit connection.
         /// </summary>
         private long _socketOpenCount;
         /// <summary>
-        /// Stores the ready transition count state used to enforce this component's runtime contract.
+        /// Limits ready transition count for transit connection.
         /// </summary>
         private long _readyTransitionCount;
         /// <summary>
-        /// Stores the submissions started state used to enforce this component's runtime contract.
+        /// Tracks submissions started for transit connection.
         /// </summary>
         private long _submissionsStarted;
         /// <summary>
-        /// Stores the submissions accepted state used to enforce this component's runtime contract.
+        /// Tracks submissions accepted for transit connection.
         /// </summary>
         private long _submissionsAccepted;
         /// <summary>
-        /// Stores the submissions rejected state used to enforce this component's runtime contract.
+        /// Tracks submissions rejected for transit connection.
         /// </summary>
         private long _submissionsRejected;
         /// <summary>
-        /// Stores the submissions failed state used to enforce this component's runtime contract.
+        /// Tracks submissions failed for transit connection.
         /// </summary>
         private long _submissionsFailed;
         /// <summary>
-        /// Stores the submissions ambiguous state used to enforce this component's runtime contract.
+        /// Tracks submissions ambiguous for transit connection.
         /// </summary>
         private long _submissionsAmbiguous;
         /// <summary>
-        /// Stores the submissions unavailable state used to enforce this component's runtime contract.
+        /// Tracks submissions unavailable for transit connection.
         /// </summary>
         private long _submissionsUnavailable;
         /// <summary>
-        /// Stores the max concurrent submissions state used to enforce this component's runtime contract.
+        /// Limits max concurrent submissions for transit connection.
         /// </summary>
         private int _maxConcurrentSubmissions;
         /// <summary>
-        /// Stores the send sequence state used to enforce this component's runtime contract.
+        /// Tracks send sequence for transit connection.
         /// </summary>
         private long _sendSequence;
         /// <summary>
-        /// Stores the batch count state used to enforce this component's runtime contract.
+        /// Limits batch count for transit connection.
         /// </summary>
         private long _batchCount;
         /// <summary>
-        /// Stores the batch size total state used to enforce this component's runtime contract.
+        /// Limits batch size total for transit connection.
         /// </summary>
         private long _batchSizeTotal;
         /// <summary>
-        /// Stores the max writer batch size state used to enforce this component's runtime contract.
+        /// Limits max writer batch size for transit connection.
         /// </summary>
         private int _maxWriterBatchSize;
         /// <summary>
-        /// Stores the last definitive response progress tick state used to enforce this component's runtime contract.
+        /// Tracks last definitive response progress tick for transit connection.
         /// </summary>
         private long _lastDefinitiveResponseProgressTick;
 
         /// <summary>
-        /// Performs the trace stamp operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates trace stamp for transit connection.
         /// </summary>
         private static string TraceStamp()
         {
@@ -270,7 +270,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the transit connection operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates transit connection for transit connection.
         /// </summary>
         internal TransitConnection(
             string host,
@@ -299,7 +299,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the transit connection operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates transit connection for transit connection.
         /// </summary>
         internal TransitConnection(
             string host,
@@ -362,42 +362,42 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Stores the connection id state used to enforce this component's runtime contract.
+        /// Tracks connection id for transit connection.
         /// </summary>
         internal string ConnectionId { get; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
-        /// Stores the current state state used to enforce this component's runtime contract.
+        /// Tracks current state for transit connection.
         /// </summary>
         internal TransitConnectionState CurrentState => _state;
 
         /// <summary>
-        /// Stores the is tls active state used to enforce this component's runtime contract.
+        /// Tracks is tls active for transit connection.
         /// </summary>
         internal bool IsTlsActive => _tlsActive;
 
         /// <summary>
-        /// Stores the capabilities state used to enforce this component's runtime contract.
+        /// Tracks capabilities for transit connection.
         /// </summary>
         internal TransitCapabilitySnapshot Capabilities => _capabilities;
 
         /// <summary>
-        /// Stores the outstanding submission count state used to enforce this component's runtime contract.
+        /// Limits outstanding submission count for transit connection.
         /// </summary>
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
 
         /// <summary>
-        /// Stores the pipeline depth state used to enforce this component's runtime contract.
+        /// Tracks pipeline depth for transit connection.
         /// </summary>
         internal int PipelineDepth => _pipelineDepth;
 
         /// <summary>
-        /// Stores the is response loop faulted state used to enforce this component's runtime contract.
+        /// Tracks is response loop faulted for transit connection.
         /// </summary>
         internal bool IsResponseLoopFaulted => Volatile.Read(ref _responseLoopFaulted) == 1;
 
         /// <summary>
-        /// Performs the throw if response loop faulted operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates throw if response loop faulted for transit connection.
         /// </summary>
         internal void ThrowIfResponseLoopFaulted()
         {
@@ -411,7 +411,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the is recorded response loop fault operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is recorded response loop fault for transit connection.
         /// </summary>
         internal bool IsRecordedResponseLoopFault(Exception exception)
         {
@@ -447,7 +447,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the notify materialization reservation changed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates notify materialization reservation changed for transit connection.
         /// </summary>
         internal static void NotifyMaterializationReservationChanged()
         {
@@ -455,7 +455,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record reconnect event operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record reconnect event for transit connection.
         /// </summary>
         internal static void RecordReconnectEvent()
         {
@@ -463,7 +463,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the initialize operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates initialize async for transit connection.
         /// </summary>
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
@@ -585,7 +585,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the cleanup initialization failure operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates cleanup initialization failure async for transit connection.
         /// </summary>
         private async Task CleanupInitializationFailureAsync()
         {
@@ -658,7 +658,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the process batch operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates process batch async for transit connection.
         /// </summary>
         internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitWorkItem> items, CancellationToken cancellationToken)
         {
@@ -764,7 +764,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try take completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try take completed for transit connection.
         /// </summary>
         internal bool TryTakeCompleted(out TransitWorkItem item, out TransitPublishResult result)
         {
@@ -788,7 +788,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the wait for completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates wait for completed async for transit connection.
         /// </summary>
         internal async ValueTask<bool> WaitForCompletedAsync(CancellationToken cancellationToken)
         {
@@ -803,7 +803,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the submit takethis operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates submit takethis async for transit connection.
         /// </summary>
         internal async ValueTask<TransitPublishResult> SubmitTakethisAsync(
             string messageId,
@@ -922,7 +922,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the drain outstanding owned work for retry operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates drain outstanding owned work for retry for transit connection.
         /// </summary>
         internal IReadOnlyList<TransitWorkItem> DrainOutstandingOwnedWorkForRetry()
         {
@@ -932,7 +932,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the drain outstanding direct submit pending work operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates drain outstanding direct submit pending work for transit connection.
         /// </summary>
         private IReadOnlyList<PendingOwnedWork> DrainOutstandingDirectSubmitPendingWork()
         {
@@ -940,7 +940,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the drain owned pending work operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates drain owned pending work for transit connection.
         /// </summary>
         private IReadOnlyList<PendingOwnedWork> DrainOwnedPendingWork(Func<PendingOwnedWork, bool> shouldDrain)
         {
@@ -965,7 +965,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the capture diagnostics snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates capture diagnostics snapshot for transit connection.
         /// </summary>
         internal TransitConnectionDiagnosticsSnapshot CaptureDiagnosticsSnapshot()
         {
@@ -1048,7 +1048,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the capture first p1 greeting provenance snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates capture first p1 greeting provenance snapshot for transit connection.
         /// </summary>
         internal static P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
@@ -1056,7 +1056,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the response loop operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates response loop async for transit connection.
         /// </summary>
         private async Task ResponseLoopAsync(CancellationToken cancellationToken)
         {
@@ -1119,7 +1119,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the response progress watchdog loop operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates response progress watchdog loop async for transit connection.
         /// </summary>
         private async Task ResponseProgressWatchdogLoopAsync(CancellationToken cancellationToken)
         {
@@ -1166,7 +1166,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try signal response loop fault operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try signal response loop fault for transit connection.
         /// </summary>
         private void TrySignalResponseLoopFault(Exception ex, bool cancelResponseLoop)
         {
@@ -1200,7 +1200,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the map takethis response operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates map takethis response for transit connection.
         /// </summary>
         private TransitPublishResult? MapTakethisResponse(string responseLine, long responseAvailableTick)
         {
@@ -1235,7 +1235,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the resolve response message id operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates resolve response message id for transit connection.
         /// </summary>
         private string ResolveResponseMessageId(int code, string responseText, string responseLine)
         {
@@ -1279,7 +1279,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try resolve leading message id token operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try resolve leading message id token for transit connection.
         /// </summary>
         private static bool TryResolveLeadingMessageIdToken(string responseText, out string? messageId)
         {
@@ -1308,7 +1308,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the acknowledge send order operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates acknowledge send order for transit connection.
         /// </summary>
         private void AcknowledgeSendOrder(string messageId)
         {
@@ -1325,7 +1325,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the stage takethis frame operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates stage takethis frame for transit connection.
         /// </summary>
         private int StageTakethisFrame(PipeWriter writer, string messageId, ReadOnlyMemory<byte> articlePayload)
         {
@@ -1347,7 +1347,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the write takethis command operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates write takethis command for transit connection.
         /// </summary>
         private static int WriteTakethisCommand(PipeWriter writer, string messageId)
         {
@@ -1363,7 +1363,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the write dot stuffed article operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates write dot stuffed article for transit connection.
         /// </summary>
         private static DotStuffWriteMetrics WriteDotStuffedArticle(PipeWriter writer, ReadOnlyMemory<byte> payload)
         {
@@ -1391,7 +1391,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the write bytes operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates write bytes for transit connection.
         /// </summary>
         private static void WriteBytes(PipeWriter writer, ReadOnlySpan<byte> bytes)
         {
@@ -1401,7 +1401,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the read line operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates read line async for transit connection.
         /// </summary>
         private async ValueTask<string> ReadLineAsync(CancellationToken cancellationToken)
         {
@@ -1412,7 +1412,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the await initialization stage operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates await initialization stage async for transit connection.
         /// </summary>
         private async Task AwaitInitializationStageAsync(
             Func<CancellationToken, Task> operation,
@@ -1474,7 +1474,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the read capabilities lines operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates read capabilities lines async for transit connection.
         /// </summary>
         private async Task<IReadOnlyList<string>> ReadCapabilitiesLinesAsync(CancellationToken cancellationToken)
         {
@@ -1493,7 +1493,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the read capabilities operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates read capabilities async for transit connection.
         /// </summary>
         private async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(CancellationToken cancellationToken)
         {
@@ -1503,7 +1503,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the write command operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates write command async for transit connection.
         /// </summary>
         private async Task WriteCommandAsync(string command, CancellationToken cancellationToken)
         {
@@ -1515,7 +1515,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the start tls operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates start tls async for transit connection.
         /// </summary>
         private async Task StartTlsAsync(CancellationToken cancellationToken)
         {
@@ -1532,7 +1532,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the upgrade to tls operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates upgrade to tls async for transit connection.
         /// </summary>
         private async Task UpgradeToTlsAsync(CancellationToken cancellationToken)
         {
@@ -1562,7 +1562,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the observe max concurrent submissions operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates observe max concurrent submissions for transit connection.
         /// </summary>
         private void ObserveMaxConcurrentSubmissions(int currentConcurrent)
         {
@@ -1582,7 +1582,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the update max batch size operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates update max batch size for transit connection.
         /// </summary>
         private void UpdateMaxBatchSize(int batchSize)
         {
@@ -1602,7 +1602,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record submission result operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record submission result for transit connection.
         /// </summary>
         private void RecordSubmissionResult(TransitPublishStatus status)
         {
@@ -1627,7 +1627,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the transition state operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates transition state for transit connection.
         /// </summary>
         private void TransitionState(TransitConnectionState state)
         {
@@ -1636,7 +1636,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the dispose operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates dispose async for transit connection.
         /// </summary>
         public async ValueTask DisposeAsync()
         {
@@ -1746,7 +1746,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the settle unresolved owned work during dispose operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates settle unresolved owned work during dispose for transit connection.
         /// </summary>
         private void SettleUnresolvedOwnedWorkDuringDispose()
         {
@@ -1755,7 +1755,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the settle unresolved direct submit work for fault operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates settle unresolved direct submit work for fault for transit connection.
         /// </summary>
         private void SettleUnresolvedDirectSubmitWorkForFault(Exception ex)
         {
@@ -1779,7 +1779,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the settle pending as ambiguous operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates settle pending as ambiguous for transit connection.
         /// </summary>
         private void SettlePendingAsAmbiguous(
             IReadOnlyList<PendingOwnedWork> unresolved,
@@ -1827,7 +1827,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try complete direct submit operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try complete direct submit for transit connection.
         /// </summary>
         private void TryCompleteDirectSubmit(long workItemId, TransitPublishResult result)
         {
@@ -1838,7 +1838,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the transit connection diagnostics snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Defines transit connection diagnostics snapshot and its transit connection contract.
         /// </summary>
         internal sealed record TransitConnectionDiagnosticsSnapshot(
             string ConnectionId,
@@ -1864,7 +1864,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             OutstandingPublishOperationSnapshot[] OutstandingOperations);
 
         /// <summary>
-        /// Performs the p1 greeting provenance snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Defines p1 greeting provenance snapshot and its transit connection contract.
         /// </summary>
         internal sealed record P1GreetingProvenanceSnapshot(
             string ConnectionId,
@@ -1890,7 +1890,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             P1GreetingLifecycleEventRecord[] LifecycleEvents);
 
         /// <summary>
-        /// Defines the p1 greeting provenance lifecycle event component and its contracts for this subsystem.
+        /// Defines p1 greeting provenance lifecycle event and its transit connection contract.
         /// </summary>
         internal enum P1GreetingProvenanceLifecycleEvent
         {
@@ -1907,7 +1907,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the p1 greeting lifecycle event record operation while preserving this component's lifecycle and state contracts.
+        /// Defines struct and its transit connection contract.
         /// </summary>
         internal readonly record struct P1GreetingLifecycleEventRecord(
             P1GreetingProvenanceLifecycleEvent Event,
@@ -1915,7 +1915,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int AttemptId);
 
         /// <summary>
-        /// Performs the diagnostic operation record operation while preserving this component's lifecycle and state contracts.
+        /// Defines struct and its transit connection contract.
         /// </summary>
         internal readonly record struct DiagnosticOperationRecord(
             string MessageId,
@@ -1950,7 +1950,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long LogicalOutstandingAheadAtResponse);
 
         /// <summary>
-        /// Performs the outstanding publish operation snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Defines struct and its transit connection contract.
         /// </summary>
         internal readonly record struct OutstandingPublishOperationSnapshot(
             string MessageId,
@@ -1968,7 +1968,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             string LikelyAwaitingPath);
 
         /// <summary>
-        /// Performs the pipelining diagnostic summary operation while preserving this component's lifecycle and state contracts.
+        /// Defines struct and its transit connection contract.
         /// </summary>
         internal readonly record struct PipeliningDiagnosticSummary(
             long MaxPendingDepth,
@@ -1990,12 +1990,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int SampledOperationCount);
 
         /// <summary>
-        /// Defines the pending owned work component and its contracts for this subsystem.
+        /// Defines pending owned work and its transit connection contract.
         /// </summary>
         private sealed class PendingOwnedWork
         {
             /// <summary>
-            /// Performs the pending owned work operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates pending owned work for transit connection.
             /// </summary>
             internal PendingOwnedWork(TransitWorkItem workItem)
             {
@@ -2003,38 +2003,38 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             /// <summary>
-            /// Stores the work item state used to enforce this component's runtime contract.
+            /// Tracks work item for transit connection.
             /// </summary>
             internal TransitWorkItem WorkItem { get; }
 
             /// <summary>
-            /// Stores the t2 socket write begin tick state used to enforce this component's runtime contract.
+            /// Tracks t2 socket write begin tick for transit connection.
             /// </summary>
             internal long T2SocketWriteBeginTick;
 
             /// <summary>
-            /// Stores the t3 socket write end tick state used to enforce this component's runtime contract.
+            /// Tracks t3 socket write end tick for transit connection.
             /// </summary>
             internal long T3SocketWriteEndTick;
 
             /// <summary>
-            /// Stores the t6 response correlated tick state used to enforce this component's runtime contract.
+            /// Tracks t6 response correlated tick for transit connection.
             /// </summary>
             internal long T6ResponseCorrelatedTick;
 
             /// <summary>
-            /// Stores the send sequence state used to enforce this component's runtime contract.
+            /// Tracks send sequence for transit connection.
             /// </summary>
             internal long SendSequence;
         }
 
         /// <summary>
-        /// Performs the completed work operation while preserving this component's lifecycle and state contracts.
+        /// Defines completed work and its transit connection contract.
         /// </summary>
         private sealed record CompletedWork(TransitWorkItem WorkItem, TransitPublishResult Result);
 
         /// <summary>
-        /// Performs the dot stuff write metrics operation while preserving this component's lifecycle and state contracts.
+        /// Defines struct and its transit connection contract.
         /// </summary>
         private readonly record struct DotStuffWriteMetrics(
             int BytesWritten,
@@ -2043,7 +2043,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long StuffedDotEvents);
 
         /// <summary>
-        /// Defines the transit connection lifecycle failure component and its contracts for this subsystem.
+        /// Defines transit connection lifecycle failure and its transit connection contract.
         /// </summary>
         internal enum TransitConnectionLifecycleFailure
         {
@@ -2054,12 +2054,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Defines the transit connection lifecycle exception component and its contracts for this subsystem.
+        /// Defines transit connection lifecycle exception and its transit connection contract.
         /// </summary>
         internal sealed class TransitConnectionLifecycleException : InvalidOperationException
         {
             /// <summary>
-            /// Stores the stage name state used to enforce this component's runtime contract.
+            /// Coordinates transit connection lifecycle exception for transit connection.
             /// </summary>
             internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure, string? stageName = null)
                 : base(failure switch
@@ -2075,32 +2075,32 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             /// <summary>
-            /// Stores the failure state used to enforce this component's runtime contract.
+            /// Tracks failure for transit connection.
             /// </summary>
             internal TransitConnectionLifecycleFailure Failure { get; }
         }
 
         [LoggerMessage(EventId = 2210, Level = LogLevel.Debug, Message = "Transit connection {ConnectionId} state changed to {State}")]
         /// <summary>
-        /// Performs the log transit state transition operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log transit state transition for transit connection.
         /// </summary>
         private static partial void LogTransitStateTransition(ILogger logger, string connectionId, TransitConnectionState state);
 
         [LoggerMessage(EventId = 2211, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} capabilities: STARTTLS={SupportsStartTls}, STREAMING={SupportsStreaming}")]
         /// <summary>
-        /// Performs the log transit capabilities operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log transit capabilities for transit connection.
         /// </summary>
         private static partial void LogTransitCapabilities(ILogger logger, string connectionId, bool supportsStartTls, bool supportsStreaming);
 
         [LoggerMessage(EventId = 2212, Level = LogLevel.Information, Message = "Transit connection {ConnectionId} is ready (TLS={TlsActive})")]
         /// <summary>
-        /// Performs the log transit connection ready operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log transit connection ready for transit connection.
         /// </summary>
         private static partial void LogTransitConnectionReady(ILogger logger, string connectionId, bool tlsActive);
 
         [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
         /// <summary>
-        /// Performs the log transit response loop faulted operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log transit response loop faulted for transit connection.
         /// </summary>
         private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
     }

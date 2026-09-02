@@ -16,7 +16,7 @@ namespace VectorNNTP.Backfiller.Startup.Logging
     internal static class SerilogConfigurator
     {
         /// <summary>
-        /// Stores the log file prefix state used to enforce this component's runtime contract.
+        /// Tracks log file prefix for serilog configurator.
         /// </summary>
         private const string LogFilePrefix = "vectornntp.backfiller-.log";
 
@@ -106,7 +106,7 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
 
         /// <summary>
-        /// Performs the parse minimum level for testing operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates parse minimum level for testing for serilog configurator.
         /// </summary>
         internal static LogEventLevel ParseMinimumLevelForTesting(string? configuredLevel)
         {
@@ -114,7 +114,7 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
 
         /// <summary>
-        /// Performs the parse microsoft log level for testing operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates parse microsoft log level for testing for serilog configurator.
         /// </summary>
         internal static LogLevel ParseMicrosoftLogLevelForTesting(string? configuredLevel)
         {
@@ -122,7 +122,7 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
 
         /// <summary>
-        /// Performs the parse minimum level operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates parse minimum level for serilog configurator.
         /// </summary>
         private static LogEventLevel ParseMinimumLevel(string? configuredLevel)
         {
@@ -132,7 +132,7 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
 
         /// <summary>
-        /// Performs the parse microsoft log level operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates parse microsoft log level for serilog configurator.
         /// </summary>
         private static LogLevel ParseMicrosoftLogLevel(string? configuredLevel)
         {

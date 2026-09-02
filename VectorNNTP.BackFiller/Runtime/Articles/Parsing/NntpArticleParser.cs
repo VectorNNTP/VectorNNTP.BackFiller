@@ -772,7 +772,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 GetPathLength(fqdn, parts),
                 (fqdn, parts),
                 /// <summary>
-                /// Performs the static operation while preserving this component's lifecycle and state contracts.
+                /// Coordinates static for nntp article parser.
                 /// </summary>
                 static (span, state) =>
                 {

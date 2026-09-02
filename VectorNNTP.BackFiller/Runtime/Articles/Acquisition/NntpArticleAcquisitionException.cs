@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Implements the nntp article acquisition exception responsibilities for this subsystem boundary.
+// Implements the nntp article acquisition exception behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {

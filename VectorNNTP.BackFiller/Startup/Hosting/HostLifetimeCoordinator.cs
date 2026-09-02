@@ -29,7 +29,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Stores the current environment state used to enforce this component's runtime contract.
+        /// Tracks current environment for host lifetime coordinator.
         /// </summary>
         private static HostingEnvironment? _currentEnvironment;
 
@@ -84,7 +84,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the register readiness hook operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates register readiness hook for host lifetime coordinator.
         /// </summary>
         private static void RegisterReadinessHook(
             IHostApplicationLifetime hostLifetime,
@@ -114,7 +114,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the signal readiness after startup metrics operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates signal readiness after startup metrics for host lifetime coordinator.
         /// </summary>
         private static void SignalReadinessAfterStartupMetrics(ILogger systemdNotifierLogger)
         {
@@ -135,7 +135,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the log hosting environment operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log hosting environment for host lifetime coordinator.
         /// </summary>
         private static void LogHostingEnvironment(ILogger<HostLifetimeCoordinator> logger)
         {
@@ -168,7 +168,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the log shutdown policy operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log shutdown policy for host lifetime coordinator.
         /// </summary>
         private static void LogShutdownPolicy(ShutdownOptions shutdownOptions, ILogger<HostLifetimeCoordinator> logger)
         {
@@ -193,7 +193,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the log shutdown policy operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log shutdown policy for host lifetime coordinator.
         /// </summary>
         private static void LogShutdownPolicy(BackFillerRuntimeOptions runtimeOptions, ILogger<HostLifetimeCoordinator> logger)
         {
@@ -287,7 +287,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the is running under systemd operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is running under systemd for host lifetime coordinator.
         /// </summary>
         private static bool IsRunningUnderSystemd()
         {
@@ -306,7 +306,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the should publish readiness operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates should publish readiness for host lifetime coordinator.
         /// </summary>
         private static bool ShouldPublishReadiness(IHostApplicationLifetime hostLifetime)
         {
@@ -315,7 +315,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the should publish readiness for testing operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates should publish readiness for testing for host lifetime coordinator.
         /// </summary>
         internal static bool ShouldPublishReadinessForTesting(IHostApplicationLifetime hostLifetime)
         {
@@ -323,7 +323,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the is running in container operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is running in container for host lifetime coordinator.
         /// </summary>
         private static bool IsRunningInContainer()
         {
@@ -357,7 +357,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the is running as windows service operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is running as windows service for host lifetime coordinator.
         /// </summary>
         private static bool IsRunningAsWindowsService()
         {
@@ -372,7 +372,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the on application started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on application started for host lifetime coordinator.
         /// </summary>
         private static void OnApplicationStarted(TimeSpan gracefulShutdownTimeout, ILogger<HostLifetimeCoordinator> logger)
         {
@@ -386,7 +386,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Performs the on application stopping operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on application stopping for host lifetime coordinator.
         /// </summary>
         private static void OnApplicationStopping(
             TimeSpan gracefulShutdownTimeout,
@@ -452,31 +452,31 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Hosting environment: {Environment}")]
         /// <summary>
-        /// Performs the log hosting environment detected operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log hosting environment detected for host lifetime coordinator.
         /// </summary>
         private static partial void LogHostingEnvironmentDetected(ILogger logger, HostingEnvironment environment);
 
         [LoggerMessage(EventId = 1002, Level = LogLevel.Information, Message = "systemd detected: Type=notify will expect READY notification; set TimeoutStartSec to allow time for dependencies and hosted service initialization")]
         /// <summary>
-        /// Performs the log systemd detected operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log systemd detected for host lifetime coordinator.
         /// </summary>
         private static partial void LogSystemdDetected(ILogger logger);
 
         [LoggerMessage(EventId = 1003, Level = LogLevel.Information, Message = "Container environment detected; ensure orchestration platform can monitor process health and exit codes (see EXIT_CODES_AND_SYSTEMD.md)")]
         /// <summary>
-        /// Performs the log container detected operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log container detected for host lifetime coordinator.
         /// </summary>
         private static partial void LogContainerDetected(ILogger logger);
 
         [LoggerMessage(EventId = 1004, Level = LogLevel.Information, Message = "Windows Service detected; ensure graceful shutdown timeout is sufficient for cleanup")]
         /// <summary>
-        /// Performs the log windows service detected operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log windows service detected for host lifetime coordinator.
         /// </summary>
         private static partial void LogWindowsServiceDetected(ILogger logger);
 
         [LoggerMessage(EventId = 1005, Level = LogLevel.Information, Message = "Shutdown policy: GracePeriodSeconds={GracePeriodSeconds}, StopNewWorkAdmission={StopNewWorkAdmission}, FinishActiveArticles={FinishActiveArticles}, DrainQueuedWork={DrainQueuedWork}")]
         /// <summary>
-        /// Performs the log shutdown policy core operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log shutdown policy core for host lifetime coordinator.
         /// </summary>
         private static partial void LogShutdownPolicyCore(
             ILogger logger,
@@ -487,7 +487,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         [LoggerMessage(EventId = 1006, Level = LogLevel.Information, Message = "Host startup milestone reached (ApplicationStarted); Program.Main will publish readiness after StartAsync completes; hosting environment={Environment}; graceful shutdown timeout={ShutdownTimeout}s")]
         /// <summary>
-        /// Performs the log application started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log application started for host lifetime coordinator.
         /// </summary>
         private static partial void LogApplicationStarted(
             ILogger logger,
@@ -496,7 +496,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         [LoggerMessage(EventId = 1007, Level = LogLevel.Information, Message = "Shutdown signal received; establishing shutdown state; hosting environment={Environment}; gracePeriod={GracePeriod}")]
         /// <summary>
-        /// Performs the log shutdown signal received operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log shutdown signal received for host lifetime coordinator.
         /// </summary>
         private static partial void LogShutdownSignalReceived(
             ILogger logger,
@@ -505,7 +505,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         [LoggerMessage(EventId = 1008, Level = LogLevel.Debug, Message = "Concurrent lifecycle transition race: attempted Ready->Draining but observed {CurrentState}; treating as benign.")]
         /// <summary>
-        /// Performs the log concurrent lifecycle transition race operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log concurrent lifecycle transition race for host lifetime coordinator.
         /// </summary>
         private static partial void LogConcurrentLifecycleTransitionRace(
             ILogger logger,
@@ -513,7 +513,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         [LoggerMessage(EventId = 1009, Level = LogLevel.Warning, Message = "ApplicationStopping observed but lifecycle already Faulted (state={CurrentState}); proceeding with shutdown.")]
         /// <summary>
-        /// Performs the log application stopping already faulted operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log application stopping already faulted for host lifetime coordinator.
         /// </summary>
         private static partial void LogApplicationStoppingAlreadyFaulted(
             ILogger logger,
@@ -522,7 +522,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
 
         [LoggerMessage(EventId = 1010, Level = LogLevel.Information, Message = "Suppressing readiness publication because shutdown is already in progress.")]
         /// <summary>
-        /// Performs the log readiness suppressed due to shutdown operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log readiness suppressed due to shutdown for host lifetime coordinator.
         /// </summary>
         private static partial void LogReadinessSuppressedDueToShutdown(ILogger logger);
     }

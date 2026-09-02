@@ -18,11 +18,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed partial class ArticleWorkProcessor : IArticleWorkProcessor
     {
         /// <summary>
-        /// Stores the retriever state used to enforce this component's runtime contract.
+        /// Tracks retriever for article work processor.
         /// </summary>
         private readonly IBackboneArticleRetriever _retriever;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for article work processor.
         /// </summary>
         private readonly ILogger<ArticleWorkProcessor> _logger;
 
@@ -116,7 +116,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Performs the static operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates static for article work processor.
         /// </summary>
         private static (ArticleWorkProcessingOutcome Outcome, ArticleWorkDispositionRecommendation Disposition) Classify(NntpArticleGrabberResult result)
         {

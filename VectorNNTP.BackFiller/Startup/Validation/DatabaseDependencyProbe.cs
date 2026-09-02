@@ -10,7 +10,7 @@ using Serilog;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines the database dependency probe component and its contracts for this subsystem.
+    /// Defines database dependency probe and its database dependency probe contract.
     /// </summary>
     internal static class DatabaseDependencyProbe
     {

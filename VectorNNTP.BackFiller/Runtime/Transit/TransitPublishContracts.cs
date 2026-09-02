@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Transit
-// Implements the transit publish contracts responsibilities for this subsystem boundary.
+// Implements the transit publish contracts behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
@@ -22,7 +22,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     }
 
     /// <summary>
-    /// Defines the transit publish provenance component and its contracts for this subsystem.
+    /// Defines transit publish provenance and its transit publish contracts contract.
     /// </summary>
     internal enum TransitPublishProvenance
     {

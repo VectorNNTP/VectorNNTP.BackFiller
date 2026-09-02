@@ -152,7 +152,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     options.ConnectTimeout,
                     cancellationToken,
                     /// <summary>
-                    /// Stores the token state used to enforce this component's runtime contract.
+                    /// Tracks token for nntp article acquisition session.
                     /// </summary>
                     async token =>
                     {
@@ -182,7 +182,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                         options.ConnectTimeout,
                         cancellationToken,
                         /// <summary>
-                        /// Stores the token state used to enforce this component's runtime contract.
+                        /// Tracks token for nntp article acquisition session.
                         /// </summary>
                         async token =>
                         {
@@ -524,7 +524,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     timeout,
                     cancellationToken,
                     /// <summary>
-                    /// Stores the token state used to enforce this component's runtime contract.
+                    /// Tracks token for nntp article acquisition session.
                     /// </summary>
                     async token =>
                     {

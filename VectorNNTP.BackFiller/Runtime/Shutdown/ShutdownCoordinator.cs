@@ -119,57 +119,57 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         // Technical upper bound for CancellationTokenSource.CancelAfter(TimeSpan) on current runtime.
         // This is distinct from operational shutdown limits, which are enforced by ShutdownOptions validation.
         /// <summary>
-        /// Stores the maximum grace period state used to enforce this component's runtime contract.
+        /// Limits maximum grace period for shutdown coordinator.
         /// </summary>
         private static readonly TimeSpan MaximumGracePeriod = TimeSpan.FromMilliseconds(int.MaxValue);
 
         /// <summary>
-        /// Stores the gate state used to enforce this component's runtime contract.
+        /// Tracks gate for shutdown coordinator.
         /// </summary>
         private readonly object _gate = new();
         /// <summary>
-        /// Stores the graceful shutdown started cts state used to enforce this component's runtime contract.
+        /// Tracks graceful shutdown started cts for shutdown coordinator.
         /// </summary>
         private readonly CancellationTokenSource _gracefulShutdownStartedCts = new();
         /// <summary>
-        /// Stores the forced shutdown cts state used to enforce this component's runtime contract.
+        /// Tracks forced shutdown cts for shutdown coordinator.
         /// </summary>
         private readonly CancellationTokenSource _forcedShutdownCts = new();
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for shutdown coordinator.
         /// </summary>
         private readonly ILogger<ShutdownCoordinator> _logger;
 
         /// <summary>
-        /// Stores the grace period cts state used to enforce this component's runtime contract.
+        /// Tracks grace period cts for shutdown coordinator.
         /// </summary>
         private CancellationTokenSource? _gracePeriodCts;
         /// <summary>
-        /// Stores the state state used to enforce this component's runtime contract.
+        /// Tracks state for shutdown coordinator.
         /// </summary>
         private ShutdownState _state = ShutdownState.Running;
         /// <summary>
-        /// Stores the graceful shutdown started at utc state used to enforce this component's runtime contract.
+        /// Tracks graceful shutdown started at utc for shutdown coordinator.
         /// </summary>
         private DateTimeOffset? _gracefulShutdownStartedAtUtc;
         /// <summary>
-        /// Stores the forced shutdown at utc state used to enforce this component's runtime contract.
+        /// Tracks forced shutdown at utc for shutdown coordinator.
         /// </summary>
         private DateTimeOffset? _forcedShutdownAtUtc;
         /// <summary>
-        /// Stores the graceful shutdown started timestamp state used to enforce this component's runtime contract.
+        /// Tracks graceful shutdown started timestamp for shutdown coordinator.
         /// </summary>
         private long? _gracefulShutdownStartedTimestamp;
         /// <summary>
-        /// Stores the forced shutdown timestamp state used to enforce this component's runtime contract.
+        /// Tracks forced shutdown timestamp for shutdown coordinator.
         /// </summary>
         private long? _forcedShutdownTimestamp;
         /// <summary>
-        /// Stores the graceful shutdown reason state used to enforce this component's runtime contract.
+        /// Tracks graceful shutdown reason for shutdown coordinator.
         /// </summary>
         private ShutdownReason _gracefulShutdownReason = ShutdownReason.Unknown;
         /// <summary>
-        /// Stores the forced shutdown reason state used to enforce this component's runtime contract.
+        /// Tracks forced shutdown reason for shutdown coordinator.
         /// </summary>
         private ShutdownReason _forcedShutdownReason = ShutdownReason.Unknown;
 
@@ -385,7 +385,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
 
                 _ = timeoutCts.Token.Register(
                     /// <summary>
-                    /// Stores the state state used to enforce this component's runtime contract.
+                    /// Tracks state for shutdown coordinator.
                     /// </summary>
                     static state =>
                     {
@@ -541,7 +541,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Performs the throw if disposed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates throw if disposed for shutdown coordinator.
         /// </summary>
         private void ThrowIfDisposed()
         {
@@ -549,7 +549,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Performs the cancel grace period timer safely operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates cancel grace period timer safely for shutdown coordinator.
         /// </summary>
         private static void CancelGracePeriodTimerSafely(CancellationTokenSource gracePeriodCts)
         {
@@ -564,7 +564,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Performs the cancel token source safely operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates cancel token source safely for shutdown coordinator.
         /// </summary>
         private static void CancelTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name, ShutdownState state)
         {
@@ -583,7 +583,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Performs the dispose cancellation token source safely operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates dispose cancellation token source safely for shutdown coordinator.
         /// </summary>
         private static void DisposeCancellationTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name)
         {
@@ -602,7 +602,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
         /// <summary>
-        /// Performs the log cancellation callback failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log cancellation callback failed for shutdown coordinator.
         /// </summary>
         private static partial void LogCancellationCallbackFailed(
             ILogger logger,
@@ -615,7 +615,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
         /// <summary>
-        /// Performs the log cancellation skipped already disposed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log cancellation skipped already disposed for shutdown coordinator.
         /// </summary>
         private static partial void LogCancellationSkippedAlreadyDisposed(
             ILogger logger,
@@ -628,7 +628,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
         /// <summary>
-        /// Performs the log disposal skipped already disposed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log disposal skipped already disposed for shutdown coordinator.
         /// </summary>
         private static partial void LogDisposalSkippedAlreadyDisposed(
             ILogger logger,

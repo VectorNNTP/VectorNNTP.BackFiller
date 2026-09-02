@@ -32,37 +32,37 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         ILogger<BackFillerListenerSocketService> logger) : BackgroundService
     {
         /// <summary>
-        /// Stores the listen backlog state used to enforce this component's runtime contract.
+        /// Tracks listen backlog for back filler listener socket service.
         /// </summary>
         private const int ListenBacklog = 512;
 
         /// <summary>
-        /// Stores the runtime options state used to enforce this component's runtime contract.
+        /// Tracks runtime options for back filler listener socket service.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
-        /// Stores the certificate state state used to enforce this component's runtime contract.
+        /// Tracks certificate state for back filler listener socket service.
         /// </summary>
         private readonly BackFillerCertificateState _certificateState = certificateState ?? throw new ArgumentNullException(nameof(certificateState));
         /// <summary>
-        /// Stores the shutdown coordinator state used to enforce this component's runtime contract.
+        /// Tracks shutdown coordinator for back filler listener socket service.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator = shutdownCoordinator ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for back filler listener socket service.
         /// </summary>
         private readonly ILogger<BackFillerListenerSocketService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
-        /// Stores the connections gate state used to enforce this component's runtime contract.
+        /// Tracks connections gate for back filler listener socket service.
         /// </summary>
         private readonly object _connectionsGate = new();
         /// <summary>
-        /// Stores the active clients state used to enforce this component's runtime contract.
+        /// Tracks active clients for back filler listener socket service.
         /// </summary>
         private readonly HashSet<TcpClient> _activeClients = [];
         /// <summary>
-        /// Stores the listen sockets state used to enforce this component's runtime contract.
+        /// Tracks listen sockets for back filler listener socket service.
         /// </summary>
         private readonly List<Socket> _listenSockets = [];
 
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the run accept loop operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates run accept loop async for back filler listener socket service.
         /// </summary>
         private async Task RunAcceptLoopAsync(Socket listenSocket, CancellationToken cancellationToken)
         {
@@ -142,7 +142,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the process accepted socket operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates process accepted socket async for back filler listener socket service.
         /// </summary>
         private async Task ProcessAcceptedSocketAsync(Socket acceptedSocket, CancellationToken cancellationToken)
         {
@@ -204,7 +204,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the bind all endpoints operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates bind all endpoints for back filler listener socket service.
         /// </summary>
         private void BindAllEndpoints(IReadOnlyList<IPEndPoint> endpoints)
         {
@@ -219,7 +219,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the build listen endpoints operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build listen endpoints for back filler listener socket service.
         /// </summary>
         private static IReadOnlyList<IPEndPoint> BuildListenEndpoints(BackFillerRuntimeOptions runtimeOptions)
         {
@@ -281,7 +281,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the create bound listen socket operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates create bound listen socket for back filler listener socket service.
         /// </summary>
         private static Socket CreateBoundListenSocket(IPEndPoint endpoint)
         {
@@ -311,7 +311,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the get current server certificate or throw operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates get current server certificate or throw for back filler listener socket service.
         /// </summary>
         private X509Certificate2 GetCurrentServerCertificateOrThrow()
         {
@@ -326,7 +326,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the wait for client disconnect operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates wait for client disconnect async for back filler listener socket service.
         /// </summary>
         private static async Task WaitForClientDisconnectAsync(SslStream sslStream, CancellationToken cancellationToken)
         {
@@ -343,7 +343,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the register client operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates register client for back filler listener socket service.
         /// </summary>
         private void RegisterClient(TcpClient client)
         {
@@ -354,7 +354,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the unregister client operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates unregister client for back filler listener socket service.
         /// </summary>
         private void UnregisterClient(TcpClient client)
         {
@@ -365,7 +365,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the close listen sockets operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates close listen sockets for back filler listener socket service.
         /// </summary>
         private void CloseListenSockets()
         {
@@ -384,7 +384,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the close active clients operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates close active clients for back filler listener socket service.
         /// </summary>
         private void CloseActiveClients()
         {
@@ -408,7 +408,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Performs the is expected stopping socket error operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is expected stopping socket error for back filler listener socket service.
         /// </summary>
         private static bool IsExpectedStoppingSocketError(SocketError socketError, CancellationToken cancellationToken)
         {
@@ -416,12 +416,12 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Defines the ipend point comparer component and its contracts for this subsystem.
+        /// Defines ipend point comparer and its back filler listener socket service contract.
         /// </summary>
         private sealed class IPEndPointComparer : IEqualityComparer<IPEndPoint>
         {
             /// <summary>
-            /// Performs the equals operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates equals for back filler listener socket service.
             /// </summary>
             public bool Equals(IPEndPoint? x, IPEndPoint? y)
             {
@@ -429,7 +429,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
 
             /// <summary>
-            /// Performs the get hash code operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates get hash code for back filler listener socket service.
             /// </summary>
             public int GetHashCode(IPEndPoint obj)
             {
@@ -439,61 +439,61 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
 
         [LoggerMessage(EventId = 2700, Level = LogLevel.Information, Message = "Inbound BackFiller listener started; ListenerCount={ListenerCount}; Port={Port}")]
         /// <summary>
-        /// Performs the log listener started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener started for back filler listener socket service.
         /// </summary>
         private static partial void LogListenerStarted(ILogger logger, int listenerCount, int port);
 
         [LoggerMessage(EventId = 2701, Level = LogLevel.Information, Message = "Inbound BackFiller listener bound endpoint {Endpoint} ({AddressFamily})")]
         /// <summary>
-        /// Performs the log endpoint bound operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log endpoint bound for back filler listener socket service.
         /// </summary>
         private static partial void LogEndpointBound(ILogger logger, string endpoint, string addressFamily);
 
         [LoggerMessage(EventId = 2702, Level = LogLevel.Debug, Message = "Inbound BackFiller listener accepted connection from {RemoteEndpoint}")]
         /// <summary>
-        /// Performs the log client accepted operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log client accepted for back filler listener socket service.
         /// </summary>
         private static partial void LogClientAccepted(ILogger logger, string remoteEndpoint);
 
         [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Inbound BackFiller TLS handshake succeeded for {RemoteEndpoint}; Thumbprint={Thumbprint}")]
         /// <summary>
-        /// Performs the log tls handshake succeeded operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log tls handshake succeeded for back filler listener socket service.
         /// </summary>
         private static partial void LogTlsHandshakeSucceeded(ILogger logger, string remoteEndpoint, string thumbprint);
 
         [LoggerMessage(EventId = 2704, Level = LogLevel.Warning, Message = "Inbound BackFiller TLS handshake failed")]
         /// <summary>
-        /// Performs the log tls handshake failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log tls handshake failed for back filler listener socket service.
         /// </summary>
         private static partial void LogTlsHandshakeFailed(ILogger logger, Exception exception);
 
         [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
         /// <summary>
-        /// Performs the log client processing fault operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log client processing fault for back filler listener socket service.
         /// </summary>
         private static partial void LogClientProcessingFault(ILogger logger, Exception exception);
 
         [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
         /// <summary>
-        /// Performs the log connection closed during shutdown operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection closed during shutdown for back filler listener socket service.
         /// </summary>
         private static partial void LogConnectionClosedDuringShutdown(ILogger logger, Exception exception);
 
         [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
         /// <summary>
-        /// Performs the log listener stopping by cancellation operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener stopping by cancellation for back filler listener socket service.
         /// </summary>
         private static partial void LogListenerStoppingByCancellation(ILogger logger);
 
         [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         /// <summary>
-        /// Performs the log listener stopped operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener stopped for back filler listener socket service.
         /// </summary>
         private static partial void LogListenerStopped(ILogger logger);
 
         [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
         /// <summary>
-        /// Performs the log listener disabled operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener disabled for back filler listener socket service.
         /// </summary>
         private static partial void LogListenerDisabled(ILogger logger);
     }

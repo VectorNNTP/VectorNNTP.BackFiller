@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Validation
-// Implements the transit server dependency probe responsibilities for this subsystem boundary.
+// Implements the transit server dependency probe behavior.
 
 using System.Net.Security;
 using System.Net.Sockets;
@@ -16,7 +16,7 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines the transit server dependency probe component and its contracts for this subsystem.
+    /// Defines transit server dependency probe and its transit server dependency probe contract.
     /// </summary>
     internal static class TransitServerDependencyProbe
     {
@@ -181,7 +181,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Performs the read capabilities operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates read capabilities async for transit server dependency probe.
         /// </summary>
         private static async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(
             StreamReader reader,
@@ -206,7 +206,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Performs the write nntp command operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates write nntp command async for transit server dependency probe.
         /// </summary>
         private static async Task WriteNntpCommandAsync(
             StreamWriter writer,
@@ -223,7 +223,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Performs the create reader operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates create reader for transit server dependency probe.
         /// </summary>
         private static StreamReader CreateReader(Stream stream)
         {
@@ -231,7 +231,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Performs the create writer operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates create writer for transit server dependency probe.
         /// </summary>
         private static StreamWriter CreateWriter(Stream stream)
         {
@@ -243,7 +243,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Performs the create strict tls stream operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates create strict tls stream for transit server dependency probe.
         /// </summary>
         private static SslStream CreateStrictTlsStream(Stream innerStream, bool leaveInnerStreamOpen)
         {
@@ -251,7 +251,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 innerStream,
                 leaveInnerStreamOpen,
                 /// <summary>
-                /// Performs the static operation while preserving this component's lifecycle and state contracts.
+                /// Coordinates static for transit server dependency probe.
                 /// </summary>
                 static (_, certificate, _, sslPolicyErrors) =>
                 {
@@ -261,7 +261,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Performs the authenticate tls operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates authenticate tls async for transit server dependency probe.
         /// </summary>
         private static async Task AuthenticateTlsAsync(SslStream sslStream, string host, CancellationToken cancellationToken)
         {

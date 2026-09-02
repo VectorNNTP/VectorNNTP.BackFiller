@@ -17,23 +17,23 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed partial class RabbitMqArticleProcessingService : BackgroundService
     {
         /// <summary>
-        /// Stores the consumer service state used to enforce this component's runtime contract.
+        /// Tracks consumer service for rabbit mq article processing service.
         /// </summary>
         private readonly RabbitMqConsumerService _consumerService;
         /// <summary>
-        /// Stores the request parser state used to enforce this component's runtime contract.
+        /// Tracks request parser for rabbit mq article processing service.
         /// </summary>
         private readonly IRabbitMqArticleWorkRequestParser _requestParser;
         /// <summary>
-        /// Stores the processor state used to enforce this component's runtime contract.
+        /// Tracks processor for rabbit mq article processing service.
         /// </summary>
         private readonly IArticleWorkProcessor _processor;
         /// <summary>
-        /// Stores the result sink state used to enforce this component's runtime contract.
+        /// Tracks result sink for rabbit mq article processing service.
         /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for rabbit mq article processing service.
         /// </summary>
         private readonly ILogger<RabbitMqArticleProcessingService> _logger;
 
@@ -104,7 +104,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Performs the create linked token source operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates create linked token source for rabbit mq article processing service.
         /// </summary>
         private static CancellationTokenSource? CreateLinkedTokenSource(CancellationToken hostToken, CancellationToken deliveryToken)
         {

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the operational command parser responsibilities for this subsystem boundary.
+// Implements the operational command parser behavior.
 
 using System.Collections.Frozen;
 
@@ -15,7 +15,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     internal static class OperationalCommandParser
     {
         /// <summary>
-        /// Stores the command map state used to enforce this component's runtime contract.
+        /// Tracks command map for operational command parser.
         /// </summary>
         private static readonly FrozenDictionary<string, OperationalCommand> CommandMap =
             new Dictionary<string, OperationalCommand>(StringComparer.OrdinalIgnoreCase)
@@ -106,7 +106,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 OperationalCommand.Diagnostics => "--diagnostics",
                 OperationalCommand.DumpConfig => "--dump-config",
                 /// <summary>
-                /// Identifies the _ case in this enum contract.
+                /// Defines value and its operational command parser contract.
                 /// </summary>
                 _ => throw new System.Diagnostics.UnreachableException($"Unsupported command enum value: {command}")
             };

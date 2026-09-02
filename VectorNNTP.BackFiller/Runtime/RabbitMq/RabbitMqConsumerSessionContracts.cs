@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq consumer session contracts responsibilities for this subsystem boundary.
+// Implements the rabbit mq consumer session contracts behavior.
 
 using System.Threading.Channels;
 
@@ -96,12 +96,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
         /// <summary>
-        /// Stores the writer state used to enforce this component's runtime contract.
+        /// Tracks writer for rabbit mq consumer session contracts.
         /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
         /// <summary>
-        /// Performs the rabbit mq delivery channel sink operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates rabbit mq delivery channel sink for rabbit mq consumer session contracts.
         /// </summary>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on delivery operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on delivery async for rabbit mq consumer session contracts.
         /// </summary>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {

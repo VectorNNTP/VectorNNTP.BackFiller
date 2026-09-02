@@ -560,11 +560,11 @@ namespace VectorNNTP.Backfiller.Configuration
     internal sealed class ShutdownOptions : IValidatableObject
     {
         /// <summary>
-        /// Stores the minimum grace period seconds state used to enforce this component's runtime contract.
+        /// Tracks minimum grace period seconds for back filler options.
         /// </summary>
         internal const int MinimumGracePeriodSeconds = 5;
         /// <summary>
-        /// Stores the maximum grace period seconds state used to enforce this component's runtime contract.
+        /// Limits maximum grace period seconds for back filler options.
         /// </summary>
         internal const int MaximumGracePeriodSeconds = 600;
 
@@ -2004,7 +2004,7 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class LetsEncryptValidator
     {
         /// <summary>
-        /// Stores the email validator state used to enforce this component's runtime contract.
+        /// Tracks email validator for back filler options.
         /// </summary>
         private static readonly EmailAddressAttribute EmailValidator = new();
 

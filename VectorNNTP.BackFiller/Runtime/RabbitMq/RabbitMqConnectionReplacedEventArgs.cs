@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq connection replaced event args responsibilities for this subsystem boundary.
+// Implements the rabbit mq connection replaced event args behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {

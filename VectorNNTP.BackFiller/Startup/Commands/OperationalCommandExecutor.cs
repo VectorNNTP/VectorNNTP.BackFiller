@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the operational command executor responsibilities for this subsystem boundary.
+// Implements the operational command executor behavior.
 
 using System.Diagnostics;
 
@@ -30,7 +30,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 OperationalCommand.Diagnostics => DiagnosticsCommandHandler.Handle(),
                 OperationalCommand.DumpConfig => DumpConfigCommandHandler.Handle(configuration),
                 /// <summary>
-                /// Identifies the _ case in this enum contract.
+                /// Defines value and its operational command executor contract.
                 /// </summary>
                 _ => throw new UnreachableException($"Unsupported command enum value: {command}")
             };

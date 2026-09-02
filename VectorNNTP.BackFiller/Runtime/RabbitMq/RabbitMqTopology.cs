@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq topology responsibilities for this subsystem boundary.
+// Implements the rabbit mq topology behavior.
 
 using System.Collections.Frozen;
 using RabbitMQ.Client;
@@ -89,7 +89,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the build legacy backbone entity name operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build legacy backbone entity name for rabbit mq topology.
         /// </summary>
         private static string BuildLegacyBackboneEntityName(string backbone)
         {
@@ -106,23 +106,23 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         ILogger<RabbitMqTopologyInitializer> logger)
     {
         /// <summary>
-        /// Stores the connection manager state used to enforce this component's runtime contract.
+        /// Tracks connection manager for rabbit mq topology.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for rabbit mq topology.
         /// </summary>
         private readonly ILogger<RabbitMqTopologyInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         /// <summary>
-        /// Stores the initialization gate state used to enforce this component's runtime contract.
+        /// Tracks initialization gate for rabbit mq topology.
         /// </summary>
         private readonly SemaphoreSlim _initializationGate = new(1, 1);
         /// <summary>
-        /// Stores the declared topology keys state used to enforce this component's runtime contract.
+        /// Tracks declared topology keys for rabbit mq topology.
         /// </summary>
         private readonly HashSet<string> _declaredTopologyKeys = new(StringComparer.Ordinal);
         /// <summary>
-        /// Stores the declared topology generation state used to enforce this component's runtime contract.
+        /// Tracks declared topology generation for rabbit mq topology.
         /// </summary>
         private long _declaredTopologyGeneration;
 
@@ -185,7 +185,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the build topology declaration key operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build topology declaration key for rabbit mq topology.
         /// </summary>
         private static string BuildTopologyDeclarationKey(string queueName)
         {
@@ -194,7 +194,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the declare backbone topology operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates declare backbone topology async for rabbit mq topology.
         /// </summary>
         private async Task DeclareBackboneTopologyAsync(
             RabbitMqBackboneTopologyDefinition definition,
@@ -246,25 +246,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         [LoggerMessage(EventId = 4100, Level = LogLevel.Information, Message = "RabbitMQ topology initialization started. BackboneCount={BackboneCount}")]
         /// <summary>
-        /// Performs the log topology initialization started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log topology initialization started for rabbit mq topology.
         /// </summary>
         private static partial void LogTopologyInitializationStarted(ILogger logger, int backboneCount);
 
         [LoggerMessage(EventId = 4101, Level = LogLevel.Information, Message = "RabbitMQ topology initialization completed. BackboneCount={BackboneCount}")]
         /// <summary>
-        /// Performs the log topology initialization completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log topology initialization completed for rabbit mq topology.
         /// </summary>
         private static partial void LogTopologyInitializationCompleted(ILogger logger, int backboneCount);
 
         [LoggerMessage(EventId = 4102, Level = LogLevel.Information, Message = "RabbitMQ backbone topology initialization started. Backbone={Backbone} Exchange={Exchange} Queue={Queue} RoutingKey={RoutingKey}")]
         /// <summary>
-        /// Performs the log backbone topology initialization started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log backbone topology initialization started for rabbit mq topology.
         /// </summary>
         private static partial void LogBackboneTopologyInitializationStarted(ILogger logger, string backbone, string exchange, string queue, string routingKey);
 
         [LoggerMessage(EventId = 4103, Level = LogLevel.Information, Message = "RabbitMQ backbone topology initialization completed. Backbone={Backbone} Exchange={Exchange} Queue={Queue} RoutingKey={RoutingKey}")]
         /// <summary>
-        /// Performs the log backbone topology initialization completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log backbone topology initialization completed for rabbit mq topology.
         /// </summary>
         private static partial void LogBackboneTopologyInitializationCompleted(ILogger logger, string backbone, string exchange, string queue, string routingKey);
     }

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup
-// Implements the exit code policy responsibilities for this subsystem boundary.
+// Implements the exit code policy behavior.
 
 namespace VectorNNTP.Backfiller.Startup
 {

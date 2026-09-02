@@ -19,11 +19,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class BackFillerCertificateState : IDisposable
     {
         /// <summary>
-        /// Stores the gate state used to enforce this component's runtime contract.
+        /// Tracks gate for back filler certificate state.
         /// </summary>
         private readonly object _gate = new();
         /// <summary>
-        /// Stores the current state used to enforce this component's runtime contract.
+        /// Tracks current for back filler certificate state.
         /// </summary>
         private BackFillerCertificateBundle? _current;
 

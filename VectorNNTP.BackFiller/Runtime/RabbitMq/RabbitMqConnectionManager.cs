@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq connection manager responsibilities for this subsystem boundary.
+// Implements the rabbit mq connection manager behavior.
 
 using System.Diagnostics;
 using RabbitMQ.Client.Events;
@@ -18,89 +18,89 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed partial class RabbitMqConnectionManager : IAsyncDisposable
     {
         /// <summary>
-        /// Stores the options state used to enforce this component's runtime contract.
+        /// Tracks options for rabbit mq connection manager.
         /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
         /// <summary>
-        /// Stores the connection name state used to enforce this component's runtime contract.
+        /// Tracks connection name for rabbit mq connection manager.
         /// </summary>
         private readonly string _connectionName;
         /// <summary>
-        /// Stores the connector state used to enforce this component's runtime contract.
+        /// Tracks connector for rabbit mq connection manager.
         /// </summary>
         private readonly IRabbitMqBrokerConnector _connector;
         /// <summary>
-        /// Stores the shutdown coordinator state used to enforce this component's runtime contract.
+        /// Tracks shutdown coordinator for rabbit mq connection manager.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
         /// <summary>
-        /// Stores the time provider state used to enforce this component's runtime contract.
+        /// Tracks time provider for rabbit mq connection manager.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for rabbit mq connection manager.
         /// </summary>
         private readonly ILogger<RabbitMqConnectionManager> _logger;
         /// <summary>
-        /// Stores the state gate state used to enforce this component's runtime contract.
+        /// Tracks state gate for rabbit mq connection manager.
         /// </summary>
         private readonly SemaphoreSlim _stateGate = new(1, 1);
         /// <summary>
-        /// Stores the recovery signal state used to enforce this component's runtime contract.
+        /// Tracks recovery signal for rabbit mq connection manager.
         /// </summary>
         private readonly SemaphoreSlim _recoverySignal = new(0, int.MaxValue);
         /// <summary>
-        /// Stores the shutdown cts state used to enforce this component's runtime contract.
+        /// Tracks shutdown cts for rabbit mq connection manager.
         /// </summary>
         private readonly CancellationTokenSource _shutdownCts = new();
 
         /// <summary>
-        /// Stores the connection state used to enforce this component's runtime contract.
+        /// Tracks connection for rabbit mq connection manager.
         /// </summary>
         private IRabbitMqBrokerConnection? _connection;
         /// <summary>
-        /// Stores the recovery task state used to enforce this component's runtime contract.
+        /// Tracks recovery task for rabbit mq connection manager.
         /// </summary>
         private Task? _recoveryTask;
         /// <summary>
-        /// Stores the graceful shutdown registration state used to enforce this component's runtime contract.
+        /// Tracks graceful shutdown registration for rabbit mq connection manager.
         /// </summary>
         private IDisposable? _gracefulShutdownRegistration;
         /// <summary>
-        /// Stores the forced shutdown registration state used to enforce this component's runtime contract.
+        /// Tracks forced shutdown registration for rabbit mq connection manager.
         /// </summary>
         private IDisposable? _forcedShutdownRegistration;
 
         /// <summary>
-        /// Stores the state state used to enforce this component's runtime contract.
+        /// Tracks state for rabbit mq connection manager.
         /// </summary>
         private volatile RabbitMqInfrastructureState _state = RabbitMqInfrastructureState.NotInitialized;
         /// <summary>
-        /// Stores the dispose requested state used to enforce this component's runtime contract.
+        /// Tracks dispose requested for rabbit mq connection manager.
         /// </summary>
         private volatile bool _disposeRequested;
         /// <summary>
-        /// Stores the recovery queued state used to enforce this component's runtime contract.
+        /// Tracks recovery queued for rabbit mq connection manager.
         /// </summary>
         private int _recoveryQueued;
         /// <summary>
-        /// Stores the recovery attempt state used to enforce this component's runtime contract.
+        /// Tracks recovery attempt for rabbit mq connection manager.
         /// </summary>
         private int _recoveryAttempt;
         /// <summary>
-        /// Stores the consecutive client recovery errors state used to enforce this component's runtime contract.
+        /// Tracks consecutive client recovery errors for rabbit mq connection manager.
         /// </summary>
         private int _consecutiveClientRecoveryErrors;
         /// <summary>
-        /// Stores the connection generation state used to enforce this component's runtime contract.
+        /// Tracks connection generation for rabbit mq connection manager.
         /// </summary>
         private long _connectionGeneration;
         /// <summary>
-        /// Stores the topology initialized state used to enforce this component's runtime contract.
+        /// Tracks topology initialized for rabbit mq connection manager.
         /// </summary>
         private volatile bool _topologyInitialized;
         /// <summary>
-        /// Stores the last connected at utc state used to enforce this component's runtime contract.
+        /// Tracks last connected at utc for rabbit mq connection manager.
         /// </summary>
         private DateTimeOffset? _lastConnectedAtUtc;
 
@@ -281,7 +281,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the connect core operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates connect core async for rabbit mq connection manager.
         /// </summary>
         private async Task ConnectCoreAsync(CancellationToken cancellationToken)
         {
@@ -326,7 +326,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the recovery loop operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates recovery loop async for rabbit mq connection manager.
         /// </summary>
         private async Task RecoveryLoopAsync()
         {
@@ -400,7 +400,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the queue recovery operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates queue recovery for rabbit mq connection manager.
         /// </summary>
         private void QueueRecovery(string reason)
         {
@@ -417,7 +417,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the dispose connection operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates dispose connection async for rabbit mq connection manager.
         /// </summary>
         private async Task DisposeConnectionAsync()
         {
@@ -440,7 +440,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the compute recovery backoff operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates compute recovery backoff for rabbit mq connection manager.
         /// </summary>
         private TimeSpan ComputeRecoveryBackoff(int attempt)
         {
@@ -452,7 +452,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the attach connection events operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates attach connection events for rabbit mq connection manager.
         /// </summary>
         private void AttachConnectionEvents(IRabbitMqBrokerConnection connection)
         {
@@ -465,7 +465,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the detach connection events operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates detach connection events for rabbit mq connection manager.
         /// </summary>
         private void DetachConnectionEvents(IRabbitMqBrokerConnection connection)
         {
@@ -478,7 +478,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on connection shutdown operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on connection shutdown for rabbit mq connection manager.
         /// </summary>
         private void OnConnectionShutdown(object? sender, ShutdownEventArgs eventArgs)
         {
@@ -494,7 +494,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on callback exception operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on callback exception for rabbit mq connection manager.
         /// </summary>
         private void OnCallbackException(object? sender, CallbackExceptionEventArgs eventArgs)
         {
@@ -502,7 +502,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on connection blocked operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on connection blocked for rabbit mq connection manager.
         /// </summary>
         private void OnConnectionBlocked(object? sender, ConnectionBlockedEventArgs eventArgs)
         {
@@ -510,7 +510,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on connection unblocked operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on connection unblocked for rabbit mq connection manager.
         /// </summary>
         private void OnConnectionUnblocked(object? sender, AsyncEventArgs eventArgs)
         {
@@ -518,7 +518,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on connection recovery error operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on connection recovery error for rabbit mq connection manager.
         /// </summary>
         private void OnConnectionRecoveryError(object? sender, ConnectionRecoveryErrorEventArgs eventArgs)
         {
@@ -533,7 +533,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on recovery succeeded operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on recovery succeeded for rabbit mq connection manager.
         /// </summary>
         private void OnRecoverySucceeded(object? sender, AsyncEventArgs eventArgs)
         {
@@ -545,7 +545,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on shutdown signaled operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on shutdown signaled for rabbit mq connection manager.
         /// </summary>
         private void OnShutdownSignaled(string shutdownType)
         {
@@ -562,7 +562,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the throw if stopping operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates throw if stopping for rabbit mq connection manager.
         /// </summary>
         private void ThrowIfStopping()
         {
@@ -574,109 +574,109 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         [LoggerMessage(EventId = 4000, Level = LogLevel.Information, Message = "RabbitMQ connection attempt started. Hosts={Hosts} Port={Port} VirtualHost={VirtualHost} ConnectionName={ConnectionName} EnableSsl={EnableSsl}")]
         /// <summary>
-        /// Performs the log connection attempt operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection attempt for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionAttempt(ILogger logger, IReadOnlyList<string> hosts, int port, string virtualHost, string connectionName, bool enableSsl);
 
         [LoggerMessage(EventId = 4001, Level = LogLevel.Information, Message = "RabbitMQ connection established. Host={Host} Port={Port} VirtualHost={VirtualHost} ConnectionName={ConnectionName} DurationMs={DurationMs}")]
         /// <summary>
-        /// Performs the log connection succeeded operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection succeeded for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionSucceeded(ILogger logger, string host, int port, string virtualHost, string connectionName, double durationMs);
 
         [LoggerMessage(EventId = 4002, Level = LogLevel.Error, Message = "RabbitMQ connection attempt failed. Hosts={Hosts} Port={Port} VirtualHost={VirtualHost} ConnectionName={ConnectionName} DurationMs={DurationMs}")]
         /// <summary>
-        /// Performs the log connection failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection failed for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionFailed(ILogger logger, IReadOnlyList<string> hosts, int port, string virtualHost, string connectionName, double durationMs, Exception exception);
 
         [LoggerMessage(EventId = 4003, Level = LogLevel.Warning, Message = "RabbitMQ connection shutdown observed. ReplyCode={ReplyCode} ReplyText={ReplyText} Initiator={Initiator}")]
         /// <summary>
-        /// Performs the log connection shutdown operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection shutdown for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionShutdown(ILogger logger, ushort replyCode, string replyText, string initiator);
 
         [LoggerMessage(EventId = 4004, Level = LogLevel.Warning, Message = "RabbitMQ callback exception observed. Message={Message}")]
         /// <summary>
-        /// Performs the log connection callback exception operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection callback exception for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionCallbackException(ILogger logger, string message);
 
         [LoggerMessage(EventId = 4005, Level = LogLevel.Warning, Message = "RabbitMQ broker blocked the connection. Reason={Reason}")]
         /// <summary>
-        /// Performs the log connection blocked operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection blocked for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionBlocked(ILogger logger, string reason);
 
         [LoggerMessage(EventId = 4006, Level = LogLevel.Information, Message = "RabbitMQ broker unblocked the connection")]
         /// <summary>
-        /// Performs the log connection unblocked operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection unblocked for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionUnblocked(ILogger logger);
 
         [LoggerMessage(EventId = 4007, Level = LogLevel.Warning, Message = "RabbitMQ recovery queued. Reason={Reason}")]
         /// <summary>
-        /// Performs the log recovery queued operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log recovery queued for rabbit mq connection manager.
         /// </summary>
         private static partial void LogRecoveryQueued(ILogger logger, string reason);
 
         [LoggerMessage(EventId = 4008, Level = LogLevel.Information, Message = "RabbitMQ recovery attempt starting. Attempt={Attempt} BackoffMs={BackoffMs}")]
         /// <summary>
-        /// Performs the log recovery starting operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log recovery starting for rabbit mq connection manager.
         /// </summary>
         private static partial void LogRecoveryStarting(ILogger logger, int attempt, double backoffMs);
 
         [LoggerMessage(EventId = 4009, Level = LogLevel.Information, Message = "RabbitMQ recovery attempt succeeded. Attempt={Attempt}")]
         /// <summary>
-        /// Performs the log recovery succeeded operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log recovery succeeded for rabbit mq connection manager.
         /// </summary>
         private static partial void LogRecoverySucceeded(ILogger logger, int attempt);
 
         [LoggerMessage(EventId = 4010, Level = LogLevel.Error, Message = "RabbitMQ recovery attempt failed. Attempt={Attempt} ConsecutiveFailures={ConsecutiveFailures} Reason={Reason}")]
         /// <summary>
-        /// Performs the log recovery failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log recovery failed for rabbit mq connection manager.
         /// </summary>
         private static partial void LogRecoveryFailed(ILogger logger, int attempt, int consecutiveFailures, string reason);
 
         [LoggerMessage(EventId = 4011, Level = LogLevel.Error, Message = "RabbitMQ recovery failure threshold reached. ConsecutiveFailures={ConsecutiveFailures}")]
         /// <summary>
-        /// Performs the log recovery failure threshold reached operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log recovery failure threshold reached for rabbit mq connection manager.
         /// </summary>
         private static partial void LogRecoveryFailureThresholdReached(ILogger logger, int consecutiveFailures);
 
         [LoggerMessage(EventId = 4012, Level = LogLevel.Warning, Message = "RabbitMQ client automatic recovery error observed. ConsecutiveErrors={ConsecutiveErrors} Reason={Reason}")]
         /// <summary>
-        /// Performs the log client automatic recovery error operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log client automatic recovery error for rabbit mq connection manager.
         /// </summary>
         private static partial void LogClientAutomaticRecoveryError(ILogger logger, int consecutiveErrors, string reason);
 
         [LoggerMessage(EventId = 4013, Level = LogLevel.Warning, Message = "RabbitMQ client automatic recovery error threshold reached. ConsecutiveErrors={ConsecutiveErrors}")]
         /// <summary>
-        /// Performs the log client automatic recovery threshold reached operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log client automatic recovery threshold reached for rabbit mq connection manager.
         /// </summary>
         private static partial void LogClientAutomaticRecoveryThresholdReached(ILogger logger, int consecutiveErrors);
 
         [LoggerMessage(EventId = 4014, Level = LogLevel.Information, Message = "RabbitMQ client automatic recovery succeeded")]
         /// <summary>
-        /// Performs the log client automatic recovery succeeded operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log client automatic recovery succeeded for rabbit mq connection manager.
         /// </summary>
         private static partial void LogClientAutomaticRecoverySucceeded(ILogger logger);
 
         [LoggerMessage(EventId = 4015, Level = LogLevel.Warning, Message = "RabbitMQ shutdown signal observed from ShutdownCoordinator. Type={ShutdownType}")]
         /// <summary>
-        /// Performs the log shutdown signal observed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log shutdown signal observed for rabbit mq connection manager.
         /// </summary>
         private static partial void LogShutdownSignalObserved(ILogger logger, string shutdownType);
 
         [LoggerMessage(EventId = 4016, Level = LogLevel.Error, Message = "RabbitMQ connection disposal failed")]
         /// <summary>
-        /// Performs the log connection dispose failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log connection dispose failed for rabbit mq connection manager.
         /// </summary>
         private static partial void LogConnectionDisposeFailed(ILogger logger, Exception exception);
 
         [LoggerMessage(EventId = 4017, Level = LogLevel.Information, Message = "RabbitMQ connection manager shutdown completed")]
         /// <summary>
-        /// Performs the log shutdown completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log shutdown completed for rabbit mq connection manager.
         /// </summary>
         private static partial void LogShutdownCompleted(ILogger logger);
     }

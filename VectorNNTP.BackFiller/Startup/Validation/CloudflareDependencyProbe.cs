@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Validation
-// Implements the cloudflare dependency probe responsibilities for this subsystem boundary.
+// Implements the cloudflare dependency probe behavior.
 
 using CloudFlare.Client;
 using CloudFlare.Client.Api.Result;
@@ -16,7 +16,7 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines the cloudflare dependency probe component and its contracts for this subsystem.
+    /// Defines cloudflare dependency probe and its cloudflare dependency probe contract.
     /// </summary>
     internal static class CloudflareDependencyProbe
     {

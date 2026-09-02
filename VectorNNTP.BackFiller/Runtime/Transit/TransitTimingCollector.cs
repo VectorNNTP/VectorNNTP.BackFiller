@@ -3,215 +3,215 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Transit
-// Implements the transit timing collector responsibilities for this subsystem boundary.
+// Implements the transit timing collector behavior.
 
 using System.Diagnostics;
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// Defines the transit timing collector component and its contracts for this subsystem.
+    /// Defines transit timing collector and its transit timing collector contract.
     /// </summary>
     internal sealed class TransitTimingCollector
     {
         /// <summary>
-        /// Stores the publish payload copy count state used to enforce this component's runtime contract.
+        /// Limits publish payload copy count for transit timing collector.
         /// </summary>
         private long _publishPayloadCopyCount;
         /// <summary>
-        /// Stores the publish payload copy total ticks state used to enforce this component's runtime contract.
+        /// Stores publish payload copy total ticks for transit timing collector.
         /// </summary>
         private long _publishPayloadCopyTotalTicks;
 
         /// <summary>
-        /// Stores the dot stuff stage count state used to enforce this component's runtime contract.
+        /// Limits dot stuff stage count for transit timing collector.
         /// </summary>
         private long _dotStuffStageCount;
         /// <summary>
-        /// Stores the dot stuff stage total ticks state used to enforce this component's runtime contract.
+        /// Tracks dot stuff stage total ticks for transit timing collector.
         /// </summary>
         private long _dotStuffStageTotalTicks;
         /// <summary>
-        /// Stores the dot stuff stage min ticks state used to enforce this component's runtime contract.
+        /// Tracks dot stuff stage min ticks for transit timing collector.
         /// </summary>
         private long _dotStuffStageMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the dot stuff stage max ticks state used to enforce this component's runtime contract.
+        /// Limits dot stuff stage max ticks for transit timing collector.
         /// </summary>
         private long _dotStuffStageMaxTicks;
         /// <summary>
-        /// Stores the dot stuff payload bytes state used to enforce this component's runtime contract.
+        /// Stores dot stuff payload bytes for transit timing collector.
         /// </summary>
         private long _dotStuffPayloadBytes;
         /// <summary>
-        /// Stores the dot stuff get span calls state used to enforce this component's runtime contract.
+        /// Tracks dot stuff get span calls for transit timing collector.
         /// </summary>
         private long _dotStuffGetSpanCalls;
         /// <summary>
-        /// Stores the dot stuff advance calls state used to enforce this component's runtime contract.
+        /// Tracks dot stuff advance calls for transit timing collector.
         /// </summary>
         private long _dotStuffAdvanceCalls;
         /// <summary>
-        /// Stores the dot stuff stuffed dot events state used to enforce this component's runtime contract.
+        /// Tracks dot stuff stuffed dot events for transit timing collector.
         /// </summary>
         private long _dotStuffStuffedDotEvents;
 
         /// <summary>
-        /// Stores the flush count state used to enforce this component's runtime contract.
+        /// Limits flush count for transit timing collector.
         /// </summary>
         private long _flushCount;
         /// <summary>
-        /// Stores the flush total ticks state used to enforce this component's runtime contract.
+        /// Tracks flush total ticks for transit timing collector.
         /// </summary>
         private long _flushTotalTicks;
         /// <summary>
-        /// Stores the flush min ticks state used to enforce this component's runtime contract.
+        /// Tracks flush min ticks for transit timing collector.
         /// </summary>
         private long _flushMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the flush max ticks state used to enforce this component's runtime contract.
+        /// Limits flush max ticks for transit timing collector.
         /// </summary>
         private long _flushMaxTicks;
 
         /// <summary>
-        /// Stores the response line read count state used to enforce this component's runtime contract.
+        /// Limits response line read count for transit timing collector.
         /// </summary>
         private long _responseLineReadCount;
         /// <summary>
-        /// Stores the response line read total ticks state used to enforce this component's runtime contract.
+        /// Tracks response line read total ticks for transit timing collector.
         /// </summary>
         private long _responseLineReadTotalTicks;
         /// <summary>
-        /// Stores the response line read min ticks state used to enforce this component's runtime contract.
+        /// Tracks response line read min ticks for transit timing collector.
         /// </summary>
         private long _responseLineReadMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the response line read max ticks state used to enforce this component's runtime contract.
+        /// Limits response line read max ticks for transit timing collector.
         /// </summary>
         private long _responseLineReadMaxTicks;
 
         /// <summary>
-        /// Stores the response correlation count state used to enforce this component's runtime contract.
+        /// Limits response correlation count for transit timing collector.
         /// </summary>
         private long _responseCorrelationCount;
         /// <summary>
-        /// Stores the response correlation total ticks state used to enforce this component's runtime contract.
+        /// Tracks response correlation total ticks for transit timing collector.
         /// </summary>
         private long _responseCorrelationTotalTicks;
         /// <summary>
-        /// Stores the response correlation min ticks state used to enforce this component's runtime contract.
+        /// Tracks response correlation min ticks for transit timing collector.
         /// </summary>
         private long _responseCorrelationMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the response correlation max ticks state used to enforce this component's runtime contract.
+        /// Limits response correlation max ticks for transit timing collector.
         /// </summary>
         private long _responseCorrelationMaxTicks;
 
         /// <summary>
-        /// Stores the response available to correlated count state used to enforce this component's runtime contract.
+        /// Limits response available to correlated count for transit timing collector.
         /// </summary>
         private long _responseAvailableToCorrelatedCount;
         /// <summary>
-        /// Stores the response available to correlated total ticks state used to enforce this component's runtime contract.
+        /// Tracks response available to correlated total ticks for transit timing collector.
         /// </summary>
         private long _responseAvailableToCorrelatedTotalTicks;
         /// <summary>
-        /// Stores the response available to correlated min ticks state used to enforce this component's runtime contract.
+        /// Tracks response available to correlated min ticks for transit timing collector.
         /// </summary>
         private long _responseAvailableToCorrelatedMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the response available to correlated max ticks state used to enforce this component's runtime contract.
+        /// Limits response available to correlated max ticks for transit timing collector.
         /// </summary>
         private long _responseAvailableToCorrelatedMaxTicks;
 
         /// <summary>
-        /// Stores the completion enqueue to observe count state used to enforce this component's runtime contract.
+        /// Limits completion enqueue to observe count for transit timing collector.
         /// </summary>
         private long _completionEnqueueToObserveCount;
         /// <summary>
-        /// Stores the completion enqueue to observe total ticks state used to enforce this component's runtime contract.
+        /// Tracks completion enqueue to observe total ticks for transit timing collector.
         /// </summary>
         private long _completionEnqueueToObserveTotalTicks;
         /// <summary>
-        /// Stores the completion enqueue to observe min ticks state used to enforce this component's runtime contract.
+        /// Tracks completion enqueue to observe min ticks for transit timing collector.
         /// </summary>
         private long _completionEnqueueToObserveMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the completion enqueue to observe max ticks state used to enforce this component's runtime contract.
+        /// Limits completion enqueue to observe max ticks for transit timing collector.
         /// </summary>
         private long _completionEnqueueToObserveMaxTicks;
 
         /// <summary>
-        /// Stores the worker poll delay count state used to enforce this component's runtime contract.
+        /// Limits worker poll delay count for transit timing collector.
         /// </summary>
         private long _workerPollDelayCount;
         /// <summary>
-        /// Stores the worker poll delay total ticks state used to enforce this component's runtime contract.
+        /// Configures worker poll delay total ticks for transit timing collector.
         /// </summary>
         private long _workerPollDelayTotalTicks;
 
         /// <summary>
-        /// Stores the response to worker observation count state used to enforce this component's runtime contract.
+        /// Limits response to worker observation count for transit timing collector.
         /// </summary>
         private long _responseToWorkerObservationCount;
         /// <summary>
-        /// Stores the response to worker observation total ticks state used to enforce this component's runtime contract.
+        /// Tracks response to worker observation total ticks for transit timing collector.
         /// </summary>
         private long _responseToWorkerObservationTotalTicks;
         /// <summary>
-        /// Stores the response to worker observation min ticks state used to enforce this component's runtime contract.
+        /// Tracks response to worker observation min ticks for transit timing collector.
         /// </summary>
         private long _responseToWorkerObservationMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the response to worker observation max ticks state used to enforce this component's runtime contract.
+        /// Limits response to worker observation max ticks for transit timing collector.
         /// </summary>
         private long _responseToWorkerObservationMaxTicks;
 
         /// <summary>
-        /// Stores the worker observation to next staging count state used to enforce this component's runtime contract.
+        /// Limits worker observation to next staging count for transit timing collector.
         /// </summary>
         private long _workerObservationToNextStagingCount;
         /// <summary>
-        /// Stores the worker observation to next staging total ticks state used to enforce this component's runtime contract.
+        /// Tracks worker observation to next staging total ticks for transit timing collector.
         /// </summary>
         private long _workerObservationToNextStagingTotalTicks;
         /// <summary>
-        /// Stores the worker observation to next staging min ticks state used to enforce this component's runtime contract.
+        /// Tracks worker observation to next staging min ticks for transit timing collector.
         /// </summary>
         private long _workerObservationToNextStagingMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the worker observation to next staging max ticks state used to enforce this component's runtime contract.
+        /// Limits worker observation to next staging max ticks for transit timing collector.
         /// </summary>
         private long _workerObservationToNextStagingMaxTicks;
 
         /// <summary>
-        /// Stores the response to next staging count state used to enforce this component's runtime contract.
+        /// Limits response to next staging count for transit timing collector.
         /// </summary>
         private long _responseToNextStagingCount;
         /// <summary>
-        /// Stores the response to next staging total ticks state used to enforce this component's runtime contract.
+        /// Tracks response to next staging total ticks for transit timing collector.
         /// </summary>
         private long _responseToNextStagingTotalTicks;
         /// <summary>
-        /// Stores the response to next staging min ticks state used to enforce this component's runtime contract.
+        /// Tracks response to next staging min ticks for transit timing collector.
         /// </summary>
         private long _responseToNextStagingMinTicks = long.MaxValue;
         /// <summary>
-        /// Stores the response to next staging max ticks state used to enforce this component's runtime contract.
+        /// Limits response to next staging max ticks for transit timing collector.
         /// </summary>
         private long _responseToNextStagingMaxTicks;
 
         /// <summary>
-        /// Stores the last definitive response correlated tick state used to enforce this component's runtime contract.
+        /// Tracks last definitive response correlated tick for transit timing collector.
         /// </summary>
         private long _lastDefinitiveResponseCorrelatedTick;
         /// <summary>
-        /// Stores the last worker observation tick state used to enforce this component's runtime contract.
+        /// Tracks last worker observation tick for transit timing collector.
         /// </summary>
         private long _lastWorkerObservationTick;
 
         /// <summary>
-        /// Performs the record publish payload copy operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record publish payload copy for transit timing collector.
         /// </summary>
         internal void RecordPublishPayloadCopy(long elapsedTicks)
         {
@@ -220,7 +220,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record dot stuff stage operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record dot stuff stage for transit timing collector.
         /// </summary>
         internal void RecordDotStuffStage(long elapsedTicks, long payloadBytes, long getSpanCalls, long advanceCalls, long stuffedDotEvents)
         {
@@ -236,7 +236,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record flush wait operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record flush wait for transit timing collector.
         /// </summary>
         internal void RecordFlushWait(long elapsedTicks)
         {
@@ -247,7 +247,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record response line read operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record response line read for transit timing collector.
         /// </summary>
         internal void RecordResponseLineRead(long elapsedTicks)
         {
@@ -258,7 +258,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record response correlation operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record response correlation for transit timing collector.
         /// </summary>
         internal void RecordResponseCorrelation(long elapsedTicks, long responseAvailableTick, long correlatedTick, bool definitive)
         {
@@ -283,7 +283,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record completion observed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record completion observed for transit timing collector.
         /// </summary>
         internal void RecordCompletionObserved(long completionEnqueuedTick, long workerObservedTick)
         {
@@ -313,7 +313,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record worker poll delay operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record worker poll delay for transit timing collector.
         /// </summary>
         internal void RecordWorkerPollDelay(long elapsedTicks)
         {
@@ -322,7 +322,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the record staging started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates record staging started for transit timing collector.
         /// </summary>
         internal void RecordStagingStarted(long stageStartTick)
         {
@@ -354,7 +354,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the capture snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates capture snapshot for transit timing collector.
         /// </summary>
         internal TransitTimingSnapshot CaptureSnapshot()
         {
@@ -422,7 +422,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the normalize min operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates normalize min for transit timing collector.
         /// </summary>
         private static long NormalizeMin(long value)
         {
@@ -430,7 +430,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the update min operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates update min for transit timing collector.
         /// </summary>
         private static void UpdateMin(ref long target, long candidate)
         {
@@ -450,7 +450,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the update max operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates update max for transit timing collector.
         /// </summary>
         private static void UpdateMax(ref long target, long candidate)
         {
@@ -471,7 +471,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     }
 
     /// <summary>
-    /// Performs the transit timing snapshot operation while preserving this component's lifecycle and state contracts.
+    /// Defines transit timing snapshot and its transit timing collector contract.
     /// </summary>
     internal sealed record TransitTimingSnapshot(
         long StopwatchFrequency,
@@ -492,7 +492,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         TransitTimingBucket ResponseToNextStaging);
 
     /// <summary>
-    /// Performs the transit timing bucket operation while preserving this component's lifecycle and state contracts.
+    /// Defines transit timing bucket and its transit timing collector contract.
     /// </summary>
     internal sealed record TransitTimingBucket(
         long Count,

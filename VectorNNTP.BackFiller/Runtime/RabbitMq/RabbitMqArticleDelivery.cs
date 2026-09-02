@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq article delivery responsibilities for this subsystem boundary.
+// Implements the rabbit mq article delivery behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {

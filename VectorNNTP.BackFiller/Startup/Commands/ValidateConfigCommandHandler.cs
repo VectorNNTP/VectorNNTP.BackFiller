@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the validate config command handler responsibilities for this subsystem boundary.
+// Implements the validate config command handler behavior.
 
 using Serilog;
 using VectorNNTP.Backfiller.Configuration;
@@ -65,7 +65,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Performs the build validate config command result operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build validate config command result for validate config command handler.
         /// </summary>
         internal static ConfigurationValidationResult BuildValidateConfigCommandResult(IConfiguration configuration)
         {

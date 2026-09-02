@@ -20,27 +20,27 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class BackFillerCertificateProvisioningService : IDisposable
     {
         /// <summary>
-        /// Stores the certificate store state used to enforce this component's runtime contract.
+        /// Tracks certificate store for back filler certificate provisioning service.
         /// </summary>
         private readonly BackFillerCertificateStore _certificateStore;
         /// <summary>
-        /// Stores the acme issuer state used to enforce this component's runtime contract.
+        /// Tracks acme issuer for back filler certificate provisioning service.
         /// </summary>
         private readonly IAcmeCertificateIssuer _acmeIssuer;
         /// <summary>
-        /// Stores the certificate state state used to enforce this component's runtime contract.
+        /// Tracks certificate state for back filler certificate provisioning service.
         /// </summary>
         private readonly BackFillerCertificateState _certificateState;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for back filler certificate provisioning service.
         /// </summary>
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
         /// <summary>
-        /// Stores the time provider state used to enforce this component's runtime contract.
+        /// Tracks time provider for back filler certificate provisioning service.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Stores the provision gate state used to enforce this component's runtime contract.
+        /// Tracks provision gate for back filler certificate provisioning service.
         /// </summary>
         private static readonly SemaphoreSlim ProvisionGate = new(1, 1);
 
@@ -166,7 +166,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the ensure certificate availability core operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates ensure certificate availability core async for back filler certificate provisioning service.
         /// </summary>
         private async Task EnsureCertificateAvailabilityCoreAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
@@ -206,7 +206,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the provision new certificate operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates provision new certificate async for back filler certificate provisioning service.
         /// </summary>
         private async Task ProvisionNewCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
@@ -344,7 +344,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}");
 
         /// <summary>
-        /// Performs the log certificate provisioning disabled operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate provisioning disabled for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificateProvisioningDisabled(ILogger logger)
         {
@@ -352,7 +352,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log certificate renewal required with unusable certificate operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate renewal required with unusable certificate for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason)
         {
@@ -360,7 +360,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log certificate renewal failed using existing certificate operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate renewal failed using existing certificate for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception)
         {
@@ -368,7 +368,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log using existing listener certificate operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log using existing listener certificate for back filler certificate provisioning service.
         /// </summary>
         private static void LogUsingExistingListenerCertificate(ILogger logger, string reason)
         {
@@ -376,7 +376,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log listener certificate inside renewal window operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener certificate inside renewal window for back filler certificate provisioning service.
         /// </summary>
         private static void LogListenerCertificateInsideRenewalWindow(ILogger logger)
         {
@@ -384,7 +384,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log certificate renewal failed retaining existing certificate operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate renewal failed retaining existing certificate for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception)
         {
@@ -392,7 +392,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log listener certificate unavailable or unusable operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener certificate unavailable or unusable for back filler certificate provisioning service.
         /// </summary>
         private static void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason)
         {
@@ -400,7 +400,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log listener certificate activated successfully operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log listener certificate activated successfully for back filler certificate provisioning service.
         /// </summary>
         private static void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc)
         {
@@ -408,7 +408,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Stores the log certificate issuance failed message state used to enforce this component's runtime contract.
+        /// Tracks log certificate issuance failed message for back filler certificate provisioning service.
         /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
             LoggerMessage.Define<string, string, string>(
@@ -417,7 +417,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
         /// <summary>
-        /// Stores the log certificate persistence failed message state used to enforce this component's runtime contract.
+        /// Tracks log certificate persistence failed message for back filler certificate provisioning service.
         /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
             LoggerMessage.Define<string, string, string>(
@@ -426,7 +426,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
         /// <summary>
-        /// Stores the log certificate reload failed message state used to enforce this component's runtime contract.
+        /// Tracks log certificate reload failed message for back filler certificate provisioning service.
         /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
             LoggerMessage.Define<string, string, string>(
@@ -435,7 +435,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
         /// <summary>
-        /// Performs the log certificate issuance failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate issuance failed for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
@@ -443,7 +443,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log certificate persistence failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate persistence failed for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
@@ -451,7 +451,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the log certificate reload failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log certificate reload failed for back filler certificate provisioning service.
         /// </summary>
         private static void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {

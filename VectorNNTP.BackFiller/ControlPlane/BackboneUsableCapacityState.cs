@@ -40,7 +40,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
     internal sealed class BackboneUsableCapacityState : IBackboneUsableCapacityProvider, IBackboneUsableCapacityStateWriter
     {
         /// <summary>
-        /// Stores the capacity by backbone state used to enforce this component's runtime contract.
+        /// Limits capacity by backbone for backbone usable capacity state.
         /// </summary>
         private ImmutableDictionary<string, int> _capacityByBackbone = ImmutableDictionary<string, int>.Empty.WithComparers(StringComparer.OrdinalIgnoreCase);
 

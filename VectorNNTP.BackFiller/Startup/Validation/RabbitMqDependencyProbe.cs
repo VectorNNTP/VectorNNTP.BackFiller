@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Validation
-// Implements the rabbit mq dependency probe responsibilities for this subsystem boundary.
+// Implements the rabbit mq dependency probe behavior.
 
 using System.Net.Sockets;
 using RabbitMQ.Client;
@@ -15,7 +15,7 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines the rabbit mq dependency probe component and its contracts for this subsystem.
+    /// Defines rabbit mq dependency probe and its rabbit mq dependency probe contract.
     /// </summary>
     internal static class RabbitMqDependencyProbe
     {

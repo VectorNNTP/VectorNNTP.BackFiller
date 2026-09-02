@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Validation
-// Implements the startup validation pipeline responsibilities for this subsystem boundary.
+// Implements the startup validation pipeline behavior.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;

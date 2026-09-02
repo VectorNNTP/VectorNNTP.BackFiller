@@ -42,15 +42,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed partial class BackboneArticleRetriever : IBackboneArticleRetriever
     {
         /// <summary>
-        /// Stores the lease provider state used to enforce this component's runtime contract.
+        /// Tracks lease provider for backbone article retriever.
         /// </summary>
         private readonly IBackboneSessionLeaseProvider _leaseProvider;
         /// <summary>
-        /// Stores the workflow state used to enforce this component's runtime contract.
+        /// Tracks workflow for backbone article retriever.
         /// </summary>
         private readonly NntpArticleGrabberWorkflow _workflow;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for backbone article retriever.
         /// </summary>
         private readonly ILogger<BackboneArticleRetriever> _logger;
 

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the help command handler responsibilities for this subsystem boundary.
+// Implements the help command handler behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {

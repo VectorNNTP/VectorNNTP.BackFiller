@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq startup initializer responsibilities for this subsystem boundary.
+// Implements the rabbit mq startup initializer behavior.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -24,23 +24,23 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         ILogger<RabbitMqStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Stores the connection manager state used to enforce this component's runtime contract.
+        /// Tracks connection manager for rabbit mq startup initializer.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
         /// <summary>
-        /// Stores the topology initializer state used to enforce this component's runtime contract.
+        /// Tracks topology initializer for rabbit mq startup initializer.
         /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
         /// <summary>
-        /// Stores the account snapshot provider state used to enforce this component's runtime contract.
+        /// Limits account snapshot provider for rabbit mq startup initializer.
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider = accountSnapshotProvider ?? throw new ArgumentNullException(nameof(accountSnapshotProvider));
         /// <summary>
-        /// Stores the runtime options state used to enforce this component's runtime contract.
+        /// Tracks runtime options for rabbit mq startup initializer.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for rabbit mq startup initializer.
         /// </summary>
         private readonly ILogger<RabbitMqStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -79,13 +79,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
         [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
         /// <summary>
-        /// Performs the log startup initialization beginning operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log startup initialization beginning for rabbit mq startup initializer.
         /// </summary>
         private static partial void LogStartupInitializationBeginning(ILogger logger);
 
         [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
         /// <summary>
-        /// Performs the log startup initialization completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log startup initialization completed for rabbit mq startup initializer.
         /// </summary>
         private static partial void LogStartupInitializationCompleted(ILogger logger, RabbitMqInfrastructureState state, int backboneCount);
     }

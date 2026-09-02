@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the version command handler responsibilities for this subsystem boundary.
+// Implements the version command handler behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {

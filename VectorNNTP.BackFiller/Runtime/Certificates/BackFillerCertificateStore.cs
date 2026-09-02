@@ -243,7 +243,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the certificate contains dns name operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates certificate contains dns name for back filler certificate store.
         /// </summary>
         private static bool CertificateContainsDnsName(X509Certificate2 certificate, string expectedDnsName)
         {
@@ -289,7 +289,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the has server authentication usage operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates has server authentication usage for back filler certificate store.
         /// </summary>
         private static bool HasServerAuthenticationUsage(X509Certificate2 certificate)
         {
@@ -307,7 +307,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the build certificate chain operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build certificate chain for back filler certificate store.
         /// </summary>
         private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
         {
@@ -349,7 +349,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the build pfx bundle operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build pfx bundle for back filler certificate store.
         /// </summary>
         private static byte[] BuildPfxBundle(AcmeOrderIssueResult issueResult, string pfxPassword)
         {
@@ -391,7 +391,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the import certificate private key operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates import certificate private key for back filler certificate store.
         /// </summary>
         private static AsymmetricAlgorithm ImportCertificatePrivateKey(string pem)
         {
@@ -421,7 +421,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Coordinates write file atomically async for back filler certificate store.
         /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
@@ -434,7 +434,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Coordinates write file atomically async for back filler certificate store.
         /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
@@ -490,7 +490,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Coordinates try delete temp file for back filler certificate store.
         /// </summary>
         private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {

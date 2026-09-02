@@ -16,19 +16,19 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed partial class LetsEncryptCertificateRenewalService : BackgroundService
     {
         /// <summary>
-        /// Stores the runtime options state used to enforce this component's runtime contract.
+        /// Tracks runtime options for lets encrypt certificate renewal service.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions;
         /// <summary>
-        /// Stores the provisioning service state used to enforce this component's runtime contract.
+        /// Tracks provisioning service for lets encrypt certificate renewal service.
         /// </summary>
         private readonly BackFillerCertificateProvisioningService _provisioningService;
         /// <summary>
-        /// Stores the shutdown coordinator state used to enforce this component's runtime contract.
+        /// Tracks shutdown coordinator for lets encrypt certificate renewal service.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for lets encrypt certificate renewal service.
         /// </summary>
         private readonly ILogger<LetsEncryptCertificateRenewalService> _logger;
 
@@ -95,7 +95,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the compute next delay operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates compute next delay for lets encrypt certificate renewal service.
         /// </summary>
         private static TimeSpan ComputeNextDelay(BackFillerLetsEncryptRuntimeOptions options)
         {

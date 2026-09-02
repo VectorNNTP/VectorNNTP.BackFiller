@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup
-// Implements the build info service responsibilities for this subsystem boundary.
+// Implements the build info service behavior.
 
 using Serilog;
 
@@ -15,7 +15,7 @@ namespace VectorNNTP.Backfiller.Startup
     internal static class BuildInfoService
     {
         /// <summary>
-        /// Stores the build info state used to enforce this component's runtime contract.
+        /// Tracks build info for build info service.
         /// </summary>
         private static BuildInfo? _buildInfo;
 

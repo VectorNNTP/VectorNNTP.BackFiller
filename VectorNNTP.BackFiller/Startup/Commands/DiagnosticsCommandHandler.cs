@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the diagnostics command handler responsibilities for this subsystem boundary.
+// Implements the diagnostics command handler behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {

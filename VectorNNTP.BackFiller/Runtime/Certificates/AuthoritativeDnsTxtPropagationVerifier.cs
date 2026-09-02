@@ -22,11 +22,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed partial class AuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
     {
         /// <summary>
-        /// Stores the time provider state used to enforce this component's runtime contract.
+        /// Tracks time provider for authoritative dns txt propagation verifier.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for authoritative dns txt propagation verifier.
         /// </summary>
         private readonly ILogger<AuthoritativeDnsTxtPropagationVerifier> _logger;
 
@@ -114,7 +114,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the resolve authoritative name server addresses operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates resolve authoritative name server addresses async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<IReadOnlyList<IPAddress>> ResolveAuthoritativeNameServerAddressesAsync(string fqdn, CancellationToken cancellationToken)
         {
@@ -158,7 +158,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the query ns record names from system resolvers operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates query ns record names from system resolvers async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<IReadOnlyList<string>> QueryNsRecordNamesFromSystemResolversAsync(string zoneName, CancellationToken cancellationToken)
         {
@@ -197,7 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the resolve system name servers operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates resolve system name servers for authoritative dns txt propagation verifier.
         /// </summary>
         private static string[] ResolveSystemNameServers()
         {
@@ -238,7 +238,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the query txt contains value operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates query txt contains value async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<bool> QueryTxtContainsValueAsync(IPAddress nameServer, string fqdn, string expectedTxtValue, CancellationToken cancellationToken)
         {
@@ -249,7 +249,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the send dns udp query operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates send dns udp query async for authoritative dns txt propagation verifier.
         /// </summary>
         private static async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
         {
@@ -267,7 +267,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Performs the normalize dns name operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates normalize dns name for authoritative dns txt propagation verifier.
         /// </summary>
         private static string NormalizeDnsName(string value)
         {
@@ -275,7 +275,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Defines the dns record type code component and its contracts for this subsystem.
+        /// Defines dns record type code and its authoritative dns txt propagation verifier contract.
         /// </summary>
         private enum DnsRecordTypeCode : ushort
         {
@@ -284,12 +284,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Defines the dns wire message builder component and its contracts for this subsystem.
+        /// Defines dns wire message builder and its authoritative dns txt propagation verifier contract.
         /// </summary>
         private static class DnsWireMessageBuilder
         {
             /// <summary>
-            /// Performs the build query operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates build query for authoritative dns txt propagation verifier.
             /// </summary>
             internal static byte[] BuildQuery(string fqdn, DnsRecordTypeCode type)
             {
@@ -318,7 +318,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the encode dns name operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates encode dns name for authoritative dns txt propagation verifier.
             /// </summary>
             private static byte[] EncodeDnsName(string fqdn)
             {
@@ -336,7 +336,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the write uint16 operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates write uint16 for authoritative dns txt propagation verifier.
             /// </summary>
             private static void WriteUInt16(byte[] buffer, int offset, ushort value)
             {
@@ -346,12 +346,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Defines the dns wire message parser component and its contracts for this subsystem.
+        /// Defines dns wire message parser and its authoritative dns txt propagation verifier contract.
         /// </summary>
         private static class DnsWireMessageParser
         {
             /// <summary>
-            /// Performs the parse ns record names operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates parse ns record names for authoritative dns txt propagation verifier.
             /// </summary>
             internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
             {
@@ -393,7 +393,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the parse txt values operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates parse txt values for authoritative dns txt propagation verifier.
             /// </summary>
             internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
             {
@@ -444,7 +444,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the static operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates static for authoritative dns txt propagation verifier.
             /// </summary>
             private static (int QuestionCount, int AnswerCount, int AuthorityCount, int AdditionalCount) ReadHeaderCounts(byte[] message)
             {
@@ -461,7 +461,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the skip name operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates skip name for authoritative dns txt propagation verifier.
             /// </summary>
             private static int SkipName(byte[] message, int offset)
             {
@@ -485,7 +485,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the read name operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates read name for authoritative dns txt propagation verifier.
             /// </summary>
             private static string ReadName(byte[] message, ref int offset)
             {
@@ -537,7 +537,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the read uint16 operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates read uint16 for authoritative dns txt propagation verifier.
             /// </summary>
             private static ushort ReadUInt16(byte[] message, int offset)
             {
@@ -545,7 +545,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the read uint16 operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates read uint16 for authoritative dns txt propagation verifier.
             /// </summary>
             private static ushort ReadUInt16(byte[] message, ref int offset)
             {
@@ -555,7 +555,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Performs the read uint32 operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates read uint32 for authoritative dns txt propagation verifier.
             /// </summary>
             private static uint ReadUInt32(byte[] message, ref int offset)
             {

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq owned channel responsibilities for this subsystem boundary.
+// Implements the rabbit mq owned channel behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
@@ -16,7 +16,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
         /// <summary>
-        /// Stores the channel state used to enforce this component's runtime contract.
+        /// Tracks channel for rabbit mq owned channel.
         /// </summary>
         private readonly IRabbitMqChannel _channel;
 

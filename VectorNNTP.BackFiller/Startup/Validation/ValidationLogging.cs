@@ -9,7 +9,7 @@ using Serilog;
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
     /// <summary>
-    /// Defines the validation logging component and its contracts for this subsystem.
+    /// Defines validation logging and its validation logging contract.
     /// </summary>
     internal static class ValidationLogging
     {

@@ -109,7 +109,7 @@ namespace VectorNNTP.Backfiller.Configuration
     {
         // MySqlConnector aliases for server/host (official documentation)
         /// <summary>
-        /// Stores the server aliases state used to enforce this component's runtime contract.
+        /// Tracks server aliases for my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> ServerAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -124,7 +124,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for database name
         /// <summary>
-        /// Stores the database aliases state used to enforce this component's runtime contract.
+        /// Tracks database aliases for my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> DatabaseAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -135,7 +135,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for username
         /// <summary>
-        /// Stores the username aliases state used to enforce this component's runtime contract.
+        /// Tracks username aliases for my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> UsernameAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -149,7 +149,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for password
         /// <summary>
-        /// Stores the password aliases state used to enforce this component's runtime contract.
+        /// Tracks password aliases for my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> PasswordAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -159,7 +159,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for minimum pool size
         /// <summary>
-        /// Stores the min pool size aliases state used to enforce this component's runtime contract.
+        /// Limits min pool size aliases for my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> MinPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -171,7 +171,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for maximum pool size
         /// <summary>
-        /// Stores the max pool size aliases state used to enforce this component's runtime contract.
+        /// Limits max pool size aliases for my sql connection string utilities.
         /// </summary>
         private static readonly HashSet<string> MaxPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -530,7 +530,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </remarks>
 #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
         /// <summary>
-        /// Performs the parse raw key value pairs operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates parse raw key value pairs for my sql connection string utilities.
         /// </summary>
         private static IReadOnlyList<(string Key, string Value)> ParseRawKeyValuePairs(string connectionString)
 #pragma warning restore CA1859

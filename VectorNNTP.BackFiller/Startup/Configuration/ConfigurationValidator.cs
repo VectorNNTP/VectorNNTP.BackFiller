@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Configuration
-// Implements the configuration validator responsibilities for this subsystem boundary.
+// Implements the configuration validator behavior.
 
 using System.ComponentModel.DataAnnotations;
 using Serilog;

@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Transit
-// Implements the transit work item responsibilities for this subsystem boundary.
+// Implements the transit work item behavior.
 
 using System.Diagnostics;
 
@@ -15,16 +15,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal sealed class TransitWorkItem
     {
         /// <summary>
-        /// Stores the terminal completion observed state used to enforce this component's runtime contract.
+        /// Tracks terminal completion observed for transit work item.
         /// </summary>
         private int _terminalCompletionObserved;
         /// <summary>
-        /// Stores the state value state used to enforce this component's runtime contract.
+        /// Tracks state value for transit work item.
         /// </summary>
         private int _stateValue = (int)TransitWorkItemState.Queued;
 
         /// <summary>
-        /// Stores the max attempts state used to enforce this component's runtime contract.
+        /// Coordinates transit work item for transit work item.
         /// </summary>
         internal TransitWorkItem(long workItemId, string messageId, byte[] payload, int maxAttempts = 3)
         {
@@ -55,112 +55,112 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Stores the work item id state used to enforce this component's runtime contract.
+        /// Tracks work item id for transit work item.
         /// </summary>
         internal long WorkItemId { get; }
 
         /// <summary>
-        /// Stores the message id state used to enforce this component's runtime contract.
+        /// Tracks message id for transit work item.
         /// </summary>
         internal string MessageId { get; }
 
         /// <summary>
-        /// Stores the payload state used to enforce this component's runtime contract.
+        /// Stores payload for transit work item.
         /// </summary>
         internal byte[] Payload { get; }
 
         /// <summary>
-        /// Stores the payload bytes state used to enforce this component's runtime contract.
+        /// Stores payload bytes for transit work item.
         /// </summary>
         internal int PayloadBytes { get; }
 
         /// <summary>
-        /// Stores the attempt count state used to enforce this component's runtime contract.
+        /// Limits attempt count for transit work item.
         /// </summary>
         internal int AttemptCount { get; private set; }
 
         /// <summary>
-        /// Stores the max attempts state used to enforce this component's runtime contract.
+        /// Limits max attempts for transit work item.
         /// </summary>
         internal int MaxAttempts { get; }
 
         /// <summary>
-        /// Stores the first enqueued utc state used to enforce this component's runtime contract.
+        /// Tracks first enqueued utc for transit work item.
         /// </summary>
         internal DateTimeOffset FirstEnqueuedUtc { get; }
 
         /// <summary>
-        /// Stores the last enqueued utc state used to enforce this component's runtime contract.
+        /// Tracks last enqueued utc for transit work item.
         /// </summary>
         internal DateTimeOffset LastEnqueuedUtc { get; private set; }
 
         /// <summary>
-        /// Stores the last claimed utc state used to enforce this component's runtime contract.
+        /// Tracks last claimed utc for transit work item.
         /// </summary>
         internal DateTimeOffset? LastClaimedUtc { get; private set; }
 
         /// <summary>
-        /// Stores the last failure utc state used to enforce this component's runtime contract.
+        /// Tracks last failure utc for transit work item.
         /// </summary>
         internal DateTimeOffset? LastFailureUtc { get; private set; }
 
         /// <summary>
-        /// Stores the next eligible utc state used to enforce this component's runtime contract.
+        /// Tracks next eligible utc for transit work item.
         /// </summary>
         internal DateTimeOffset? NextEligibleUtc { get; private set; }
 
         /// <summary>
-        /// Stores the last failure class state used to enforce this component's runtime contract.
+        /// Tracks last failure class for transit work item.
         /// </summary>
         internal TransitWorkFailureClass? LastFailureClass { get; private set; }
 
         /// <summary>
-        /// Stores the last transmission uncertainty state used to enforce this component's runtime contract.
+        /// Tracks last transmission uncertainty for transit work item.
         /// </summary>
         internal TransitTransmissionUncertainty? LastTransmissionUncertainty { get; private set; }
 
         /// <summary>
-        /// Stores the state state used to enforce this component's runtime contract.
+        /// Tracks state for transit work item.
         /// </summary>
         internal TransitWorkItemState State => (TransitWorkItemState)Volatile.Read(ref _stateValue);
 
         /// <summary>
-        /// Stores the owner connection id state used to enforce this component's runtime contract.
+        /// Tracks owner connection id for transit work item.
         /// </summary>
         internal string? OwnerConnectionId { get; private set; }
 
         /// <summary>
-        /// Stores the cancel requested state used to enforce this component's runtime contract.
+        /// Tracks cancel requested for transit work item.
         /// </summary>
         internal bool CancelRequested { get; private set; }
 
         /// <summary>
-        /// Stores the terminal status state used to enforce this component's runtime contract.
+        /// Tracks terminal status for transit work item.
         /// </summary>
         internal TransitPublishStatus? TerminalStatus { get; private set; }
 
         /// <summary>
-        /// Stores the terminal provenance state used to enforce this component's runtime contract.
+        /// Tracks terminal provenance for transit work item.
         /// </summary>
         internal TransitPublishProvenance? TerminalProvenance { get; private set; }
 
         /// <summary>
-        /// Stores the last state transition tick state used to enforce this component's runtime contract.
+        /// Tracks last state transition tick for transit work item.
         /// </summary>
         internal long LastStateTransitionTick { get; private set; }
 
         /// <summary>
-        /// Stores the completion task state used to enforce this component's runtime contract.
+        /// Tracks completion task for transit work item.
         /// </summary>
         internal Task<TransitPublishResult> CompletionTask => _completion.Task;
 
         /// <summary>
-        /// Stores the completion state used to enforce this component's runtime contract.
+        /// Tracks completion for transit work item.
         /// </summary>
         private readonly TaskCompletionSource<TransitPublishResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>
-        /// Performs the try mark queued operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try mark queued for transit work item.
         /// </summary>
         internal bool TryMarkQueued(DateTimeOffset utcNow)
         {
@@ -197,7 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try revert queued to retry pending operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try revert queued to retry pending for transit work item.
         /// </summary>
         internal bool TryRevertQueuedToRetryPending(DateTimeOffset utcNow)
         {
@@ -214,7 +214,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark queued operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark queued for transit work item.
         /// </summary>
         internal void MarkQueued(DateTimeOffset utcNow)
         {
@@ -225,7 +225,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try mark claimed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try mark claimed for transit work item.
         /// </summary>
         internal bool TryMarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
@@ -248,7 +248,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark claimed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark claimed for transit work item.
         /// </summary>
         internal void MarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
@@ -259,7 +259,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark staged operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark staged for transit work item.
         /// </summary>
         internal void MarkStaged()
         {
@@ -267,7 +267,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark flushed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark flushed for transit work item.
         /// </summary>
         internal void MarkFlushed()
         {
@@ -275,7 +275,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark awaiting response operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark awaiting response for transit work item.
         /// </summary>
         internal void MarkAwaitingResponse()
         {
@@ -288,7 +288,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try move to retry pending operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try move to retry pending for transit work item.
         /// </summary>
         internal bool TryMoveToRetryPending(
             TransitWorkFailureClass failureClass,
@@ -326,7 +326,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the has attempts remaining operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates has attempts remaining for transit work item.
         /// </summary>
         internal bool HasAttemptsRemaining()
         {
@@ -334,7 +334,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try transition to terminal operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try transition to terminal for transit work item.
         /// </summary>
         internal bool TryTransitionToTerminal(TransitPublishStatus status, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
@@ -352,7 +352,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the mark cancel requested operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates mark cancel requested for transit work item.
         /// </summary>
         internal void MarkCancelRequested()
         {
@@ -360,7 +360,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try complete operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try complete for transit work item.
         /// </summary>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance)
         {
@@ -371,7 +371,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try complete operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try complete for transit work item.
         /// </summary>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
@@ -381,7 +381,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try set completion result operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try set completion result for transit work item.
         /// </summary>
         internal bool TrySetCompletionResult(TransitPublishResult result)
         {
@@ -390,7 +390,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the try transition state operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates try transition state for transit work item.
         /// </summary>
         private bool TryTransitionState(TransitWorkItemState expected, TransitWorkItemState next)
         {
@@ -404,7 +404,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the is terminal state operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is terminal state for transit work item.
         /// </summary>
         private static bool IsTerminalState(TransitWorkItemState state)
         {
@@ -415,7 +415,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Performs the map terminal state operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates map terminal state for transit work item.
         /// </summary>
         private static TransitWorkItemState MapTerminalState(TransitPublishStatus status)
         {
@@ -429,13 +429,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Stores the is terminal state used to enforce this component's runtime contract.
+        /// Tracks is terminal for transit work item.
         /// </summary>
         internal bool IsTerminal => Volatile.Read(ref _terminalCompletionObserved) == 1;
     }
 
     /// <summary>
-    /// Defines the transit work item state component and its contracts for this subsystem.
+    /// Defines transit work item state and its transit work item contract.
     /// </summary>
     internal enum TransitWorkItemState
     {
@@ -452,7 +452,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     }
 
     /// <summary>
-    /// Defines the transit work failure class component and its contracts for this subsystem.
+    /// Defines transit work failure class and its transit work item contract.
     /// </summary>
     internal enum TransitWorkFailureClass
     {
@@ -470,7 +470,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     }
 
     /// <summary>
-    /// Defines the transit transmission uncertainty component and its contracts for this subsystem.
+    /// Defines transit transmission uncertainty and its transit work item contract.
     /// </summary>
     internal enum TransitTransmissionUncertainty
     {

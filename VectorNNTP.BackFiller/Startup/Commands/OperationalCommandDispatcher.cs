@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the operational command dispatcher responsibilities for this subsystem boundary.
+// Implements the operational command dispatcher behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {

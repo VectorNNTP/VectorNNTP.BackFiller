@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq consumer infrastructure options responsibilities for this subsystem boundary.
+// Implements the rabbit mq consumer infrastructure options behavior.
 
 using VectorNNTP.Backfiller.Configuration;
 

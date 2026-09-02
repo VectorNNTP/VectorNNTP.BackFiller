@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Commands
-// Implements the dump config command handler responsibilities for this subsystem boundary.
+// Implements the dump config command handler behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
@@ -13,7 +13,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     internal static class DumpConfigCommandHandler
     {
         /// <summary>
-        /// Stores the dump config included section prefixes state used to enforce this component's runtime contract.
+        /// Tracks dump config included section prefixes for dump config command handler.
         /// </summary>
         private static readonly string[] DumpConfigIncludedSectionPrefixes =
         [
@@ -22,7 +22,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         ];
 
         /// <summary>
-        /// Stores the dump config clear text keys state used to enforce this component's runtime contract.
+        /// Tracks dump config clear text keys for dump config command handler.
         /// </summary>
         private static readonly HashSet<string> DumpConfigClearTextKeys = new(StringComparer.OrdinalIgnoreCase)
         {

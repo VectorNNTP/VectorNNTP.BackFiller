@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Startup / Validation
-// Implements the validation results responsibilities for this subsystem boundary.
+// Implements the validation results behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {

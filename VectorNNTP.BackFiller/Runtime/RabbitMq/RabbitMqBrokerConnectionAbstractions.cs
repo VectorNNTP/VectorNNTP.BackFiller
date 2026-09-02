@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq broker connection abstractions responsibilities for this subsystem boundary.
+// Implements the rabbit mq broker connection abstractions behavior.
 
 using System.Text;
 using RabbitMQ.Client;
@@ -188,35 +188,35 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqBrokerConnectionAdapter : IRabbitMqBrokerConnection
     {
         /// <summary>
-        /// Stores the connection state used to enforce this component's runtime contract.
+        /// Tracks connection for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly IConnection _connection;
         /// <summary>
-        /// Stores the virtual host state used to enforce this component's runtime contract.
+        /// Tracks virtual host for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly string _virtualHost;
         /// <summary>
-        /// Stores the connection shutdown async handler state used to enforce this component's runtime contract.
+        /// Tracks connection shutdown async handler for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly AsyncEventHandler<ShutdownEventArgs> _connectionShutdownAsyncHandler;
         /// <summary>
-        /// Stores the callback exception async handler state used to enforce this component's runtime contract.
+        /// Tracks callback exception async handler for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly AsyncEventHandler<CallbackExceptionEventArgs> _callbackExceptionAsyncHandler;
         /// <summary>
-        /// Stores the connection blocked async handler state used to enforce this component's runtime contract.
+        /// Tracks connection blocked async handler for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly AsyncEventHandler<ConnectionBlockedEventArgs> _connectionBlockedAsyncHandler;
         /// <summary>
-        /// Stores the connection unblocked async handler state used to enforce this component's runtime contract.
+        /// Tracks connection unblocked async handler for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _connectionUnblockedAsyncHandler;
         /// <summary>
-        /// Stores the connection recovery error async handler state used to enforce this component's runtime contract.
+        /// Tracks connection recovery error async handler for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly AsyncEventHandler<ConnectionRecoveryErrorEventArgs> _connectionRecoveryErrorAsyncHandler;
         /// <summary>
-        /// Stores the recovery succeeded async handler state used to enforce this component's runtime contract.
+        /// Tracks recovery succeeded async handler for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _recoverySucceededAsyncHandler;
 
@@ -346,7 +346,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed class RabbitMqChannelAdapter : IRabbitMqChannel
     {
         /// <summary>
-        /// Stores the channel state used to enforce this component's runtime contract.
+        /// Tracks channel for rabbit mq broker connection abstractions.
         /// </summary>
         private readonly IChannel _channel;
 
@@ -427,7 +427,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the to mutable operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates to mutable for rabbit mq broker connection abstractions.
         /// </summary>
         private static IDictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
         {

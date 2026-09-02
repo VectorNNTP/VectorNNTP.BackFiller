@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / RabbitMq
-// Implements the rabbit mq backbone consumer session responsibilities for this subsystem boundary.
+// Implements the rabbit mq backbone consumer session behavior.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -18,85 +18,85 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed partial class RabbitMqBackboneConsumerSession : IRabbitMqConsumerSession
     {
         /// <summary>
-        /// Stores the identity state used to enforce this component's runtime contract.
+        /// Tracks identity for rabbit mq backbone consumer session.
         /// </summary>
         private readonly RabbitMqConsumerSessionIdentity _identity;
         /// <summary>
-        /// Stores the queue name state used to enforce this component's runtime contract.
+        /// Tracks queue name for rabbit mq backbone consumer session.
         /// </summary>
         private readonly string _queueName;
         /// <summary>
-        /// Stores the connection manager state used to enforce this component's runtime contract.
+        /// Tracks connection manager for rabbit mq backbone consumer session.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
         /// <summary>
-        /// Stores the topology initializer state used to enforce this component's runtime contract.
+        /// Tracks topology initializer for rabbit mq backbone consumer session.
         /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
         /// <summary>
-        /// Stores the delivery sink state used to enforce this component's runtime contract.
+        /// Tracks delivery sink for rabbit mq backbone consumer session.
         /// </summary>
         private readonly IRabbitMqDeliverySink _deliverySink;
         /// <summary>
-        /// Stores the logger state used to enforce this component's runtime contract.
+        /// Provides logging for rabbit mq backbone consumer session.
         /// </summary>
         private readonly ILogger<RabbitMqBackboneConsumerSession> _logger;
         /// <summary>
-        /// Stores the prefetch count state used to enforce this component's runtime contract.
+        /// Limits prefetch count for rabbit mq backbone consumer session.
         /// </summary>
         private readonly ushort? _prefetchCount;
         /// <summary>
-        /// Stores the diagnostic correlation id state used to enforce this component's runtime contract.
+        /// Tracks diagnostic correlation id for rabbit mq backbone consumer session.
         /// </summary>
         private readonly string? _diagnosticCorrelationId;
         /// <summary>
-        /// Stores the lifecycle gate state used to enforce this component's runtime contract.
+        /// Tracks lifecycle gate for rabbit mq backbone consumer session.
         /// </summary>
         private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
         /// <summary>
-        /// Stores the owned channel state used to enforce this component's runtime contract.
+        /// Tracks owned channel for rabbit mq backbone consumer session.
         /// </summary>
         private RabbitMqOwnedChannel? _ownedChannel;
         /// <summary>
-        /// Stores the consumer state used to enforce this component's runtime contract.
+        /// Tracks consumer for rabbit mq backbone consumer session.
         /// </summary>
         private AsyncEventingBasicConsumer? _consumer;
         /// <summary>
-        /// Stores the consumer tag state used to enforce this component's runtime contract.
+        /// Tracks consumer tag for rabbit mq backbone consumer session.
         /// </summary>
         private string? _consumerTag;
         /// <summary>
-        /// Stores the session cancellation state used to enforce this component's runtime contract.
+        /// Tracks session cancellation for rabbit mq backbone consumer session.
         /// </summary>
         private CancellationTokenSource? _sessionCancellation;
         /// <summary>
-        /// Stores the drain completion state used to enforce this component's runtime contract.
+        /// Tracks drain completion for rabbit mq backbone consumer session.
         /// </summary>
         private TaskCompletionSource<bool> _drainCompletion = CreateCompletedDrainSource();
         /// <summary>
-        /// Stores the active connection generation state used to enforce this component's runtime contract.
+        /// Tracks active connection generation for rabbit mq backbone consumer session.
         /// </summary>
         private long _activeConnectionGeneration;
         /// <summary>
-        /// Stores the admitted delivery count state used to enforce this component's runtime contract.
+        /// Limits admitted delivery count for rabbit mq backbone consumer session.
         /// </summary>
         private int _admittedDeliveryCount;
         /// <summary>
-        /// Stores the lifecycle state state used to enforce this component's runtime contract.
+        /// Tracks lifecycle state for rabbit mq backbone consumer session.
         /// </summary>
         private RabbitMqConsumerLifecycleState _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
         /// <summary>
-        /// Stores the disposed state used to enforce this component's runtime contract.
+        /// Tracks disposed for rabbit mq backbone consumer session.
         /// </summary>
         private bool _disposed;
         /// <summary>
-        /// Stores the connection scope state used to enforce this component's runtime contract.
+        /// Tracks connection scope for rabbit mq backbone consumer session.
         /// </summary>
         private IDisposable? _connectionScope;
 
         /// <summary>
-        /// Defines the rabbit mq consumer lifecycle state component and its contracts for this subsystem.
+        /// Defines rabbit mq consumer lifecycle state and its rabbit mq backbone consumer session contract.
         /// </summary>
         private enum RabbitMqConsumerLifecycleState
         {
@@ -106,7 +106,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the rabbit mq backbone consumer session operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates rabbit mq backbone consumer session for rabbit mq backbone consumer session.
         /// </summary>
         internal RabbitMqBackboneConsumerSession(
             RabbitMqConsumerSessionIdentity identity,
@@ -136,28 +136,28 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Stores the identity state used to enforce this component's runtime contract.
+        /// Tracks identity for rabbit mq backbone consumer session.
         /// </summary>
         internal RabbitMqConsumerSessionIdentity Identity => _identity;
 
         RabbitMqConsumerSessionIdentity IRabbitMqConsumerSession.Identity => _identity;
 
         /// <summary>
-        /// Stores the is running state used to enforce this component's runtime contract.
+        /// Tracks is running for rabbit mq backbone consumer session.
         /// </summary>
         internal bool IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
         bool IRabbitMqConsumerSession.IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
         /// <summary>
-        /// Stores the active connection generation state used to enforce this component's runtime contract.
+        /// Tracks active connection generation for rabbit mq backbone consumer session.
         /// </summary>
         internal long ActiveConnectionGeneration => Interlocked.Read(ref _activeConnectionGeneration);
 
         long IRabbitMqConsumerSession.ActiveConnectionGeneration => ActiveConnectionGeneration;
 
         /// <summary>
-        /// Performs the handle connection replaced operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates handle connection replaced async for rabbit mq backbone consumer session.
         /// </summary>
         internal async Task HandleConnectionReplacedAsync(RabbitMqConnectionReplacedEventArgs args, CancellationToken cancellationToken)
         {
@@ -196,7 +196,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the start operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates start async for rabbit mq backbone consumer session.
         /// </summary>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
@@ -220,7 +220,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the stop operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates stop async for rabbit mq backbone consumer session.
         /// </summary>
         public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
         {
@@ -236,7 +236,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the dispose operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates dispose async for rabbit mq backbone consumer session.
         /// </summary>
         public async ValueTask DisposeAsync()
         {
@@ -260,7 +260,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the start core operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates start core async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
@@ -333,7 +333,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the stop core operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates stop core async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task StopCoreAsync(CancellationToken cancellationToken, bool expectedShutdown, bool cancelAdmittedWork)
         {
@@ -439,7 +439,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on received operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on received async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task OnReceivedAsync(object sender, BasicDeliverEventArgs args)
         {
@@ -533,7 +533,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on consumer shutdown operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on consumer shutdown async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task OnConsumerShutdownAsync(object sender, ShutdownEventArgs args)
         {
@@ -565,7 +565,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on consumer unregistered operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on consumer unregistered async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task OnConsumerUnregisteredAsync(object sender, ConsumerEventArgs args)
         {
@@ -598,7 +598,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the recreate consumer core operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates recreate consumer core async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task RecreateConsumerCoreAsync(long requestedGeneration, CancellationToken cancellationToken)
         {
@@ -612,7 +612,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the is active consumer stale for current connection operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is active consumer stale for current connection for rabbit mq backbone consumer session.
         /// </summary>
         private bool IsActiveConsumerStaleForCurrentConnection()
         {
@@ -636,7 +636,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the is event from active consumer operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates is event from active consumer for rabbit mq backbone consumer session.
         /// </summary>
         private bool IsEventFromActiveConsumer(object sender)
         {
@@ -644,7 +644,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the on admitted delivery settled operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates on admitted delivery settled async for rabbit mq backbone consumer session.
         /// </summary>
         private async Task OnAdmittedDeliverySettledAsync()
         {
@@ -669,7 +669,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the create completed drain source operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates create completed drain source for rabbit mq backbone consumer session.
         /// </summary>
         private static TaskCompletionSource<bool> CreateCompletedDrainSource()
         {
@@ -679,21 +679,21 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Defines the rabbit mq admitted delivery tracker component and its contracts for this subsystem.
+        /// Defines rabbit mq admitted delivery tracker and its rabbit mq backbone consumer session contract.
         /// </summary>
         private sealed class RabbitMqAdmittedDeliveryTracker : IRabbitMqAdmittedDeliveryTracker
         {
             /// <summary>
-            /// Stores the owner state used to enforce this component's runtime contract.
+            /// Tracks owner for rabbit mq backbone consumer session.
             /// </summary>
             private readonly RabbitMqBackboneConsumerSession _owner;
             /// <summary>
-            /// Stores the completed state used to enforce this component's runtime contract.
+            /// Tracks completed for rabbit mq backbone consumer session.
             /// </summary>
             private int _completed;
 
             /// <summary>
-            /// Performs the rabbit mq admitted delivery tracker operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates rabbit mq admitted delivery tracker for rabbit mq backbone consumer session.
             /// </summary>
             internal RabbitMqAdmittedDeliveryTracker(RabbitMqBackboneConsumerSession owner)
             {
@@ -701,7 +701,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             /// <summary>
-            /// Performs the mark settled operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates mark settled for rabbit mq backbone consumer session.
             /// </summary>
             public void MarkSettled()
             {
@@ -715,33 +715,33 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Defines the rabbit mq delivery settlement component and its contracts for this subsystem.
+        /// Defines rabbit mq delivery settlement and its rabbit mq backbone consumer session contract.
         /// </summary>
         private sealed class RabbitMqDeliverySettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Stores the owner state used to enforce this component's runtime contract.
+            /// Tracks owner for rabbit mq backbone consumer session.
             /// </summary>
             private readonly RabbitMqBackboneConsumerSession _owner;
             /// <summary>
-            /// Stores the delivery tag state used to enforce this component's runtime contract.
+            /// Tracks delivery tag for rabbit mq backbone consumer session.
             /// </summary>
             private readonly ulong _deliveryTag;
             /// <summary>
-            /// Stores the delivery generation state used to enforce this component's runtime contract.
+            /// Tracks delivery generation for rabbit mq backbone consumer session.
             /// </summary>
             private readonly long _deliveryGeneration;
             /// <summary>
-            /// Stores the admission tracker state used to enforce this component's runtime contract.
+            /// Tracks admission tracker for rabbit mq backbone consumer session.
             /// </summary>
             private readonly RabbitMqAdmittedDeliveryTracker? _admissionTracker;
             /// <summary>
-            /// Stores the settled state used to enforce this component's runtime contract.
+            /// Tracks settled for rabbit mq backbone consumer session.
             /// </summary>
             private int _settled;
 
             /// <summary>
-            /// Performs the rabbit mq delivery settlement operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates rabbit mq delivery settlement for rabbit mq backbone consumer session.
             /// </summary>
             internal RabbitMqDeliverySettlement(RabbitMqBackboneConsumerSession owner, ulong deliveryTag, long deliveryGeneration, RabbitMqAdmittedDeliveryTracker? admissionTracker)
             {
@@ -752,7 +752,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             /// <summary>
-            /// Performs the ack operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates ack async for rabbit mq backbone consumer session.
             /// </summary>
             public async ValueTask AckAsync(CancellationToken cancellationToken)
             {
@@ -760,7 +760,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             /// <summary>
-            /// Performs the nack operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates nack async for rabbit mq backbone consumer session.
             /// </summary>
             public async ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
@@ -768,7 +768,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             /// <summary>
-            /// Performs the settle operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates settle async for rabbit mq backbone consumer session.
             /// </summary>
             private async ValueTask SettleAsync(bool? requeue, CancellationToken cancellationToken)
             {
@@ -815,7 +815,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the begin connection scope operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates begin connection scope for rabbit mq backbone consumer session.
         /// </summary>
         private IDisposable BeginConnectionScope()
         {
@@ -837,17 +837,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the composite disposable operation while preserving this component's lifecycle and state contracts.
+        /// Defines composite disposable and its rabbit mq backbone consumer session contract.
         /// </summary>
         private sealed class CompositeDisposable(IReadOnlyList<IDisposable> scopes) : IDisposable
         {
             /// <summary>
-            /// Stores the scopes state used to enforce this component's runtime contract.
+            /// Tracks scopes for rabbit mq backbone consumer session.
             /// </summary>
             private readonly IReadOnlyList<IDisposable> _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
 
             /// <summary>
-            /// Performs the dispose operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates dispose for rabbit mq backbone consumer session.
             /// </summary>
             public void Dispose()
             {
@@ -859,7 +859,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the build connection prefix operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates build connection prefix for rabbit mq backbone consumer session.
         /// </summary>
         private static string BuildConnectionPrefix(string backbone, string accountUsername, int connectionNumber, int connectionLimit)
         {
@@ -873,7 +873,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the throw if disposed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates throw if disposed for rabbit mq backbone consumer session.
         /// </summary>
         private void ThrowIfDisposed()
         {
@@ -884,7 +884,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer started for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerStarted(ILogger logger, string backbone, int sessionOrdinal, string queue, long connectionGeneration, string consumerTag)
         {
@@ -892,7 +892,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer stopped operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer stopped for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerStopped(ILogger logger, string backbone, int sessionOrdinal)
         {
@@ -900,7 +900,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer retiring operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer retiring for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerRetiring(ILogger logger, string backbone, int sessionOrdinal, int admittedCount)
         {
@@ -908,7 +908,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer drain started operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer drain started for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerDrainStarted(ILogger logger, string backbone, int sessionOrdinal, int admittedCount)
         {
@@ -916,7 +916,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer drain completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer drain completed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerDrainCompleted(ILogger logger, string backbone, int sessionOrdinal)
         {
@@ -924,7 +924,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer shutdown observed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer shutdown observed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerShutdownObserved(ILogger logger, string backbone, int sessionOrdinal, ushort replyCode, string replyText, string initiator)
         {
@@ -932,7 +932,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer recreation starting operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer recreation starting for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerRecreationStarting(ILogger logger, string backbone, int sessionOrdinal, long previousGeneration, long newGeneration)
         {
@@ -940,7 +940,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer recreation completed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer recreation completed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerRecreationCompleted(ILogger logger, string backbone, int sessionOrdinal, long activeGeneration)
         {
@@ -948,7 +948,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer cancel during shutdown failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer cancel during shutdown failed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerCancelDuringShutdownFailed(ILogger logger, string backbone, int sessionOrdinal, string reason)
         {
@@ -956,7 +956,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer channel dispose during shutdown failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer channel dispose during shutdown failed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerChannelDisposeDuringShutdownFailed(ILogger logger, string backbone, int sessionOrdinal, string reason)
         {
@@ -964,7 +964,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer prefetch configured operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer prefetch configured for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerPrefetchConfigured(ILogger logger, string backbone, int sessionOrdinal, ushort prefetchCount)
         {
@@ -972,7 +972,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer cancellation failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer cancellation failed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerCancellationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
         {
@@ -980,7 +980,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer channel dispose failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer channel dispose failed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerChannelDisposeFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
         {
@@ -988,7 +988,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer cancellation observed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer cancellation observed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerCancellationObserved(ILogger logger, string backbone, int sessionOrdinal, int consumerTagCount)
         {
@@ -996,7 +996,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the should log diagnostic payload operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates should log diagnostic payload for rabbit mq backbone consumer session.
         /// </summary>
         private bool ShouldLogDiagnosticPayload(string? correlationId)
         {
@@ -1006,7 +1006,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log payload diagnostic at callback entry operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log payload diagnostic at callback entry for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogPayloadDiagnosticAtCallbackEntry(
             ILogger logger,
@@ -1041,7 +1041,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log delivery ignored from stale generation operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log delivery ignored from stale generation for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogDeliveryIgnoredFromStaleGeneration(ILogger logger, string backbone, int sessionOrdinal, long deliveryGeneration, long currentGeneration)
         {
@@ -1049,7 +1049,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Performs the log consumer recreation failed operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates log consumer recreation failed for rabbit mq backbone consumer session.
         /// </summary>
         private static void LogConsumerRecreationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
         {

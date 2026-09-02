@@ -13,7 +13,7 @@ using Certes.Acme.Resource;
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Defines the acme certificate issuer component and its contracts for this subsystem.
+    /// Defines acme certificate issuer and its acme certificate issuer.dns01 helpers contract.
     /// </summary>
     internal sealed partial class AcmeCertificateIssuer
     {

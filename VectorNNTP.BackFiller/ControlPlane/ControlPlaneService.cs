@@ -47,11 +47,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
         /// <summary>
-        /// Stores the heartbeat interval state used to enforce this component's runtime contract.
+        /// Configures heartbeat interval for control plane service.
         /// </summary>
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
         /// <summary>
-        /// Stores the refresh interval state used to enforce this component's runtime contract.
+        /// Configures refresh interval for control plane service.
         /// </summary>
         private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
 
@@ -469,7 +469,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Performs the publish backbone usable capacity snapshot operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates publish backbone usable capacity snapshot for control plane service.
         /// </summary>
         private void PublishBackboneUsableCapacitySnapshot()
         {
@@ -500,7 +500,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Performs the retire rabbit mq capacity boundary operation while preserving this component's lifecycle and state contracts.
+        /// Coordinates retire rabbit mq capacity boundary async for control plane service.
         /// </summary>
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
@@ -516,12 +516,12 @@ namespace VectorNNTP.Backfiller.ControlPlane
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
             /// <summary>
-            /// Stores the instance state used to enforce this component's runtime contract.
+            /// Tracks instance for control plane service.
             /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
             /// <summary>
-            /// Performs the publish snapshot operation while preserving this component's lifecycle and state contracts.
+            /// Coordinates publish snapshot for control plane service.
             /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
@@ -530,7 +530,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Performs the account runtime state operation while preserving this component's lifecycle and state contracts.
+        /// Defines account runtime state and its control plane service contract.
         /// </summary>
         private sealed record AccountRuntimeState(
             NntpAccountSnapshot LastAppliedAccount,

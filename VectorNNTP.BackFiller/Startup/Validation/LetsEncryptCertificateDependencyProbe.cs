@@ -21,7 +21,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     internal static class LetsEncryptCertificateDependencyProbe
     {
         /// <summary>
-        /// Stores the dependency name state used to enforce this component's runtime contract.
+        /// Tracks dependency name for lets encrypt certificate dependency probe.
         /// </summary>
         private const string DependencyName = "LetsEncryptCertificate";
 
