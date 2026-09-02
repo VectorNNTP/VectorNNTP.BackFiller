@@ -14,7 +14,7 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal sealed class BoundedArticleQueue : IDisposable
 {
     /// <summary>
-    /// Gets or sets the _channel.
+    /// Holds the bounded channel that enforces queued-article capacity.
     /// </summary>
     private readonly Channel<QueuedArticle> _channel;
     /// <summary>
