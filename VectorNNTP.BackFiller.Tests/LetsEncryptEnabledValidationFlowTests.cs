@@ -166,7 +166,7 @@ namespace VectorNNTP.Backfiller.Tests
                     ["BackFiller:LetsEncrypt:RenewalCheckIntervalHours"] = "0",
                     ["BackFiller:LetsEncrypt:RenewalJitterRatio"] = "1",
                     ["BackFiller:LetsEncrypt:RenewBeforeExpiryDays"] = "0",
-                    ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                    ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                     // Minimal RabbitMQ baseline so validator does not fail unrelatedly
                     ["BackFiller:RabbitMQ:Hosts:0"] = "203.0.113.1",

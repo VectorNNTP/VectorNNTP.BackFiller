@@ -286,7 +286,7 @@ namespace VectorNNTP.Backfiller.Tests
             {
                 LetsEncrypt = new LetsEncryptOptions
                 {
-                    CloudFlareApiToken = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                    CloudFlareApiToken = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     CloudFlareZoneId = "5811a29d39a0732afb5f160c9b137c3d",
                 },
             };

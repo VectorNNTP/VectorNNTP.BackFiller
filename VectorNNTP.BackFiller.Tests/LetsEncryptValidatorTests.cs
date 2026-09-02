@@ -343,7 +343,7 @@ namespace VectorNNTP.Backfiller.Tests
         public void ValidateCloudFlareApiToken_WhenValid_ReturnsNoErrors()
         {
             List<LetsEncryptValidationResult> diagnostics = LetsEncryptValidator.ValidateCloudFlareApiToken(
-                cloudFlareApiToken: "v1.abcdef1234567890abcdef1234567890abcdef12",
+                cloudFlareApiToken: "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 settingPrefix: "BackFiller:LetsEncrypt");
 
             Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
