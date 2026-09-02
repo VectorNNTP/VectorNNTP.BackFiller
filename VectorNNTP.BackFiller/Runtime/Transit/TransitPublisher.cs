@@ -832,40 +832,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles reconnect async for transit publisher.
-        /// </summary>
-        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
-        {
-            if ((uint)slotIndex >= (uint)_connections.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Connection slot index is out of range.");
-            }
-
-            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
-            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                TransitConnection? current = _connections[slotIndex] ?? throw new InvalidOperationException("Cannot reconnect because no active connection exists for the slot.");
-                await RequeueClaimedAndOutstandingAfterFaultAsync(current, claimed: null, cancellationToken).ConfigureAwait(false);
-                _ = TrackDeferredConnectionDisposal(current);
-
-                if (_disposeRequested || cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                _ = Interlocked.Increment(ref _totalReconnects);
-                TransitConnection replacement = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
-                _connections[slotIndex] = replacement;
-            }
-            finally
-            {
-                _ = reconnectGate.Release();
-            }
-        }
-
-        /// <summary>
         /// Handles requeue claimed and outstanding after fault async for transit publisher.
         /// </summary>
         private async Task RequeueClaimedAndOutstandingAfterFaultAsync(
