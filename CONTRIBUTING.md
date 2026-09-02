@@ -313,7 +313,7 @@ Public types must include `<remarks><para><b>Performance:</b> HOT PATH …</para
 
 ### Benchmarking expectations
 
-- Changes to **HOT PATH** types require regression checks: `dotnet test Vector.NNTP.slnx -p:Platform=x64` plus a PR note when throughput or allocation behavior could change.
+- Changes to **HOT PATH** types require regression checks: `dotnet test VectorNNTP.BackFiller.slnx -p:Platform=x64` plus a PR note when throughput or allocation behavior could change.
 - Add BenchmarkDotNet coverage when introducing new SIMD or pooling paths (project TBD).
 
 ### Internal folder policy

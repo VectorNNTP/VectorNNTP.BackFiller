@@ -1,0 +1,138 @@
+name: Build and Validate
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-build-test:
+    name: Linux Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore solution
+        run: dotnet restore VectorNNTP.BackFiller.slnx
+
+      - name: Build production project
+        run: dotnet build VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj --configuration Release --no-restore
+
+      - name: Build test project
+        run: dotnet build VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj --configuration Release --no-restore
+
+      - name: Run tests
+        run: >
+          dotnet test VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-test-results
+          path: TestResults/**/*.trx
+          retention-days: 14
+
+  linux-benchmark-tests:
+    name: Linux Benchmark Contract Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore solution
+        run: dotnet restore VectorNNTP.BackFiller.slnx
+
+      - name: Build benchmark project
+        run: dotnet build VectorNNTP.BackFiller.Benchmarks/VectorNNTP.BackFiller.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Build benchmark test project
+        run: dotnet build VectorNNTP.BackFiller.Benchmarks.Tests/VectorNNTP.BackFiller.Benchmarks.Tests.csproj --configuration Release --no-restore
+
+      - name: Run benchmark contract tests
+        run: >
+          dotnet test VectorNNTP.BackFiller.Benchmarks.Tests/VectorNNTP.BackFiller.Benchmarks.Tests.csproj
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=benchmark-test-results.trx"
+          --results-directory ./BenchmarkTestResults
+
+      - name: Upload benchmark test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-benchmark-test-results
+          path: BenchmarkTestResults/**/*.trx
+          retention-days: 14
+
+  windows-build:
+    name: Windows Build Validation
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore solution
+        run: dotnet restore VectorNNTP.BackFiller.slnx
+
+      - name: Build production project
+        run: dotnet build VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj --configuration Release --no-restore
+
+      - name: Publish BackFiller win-x64
+        run: >
+          dotnet publish VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained false
+          --output ./artifacts/win-x64
+          --no-restore
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: backfiller-win-x64-ci-build
+          path: artifacts/win-x64/
+          retention-days: 7

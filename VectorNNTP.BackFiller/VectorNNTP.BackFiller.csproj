@@ -20,6 +20,7 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="VectorNNTP.BackFiller.Tests" />
+		<InternalsVisibleTo Include="VectorNNTP.BackFiller.Benchmarks.Tests" />
 	</ItemGroup>
 
 	<!-- ── Language Version ─────────────────────────────────────────────

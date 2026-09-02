@@ -11,6 +11,8 @@
 - [ ] Unit tests added/updated
 - [ ] Existing tests pass
 - [ ] Integration tests pass where applicable
+- [ ] CI workflows pass for this PR
+- [ ] Analyzer warnings/errors introduced by this PR are resolved intentionally
 - [ ] Performance impact considered
 - [ ] Cancellation/shutdown behaviour considered where applicable
 

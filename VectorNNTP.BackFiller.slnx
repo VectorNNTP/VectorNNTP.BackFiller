@@ -5,6 +5,9 @@
   <Project Path="VectorNNTP.BackFiller.Benchmarks/VectorNNTP.BackFiller.Benchmarks.csproj">
     <Platform Project="x64" />
   </Project>
+  <Project Path="VectorNNTP.BackFiller.Benchmarks.Tests/VectorNNTP.BackFiller.Benchmarks.Tests.csproj">
+    <Platform Project="x64" />
+  </Project>
   <Project Path="VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj">
     <Platform Project="x64" />
   </Project>

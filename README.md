@@ -408,51 +408,43 @@ In particular:
 
 ## Repository Structure
 
-The repository is organised around the service runtime, infrastructure, and test requirements.
+The repository is organised around the BackFiller service runtime, tests, and benchmarks.
 
-The exact project structure may evolve as the implementation develops.
-
+    VectorNNTP.BackFiller.slnx
+    README.md
+    CHANGELOG.md
+    CONTRIBUTING.md
+    .github/
+      workflows/
+        build.yml
+        code-coverage.yml
+        dependency-review.yml
+        codeql.yml
+      ISSUE_TEMPLATE/
+      CODEOWNERS
+      dependabot.yml
+      PULL_REQUEST_TEMPLATE.md
+      SECURITY.md
     VectorNNTP.BackFiller/
-    |
-    +-- .github/
-    |   +-- workflows/
-    |   +-- dependabot.yml
-    |   +-- CODEOWNERS
-    |   +-- SECURITY.md
-    |
-    +-- src/
-    |   +-- ...
-    |
-    +-- tests/
-    |   +-- ...
-    |
-    +-- benchmarks/
-    |   +-- ...
-    |
-    +-- global.json
-    +-- Directory.Build.props
-    +-- Directory.Packages.props
-    +-- README.md
+    VectorNNTP.BackFiller.Tests/
+    VectorNNTP.BackFiller.Benchmarks/
 
 ---
 
 ## CI/CD
 
-Pull requests are expected to pass the repository's automated validation before being merged.
+Pull requests targeting `master` are expected to pass automated GitHub Actions validation before merge.
 
-CI should validate, as applicable:
+Current repository workflows validate:
 
-- Restore
-- Compilation
-- Unit tests
-- Integration tests
-- Dependency security
-- Static analysis
-- CodeQL analysis
+- Restore and build (`.github/workflows/build.yml`)
+- Linux unit tests with TRX diagnostics (`.github/workflows/build.yml`)
+- Windows x64 build/publish validation artifact (`.github/workflows/build.yml`)
+- Code coverage reporting (`.github/workflows/code-coverage.yml`)
+- Dependency review on pull requests (`.github/workflows/dependency-review.yml`)
+- CodeQL security analysis (`.github/workflows/codeql.yml`)
 
-Dependency updates are managed through Dependabot.
-
-GitHub Actions dependencies are also monitored so that CI infrastructure itself remains current.
+Dependency updates are managed through Dependabot, including NuGet, .NET SDK, and GitHub Actions dependencies.
 
 ---
 
@@ -492,4 +484,4 @@ Keep pull requests focused. Avoid mixing unrelated refactoring with functional c
 
 Copyright ©2026 Chris Knipe <cknipe@opticnetworks.net>.
 
-License information will be provided here when the project's licensing terms are finalised.
+The repository includes Apache License 2.0 license text (`LICENSE.txt`).
