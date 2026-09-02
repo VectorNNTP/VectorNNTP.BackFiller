@@ -56,9 +56,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task TryReserveNext_WhenInvokedConcurrently_IsGloballyBoundedToTargetAsync()
         {
-            /// <summary>
-            /// Supplies target for the fixture or scenario under test.
-            /// </summary>
             const int Target = 200;
             /// <summary>
             /// Supplies workers for the fixture or scenario under test.
