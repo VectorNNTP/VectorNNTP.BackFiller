@@ -22,7 +22,7 @@ namespace IsolatedRegressionGate;
 internal static class Program
 {
     /// <summary>
-    /// Gets or sets the utility Version value.
+    /// Gets or sets the utility Version.
     /// </summary>
     private const string UtilityVersion = "0.1.0";
 
@@ -475,16 +475,16 @@ internal static class Program
 internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
 {
     /// <summary>
-    /// Gets or sets the _cases value.
+    /// Gets or sets the _cases.
     /// </summary>
     private readonly List<TestCase> _cases = [];
     /// <summary>
-    /// Performs the _sync operation.
+    /// Runs the _sync benchmark scenario.
     /// </summary>
     private readonly object _sync = new();
 
     /// <summary>
-    /// Performs the completion operation.
+    /// Runs the completion benchmark scenario.
     /// </summary>
     public TaskCompletionSource<DiscoverySnapshot> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -553,16 +553,16 @@ internal sealed class DiscoveryEventsCollector : ITestDiscoveryEventsHandler2
 internal sealed class RunEventsCollector : ITestRunEventsHandler
 {
     /// <summary>
-    /// Gets or sets the _results value.
+    /// Gets or sets the _results.
     /// </summary>
     private readonly List<TestResult> _results = [];
     /// <summary>
-    /// Performs the _sync operation.
+    /// Runs the _sync benchmark scenario.
     /// </summary>
     private readonly object _sync = new();
 
     /// <summary>
-    /// Performs the completion operation.
+    /// Runs the completion benchmark scenario.
     /// </summary>
     public TaskCompletionSource<RunSnapshot> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -682,7 +682,7 @@ internal enum GateExitCode
 internal sealed class SelectionException(string message, bool infrastructure) : Exception(message)
 {
     /// <summary>
-    /// Gets or sets the infrastructure value.
+    /// Gets or sets the infrastructure.
     /// </summary>
     public bool Infrastructure { get; } = infrastructure;
 }
@@ -772,232 +772,233 @@ internal sealed class GateOptions
 internal sealed class GateSummary
 {
     /// <summary>
-    /// Gets or sets the utility Version value.
+    /// Gets or sets the utility Version.
     /// </summary>
     public string UtilityVersion { get; set; } = string.Empty;
     /// <summary>
-    /// Gets or sets the runtime value.
+    /// Gets or sets the runtime.
     /// </summary>
     public string Runtime { get; set; } = string.Empty;
     /// <summary>
-    /// Gets or sets the test SdkVersion value.
+    /// Gets or sets the test SdkVersion.
     /// </summary>
     public string TestSdkVersion { get; set; } = string.Empty;
     /// <summary>
-    /// Gets or sets the platform ObjectModelVersion value.
+    /// Gets or sets the platform ObjectModelVersion.
     /// </summary>
     public string? PlatformObjectModelVersion { get; set; }
     /// <summary>
-    /// Gets or sets the started Utc value.
+    /// Gets or sets the started Utc.
     /// </summary>
     public DateTimeOffset StartedUtc { get; set; }
     /// <summary>
-    /// Gets or sets the completed Utc value.
+    /// Gets or sets the completed Utc.
     /// </summary>
     public DateTimeOffset CompletedUtc { get; set; }
     /// <summary>
-    /// Gets or sets the vs TestConsolePath value.
+    /// Gets or sets the vs TestConsolePath.
     /// </summary>
     public string? VsTestConsolePath { get; set; }
     /// <summary>
-    /// Gets or sets the run Settings value.
+    /// Gets or sets the run Settings.
     /// </summary>
     public string? RunSettings { get; set; }
     /// <summary>
-    /// Gets or sets the test AssemblyPath value.
+    /// Gets or sets the test AssemblyPath.
     /// </summary>
     public string? TestAssemblyPath { get; set; }
     /// <summary>
-    /// Gets or sets the requested Class value.
+    /// Gets or sets the requested Class.
     /// </summary>
     public string? RequestedClass { get; set; }
     /// <summary>
-    /// Gets or sets the requested Test value.
+    /// Gets or sets the requested Test.
     /// </summary>
     public string? RequestedTest { get; set; }
     /// <summary>
-    /// Gets or sets the timeout Seconds value.
+    /// Gets or sets the timeout Seconds.
     /// </summary>
     public int TimeoutSeconds { get; set; }
     /// <summary>
-    /// Gets or sets the discovery value.
+    /// Gets or sets the discovery.
     /// </summary>
     public DiscoverySummary? Discovery { get; set; }
     /// <summary>
-    /// Gets or sets the selection Diagnostics value.
+    /// Gets or sets the selection Diagnostics.
     /// </summary>
     public SelectionDiagnostics? SelectionDiagnostics { get; set; }
     /// <summary>
-    /// Gets or sets the selected Count value.
+    /// Gets or sets the selected Count.
     /// </summary>
     public int SelectedCount { get; set; }
     /// <summary>
-    /// Gets or sets the selected TestCase value.
+    /// Gets or sets the selected TestCase.
     /// </summary>
     public TestCaseIdentity? SelectedTestCase { get; set; }
     /// <summary>
-    /// Gets or sets the execution value.
+    /// Gets or sets the execution.
     /// </summary>
     public ExecutionSummary? Execution { get; set; }
     /// <summary>
-    /// Gets or sets the structured TestResult value.
+    /// Gets or sets the structured TestResult.
     /// </summary>
     public StructuredResult? StructuredTestResult { get; set; }
     /// <summary>
-    /// Gets or sets the timeout value.
+    /// Gets or sets the timeout.
     /// </summary>
     public bool Timeout { get; set; }
     /// <summary>
-    /// Gets or sets the hang Detected value.
+    /// Gets or sets the hang Detected.
     /// </summary>
     public bool HangDetected { get; set; }
     /// <summary>
-    /// Gets or sets the infrastructure Error value.
+    /// Gets or sets the infrastructure Error.
     /// </summary>
     public bool InfrastructureError { get; set; }
     /// <summary>
-    /// Gets or sets the reconciliation State value.
+    /// Gets or sets the reconciliation State.
     /// </summary>
     public string? ReconciliationState { get; set; }
     /// <summary>
-    /// Gets or sets the exception Type value.
+    /// Gets or sets the exception Type.
     /// </summary>
     public string? ExceptionType { get; set; }
     /// <summary>
-    /// Gets or sets the exception Stack value.
+    /// Gets or sets the exception Stack.
     /// </summary>
     public string? ExceptionStack { get; set; }
     /// <summary>
-    /// Gets or sets the final Classification value.
+    /// Gets or sets the final Classification.
     /// </summary>
     public string FinalClassification { get; set; } = string.Empty;
     /// <summary>
-    /// Gets or sets the exit Code value.
+    /// Gets or sets the exit Code.
     /// </summary>
     public int ExitCode { get; set; }
 }
 
 /// <summary>
-/// Defines the discovery Summary class for benchmark or isolated-regression execution.
+/// Represents the discovery Summary class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class DiscoverySummary
 {
     /// <summary>
-    /// Gets or sets the total Discovered value.
+    /// Gets or sets the total Discovered.
     /// </summary>
     public int TotalDiscovered { get; set; }
     /// <summary>
-    /// Gets or sets the is Aborted value.
+    /// Gets or sets the is Aborted.
     /// </summary>
     public bool IsAborted { get; set; }
     /// <summary>
-    /// Gets or sets the is FullyDiscovered value.
+    /// Gets or sets the is FullyDiscovered.
     /// </summary>
     public bool IsFullyDiscovered { get; set; }
     /// <summary>
-    /// Gets or sets the cases value.
+    /// Gets or sets the cases.
     /// </summary>
     public List<TestCaseIdentity> Cases { get; set; } = [];
 }
 
 /// <summary>
-/// Defines the selection Diagnostics class for benchmark or isolated-regression execution.
+/// Represents the selection Diagnostics class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class SelectionDiagnostics
 {
     /// <summary>
-    /// Gets or sets the requested Class value.
+    /// Gets or sets the requested Class.
     /// </summary>
     public string? RequestedClass { get; set; }
     /// <summary>
-    /// Gets or sets the requested Test value.
+    /// Gets or sets the requested Test.
     /// </summary>
     public string? RequestedTest { get; set; }
     /// <summary>
-    /// Gets or sets the candidate Count value.
+    /// Gets or sets the candidate Count.
     /// </summary>
     public int CandidateCount { get; set; }
     /// <summary>
-    /// Gets or sets the candidates value.
+    /// Gets or sets the candidates.
     /// </summary>
     public List<TestCaseIdentity> Candidates { get; set; } = [];
 }
 
 /// <summary>
-/// Defines the execution Summary class for benchmark or isolated-regression execution.
+/// Represents the execution Summary class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class ExecutionSummary
 {
     /// <summary>
-    /// Gets or sets the executed ViaTestCaseObjects value.
+    /// Gets or sets the executed ViaTestCaseObjects.
     /// </summary>
     public bool ExecutedViaTestCaseObjects { get; set; }
     /// <summary>
-    /// Gets or sets the used FilterString value.
+    /// Gets or sets the used FilterString.
     /// </summary>
     public string? UsedFilterString { get; set; }
     /// <summary>
-    /// Gets or sets the executed Count value.
+    /// Gets or sets the executed Count.
     /// </summary>
     public int ExecutedCount { get; set; }
     /// <summary>
-    /// Gets or sets the received ResultCount value.
+    /// Gets or sets the received ResultCount.
     /// </summary>
     public int ReceivedResultCount { get; set; }
     /// <summary>
-    /// Gets or sets the run StartedUtc value.
+    /// Gets or sets the run StartedUtc.
     /// </summary>
     public DateTimeOffset RunStartedUtc { get; set; }
     /// <summary>
-    /// Gets or sets the elapsed Seconds value.
+    /// Gets or sets the elapsed Seconds.
     /// </summary>
     public double ElapsedSeconds { get; set; }
     /// <summary>
-    /// Gets or sets the complete value.
+    /// Gets or sets the complete.
     /// </summary>
     public bool Complete { get; set; }
     /// <summary>
-    /// Gets or sets the is Canceled value.
+    /// Gets or sets the is Canceled.
     /// </summary>
     public bool IsCanceled { get; set; }
     /// <summary>
-    /// Gets or sets the is Aborted value.
+    /// Gets or sets the is Aborted.
     /// </summary>
     public bool IsAborted { get; set; }
     /// <summary>
-    /// Gets or sets the cancel Requested value.
+    /// Gets or sets the cancel Requested.
     /// </summary>
     public bool CancelRequested { get; set; }
     /// <summary>
-    /// Gets or sets the abort Requested value.
+    /// Gets or sets the abort Requested.
     /// </summary>
     public bool AbortRequested { get; set; }
 }
 
 /// <summary>
-/// Defines the test CaseIdentity class for benchmark or isolated-regression execution.
+/// Represents the test CaseIdentity class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class TestCaseIdentity
 {
     /// <summary>
-    /// Gets or sets the id value.
+    /// Gets or sets the id.
     /// </summary>
     public string? Id { get; set; }
     /// <summary>
-    /// Gets or sets the fully QualifiedName value.
+    /// Gets or sets the fully QualifiedName.
     /// </summary>
     public string FullyQualifiedName { get; set; } = string.Empty;
     /// <summary>
-    /// Gets or sets the display Name value.
+    /// Gets or sets the display Name.
     /// </summary>
     public string? DisplayName { get; set; }
     /// <summary>
-    /// Gets or sets the source value.
+    /// Gets or sets the source.
     /// </summary>
     public string? Source { get; set; }
 
     /// <summary>
-    /// Performs the from TestCase operation.
+    /// Creates a value from TestCase.
+
     /// </summary>
     public static TestCaseIdentity FromTestCase(TestCase testCase) => new()
     {
@@ -1009,33 +1010,34 @@ internal sealed class TestCaseIdentity
 }
 
 /// <summary>
-/// Defines the structured Result class for benchmark or isolated-regression execution.
+/// Represents the structured Result class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class StructuredResult
 {
     /// <summary>
-    /// Gets or sets the outcome value.
+    /// Gets or sets the outcome.
     /// </summary>
     public string? Outcome { get; set; }
     /// <summary>
-    /// Gets or sets the duration value.
+    /// Gets or sets the duration.
     /// </summary>
     public string? Duration { get; set; }
     /// <summary>
-    /// Gets or sets the error Message value.
+    /// Gets or sets the error Message.
     /// </summary>
     public string? ErrorMessage { get; set; }
     /// <summary>
-    /// Gets or sets the error StackTrace value.
+    /// Gets or sets the error StackTrace.
     /// </summary>
     public string? ErrorStackTrace { get; set; }
     /// <summary>
-    /// Gets or sets the display Name value.
+    /// Gets or sets the display Name.
     /// </summary>
     public string? DisplayName { get; set; }
 
     /// <summary>
-    /// Performs the from TestResult operation.
+    /// Creates a value from TestResult.
+
     /// </summary>
     public static StructuredResult FromTestResult(TestResult result) => new()
     {

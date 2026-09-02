@@ -7,12 +7,12 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the format Helpers class for benchmark or isolated-regression execution.
+/// Represents the format Helpers class used by the benchmark or regression gate.
 /// </summary>
 internal static class FormatHelpers
 {
     /// <summary>
-    /// Performs the print RequiredRateComparison operation.
+    /// Implements the print RequiredRateComparison contract.
     /// </summary>
     internal static void PrintRequiredRateComparison(double currentArticlesPerSecond, int articleBytes)
     {
@@ -41,7 +41,8 @@ internal static class FormatHelpers
     }
 
     /// <summary>
-    /// Performs the build DepthBucketSummary operation.
+    /// Builds DepthBucketSummary.
+
     /// </summary>
     internal static string BuildDepthBucketSummary(List<long>[] submitBuckets, List<long>[] completeBuckets)
     {

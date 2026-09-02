@@ -27,58 +27,58 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 public partial class LoggingApiBenchmarks
 {
     /// <summary>
-    /// Gets or sets the demo StateValue value.
+    /// Gets or sets the demo StateValue.
     /// </summary>
     private static readonly DemoState DemoStateValue = DemoState.Ready;
     /// <summary>
-    /// Performs the demo TimeSpan operation.
+    /// Implements the demo TimeSpan contract.
     /// </summary>
     private static readonly TimeSpan DemoTimeSpan = TimeSpan.FromMilliseconds(1234);
     /// <summary>
-    /// Gets or sets the demo Int value.
+    /// Gets or sets the demo Int.
     /// </summary>
     private const int DemoInt = 42;
     /// <summary>
-    /// Gets or sets the demo Long value.
+    /// Gets or sets the demo Long.
     /// </summary>
     private const long DemoLong = 123456789L;
     /// <summary>
-    /// Gets or sets the demo Double value.
+    /// Gets or sets the demo Double.
     /// </summary>
     private const double DemoDouble = 123.456;
     /// <summary>
-    /// Gets or sets the demo String value.
+    /// Gets or sets the demo String.
     /// </summary>
     private const string DemoString = "benchmark-payload";
 
     /// <summary>
-    /// Gets or sets the _precreatedException value.
+    /// Gets or sets the _precreatedException.
     /// </summary>
     private Exception _precreatedException = null!;
 
     /// <summary>
-    /// Gets or sets the _sourceGeneratedDebugEnabled value.
+    /// Gets or sets the _sourceGeneratedDebugEnabled.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedDebugEnabled = null!;
     /// <summary>
-    /// Gets or sets the _sourceGeneratedDebugDisabled value.
+    /// Gets or sets the _sourceGeneratedDebugDisabled.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedDebugDisabled = null!;
     /// <summary>
-    /// Gets or sets the _sourceGeneratedInfoEnabled value.
+    /// Gets or sets the _sourceGeneratedInfoEnabled.
     /// </summary>
     private Microsoft.Extensions.Logging.ILogger _sourceGeneratedInfoEnabled = null!;
 
     /// <summary>
-    /// Gets or sets the _serilogDebugEnabled value.
+    /// Gets or sets the _serilogDebugEnabled.
     /// </summary>
     private Serilog.ILogger _serilogDebugEnabled = null!;
     /// <summary>
-    /// Gets or sets the _serilogDebugDisabled value.
+    /// Gets or sets the _serilogDebugDisabled.
     /// </summary>
     private Serilog.ILogger _serilogDebugDisabled = null!;
     /// <summary>
-    /// Gets or sets the _serilogInfoEnabled value.
+    /// Gets or sets the _serilogInfoEnabled.
     /// </summary>
     private Serilog.ILogger _serilogInfoEnabled = null!;
 
@@ -274,7 +274,8 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the create MelLogger operation.
+    /// Creates MelLogger.
+
     /// </summary>
     private static Microsoft.Extensions.Logging.ILogger CreateMelLogger(LogLevel minimumLevel)
     {
@@ -294,7 +295,8 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the create SerilogLogger operation.
+    /// Creates SerilogLogger.
+
     /// </summary>
     private static Serilog.ILogger CreateSerilogLogger(LogEventLevel minimumLevel)
     {
@@ -305,7 +307,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the dispose Logger operation.
+    /// Implements the dispose Logger contract.
     /// </summary>
     private static void DisposeLogger(Microsoft.Extensions.Logging.ILogger logger)
     {
@@ -316,7 +318,8 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Performs the to SerilogLevel operation.
+    /// Converts to SerilogLevel.
+
     /// </summary>
     private static LogEventLevel ToSerilogLevel(LogLevel level)
     {
@@ -333,7 +336,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Defines the demo State enum for benchmark or isolated-regression execution.
+    /// Represents the demo State enum used by the benchmark or regression gate.
     /// </summary>
     private enum DemoState
     {
@@ -343,12 +346,12 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Defines the null SerilogSink class for benchmark or isolated-regression execution.
+    /// Represents the null SerilogSink class used by the benchmark or regression gate.
     /// </summary>
     private sealed class NullSerilogSink : Serilog.Core.ILogEventSink
     {
         /// <summary>
-        /// Performs the emit operation.
+        /// Runs the emit benchmark scenario.
         /// </summary>
         public void Emit(LogEvent logEvent)
         {
@@ -357,7 +360,7 @@ public partial class LoggingApiBenchmarks
     }
 
     /// <summary>
-    /// Defines the benchmark LoggingMessages class for benchmark or isolated-regression execution.
+    /// Represents the benchmark LoggingMessages class used by the benchmark or regression gate.
     /// </summary>
     private static partial class BenchmarkLoggingMessages
     {
@@ -366,7 +369,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Debug,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
         /// <summary>
-        /// Performs the log DemoDebug operation.
+        /// Implements the log DemoDebug contract.
         /// </summary>
         public static partial void LogDemoDebug(
             Microsoft.Extensions.Logging.ILogger logger,
@@ -382,7 +385,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Information,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
         /// <summary>
-        /// Performs the log DemoInformation operation.
+        /// Implements the log DemoInformation contract.
         /// </summary>
         public static partial void LogDemoInformation(
             Microsoft.Extensions.Logging.ILogger logger,
@@ -398,7 +401,7 @@ public partial class LoggingApiBenchmarks
             Level = LogLevel.Debug,
             Message = "Exception in benchmark path {Path}")]
         /// <summary>
-        /// Performs the log DemoException operation.
+        /// Implements the log DemoException contract.
         /// </summary>
         public static partial void LogDemoException(
             Microsoft.Extensions.Logging.ILogger logger,

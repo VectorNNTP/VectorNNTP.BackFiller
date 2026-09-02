@@ -7,29 +7,29 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the byte Budget class for benchmark or isolated-regression execution.
+/// Represents the byte Budget class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class ByteBudget : IDisposable
 {
     /// <summary>
-    /// Performs the _gate operation.
+    /// Runs the _gate benchmark scenario.
     /// </summary>
     private readonly object _gate = new();
     /// <summary>
-    /// Performs the _waiters operation.
+    /// Runs the _waiters benchmark scenario.
     /// </summary>
     private readonly Queue<BudgetWaiter> _waiters = new();
     /// <summary>
-    /// Gets or sets the _availableBytes value.
+    /// Gets or sets the _availableBytes.
     /// </summary>
     private long _availableBytes;
     /// <summary>
-    /// Gets or sets the _disposed value.
+    /// Gets or sets the _disposed.
     /// </summary>
     private bool _disposed;
 
     /// <summary>
-    /// Performs the byte Budget operation.
+    /// Implements the byte Budget contract.
     /// </summary>
     internal ByteBudget(long maxBytes)
     {
@@ -42,7 +42,7 @@ internal sealed class ByteBudget : IDisposable
     }
 
     /// <summary>
-    /// Performs the acquire Async operation.
+    /// Implements the acquire Async contract.
     /// </summary>
     internal ValueTask AcquireAsync(int bytes, CancellationToken cancellationToken)
     {
@@ -74,7 +74,7 @@ internal sealed class ByteBudget : IDisposable
     }
 
     /// <summary>
-    /// Performs the release operation.
+    /// Runs the release benchmark scenario.
     /// </summary>
     internal void Release(int bytes)
     {
@@ -127,7 +127,7 @@ internal sealed class ByteBudget : IDisposable
     }
 
     /// <summary>
-    /// Performs the cancel Waiter operation.
+    /// Implements the cancel Waiter contract.
     /// </summary>
     private void CancelWaiter(BudgetWaiter waiter)
     {
@@ -138,7 +138,7 @@ internal sealed class ByteBudget : IDisposable
     }
 
     /// <summary>
-    /// Performs the throw IfDisposed operation.
+    /// Implements the throw IfDisposed contract.
     /// </summary>
     private void ThrowIfDisposed()
     {
@@ -149,7 +149,7 @@ internal sealed class ByteBudget : IDisposable
     }
 
     /// <summary>
-    /// Performs the dispose operation.
+    /// Releases resources held by this instance.
     /// </summary>
     public void Dispose()
     {
@@ -183,21 +183,21 @@ internal sealed class ByteBudget : IDisposable
     }
 
     /// <summary>
-    /// Defines the budget Waiter class for benchmark or isolated-regression execution.
+    /// Represents the budget Waiter class used by the benchmark or regression gate.
     /// </summary>
     private sealed class BudgetWaiter
     {
         /// <summary>
-        /// Gets or sets the _completion value.
+        /// Gets or sets the _completion.
         /// </summary>
         private readonly TaskCompletionSource _completion;
         /// <summary>
-        /// Gets or sets the _registration value.
+        /// Gets or sets the _registration.
         /// </summary>
         private CancellationTokenRegistration _registration;
 
         /// <summary>
-        /// Performs the budget Waiter operation.
+        /// Implements the budget Waiter contract.
         /// </summary>
         internal BudgetWaiter(int requestedBytes)
         {
@@ -206,20 +206,20 @@ internal sealed class ByteBudget : IDisposable
         }
 
         /// <summary>
-        /// Gets or sets the requested Bytes value.
+        /// Gets or sets the requested Bytes.
         /// </summary>
         internal int RequestedBytes { get; }
         /// <summary>
-        /// Gets or sets the task value.
+        /// Gets or sets the task.
         /// </summary>
         internal Task Task => _completion.Task;
         /// <summary>
-        /// Gets or sets the is Canceled value.
+        /// Gets or sets the is Canceled.
         /// </summary>
         internal bool IsCanceled { get; private set; }
 
         /// <summary>
-        /// Performs the register Cancellation operation.
+        /// Implements the register Cancellation contract.
         /// </summary>
         internal void RegisterCancellation(CancellationToken cancellationToken, ByteBudget budget)
         {
@@ -232,7 +232,7 @@ internal sealed class ByteBudget : IDisposable
         }
 
         /// <summary>
-        /// Performs the mark Canceled operation.
+        /// Implements the mark Canceled contract.
         /// </summary>
         internal void MarkCanceled()
         {
@@ -240,7 +240,7 @@ internal sealed class ByteBudget : IDisposable
         }
 
         /// <summary>
-        /// Performs the try SetAcquired operation.
+        /// Implements the try SetAcquired contract.
         /// </summary>
         internal void TrySetAcquired()
         {
@@ -249,7 +249,7 @@ internal sealed class ByteBudget : IDisposable
         }
 
         /// <summary>
-        /// Performs the try SetCanceled operation.
+        /// Implements the try SetCanceled contract.
         /// </summary>
         internal void TrySetCanceled()
         {
@@ -259,7 +259,7 @@ internal sealed class ByteBudget : IDisposable
         }
 
         /// <summary>
-        /// Defines the cancellation State record struct for benchmark or isolated-regression execution.
+        /// Represents the cancellation State record struct used by the benchmark or regression gate.
         /// </summary>
         private readonly record struct CancellationState(ByteBudget Budget, BudgetWaiter Waiter);
     }

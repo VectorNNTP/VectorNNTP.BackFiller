@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the benchmark Mode enum for benchmark or isolated-regression execution.
+/// Represents the benchmark Mode enum used by the benchmark or regression gate.
 /// </summary>
 internal enum BenchmarkMode
 {
@@ -20,7 +20,7 @@ internal enum BenchmarkMode
 }
 
 /// <summary>
-/// Defines the transit BenchmarkConfig record struct for benchmark or isolated-regression execution.
+/// Represents the transit BenchmarkConfig record struct used by the benchmark or regression gate.
 /// </summary>
 internal readonly record struct TransitBenchmarkConfig(
     BenchmarkMode Mode,
@@ -46,20 +46,20 @@ internal readonly record struct TransitBenchmarkConfig(
     RuntimeIdentityExpectation ExpectedRuntimeIdentity)
 {
     /// <summary>
-    /// Gets or sets the required TransitHostname value.
+    /// Gets or sets the required TransitHostname.
     /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
     /// <summary>
-    /// Gets or sets the default ArticleTargetBytes value.
+    /// Gets or sets the default ArticleTargetBytes.
     /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
     /// <summary>
-    /// Gets or sets the default WarmupSeconds value.
+    /// Gets or sets the default WarmupSeconds.
     /// </summary>
     private const int DefaultWarmupSeconds = 10;
 
     /// <summary>
-    /// Performs the load operation.
+    /// Runs the load benchmark scenario.
     /// </summary>
     internal static TransitBenchmarkConfig Load(
             TimeSpan measurementDuration,
@@ -225,7 +225,7 @@ internal readonly record struct TransitBenchmarkConfig(
     }
 
     /// <summary>
-    /// Performs the find BackFillerAppSettingsPath operation.
+    /// Implements the find BackFillerAppSettingsPath contract.
     /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {

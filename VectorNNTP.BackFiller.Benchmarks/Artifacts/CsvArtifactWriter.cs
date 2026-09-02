@@ -7,12 +7,13 @@
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the csv ArtifactWriter class for benchmark or isolated-regression execution.
+/// Represents the csv ArtifactWriter class used by the benchmark or regression gate.
 /// </summary>
 internal static class CsvArtifactWriter
 {
     /// <summary>
-    /// Performs the get ArtifactPath operation.
+    /// Gets ArtifactPath.
+
     /// </summary>
     internal static string GetArtifactPath(string baseDirectory, string stamp)
     {
@@ -20,7 +21,8 @@ internal static class CsvArtifactWriter
     }
 
     /// <summary>
-    /// Performs the write ToPath operation.
+    /// Writes ToPath.
+
     /// </summary>
     internal static void WriteToPath(string path, string csv)
     {

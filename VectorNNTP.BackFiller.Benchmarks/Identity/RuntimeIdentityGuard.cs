@@ -241,7 +241,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the resolve LoadedProductionAssembly operation.
+    /// Resolves LoadedProductionAssembly.
+
     /// </summary>
     private static Assembly? ResolveLoadedProductionAssembly()
     {
@@ -250,7 +251,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the resolve ActualProductionAssemblyPath operation.
+    /// Resolves ActualProductionAssemblyPath.
+
     /// </summary>
     private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
     {
@@ -265,7 +267,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the compute Sha256 operation.
+    /// Computes Sha256.
+
     /// </summary>
     private static string ComputeSha256(string filePath)
     {
@@ -275,7 +278,7 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the is UnknownIdentityValue operation.
+    /// Implements the is UnknownIdentityValue contract.
     /// </summary>
     private static bool IsUnknownIdentityValue(string? value)
     {
@@ -283,7 +286,8 @@ internal static class RuntimeIdentityGuard
     }
 
     /// <summary>
-    /// Performs the normalize TargetFramework operation.
+    /// Normalizes TargetFramework.
+
     /// </summary>
     private static string NormalizeTargetFramework(string? value)
     {

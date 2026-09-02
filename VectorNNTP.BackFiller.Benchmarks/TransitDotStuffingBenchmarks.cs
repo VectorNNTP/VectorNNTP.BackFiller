@@ -25,21 +25,21 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 public class TransitDotStuffingBenchmarks
 {
     /// <summary>
-    /// Gets or sets the payload Size value.
+    /// Gets or sets the payload Size.
     /// </summary>
     private const int PayloadSize = 2_097_152;
 
     /// <summary>
-    /// Gets or sets the _source value.
+    /// Gets or sets the _source.
     /// </summary>
     private byte[] _source = null!;
     /// <summary>
-    /// Gets or sets the _destination value.
+    /// Gets or sets the _destination.
     /// </summary>
     private byte[] _destination = null!;
 
     /// <summary>
-    /// Gets or sets the distribution value.
+    /// Gets or sets the distribution.
     /// </summary>
     [Params(
         DotPayloadDistribution.NormalNoDot,
@@ -160,7 +160,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the write WithPipeWriter operation.
+    /// Writes ipeWriter.
+
     /// </summary>
     private int WriteWithPipeWriter(TransitDotStuffingAlgorithm algorithm)
     {
@@ -186,7 +187,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the build Payload operation.
+    /// Builds ad.
+
     /// </summary>
     private static byte[] BuildPayload(DotPayloadDistribution distribution, int size)
     {
@@ -202,7 +204,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the build NormalPayload operation.
+    /// Builds lPayload.
+
     /// </summary>
     private static byte[] BuildNormalPayload(int size)
     {
@@ -240,7 +243,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the build DotHeavyPayload operation.
+    /// Builds avyPayload.
+
     /// </summary>
     private static byte[] BuildDotHeavyPayload(int size)
     {
@@ -265,7 +269,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the build MixedPayload operation.
+    /// Builds Payload.
+
     /// </summary>
     private static byte[] BuildMixedPayload(int size)
     {
@@ -305,7 +310,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the build LargeLinePayload operation.
+    /// Builds LinePayload.
+
     /// </summary>
     private static byte[] BuildLargeLinePayload(int size)
     {
@@ -331,7 +337,8 @@ public class TransitDotStuffingBenchmarks
     }
 
     /// <summary>
-    /// Performs the build SmallLinePayload operation.
+    /// Builds LinePayload.
+
     /// </summary>
     private static byte[] BuildSmallLinePayload(int size)
     {

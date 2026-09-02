@@ -9,12 +9,13 @@ using System.Diagnostics;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the metric MathHelpers class for benchmark or isolated-regression execution.
+/// Represents the metric MathHelpers class used by the benchmark or regression gate.
 /// </summary>
 internal static class MetricMathHelpers
 {
     /// <summary>
-    /// Performs the compute PercentileMicroseconds operation.
+    /// Computes PercentileMicroseconds.
+
     /// </summary>
     internal static double ComputePercentileMicroseconds(List<long> sortedLatencyTicks, double percentile)
     {
@@ -32,7 +33,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the classify DepthBucket operation.
+    /// Implements the classify DepthBucket contract.
     /// </summary>
     internal static int ClassifyDepthBucket(int pending)
     {
@@ -44,7 +45,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the percentile Us operation.
+    /// Implements the percentile Us contract.
     /// </summary>
     internal static double PercentileUs(List<long> samples, double percentile)
     {
@@ -60,7 +61,7 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the ticks ToUs operation.
+    /// Implements the ticks ToUs contract.
     /// </summary>
     internal static double TicksToUs(double ticks)
     {
@@ -73,7 +74,8 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the normalize Min operation.
+    /// Normalizes Min.
+
     /// </summary>
     internal static long NormalizeMin(long value)
     {
@@ -81,7 +83,8 @@ internal static class MetricMathHelpers
     }
 
     /// <summary>
-    /// Performs the compute Average operation.
+    /// Computes Average.
+
     /// </summary>
     internal static double ComputeAverage(long sum, long count)
     {

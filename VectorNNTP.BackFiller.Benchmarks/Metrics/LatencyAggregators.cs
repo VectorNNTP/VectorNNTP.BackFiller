@@ -9,7 +9,7 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the connection CounterState record struct for benchmark or isolated-regression execution.
+/// Represents the connection CounterState record struct used by the benchmark or regression gate.
 /// </summary>
 internal readonly record struct ConnectionCounterState(
     string ConnectionId,
@@ -18,7 +18,7 @@ internal readonly record struct ConnectionCounterState(
     long Completed);
 
 /// <summary>
-/// Defines the dispatcher SeriesPoint record struct for benchmark or isolated-regression execution.
+/// Represents the dispatcher SeriesPoint record struct used by the benchmark or regression gate.
 /// </summary>
 internal readonly record struct DispatcherSeriesPoint(
     TimeSpan Elapsed,
@@ -29,57 +29,57 @@ internal readonly record struct DispatcherSeriesPoint(
     long QueueBytes);
 
 /// <summary>
-/// Defines the connection SeriesAggregate class for benchmark or isolated-regression execution.
+/// Represents the connection SeriesAggregate class used by the benchmark or regression gate.
 /// </summary>
 internal sealed class ConnectionSeriesAggregate
 {
     /// <summary>
-    /// Gets or sets the _slot value.
+    /// Gets or sets the _slot.
     /// </summary>
     private readonly int _slot;
     /// <summary>
-    /// Gets or sets the _pendingSum value.
+    /// Gets or sets the _pendingSum.
     /// </summary>
     private double _pendingSum;
     /// <summary>
-    /// Gets or sets the _samples value.
+    /// Gets or sets the _samples.
     /// </summary>
     private int _samples;
     /// <summary>
-    /// Gets or sets the _pendingMin value.
+    /// Gets or sets the _pendingMin.
     /// </summary>
     private int _pendingMin = int.MaxValue;
     /// <summary>
-    /// Gets or sets the _pendingMax value.
+    /// Gets or sets the _pendingMax.
     /// </summary>
     private int _pendingMax;
     /// <summary>
-    /// Gets or sets the _maxInFlight value.
+    /// Gets or sets the _maxInFlight.
     /// </summary>
     private int _maxInFlight;
     /// <summary>
-    /// Gets or sets the _failures value.
+    /// Gets or sets the _failures.
     /// </summary>
     private long _failures;
     /// <summary>
-    /// Gets or sets the _reconnects value.
+    /// Gets or sets the _reconnects.
     /// </summary>
     private long _reconnects;
     /// <summary>
-    /// Gets or sets the _submitRateSum value.
+    /// Gets or sets the _submitRateSum.
     /// </summary>
     private double _submitRateSum;
     /// <summary>
-    /// Gets or sets the _completeRateSum value.
+    /// Gets or sets the _completeRateSum.
     /// </summary>
     private double _completeRateSum;
     /// <summary>
-    /// Gets or sets the _responseRateSum value.
+    /// Gets or sets the _responseRateSum.
     /// </summary>
     private double _responseRateSum;
 
     /// <summary>
-    /// Performs the connection SeriesAggregate operation.
+    /// Implements the connection SeriesAggregate contract.
     /// </summary>
     internal ConnectionSeriesAggregate(int slot)
     {
@@ -87,7 +87,7 @@ internal sealed class ConnectionSeriesAggregate
     }
 
     /// <summary>
-    /// Performs the observe operation.
+    /// Runs the observe benchmark scenario.
     /// </summary>
     internal void Observe(TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot, double submitRate, double completeRate, double responseRate, long reconnects)
     {
@@ -104,7 +104,8 @@ internal sealed class ConnectionSeriesAggregate
     }
 
     /// <summary>
-    /// Performs the format Line operation.
+    /// Formats Line.
+
     /// </summary>
     internal string FormatLine()
     {
@@ -118,12 +119,13 @@ internal sealed class ConnectionSeriesAggregate
 }
 
 /// <summary>
-/// Defines the latency Aggregators class for benchmark or isolated-regression execution.
+/// Represents the latency Aggregators class used by the benchmark or regression gate.
 /// </summary>
 internal static class LatencyAggregators
 {
     /// <summary>
-    /// Performs the build ConnectionSeriesSummary operation.
+    /// Builds ConnectionSeriesSummary.
+
     /// </summary>
     internal static string BuildConnectionSeriesSummary(Dictionary<int, ConnectionSeriesAggregate> series)
     {
@@ -140,7 +142,8 @@ internal static class LatencyAggregators
     }
 
     /// <summary>
-    /// Performs the build DispatcherSeriesSummary operation.
+    /// Builds DispatcherSeriesSummary.
+
     /// </summary>
     internal static string BuildDispatcherSeriesSummary(List<DispatcherSeriesPoint> series)
     {
@@ -160,7 +163,8 @@ internal static class LatencyAggregators
     }
 
     /// <summary>
-    /// Performs the update Peak operation.
+    /// Updates Peak.
+
     /// </summary>
     internal static void UpdatePeak(ref long location, long candidate)
     {
@@ -180,7 +184,8 @@ internal static class LatencyAggregators
     }
 
     /// <summary>
-    /// Performs the update Min operation.
+    /// Updates Min.
+
     /// </summary>
     internal static void UpdateMin(ref long location, long candidate)
     {

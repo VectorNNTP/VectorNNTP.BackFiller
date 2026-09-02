@@ -17,38 +17,39 @@ using VectorNNTP.BackFiller.Benchmarks.Execution;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the transit ServerStressRunner class for benchmark or isolated-regression execution.
+/// Represents the transit ServerStressRunner class used by the benchmark or regression gate.
 /// </summary>
 internal static class TransitServerStressRunner
 {
     /// <summary>
-    /// Gets or sets the default ArticleTargetBytes value.
+    /// Gets or sets the default ArticleTargetBytes.
     /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
     /// <summary>
-    /// Gets or sets the default WarmupSeconds value.
+    /// Gets or sets the default WarmupSeconds.
     /// </summary>
     private const int DefaultWarmupSeconds = 10;
     /// <summary>
-    /// Gets or sets the validation Seconds value.
+    /// Gets or sets the validation Seconds.
     /// </summary>
     private const int ValidationSeconds = 10;
     /// <summary>
-    /// Gets or sets the default GeneratorMeasurementSeconds value.
+    /// Gets or sets the default GeneratorMeasurementSeconds.
     /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;
 
     /// <summary>
-    /// Performs the runtime Identity operation.
+    /// Implements the runtime Identity contract.
     /// </summary>
     private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
     /// <summary>
-    /// Gets or sets the benchmark BuildVersion value.
+    /// Gets or sets the benchmark BuildVersion.
     /// </summary>
     private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
 
     /// <summary>
-    /// Performs the run Async operation.
+    /// Runs Async.
+
     /// </summary>
     internal static async Task RunAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -57,7 +58,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run ValidationAsync operation.
+    /// Runs ValidationAsync.
+
     /// </summary>
     internal static async Task RunValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -101,7 +103,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run SaturationAsync operation.
+    /// Runs SaturationAsync.
+
     /// </summary>
     internal static async Task RunSaturationAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -110,7 +113,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run GeneratorWorkerSweepAsync operation.
+    /// Runs GeneratorWorkerSweepAsync.
+
     /// </summary>
     internal static async Task RunGeneratorWorkerSweepAsync(CancellationToken cancellationToken = default)
     {
@@ -139,7 +143,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run Forensic32 WorkerAsync operation.
+    /// Runs Forensic32 WorkerAsync.
+
     /// </summary>
     internal static async Task RunForensic32WorkerAsync(CancellationToken cancellationToken = default)
     {
@@ -160,7 +165,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run GeneratorBaselineAsync operation.
+    /// Runs GeneratorBaselineAsync.
+
     /// </summary>
     internal static async Task RunGeneratorBaselineAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -168,7 +174,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run SingleTraceAsync operation.
+    /// Runs SingleTraceAsync.
+
     /// </summary>
     internal static async Task RunSingleTraceAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -181,7 +188,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run CoreAsync operation.
+    /// Runs CoreAsync.
+
     /// </summary>
     private static Task RunCoreAsync(TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
@@ -216,7 +224,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the run MeasurementAsync operation.
+    /// Runs MeasurementAsync.
+
     /// </summary>
     private static async Task<BenchmarkResult> RunMeasurementAsync(
         TransitPublisher publisher,
@@ -236,7 +245,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the create TransitPublisherLogger operation.
+    /// Creates TransitPublisherLogger.
+
     /// </summary>
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
     {
@@ -247,7 +257,8 @@ internal static class TransitServerStressRunner
     }
 
     /// <summary>
-    /// Performs the write StructuredResultArtifacts operation.
+    /// Writes StructuredResultArtifacts.
+
     /// </summary>
     private static void WriteStructuredResultArtifacts(BenchmarkResult result, TransitBenchmarkConfig config)
     {
@@ -256,11 +267,11 @@ internal static class TransitServerStressRunner
             config,
             Environment.ProcessorCount,
             /// <summary>
-            /// Performs the from operation.
+            /// Runs the from benchmark scenario.
             /// </summary>
             static (benchmarkResult, benchmarkConfig, processorCount) => BenchmarkResultArtifact.From(benchmarkResult, benchmarkConfig, processorCount),
             /// <summary>
-            /// Performs the artifact operation.
+            /// Runs the artifact benchmark scenario.
             /// </summary>
             static artifact => artifact.ToCsv());
     }

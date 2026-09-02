@@ -14,21 +14,22 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.BackFiller.Benchmarks;
 
 /// <summary>
-/// Defines the transit DiagnosticSuiteRunner class for benchmark or isolated-regression execution.
+/// Represents the transit DiagnosticSuiteRunner class used by the benchmark or regression gate.
 /// </summary>
 internal static class TransitDiagnosticSuiteRunner
 {
     /// <summary>
-    /// Gets or sets the required TransitHostname value.
+    /// Gets or sets the required TransitHostname.
     /// </summary>
     private const string RequiredTransitHostname = "incoming.usenet.ninja";
     /// <summary>
-    /// Gets or sets the default ArticleTargetBytes value.
+    /// Gets or sets the default ArticleTargetBytes.
     /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
 
     /// <summary>
-    /// Performs the run Async operation.
+    /// Runs Async.
+
     /// </summary>
     internal static async Task RunAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
@@ -104,7 +105,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the warmup GeneratorAsync operation.
+    /// Implements the warmup GeneratorAsync contract.
     /// </summary>
     private static async Task WarmupGeneratorAsync(int warmupSeconds, int articleBytes, int workerCount, CancellationToken cancellationToken)
     {
@@ -137,7 +138,8 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the run GeneratorOnlyAsync operation.
+    /// Runs GeneratorOnlyAsync.
+
     /// </summary>
     private static async Task<GenerationOnlyResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int workerCount, CancellationToken cancellationToken)
     {
@@ -227,7 +229,8 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the run GeneratorQueueAsync operation.
+    /// Runs GeneratorQueueAsync.
+
     /// </summary>
     private static async Task<QueuePipelineResult> RunGeneratorQueueAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int queueArticles, long queueBytes, CancellationToken cancellationToken)
     {
@@ -360,7 +363,8 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the run GeneratorQueueDispatchNoOpAsync operation.
+    /// Runs GeneratorQueueDispatchNoOpAsync.
+
     /// </summary>
     private static async Task<QueuePipelineResult> RunGeneratorQueueDispatchNoOpAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, int queueArticles, long queueBytes, int dispatchWorkers, CancellationToken cancellationToken)
     {
@@ -488,7 +492,8 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the run RealPublisherInstrumentedAsync operation.
+    /// Runs RealPublisherInstrumentedAsync.
+
     /// </summary>
     private static async Task<EndToEndResult> RunRealPublisherInstrumentedAsync(
         string label,
@@ -519,7 +524,7 @@ internal static class TransitDiagnosticSuiteRunner
 
         await using TransitPublisher publisher = new(
             /// <summary>
-            /// Performs the back FillerRuntimeOptions operation.
+            /// Implements the back FillerRuntimeOptions contract.
             /// </summary>
             new BackFillerRuntimeOptions(
                 CanonicalBackFillerFqdn: "benchmark.backfiller.usenet.ninja",
@@ -702,7 +707,8 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the run ParallelGeneratorSweepAsync operation.
+    /// Runs ParallelGeneratorSweepAsync.
+
     /// </summary>
     private static async Task<List<GenerationOnlyResult>> RunParallelGeneratorSweepAsync(string label, int warmupSeconds, int measurementSeconds, int articleBytes, CancellationToken cancellationToken)
     {
@@ -731,7 +737,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the load RuntimeConfig operation.
+    /// Implements the load RuntimeConfig contract.
     /// </summary>
     private static RuntimeConfig LoadRuntimeConfig()
     {
@@ -761,7 +767,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the find BackFillerAppSettingsPath operation.
+    /// Implements the find BackFillerAppSettingsPath contract.
     /// </summary>
     private static string FindBackFillerAppSettingsPath()
     {
@@ -782,7 +788,8 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the compute PercentileMicroseconds operation.
+    /// Computes PercentileMicroseconds.
+
     /// </summary>
     private static double ComputePercentileMicroseconds(IEnumerable<long> ticks, double percentile)
     {
@@ -798,7 +805,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the print GenerationResult operation.
+    /// Implements the print GenerationResult contract.
     /// </summary>
     private static void PrintGenerationResult(GenerationOnlyResult result)
     {
@@ -807,7 +814,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the print QueuePipelineResult operation.
+    /// Implements the print QueuePipelineResult contract.
     /// </summary>
     private static void PrintQueuePipelineResult(QueuePipelineResult result)
     {
@@ -818,7 +825,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the print EndToEndResult operation.
+    /// Implements the print EndToEndResult contract.
     /// </summary>
     private static void PrintEndToEndResult(EndToEndResult result)
     {
@@ -830,7 +837,7 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Performs the print Summary operation.
+    /// Implements the print Summary contract.
     /// </summary>
     private static void PrintSummary(GenerationOnlyResult test1, QueuePipelineResult test2, QueuePipelineResult test3, EndToEndResult test4, List<GenerationOnlyResult> test5, int articleBytes)
     {
@@ -877,37 +884,37 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Defines the cpu Sampler class for benchmark or isolated-regression execution.
+    /// Represents the cpu Sampler class used by the benchmark or regression gate.
     /// </summary>
     private sealed class CpuSampler
     {
         /// <summary>
-        /// Gets or sets the _process value.
+        /// Gets or sets the _process.
         /// </summary>
         private readonly Process _process;
         /// <summary>
-        /// Performs the _elapsed operation.
+        /// Runs the _elapsed benchmark scenario.
         /// </summary>
         private readonly Stopwatch _elapsed = Stopwatch.StartNew();
         /// <summary>
-        /// Gets or sets the _cts value.
+        /// Gets or sets the _cts.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value.
+        /// Gets or sets the _task.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _cpuStart value.
+        /// Gets or sets the _cpuStart.
         /// </summary>
         private TimeSpan _cpuStart;
         /// <summary>
-        /// Gets or sets the _peakWorkingSet value.
+        /// Gets or sets the _peakWorkingSet.
         /// </summary>
         private long _peakWorkingSet;
 
         /// <summary>
-        /// Performs the cpu Sampler operation.
+        /// Implements the cpu Sampler contract.
         /// </summary>
         internal CpuSampler(Process process)
         {
@@ -916,24 +923,24 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Gets or sets the average CpuPercent value.
+        /// Gets or sets the average CpuPercent.
         /// </summary>
         internal double AverageCpuPercent { get; private set; }
         /// <summary>
-        /// Gets or sets the equivalent BusyCores value.
+        /// Gets or sets the equivalent BusyCores.
         /// </summary>
         internal double EquivalentBusyCores => AverageCpuPercent / 100d * Environment.ProcessorCount;
         /// <summary>
-        /// Gets or sets the peak WorkingSetBytes value.
+        /// Gets or sets the peak WorkingSetBytes.
         /// </summary>
         internal long PeakWorkingSetBytes => _peakWorkingSet;
         /// <summary>
-        /// Gets or sets the total CpuTime value.
+        /// Gets or sets the total CpuTime.
         /// </summary>
         internal TimeSpan TotalCpuTime { get; private set; }
 
         /// <summary>
-        /// Performs the start operation.
+        /// Runs the start benchmark scenario.
         /// </summary>
         internal void Start()
         {
@@ -955,7 +962,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Performs the stop operation.
+        /// Runs the stop benchmark scenario.
         /// </summary>
         internal void Stop()
         {
@@ -982,41 +989,41 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Defines the queue DepthSampler class for benchmark or isolated-regression execution.
+    /// Represents the queue DepthSampler class used by the benchmark or regression gate.
     /// </summary>
     private sealed class QueueDepthSampler
     {
         /// <summary>
-        /// Gets or sets the _queue value.
+        /// Gets or sets the _queue.
         /// </summary>
         private readonly TransitBenchmarkCore.BoundedArticleQueue _queue;
         /// <summary>
-        /// Gets or sets the _cts value.
+        /// Gets or sets the _cts.
         /// </summary>
         private CancellationTokenSource? _cts;
         /// <summary>
-        /// Gets or sets the _task value.
+        /// Gets or sets the _task.
         /// </summary>
         private Task? _task;
         /// <summary>
-        /// Gets or sets the _sum value.
+        /// Gets or sets the _sum.
         /// </summary>
         private long _sum;
         /// <summary>
-        /// Gets or sets the _count value.
+        /// Gets or sets the _count.
         /// </summary>
         private long _count;
         /// <summary>
-        /// Gets or sets the _min value.
+        /// Gets or sets the _min.
         /// </summary>
         private int _min = int.MaxValue;
         /// <summary>
-        /// Gets or sets the _max value.
+        /// Gets or sets the _max.
         /// </summary>
         private int _max;
 
         /// <summary>
-        /// Performs the queue DepthSampler operation.
+        /// Implements the queue DepthSampler contract.
         /// </summary>
         internal QueueDepthSampler(TransitBenchmarkCore.BoundedArticleQueue queue)
         {
@@ -1024,20 +1031,20 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Gets or sets the min Depth value.
+        /// Gets or sets the min Depth.
         /// </summary>
         internal int MinDepth => _min == int.MaxValue ? 0 : _min;
         /// <summary>
-        /// Gets or sets the max Depth value.
+        /// Gets or sets the max Depth.
         /// </summary>
         internal int MaxDepth => _max;
         /// <summary>
-        /// Performs the average Depth operation.
+        /// Implements the average Depth contract.
         /// </summary>
         internal double AverageDepth => _count == 0 ? 0 : (double)_sum / _count;
 
         /// <summary>
-        /// Performs the start operation.
+        /// Runs the start benchmark scenario.
         /// </summary>
         internal void Start()
         {
@@ -1057,7 +1064,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Performs the stop operation.
+        /// Runs the stop benchmark scenario.
         /// </summary>
         internal void Stop()
         {
@@ -1081,62 +1088,62 @@ internal static class TransitDiagnosticSuiteRunner
     }
 
     /// <summary>
-    /// Defines the stage Tracker class for benchmark or isolated-regression execution.
+    /// Represents the stage Tracker class used by the benchmark or regression gate.
     /// </summary>
     private sealed class StageTracker
     {
         /// <summary>
-        /// Performs the _stamps operation.
+        /// Runs the _stamps benchmark scenario.
         /// </summary>
         private readonly ConcurrentDictionary<string, StageStamp> _stamps = new(StringComparer.Ordinal);
         /// <summary>
-        /// Gets or sets the _generationTicks value.
+        /// Gets or sets the _generationTicks.
         /// </summary>
         private long _generationTicks;
         /// <summary>
-        /// Gets or sets the _queueWaitTicks value.
+        /// Gets or sets the _queueWaitTicks.
         /// </summary>
         private long _queueWaitTicks;
         /// <summary>
-        /// Gets or sets the _dispatchWaitTicks value.
+        /// Gets or sets the _dispatchWaitTicks.
         /// </summary>
         private long _dispatchWaitTicks;
         /// <summary>
-        /// Gets or sets the _publishTicks value.
+        /// Gets or sets the _publishTicks.
         /// </summary>
         private long _publishTicks;
         /// <summary>
-        /// Gets or sets the _lifecycleTicks value.
+        /// Gets or sets the _lifecycleTicks.
         /// </summary>
         private long _lifecycleTicks;
         /// <summary>
-        /// Gets or sets the _count value.
+        /// Gets or sets the _count.
         /// </summary>
         private long _count;
 
         /// <summary>
-        /// Performs the average GenerationUs operation.
+        /// Implements the average GenerationUs contract.
         /// </summary>
         internal double AverageGenerationUs => _count == 0 ? 0 : _generationTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Performs the average QueueWaitUs operation.
+        /// Implements the average QueueWaitUs contract.
         /// </summary>
         internal double AverageQueueWaitUs => _count == 0 ? 0 : _queueWaitTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Performs the average DispatchWaitUs operation.
+        /// Implements the average DispatchWaitUs contract.
         /// </summary>
         internal double AverageDispatchWaitUs => _count == 0 ? 0 : _dispatchWaitTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Performs the average PublishUs operation.
+        /// Implements the average PublishUs contract.
         /// </summary>
         internal double AveragePublishUs => _count == 0 ? 0 : _publishTicks * 1_000_000d / (Stopwatch.Frequency * _count);
         /// <summary>
-        /// Performs the average LifecycleUs operation.
+        /// Implements the average LifecycleUs contract.
         /// </summary>
         internal double AverageLifecycleUs => _count == 0 ? 0 : _lifecycleTicks * 1_000_000d / (Stopwatch.Frequency * _count);
 
         /// <summary>
-        /// Performs the record Produced operation.
+        /// Implements the record Produced contract.
         /// </summary>
         internal void RecordProduced(string messageId, long generationTicks, long enqueueTicks, long enqueueEndTick)
         {
@@ -1144,7 +1151,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Performs the record Dequeued operation.
+        /// Implements the record Dequeued contract.
         /// </summary>
         internal void RecordDequeued(string messageId, long dequeueTick)
         {
@@ -1155,7 +1162,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Performs the record PublishStart operation.
+        /// Implements the record PublishStart contract.
         /// </summary>
         internal void RecordPublishStart(string messageId, long publishStart)
         {
@@ -1166,7 +1173,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Performs the record PublishEnd operation.
+        /// Implements the record PublishEnd contract.
         /// </summary>
         internal void RecordPublishEnd(string messageId, long publishEndTick, bool accepted)
         {
@@ -1190,7 +1197,7 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Performs the peak ActualPending operation.
+        /// Implements the peak ActualPending contract.
         /// </summary>
         internal int PeakActualPending(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics)
         {
@@ -1198,18 +1205,18 @@ internal static class TransitDiagnosticSuiteRunner
         }
 
         /// <summary>
-        /// Defines the stage Stamp record struct for benchmark or isolated-regression execution.
+        /// Represents the stage Stamp record struct used by the benchmark or regression gate.
         /// </summary>
         private readonly record struct StageStamp(long GenerationTicks, long EnqueueTicks, long EnqueueEndTick, long DequeueTick, long PublishStartTick);
     }
 
     /// <summary>
-    /// Defines the runtime Config record struct for benchmark or isolated-regression execution.
+    /// Represents the runtime Config record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct RuntimeConfig(string Host, int Port, bool UseSsl);
 
     /// <summary>
-    /// Defines the generation OnlyResult record struct for benchmark or isolated-regression execution.
+    /// Represents the generation OnlyResult record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct GenerationOnlyResult(
         string Label,
@@ -1231,21 +1238,21 @@ internal static class TransitDiagnosticSuiteRunner
         TimeSpan CpuTime)
     {
         /// <summary>
-        /// Gets or sets the articles PerSecond value.
+        /// Gets or sets the articles PerSecond.
         /// </summary>
         internal double ArticlesPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Articles / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value.
+        /// Gets or sets the gbps.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Performs the allocated BytesPerArticle operation.
+        /// Implements the allocated BytesPerArticle contract.
         /// </summary>
         internal double AllocatedBytesPerArticle => Articles == 0 ? 0 : (double)AllocatedBytes / Articles;
     }
 
     /// <summary>
-    /// Defines the queue PipelineResult record struct for benchmark or isolated-regression execution.
+    /// Represents the queue PipelineResult record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct QueuePipelineResult(
         string Label,
@@ -1276,29 +1283,29 @@ internal static class TransitDiagnosticSuiteRunner
         double AvgPublishUs)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value.
+        /// Gets or sets the generated PerSecond.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the dispatched PerSecond value.
+        /// Gets or sets the dispatched PerSecond.
         /// </summary>
         internal double DispatchedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Dispatched / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value.
+        /// Gets or sets the completed PerSecond.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value.
+        /// Gets or sets the gbps.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Performs the allocated BytesPerArticle operation.
+        /// Implements the allocated BytesPerArticle contract.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
 
     /// <summary>
-    /// Defines the end ToEndResult record struct for benchmark or isolated-regression execution.
+    /// Represents the end ToEndResult record struct used by the benchmark or regression gate.
     /// </summary>
     private readonly record struct EndToEndResult(
         string Label,
@@ -1328,23 +1335,23 @@ internal static class TransitDiagnosticSuiteRunner
         int ActiveConnections)
     {
         /// <summary>
-        /// Gets or sets the generated PerSecond value.
+        /// Gets or sets the generated PerSecond.
         /// </summary>
         internal double GeneratedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Generated / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the completed PerSecond value.
+        /// Gets or sets the completed PerSecond.
         /// </summary>
         internal double CompletedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Completed / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the accepted PerSecond value.
+        /// Gets or sets the accepted PerSecond.
         /// </summary>
         internal double AcceptedPerSecond => Elapsed.TotalSeconds <= 0 ? 0 : Accepted / Elapsed.TotalSeconds;
         /// <summary>
-        /// Gets or sets the gbps value.
+        /// Gets or sets the gbps.
         /// </summary>
         internal double Gbps => Elapsed.TotalSeconds <= 0 ? 0 : Bytes * 8d / 1_000_000_000d / Elapsed.TotalSeconds;
         /// <summary>
-        /// Performs the allocated BytesPerArticle operation.
+        /// Implements the allocated BytesPerArticle contract.
         /// </summary>
         internal double AllocatedBytesPerArticle => Generated == 0 ? 0 : (double)AllocatedBytes / Generated;
     }
