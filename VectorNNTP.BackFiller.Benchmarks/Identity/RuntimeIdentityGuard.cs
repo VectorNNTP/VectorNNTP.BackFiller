@@ -295,9 +295,6 @@ internal static class RuntimeIdentityGuard
             return candidate.ToLowerInvariant();
         }
 
-        /// <summary>
-        /// Gets or sets the prefix value.
-        /// </summary>
         const string prefix = ".NETCoreApp,Version=v";
         if (candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
         {
