@@ -13,7 +13,7 @@ using System.Text.Json;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Defines rabbit mq article work request wire protocol and its rabbit mq article work request wire protocol contract.
+    /// Defines the canonical JSON wire protocol contract for RabbitMQ article-work requests.
     /// </summary>
     internal static class RabbitMqArticleWorkRequestWireProtocol
     {
