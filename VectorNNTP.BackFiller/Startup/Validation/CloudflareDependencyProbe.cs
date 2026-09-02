@@ -28,6 +28,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <para>The configured <c>BackFiller:DnsSuffix</c> must match the zone name returned by Cloudflare for the configured zone ID.</para>
         /// <para>Token values are never logged or returned in diagnostics.</para>
         /// </remarks>
+        /// <param name="backFiller">The backFiller value.</param>
+        /// <param name="timeout">The timeout value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateCloudflareZoneDependencyAsync(
             BackFillerOptions? backFiller,
             TimeSpan timeout,

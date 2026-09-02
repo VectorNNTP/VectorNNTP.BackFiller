@@ -108,6 +108,8 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         /// <summary>
         /// Parses the minimum log level used by test configuration.
         /// </summary>
+        /// <param name="configuredLevel">The configuredLevel value.</param>
+        /// <returns>The operation result.</returns>
         internal static LogEventLevel ParseMinimumLevelForTesting(string? configuredLevel)
         {
             return ParseMinimumLevel(configuredLevel);
@@ -116,6 +118,8 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         /// <summary>
         /// Parses the Microsoft logging level used by test configuration.
         /// </summary>
+        /// <param name="configuredLevel">The configuredLevel value.</param>
+        /// <returns>The operation result.</returns>
         internal static LogLevel ParseMicrosoftLogLevelForTesting(string? configuredLevel)
         {
             return ParseMicrosoftLogLevel(configuredLevel);

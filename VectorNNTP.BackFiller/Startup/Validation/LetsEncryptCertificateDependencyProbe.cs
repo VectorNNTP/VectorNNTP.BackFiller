@@ -31,6 +31,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="runtimeOptions">Validated runtime options snapshot.</param>
         /// <param name="cancellationToken">Startup cancellation token.</param>
         /// <returns>Dependency validation result.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> EnsureCertificateAvailabilityAsync(
             BackFillerRuntimeOptions runtimeOptions,
             CancellationToken cancellationToken)

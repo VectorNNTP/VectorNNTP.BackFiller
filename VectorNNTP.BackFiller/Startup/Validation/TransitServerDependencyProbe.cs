@@ -23,6 +23,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Validates TransitServer endpoint reachability, NNTP greeting semantics, and streaming capability.
         /// </summary>
+        /// <param name="backFiller">The backFiller value.</param>
+        /// <param name="timeout">The timeout value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateTransitServerConnectivityAsync(
             BackFillerOptions? backFiller,
             TimeSpan timeout,

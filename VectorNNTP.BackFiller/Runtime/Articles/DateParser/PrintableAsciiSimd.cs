@@ -52,6 +52,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         /// </summary>
         /// <param name="span">Input span to validate.</param>
         /// <returns><see langword="true"/> when empty or fully printable ASCII; otherwise <see langword="false"/>.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsAllPrintableAscii(ReadOnlySpan<char> span)
         {

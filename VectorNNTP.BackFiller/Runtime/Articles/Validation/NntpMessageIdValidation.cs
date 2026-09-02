@@ -35,6 +35,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// <param name="messageId">Candidate Message-ID including angle brackets.</param>
         /// <param name="stripSpaces">When true, leading/trailing whitespace is trimmed before validation.</param>
         /// <returns><see langword="true"/> when valid.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsValidMessageId(ReadOnlySpan<char> messageId, bool stripSpaces = false)
         {

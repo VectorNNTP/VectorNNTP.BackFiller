@@ -44,6 +44,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Creates a successful validation result.
         /// </summary>
+        /// <returns>The operation result.</returns>
         public static ConfigurationValidationResult Success()
         {
             return new ConfigurationValidationResult([], []);
@@ -98,6 +99,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Creates a successful dependency validation result.
         /// </summary>
+        /// <returns>The operation result.</returns>
         public static DependencyValidationResult Success()
         {
             return new DependencyValidationResult([], [], []);

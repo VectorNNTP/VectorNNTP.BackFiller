@@ -36,6 +36,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <summary>
         /// Detects the current hosting environment.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static HostingEnvironment DetectHostingEnvironment()
         {
             if (_currentEnvironment.HasValue)
@@ -317,6 +318,8 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <summary>
         /// Determines whether readiness should be published for the current test host.
         /// </summary>
+        /// <param name="hostLifetime">The hostLifetime value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal static bool ShouldPublishReadinessForTesting(IHostApplicationLifetime hostLifetime)
         {
             return ShouldPublishReadiness(hostLifetime);

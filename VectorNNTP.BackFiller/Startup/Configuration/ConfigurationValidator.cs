@@ -19,6 +19,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Validates an options object using the DataAnnotations validation pipeline.
         /// </summary>
+        /// <param name="string">The string value.</param>
+        /// <param name="prefix">The prefix value.</param>
+        /// <returns>The operation result.</returns>
         internal static List<(string, string)> ValidateAnnotatedObject<TOptions>(TOptions options, string prefix)
             where TOptions : class
         {
@@ -53,6 +56,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Validates ConnectionStrings configuration section.
         /// </summary>
+        /// <param name="Setting">The Setting value.</param>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static List<(string Setting, string Error)> ValidateConnectionStrings(IConfiguration configuration)
         {
             List<(string Setting, string Message)> warnings = [];
@@ -62,6 +68,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Validates ConnectionStrings configuration section.
         /// </summary>
+        /// <param name="Setting">The Setting value.</param>
+        /// <param name="Error">The Error value.</param>
+        /// <returns>The operation result.</returns>
         internal static List<(string Setting, string Error)> ValidateConnectionStrings(
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
@@ -95,6 +104,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Validates BackFiller configuration section.
         /// </summary>
+        /// <param name="Setting">The Setting value.</param>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(IConfiguration configuration)
         {
             List<(string Setting, string Message)> warnings = [];
@@ -104,6 +116,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Validates BackFiller configuration section.
         /// </summary>
+        /// <param name="Setting">The Setting value.</param>
+        /// <param name="Error">The Error value.</param>
+        /// <returns>The operation result.</returns>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
@@ -121,6 +136,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="backFiller">Bound BackFiller options instance.</param>
         /// <param name="warnings">Warning collection to append non-blocking diagnostics to.</param>
         /// <returns>Collection of blocking configuration errors.</returns>
+        /// <param name="Setting">The Setting value.</param>
+        /// <param name="Error">The Error value.</param>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings)

@@ -108,6 +108,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="runtimeOptions">Validated runtime options.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns><see langword="true"/> when a new certificate was issued and activated; otherwise <see langword="false"/>.</returns>
+        /// <typeparam name="bool">The bool type parameter.</typeparam>
         public async Task<bool> TryRenewIfDueAsync(BackFillerRuntimeOptions runtimeOptions, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);

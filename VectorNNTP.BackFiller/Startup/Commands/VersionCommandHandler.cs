@@ -15,6 +15,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Displays version and build information.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static int Handle()
         {
             Console.WriteLine(BuildInfoService.GetFullVersionString());

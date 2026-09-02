@@ -291,6 +291,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// <summary>
             /// Handles build query for authoritative dns txt propagation verifier.
             /// </summary>
+            /// <param name="fqdn">The fqdn value.</param>
+            /// <param name="type">The type value.</param>
+            /// <returns>The operation result.</returns>
             internal static byte[] BuildQuery(string fqdn, DnsRecordTypeCode type)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
@@ -353,6 +356,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// <summary>
             /// Handles parse ns record names for authoritative dns txt propagation verifier.
             /// </summary>
+            /// <param name="message">The message value.</param>
+            /// <returns>The operation result.</returns>
             internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
@@ -395,6 +400,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// <summary>
             /// Handles parse txt values for authoritative dns txt propagation verifier.
             /// </summary>
+            /// <param name="message">The message value.</param>
+            /// <returns>The operation result.</returns>
             internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
@@ -446,6 +453,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// <summary>
             /// Handles static for authoritative dns txt propagation verifier.
             /// </summary>
+            /// <param name="message">The message value.</param>
             private static (int QuestionCount, int AnswerCount, int AuthorityCount, int AdditionalCount) ReadHeaderCounts(byte[] message)
             {
                 if (message.Length < 12)

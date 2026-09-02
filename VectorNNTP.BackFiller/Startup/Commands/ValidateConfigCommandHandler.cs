@@ -19,6 +19,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Validates configuration only and returns an appropriate exit code.
         /// </summary>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static int Handle(IConfiguration? configuration)
         {
             Console.WriteLine("Validating configuration...");
@@ -67,6 +69,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Handles build validate config command result for validate config command handler.
         /// </summary>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static ConfigurationValidationResult BuildValidateConfigCommandResult(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

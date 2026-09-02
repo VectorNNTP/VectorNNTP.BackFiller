@@ -33,6 +33,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="request">Parsed article-work request.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Retrieval result containing lease context and deterministic workflow result.</returns>
+        /// <typeparam name="BackboneArticleRetrievalResult">The BackboneArticleRetrievalResult type parameter.</typeparam>
         public ValueTask<BackboneArticleRetrievalResult> RetrieveAsync(RabbitMqArticleWorkRequest request, CancellationToken cancellationToken);
     }
 

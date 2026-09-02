@@ -29,6 +29,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles read nntp line async for transit protocol parser.
         /// </summary>
+        /// <param name="reader">The reader value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -38,6 +41,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles read nntp line with byte count async for transit protocol parser.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -137,6 +142,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles validate greeting for transit protocol parser.
         /// </summary>
+        /// <param name="greetingLine">The greetingLine value.</param>
         internal static void ValidateGreeting(string greetingLine)
         {
             (int code, _, _) = ParseStatusLine(greetingLine);
@@ -152,6 +158,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles parse capabilities response for transit protocol parser.
         /// </summary>
+        /// <param name="responseLines">The responseLines value.</param>
+        /// <returns>The operation result.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         internal static TransitCapabilitySnapshot ParseCapabilitiesResponse(IReadOnlyList<string> responseLines)
         {
             ArgumentNullException.ThrowIfNull(responseLines);

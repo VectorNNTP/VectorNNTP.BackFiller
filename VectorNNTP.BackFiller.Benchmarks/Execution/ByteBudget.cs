@@ -44,6 +44,9 @@ internal sealed class ByteBudget : IDisposable
     /// <summary>
     /// Implements the acquire Async contract.
     /// </summary>
+    /// <param name="bytes">The number of bytes to reserve from the shared budget.</param>
+    /// <param name="cancellationToken">Cancellation token used while waiting for capacity.</param>
+    /// <returns>A task that completes when capacity is acquired or cancellation is observed.</returns>
     internal ValueTask AcquireAsync(int bytes, CancellationToken cancellationToken)
     {
         if (bytes <= 0)
@@ -76,6 +79,7 @@ internal sealed class ByteBudget : IDisposable
     /// <summary>
     /// Runs the release benchmark scenario.
     /// </summary>
+    /// <param name="bytes">The number of bytes to return to the available budget.</param>
     internal void Release(int bytes)
     {
         if (bytes <= 0)
@@ -129,6 +133,7 @@ internal sealed class ByteBudget : IDisposable
     /// <summary>
     /// Implements the cancel Waiter contract.
     /// </summary>
+    /// <param name="waiter">The waiter instance to mark as canceled.</param>
     private void CancelWaiter(BudgetWaiter waiter)
     {
         lock (_gate)
@@ -221,6 +226,8 @@ internal sealed class ByteBudget : IDisposable
         /// <summary>
         /// Implements the register Cancellation contract.
         /// </summary>
+        /// <param name="cancellationToken">The cancellation token associated with the waiting acquire request.</param>
+        /// <param name="budget">The owning budget used to mark this waiter as canceled.</param>
         internal void RegisterCancellation(CancellationToken cancellationToken, ByteBudget budget)
         {
             _registration = cancellationToken.Register(static state =>

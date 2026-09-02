@@ -423,6 +423,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             /// <summary>
             /// Handles equals for back filler listener socket service.
             /// </summary>
+            /// <param name="x">The x value.</param>
+            /// <param name="y">The y value.</param>
+            /// <returns>true when the operation succeeds; otherwise false.</returns>
             public bool Equals(IPEndPoint? x, IPEndPoint? y)
             {
                 return ReferenceEquals(x, y) || (x is not null && y is not null && x.Port == y.Port && x.Address.Equals(y.Address));
@@ -431,6 +434,8 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             /// <summary>
             /// Handles get hash code for back filler listener socket service.
             /// </summary>
+            /// <param name="obj">The obj value.</param>
+            /// <returns>The operation result.</returns>
             public int GetHashCode(IPEndPoint obj)
             {
                 return HashCode.Combine(obj.Address, obj.Port);

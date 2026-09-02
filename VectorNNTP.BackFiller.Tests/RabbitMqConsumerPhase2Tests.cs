@@ -436,6 +436,9 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         [Fact]
+        /// <summary>
+        /// Verifies that StopAsync retirement mode prevents admission of deliveries arriving after consumer cancellation.
+        /// </summary>
         public async Task StopAsync_WhenRetiring_RejectsNewDeliveryAdmission()
         {
             using ShutdownCoordinator shutdownCoordinator = new();

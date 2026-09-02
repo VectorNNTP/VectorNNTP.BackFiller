@@ -454,6 +454,9 @@ namespace VectorNNTP.Backfiller.Tests
         [InlineData("Database:Username", false)]     // Username is operational, not secret
         [InlineData("Application:Name", false)]
         [InlineData("Logging:Level", false)]
+        /// <summary>
+        /// Verifies that sensitive-key detection uses segment and suffix matching without prefix false positives.
+        /// </summary>
         public void IsSensitiveConfigurationKey_UsesSegmentBasedMatching(string key, bool expectedSensitive)
         {
             // Act

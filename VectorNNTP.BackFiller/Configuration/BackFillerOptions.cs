@@ -112,24 +112,28 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <summary>
         /// Gets or sets Let's Encrypt configuration used for ACME account and certificate operations.
         /// </summary>
+        /// <returns>The operation result.</returns>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt is required")]
         public LetsEncryptOptions LetsEncrypt { get; set; } = new();
 
         /// <summary>
         /// Gets or sets RabbitMQ configuration used for channel lifecycle and control-plane messaging safeguards.
         /// </summary>
+        /// <returns>The operation result.</returns>
         [Required(ErrorMessage = "BackFiller:RabbitMQ is required")]
         public RabbitMqOptions RabbitMQ { get; set; } = new();
 
         /// <summary>
         /// Gets or sets TransitServer connection settings used for downstream NNTP article streaming.
         /// </summary>
+        /// <returns>The operation result.</returns>
         [Required(ErrorMessage = "BackFiller:TransitServer is required")]
         public TransitServerOptions TransitServer { get; set; } = new();
 
         /// <summary>
         /// Gets or sets graceful shutdown behavior used when stopping the BackFiller service.
         /// </summary>
+        /// <returns>The operation result.</returns>
         [Required(ErrorMessage = "BackFiller:Shutdown is required")]
         public ShutdownOptions Shutdown { get; set; } = new();
     }
@@ -588,6 +592,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         /// <param name="validationContext">Validation context for this options instance.</param>
         /// <returns>Validation errors when constraints are violated.</returns>
+        /// <typeparam name="ValidationResult">The ValidationResult type parameter.</typeparam>
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
             ArgumentNullException.ThrowIfNull(validationContext);
@@ -628,6 +633,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for TransitServer settings.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="TransitServerValidationResult">The TransitServerValidationResult type parameter.</typeparam>
         public static List<TransitServerValidationResult> Validate(
             TransitServerOptions? transitServer,
             string settingPrefix)
@@ -772,6 +778,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for RabbitMQ lease settings.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="RabbitMqValidationResult">The RabbitMqValidationResult type parameter.</typeparam>
         public static List<RabbitMqValidationResult> Validate(
             RabbitMqOptions? rabbitMq,
             string settingPrefix)
@@ -1757,6 +1764,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration setting prefix for diagnostics.</param>
         /// <returns>Validation diagnostics.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="BackFillerIdentityValidationResult">The BackFillerIdentityValidationResult type parameter.</typeparam>
         public static List<BackFillerIdentityValidationResult> Validate(
             string? name,
             int? id,
@@ -2015,6 +2023,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for ACME account email.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateAcmeAccountEmail(string? acmeAccountEmail, string settingPrefix)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(settingPrefix);
@@ -2067,6 +2076,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for transient retry max-attempts configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateAcmeTransientRetryMaxAttempts(
             int? acmeTransientRetryMaxAttempts,
             string settingPrefix)
@@ -2103,6 +2113,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for clock-skew check TTL configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateClockSkewCheckTtlMinutes(
             int? clockSkewCheckTtlMinutes,
             string settingPrefix)
@@ -2139,6 +2150,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for clock-skew maximum configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateClockSkewMaxMinutes(
             int? clockSkewMaxMinutes,
             string settingPrefix)
@@ -2175,6 +2187,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for authoritative nameserver cache TTL configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDnsAuthoritativeNsCacheMinutes(
             int? dnsAuthoritativeNsCacheMinutes,
             string settingPrefix)
@@ -2211,6 +2224,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for authoritative DNS quorum-ratio configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDnsAuthoritativeQuorumRatio(
             double? dnsAuthoritativeQuorumRatio,
             string settingPrefix)
@@ -2250,6 +2264,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for DNS propagation delay configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDnsPropagationDelaySeconds(
             int? dnsPropagationDelaySeconds,
             string settingPrefix)
@@ -2286,6 +2301,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for DNS TXT polling interval configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDnsTxtPollIntervalSeconds(
             int? dnsTxtPollIntervalSeconds,
             string settingPrefix)
@@ -2322,6 +2338,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for DNS TXT polling timeout configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDnsTxtPollTimeoutSeconds(
             int? dnsTxtPollTimeoutSeconds,
             string settingPrefix)
@@ -2359,6 +2376,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for interval/timeout coherence.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDnsTxtPollingCoherence(
             int? dnsTxtPollIntervalSeconds,
             int? dnsTxtPollTimeoutSeconds,
@@ -2390,6 +2408,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for shared domain-name configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateDomainNames(
             string[]? domainNames,
             string settingPrefix)
@@ -2480,6 +2499,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for PFX export password configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidatePfxExportPassword(
             string? pfxExportPassword,
             string settingPrefix)
@@ -2534,6 +2554,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for renewal-check interval configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateRenewalCheckIntervalHours(
             int? renewalCheckIntervalHours,
             string settingPrefix)
@@ -2570,6 +2591,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for renewal-check jitter ratio configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateRenewalJitterRatio(
             double? renewalJitterRatio,
             string settingPrefix)
@@ -2609,6 +2631,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for renewal eligibility threshold configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateRenewBeforeExpiryDays(
             int? renewBeforeExpiryDays,
             string settingPrefix)
@@ -2645,6 +2668,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for Cloudflare API token configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateCloudFlareApiToken(
             string? cloudFlareApiToken,
             string settingPrefix)
@@ -2690,6 +2714,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for Cloudflare zone-id configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateCloudFlareZoneId(
             string? cloudFlareZoneId,
             string settingPrefix)
@@ -2729,6 +2754,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">Configuration prefix used for diagnostics.</param>
         /// <returns>Validation diagnostics for ACME account key configuration.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="LetsEncryptValidationResult">The LetsEncryptValidationResult type parameter.</typeparam>
         public static List<LetsEncryptValidationResult> ValidateAcmeAccountKeyPem(
             string? acmeAccountKeyPem,
             string? dirCerts,
@@ -2938,6 +2964,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingPrefix">The configuration setting prefix (for diagnostic messages).</param>
         /// <returns>List of validation diagnostics (errors and warnings). Empty if valid with no warnings.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingPrefix"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="BindAddressValidationResult">The BindAddressValidationResult type parameter.</typeparam>
         public static List<BindAddressValidationResult> Validate(
             string[]? bindAddresses,
             int? bindPort,

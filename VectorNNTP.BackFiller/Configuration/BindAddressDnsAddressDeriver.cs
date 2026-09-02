@@ -26,6 +26,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="interfaceAddressProvider">Optional provider that returns local interface addresses for wildcard derivation.</param>
         /// <returns>Canonical deduplicated DNS address set.</returns>
         /// <exception cref="InvalidOperationException">Thrown when configured bind-address values contain unparseable entries or wildcard interface enumeration fails.</exception>
+        /// <typeparam name="IPAddress">The IPAddress type parameter.</typeparam>
         internal static IReadOnlyList<IPAddress> DeriveCanonicalDnsAddresses(
             string[]? bindAddresses,
             Func<IReadOnlyList<IPAddress>>? interfaceAddressProvider = null)
@@ -208,6 +209,7 @@ namespace VectorNNTP.Backfiller.Configuration
             /// <summary>
             /// Singleton comparer instance.
             /// </summary>
+            /// <returns>The operation result.</returns>
             internal static ByteSequenceComparer Instance { get; } = new();
 
             /// <summary>

@@ -188,6 +188,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task that completes when at least one ready session is available.</returns>
         /// <exception cref="InvalidOperationException">Thrown when initialization is attempted more than once or no sessions become ready.</exception>
+        /// <typeparam name="NntpAccountSnapshot">The NntpAccountSnapshot type parameter.</typeparam>
         internal async Task InitializeAsync(IReadOnlyList<NntpAccountSnapshot> accounts, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(accounts);
@@ -252,6 +253,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="cancellationToken">Cancellation token for shutdown-aware reconciliation work.</param>
         /// <returns>Deterministic reconciliation summary for control-plane diagnostics.</returns>
         /// <exception cref="InvalidOperationException">Thrown when called before manager initialization.</exception>
+        /// <typeparam name="NntpAccountSessionReconcileResult">The NntpAccountSessionReconcileResult type parameter.</typeparam>
         internal async Task<NntpAccountSessionReconcileResult> ReconcileAccountAsync(
             NntpAccountSnapshot desiredAccount,
             CancellationToken cancellationToken)
@@ -381,6 +383,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="messageId">Canonical Message-ID used for correlation logging.</param>
         /// <param name="cancellationToken">Cancellation token for backpressure waiting.</param>
         /// <returns>A lease that owns one active session assignment until disposed.</returns>
+        /// <typeparam name="NntpArticleSessionLease">The NntpArticleSessionLease type parameter.</typeparam>
         internal async ValueTask<NntpArticleSessionLease> AcquireAsync(string messageId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(messageId);

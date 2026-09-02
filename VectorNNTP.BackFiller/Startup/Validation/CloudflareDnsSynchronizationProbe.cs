@@ -40,6 +40,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="cancellationToken">Startup cancellation token.</param>
         /// <param name="dnsFacadeFactory">Optional test hook for supplying a custom Cloudflare DNS facade.</param>
         /// <returns>A dependency validation result representing synchronization success or failure.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> SynchronizeGeneratedBackFillerDnsAsync(
             BackFillerOptions? backFiller,
             BackFillerRuntimeOptions runtimeOptions,
@@ -495,6 +496,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="zoneId">Zone identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Resolved zone details.</returns>
+        /// <typeparam name="CloudflareZoneInfo">The CloudflareZoneInfo type parameter.</typeparam>
         public Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken);
 
         /// <summary>
@@ -516,6 +518,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="proxied">Optional proxied mode.</param>
         /// <param name="ttl">Optional DNS TTL.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task AddDnsRecordAsync(
             string zoneId,
             string fqdn,
@@ -531,6 +534,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="zoneId">Zone identifier.</param>
         /// <param name="recordId">Record identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task DeleteDnsRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
     }
 
@@ -560,6 +564,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="zoneId">Zone identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Resolved zone details.</returns>
+        /// <typeparam name="CloudflareZoneInfo">The CloudflareZoneInfo type parameter.</typeparam>
         public async Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
@@ -618,6 +623,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="proxied">Optional proxied mode.</param>
         /// <param name="ttl">Optional DNS TTL.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public async Task AddDnsRecordAsync(
             string zoneId,
             string fqdn,
@@ -656,6 +662,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="zoneId">Zone identifier.</param>
         /// <param name="recordId">Record identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public async Task DeleteDnsRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);

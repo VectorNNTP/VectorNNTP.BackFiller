@@ -103,6 +103,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         /// <param name="canonicalValue">Canonical UTC date string when parse succeeds.</param>
         /// <param name="failure">Failure reason when parse fails.</param>
         /// <returns><see langword="true"/> when parse succeeds.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         internal static bool TryGetCanonicalDateValue(ReadOnlySpan<char> input, out string canonicalValue, out DateParseFailureReason failure)
         {
             return TryGetCanonicalDateValue(input, DateParseOptions.Default, out canonicalValue, out failure);

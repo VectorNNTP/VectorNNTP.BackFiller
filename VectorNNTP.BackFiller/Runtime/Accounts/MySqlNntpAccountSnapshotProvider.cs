@@ -24,6 +24,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// <summary>
         /// Limits accounts table create sql for my sql nntp account snapshot provider.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal const string AccountsTableCreateSql = "CREATE TABLE IF NOT EXISTS `nntpbackfilleraccounts` (" +
             "`entryid` char(36) NOT NULL," +
             "`backbone` enum('Abavia','Altopia','BaseIP','Eweka','Elbracht','Giganews','GTT','Highwinds','ItsHosted','Novia','UExpress','UsenetNode1') NOT NULL," +
@@ -151,6 +152,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// Ensures startup-time MySQL database and table dependencies exist and are accessible.
         /// </summary>
         /// <param name="cancellationToken">Startup cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task EnsureStartupDependenciesAsync(CancellationToken cancellationToken)
         {
             await _startupProvisioningStore.EnsureDatabaseAndTableAsync(
@@ -164,6 +166,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// Loads and publishes the initial runtime account snapshot.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token for startup cancellation.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task LoadInitialSnapshotAsync(CancellationToken cancellationToken)
         {
             LogInitialAccountLoadStarting(_logger, _serverId);
@@ -177,6 +180,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// Refreshes and publishes the runtime account snapshot.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token for shutdown-aware refresh.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="bool">The bool type parameter.</typeparam>
         internal async Task<bool> RefreshSnapshotAsync(CancellationToken cancellationToken)
         {
             if (Interlocked.CompareExchange(ref _refreshInProgress, 1, 0) != 0)
@@ -283,6 +288,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// <summary>
         /// Handles parse entry id value for my sql nntp account snapshot provider.
         /// </summary>
+        /// <param name="rawEntryId">The rawEntryId value.</param>
+        /// <returns>The operation result.</returns>
         internal static Guid ParseEntryIdValue(object rawEntryId)
         {
             return rawEntryId switch
@@ -296,6 +303,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// <summary>
         /// Handles parse entry id for my sql nntp account snapshot provider.
         /// </summary>
+        /// <param name="rawEntryId">The rawEntryId value.</param>
+        /// <returns>The operation result.</returns>
         internal static Guid ParseEntryId(string rawEntryId)
         {
             return Guid.TryParse(rawEntryId, out Guid parsed)
@@ -306,6 +315,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// <summary>
         /// Handles parse keep alive value for my sql nntp account snapshot provider.
         /// </summary>
+        /// <param name="rawKeepAlive">The rawKeepAlive value.</param>
+        /// <returns>The operation result.</returns>
         internal static byte ParseKeepAliveValue(object rawKeepAlive)
         {
             return rawKeepAlive switch
@@ -326,6 +337,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// <summary>
         /// Handles parse use ssl for my sql nntp account snapshot provider.
         /// </summary>
+        /// <param name="rawUseSsl">The rawUseSsl value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal static bool ParseUseSsl(string rawUseSsl)
         {
             return rawUseSsl switch
@@ -344,6 +357,11 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             /// <summary>
             /// Handles ensure database and table async for my sql nntp account snapshot provider.
             /// </summary>
+            /// <param name="databaseName">The databaseName value.</param>
+            /// <param name="tableName">The tableName value.</param>
+            /// <param name="createTableSql">The createTableSql value.</param>
+            /// <param name="cancellationToken">The cancellationToken value.</param>
+            /// <returns>A task representing the asynchronous operation.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken);
         }
 
@@ -367,6 +385,11 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             /// <summary>
             /// Handles ensure database and table async for my sql nntp account snapshot provider.
             /// </summary>
+            /// <param name="databaseName">The databaseName value.</param>
+            /// <param name="tableName">The tableName value.</param>
+            /// <param name="createTableSql">The createTableSql value.</param>
+            /// <param name="cancellationToken">The cancellationToken value.</param>
+            /// <returns>A task representing the asynchronous operation.</returns>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;
@@ -390,6 +413,8 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             /// <summary>
             /// Handles my sql startup provisioning store for my sql nntp account snapshot provider.
             /// </summary>
+            /// <param name="connectionString">The connectionString value.</param>
+            /// <param name="logger">The logger value.</param>
             internal MySqlStartupProvisioningStore(string connectionString, ILogger<MySqlNntpAccountSnapshotProvider> logger)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
@@ -402,6 +427,11 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             /// <summary>
             /// Handles ensure database and table async for my sql nntp account snapshot provider.
             /// </summary>
+            /// <param name="databaseName">The databaseName value.</param>
+            /// <param name="tableName">The tableName value.</param>
+            /// <param name="createTableSql">The createTableSql value.</param>
+            /// <param name="cancellationToken">The cancellationToken value.</param>
+            /// <returns>A task representing the asynchronous operation.</returns>
             public async Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(databaseName);

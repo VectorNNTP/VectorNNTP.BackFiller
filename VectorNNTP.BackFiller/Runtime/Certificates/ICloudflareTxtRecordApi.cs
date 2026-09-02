@@ -33,6 +33,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="recordValue">TXT value content.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Created TXT record information.</returns>
+        /// <typeparam name="CloudflareTxtRecordInfo">The CloudflareTxtRecordInfo type parameter.</typeparam>
         public Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken);
 
         /// <summary>
@@ -41,6 +42,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="zoneId">Cloudflare zone identifier.</param>
         /// <param name="recordId">Record identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
     }
 }

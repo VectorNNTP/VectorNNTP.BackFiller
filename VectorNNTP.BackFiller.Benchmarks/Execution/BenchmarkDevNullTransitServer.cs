@@ -502,6 +502,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the try ParseCommand contract.
     /// </summary>
+    /// <param name="line">The NNTP command line bytes excluding the trailing line terminator.</param>
+    /// <param name="command">The parsed command classification and optional message-id output.</param>
+    /// <returns><see langword="true"/> when a command classification was produced; otherwise <see langword="false"/> for empty input.</returns>
     private static bool TryParseCommand(in ReadOnlySequence<byte> line, out ParsedCommand command)
     {
         if (line.IsEmpty)
@@ -551,6 +554,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the decode MessageIdOrDefault contract.
     /// </summary>
+    /// <param name="messageIdBytes">The raw trailing token bytes that may contain a message-id.</param>
+    /// <returns>The trimmed ASCII message-id, or a placeholder value when no message-id is present.</returns>
     private static string DecodeMessageIdOrDefault(in ReadOnlySequence<byte> messageIdBytes)
     {
         string raw = Encoding.ASCII.GetString(messageIdBytes.ToArray()).Trim();
@@ -562,6 +567,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the ascii EqualsIgnoreCase contract.
     /// </summary>
+    /// <param name="value">The segmented ASCII bytes to compare.</param>
+    /// <param name="expected">The expected upper-case ASCII token.</param>
+    /// <returns><see langword="true"/> when both sequences are equal ignoring ASCII case; otherwise <see langword="false"/>.</returns>
     private static bool AsciiEqualsIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> expected)
     {
         if (value.Length != expected.Length)
@@ -590,6 +598,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the ascii StartsWithIgnoreCase contract.
     /// </summary>
+    /// <param name="value">The segmented ASCII bytes to inspect.</param>
+    /// <param name="prefix">The expected upper-case ASCII prefix.</param>
+    /// <returns><see langword="true"/> when <paramref name="value"/> starts with <paramref name="prefix"/> ignoring ASCII case; otherwise <see langword="false"/>.</returns>
     private static bool AsciiStartsWithIgnoreCase(in ReadOnlySequence<byte> value, ReadOnlySpan<byte> prefix)
     {
         if (value.Length < prefix.Length)
@@ -623,6 +634,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the try GetLastByte contract.
     /// </summary>
+    /// <param name="sequence">The segmented byte sequence to inspect.</param>
+    /// <param name="value">The last byte when present; otherwise <c>0</c>.</param>
+    /// <returns><see langword="true"/> when a last byte was found; otherwise <see langword="false"/>.</returns>
     private static bool TryGetLastByte(in ReadOnlySequence<byte> sequence, out byte value)
     {
         value = 0;
@@ -646,6 +660,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Converts to UpperAsciiInvariant.
     /// </summary>
+    /// <param name="value">The ASCII byte to normalize.</param>
+    /// <returns>The upper-case ASCII equivalent when <paramref name="value"/> is a lower-case letter; otherwise the original byte.</returns>
     private static byte ToUpperAsciiInvariant(byte value)
     {
         return value is >= (byte)'a' and <= (byte)'z'
@@ -789,6 +805,11 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the send QuitAndStopAsync contract.
     /// </summary>
+    /// <param name="writer">The protocol writer used to send the final QUIT response.</param>
+    /// <param name="queueReader">The response queue drained before shutdown.</param>
+    /// <param name="metrics">The transmit metrics updated for the final flush.</param>
+    /// <param name="onResponseWritten">Callback invoked after writing the QUIT response.</param>
+    /// <returns>A task representing completion of the final flush operation.</returns>
     private static async Task SendQuitAndStopAsync(PipeWriter writer, ChannelReader<ResponseWorkItem> queueReader, TransmitLoopMetrics metrics, Action onResponseWritten)
     {
         while (queueReader.TryRead(out _))
@@ -810,6 +831,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the enqueue Response contract.
     /// </summary>
+    /// <param name="writer">The response channel writer.</param>
+    /// <param name="workItem">The response work item to enqueue.</param>
     private static void EnqueueResponse(ChannelWriter<ResponseWorkItem> writer, in ResponseWorkItem workItem)
     {
         ArgumentNullException.ThrowIfNull(writer);
@@ -832,6 +855,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Writes Response.
     /// </summary>
+    /// <param name="writer">The protocol writer receiving encoded response bytes.</param>
+    /// <param name="response">The logical response to encode and write.</param>
     private static void WriteResponse(PipeWriter writer, in ResponseWorkItem response)
     {
         switch (response.Kind)
@@ -868,6 +893,9 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         /// <summary>
         /// Implements the request Quit contract.
         /// </summary>
+        /// <remarks>
+        /// Uses an atomic exchange so quit observation by the transmit loop does not require additional locking.
+        /// </remarks>
         internal void RequestQuit()
         {
             Interlocked.Exchange(ref _quitRequested, 1);
@@ -922,6 +950,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         /// <summary>
         /// Implements the record Flush contract.
         /// </summary>
+        /// <param name="responsesInFlush">The number of responses staged in the just-completed flush.</param>
         internal void RecordFlush(int responsesInFlush)
         {
             Interlocked.Increment(ref _flushCount);
@@ -988,16 +1017,21 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
         /// <summary>
         /// Runs the takethis benchmark scenario.
         /// </summary>
+        /// <param name="messageId">The TAKETHIS message-id echoed in the response payload.</param>
+        /// <returns>A response work item representing a TAKETHIS accepted response.</returns>
         public static ResponseWorkItem Takethis(string messageId) => new(ResponseKind.TakethisAccepted, messageId);
 
         /// <summary>
         /// Runs the check benchmark scenario.
         /// </summary>
+        /// <param name="messageId">The CHECK message-id echoed in the response payload.</param>
+        /// <returns>A response work item representing a CHECK send response.</returns>
         public static ResponseWorkItem Check(string messageId) => new(ResponseKind.CheckSend, messageId);
 
         /// <summary>
         /// Runs the unknown benchmark scenario.
         /// </summary>
+        /// <returns>A response work item representing an unknown-command response.</returns>
         public static ResponseWorkItem Unknown() => new(ResponseKind.UnknownCommand, string.Empty);
     }
 
@@ -1087,6 +1121,8 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     /// <summary>
     /// Implements the describe SocketState contract.
     /// </summary>
+    /// <param name="client">The TCP client whose socket state should be described.</param>
+    /// <returns>A diagnostic string describing client socket connectivity and poll state.</returns>
     private static string DescribeSocketState(TcpClient client)
     {
         ArgumentNullException.ThrowIfNull(client);

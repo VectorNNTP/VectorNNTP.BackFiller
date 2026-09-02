@@ -75,6 +75,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Handles is connection string for configuration fingerprint service.
         /// </summary>
+        /// <param name="configurationKey">The configurationKey value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal static bool IsConnectionString(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -105,6 +107,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Handles sanitize connection string for configuration fingerprint service.
         /// </summary>
+        /// <param name="connectionString">The connectionString value.</param>
+        /// <returns>The operation result.</returns>
         internal static string? SanitizeConnectionString(string connectionString)
         {
             try
@@ -212,6 +216,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Handles calculate configuration fingerprint for configuration fingerprint service.
         /// </summary>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static string CalculateConfigurationFingerprint(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

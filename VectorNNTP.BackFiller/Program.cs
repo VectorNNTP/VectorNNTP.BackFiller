@@ -42,6 +42,7 @@ namespace VectorNNTP.Backfiller
         /// <para>Startup validation is cancelable via Ctrl+C and uses explicit exit codes for parse,
         /// configuration, dependency, cancellation, and unexpected-failure outcomes.</para>
         /// </remarks>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public static async Task Main(string[] args)
         {
             ProcessBootstrapper.ConfigureBootstrapLogger();

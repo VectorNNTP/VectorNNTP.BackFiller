@@ -33,6 +33,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="recordValue">TXT record content value.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Created record identifier.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         public Task<string> CreateTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken);
 
         /// <summary>

@@ -27,6 +27,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="dependencyTimeout">Maximum timeout per dependency operation.</param>
         /// <param name="cancellationToken">Startup cancellation token.</param>
         /// <returns>Aggregated dependency validation outcome.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateDependenciesAsync(
             IConfiguration configuration,
             BackFillerOptions? backFiller,

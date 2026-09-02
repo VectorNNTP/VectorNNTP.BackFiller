@@ -90,6 +90,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <summary>
         /// Handles create txt record async for cloudflare txt record client.
         /// </summary>
+        /// <param name="zoneId">The zoneId value.</param>
+        /// <param name="recordName">The recordName value.</param>
+        /// <param name="recordValue">The recordValue value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         public async Task<string> CreateTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);

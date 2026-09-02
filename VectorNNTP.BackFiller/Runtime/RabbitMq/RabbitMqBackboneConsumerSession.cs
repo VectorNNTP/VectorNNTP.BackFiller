@@ -152,6 +152,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Stores active connection generation used by rabbit mq backbone consumer session.
         /// </summary>
+        /// <param name="_activeConnectionGeneration">The _activeConnectionGeneration value.</param>
+        /// <returns>The operation result.</returns>
         internal long ActiveConnectionGeneration => Interlocked.Read(ref _activeConnectionGeneration);
 
         long IRabbitMqConsumerSession.ActiveConnectionGeneration => ActiveConnectionGeneration;
@@ -159,6 +161,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles handle connection replaced async for rabbit mq backbone consumer session.
         /// </summary>
+        /// <param name="args">The args value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task HandleConnectionReplacedAsync(RabbitMqConnectionReplacedEventArgs args, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(args);
@@ -198,6 +203,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles start async for rabbit mq backbone consumer session.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
@@ -222,6 +229,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles stop async for rabbit mq backbone consumer session.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <param name="cancelAdmittedWork">The cancelAdmittedWork value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
         {
             await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -238,6 +248,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles dispose async for rabbit mq backbone consumer session.
         /// </summary>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public async ValueTask DisposeAsync()
         {
             if (_disposed)
@@ -695,6 +706,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             /// <summary>
             /// Handles rabbit mq admitted delivery tracker for rabbit mq backbone consumer session.
             /// </summary>
+            /// <param name="owner">The owner value.</param>
             internal RabbitMqAdmittedDeliveryTracker(RabbitMqBackboneConsumerSession owner)
             {
                 _owner = owner ?? throw new ArgumentNullException(nameof(owner));
@@ -743,6 +755,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             /// <summary>
             /// Handles rabbit mq delivery settlement for rabbit mq backbone consumer session.
             /// </summary>
+            /// <param name="owner">The owner value.</param>
+            /// <param name="deliveryTag">The deliveryTag value.</param>
+            /// <param name="deliveryGeneration">The deliveryGeneration value.</param>
+            /// <param name="admissionTracker">The admissionTracker value.</param>
             internal RabbitMqDeliverySettlement(RabbitMqBackboneConsumerSession owner, ulong deliveryTag, long deliveryGeneration, RabbitMqAdmittedDeliveryTracker? admissionTracker)
             {
                 _owner = owner ?? throw new ArgumentNullException(nameof(owner));
@@ -754,6 +770,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             /// <summary>
             /// Handles ack async for rabbit mq backbone consumer session.
             /// </summary>
+            /// <param name="cancellationToken">The cancellationToken value.</param>
+            /// <returns>A value task representing the asynchronous operation.</returns>
             public async ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 await SettleAsync(requeue: null, cancellationToken).ConfigureAwait(false);
@@ -762,6 +780,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             /// <summary>
             /// Handles nack async for rabbit mq backbone consumer session.
             /// </summary>
+            /// <param name="requeue">The requeue value.</param>
+            /// <param name="cancellationToken">The cancellationToken value.</param>
+            /// <returns>A value task representing the asynchronous operation.</returns>
             public async ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 await SettleAsync(requeue, cancellationToken).ConfigureAwait(false);

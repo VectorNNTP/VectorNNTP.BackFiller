@@ -78,6 +78,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <param name="payload">UTF-8 JSON response payload.</param>
         /// <returns>Parsed response instance.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static RabbitMqArticleWorkResponse ParseV1(ReadOnlySpan<byte> payload)
         {
             if (payload.IsEmpty)

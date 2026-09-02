@@ -17,6 +17,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Validates startup readiness (configuration and dependencies) and returns an appropriate exit code.
         /// </summary>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static int Handle(IConfiguration? configuration)
         {
             Console.WriteLine("Validating startup readiness...");

@@ -19,6 +19,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// </summary>
         /// <param name="command">The parsed operational command.</param>
         /// <param name="configuration">Configuration used by commands that require it.</param>
+        /// <returns>The operation result.</returns>
         internal static int ExecuteCommand(OperationalCommand command, IConfiguration? configuration)
         {
             return command switch
@@ -36,6 +37,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Determines whether a parsed command requires configuration to execute.
         /// </summary>
+        /// <param name="command">The command value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal static bool CommandRequiresConfiguration(OperationalCommand command)
         {
             return command is OperationalCommand.ValidateConfig

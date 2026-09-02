@@ -343,6 +343,8 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// handlers creates state confusion where transition logs/notifications become inconsistent with
         /// actual state.</para>
         /// </remarks>
+        /// <param name="newState">The newState value.</param>
+        /// <param name="reason">The reason value.</param>
         internal void TransitionTo(LifecycleState newState, string reason)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(reason);
@@ -518,6 +520,8 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// Prevents log spam during stuck initialization (e.g., 600 warnings if called every second for 10 minutes).
         /// The eventual state transition log will show final duration.</para>
         /// </remarks>
+        /// <param name="threshold">The threshold value.</param>
+        /// <param name="phaseName">The phaseName value.</param>
         public void LogSlowPhaseWarning(TimeSpan threshold, string phaseName)
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(threshold, TimeSpan.Zero);
@@ -550,6 +554,7 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// <summary>
         /// Gets a summary of current state (thread-safe snapshot, monotonic timing).
         /// </summary>
+        /// <returns>The operation result.</returns>
         public string GetSummary()
         {
             lock (_sync)

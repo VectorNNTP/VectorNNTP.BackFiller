@@ -148,6 +148,7 @@ namespace VectorNNTP.Backfiller
         /// <summary>
         /// Gets runtime details for the current process.
         /// </summary>
+        /// <returns>The operation result.</returns>
         public RuntimeDetails Runtime { get; init; } = RuntimeDetails.CreateCurrent();
 
         /// <summary>
@@ -357,6 +358,8 @@ namespace VectorNNTP.Backfiller
         /// <see langword="true"/> when the build is marked dirty, <see langword="false"/> when explicitly clean,
         /// and <see langword="null"/> when dirty state information is unavailable.
         /// </returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         internal static bool? ResolveDirtyState(IReadOnlyDictionary<string, string> metadata, string informationalVersion)
         {
             ArgumentNullException.ThrowIfNull(metadata);

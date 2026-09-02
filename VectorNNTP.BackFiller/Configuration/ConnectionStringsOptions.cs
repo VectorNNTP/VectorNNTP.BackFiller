@@ -103,6 +103,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="settingName">The configuration setting name (for diagnostic messages).</param>
         /// <returns>List of validation diagnostics (errors and warnings). Empty if valid with no warnings.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="settingName"/> is null, empty, or whitespace.</exception>
+        /// <typeparam name="ConnectionStringValidationResult">The ConnectionStringValidationResult type parameter.</typeparam>
         public static List<ConnectionStringValidationResult> Validate(string? connectionString, string settingName)
         {
             // Validate settingName parameter (used in all diagnostic messages)

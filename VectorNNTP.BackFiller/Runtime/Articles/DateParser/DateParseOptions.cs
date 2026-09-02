@@ -21,6 +21,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         /// <summary>
         /// Gets default options for article date parsing.
         /// </summary>
+        /// <param name="false">The false value.</param>
+        /// <param name="true">The true value.</param>
+        /// <returns>The operation result.</returns>
         internal static DateParseOptions Default => new(
             MaxInputLength: 512,
             RequireKnownTimezoneAbbreviation: false,

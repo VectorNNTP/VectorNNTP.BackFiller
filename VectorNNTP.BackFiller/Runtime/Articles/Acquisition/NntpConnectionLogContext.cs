@@ -169,6 +169,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             /// <summary>
             /// Handles composite disposable for nntp connection log context.
             /// </summary>
+            /// <param name="disposables">The disposables value.</param>
             internal CompositeDisposable(IReadOnlyList<IDisposable> disposables)
             {
                 _disposables = disposables ?? throw new ArgumentNullException(nameof(disposables));

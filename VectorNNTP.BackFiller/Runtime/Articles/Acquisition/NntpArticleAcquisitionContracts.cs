@@ -111,6 +111,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <summary>
         /// Gets default acquisition guardrails.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static NntpArticleAcquisitionOptions Default => new(
             MaxArticleBytes: 256 * 1024 * 1024,
             ReceiveBufferBytes: 64 * 1024,

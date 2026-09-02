@@ -286,6 +286,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// <summary>
         /// Gets default parser limits tuned for hostile-input safety and transit workloads.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static NntpArticleParserOptions Default => new(
             MaxArticleBytes: 64 * 1024 * 1024,
             MaxHeaderSectionBytes: 256 * 1024,

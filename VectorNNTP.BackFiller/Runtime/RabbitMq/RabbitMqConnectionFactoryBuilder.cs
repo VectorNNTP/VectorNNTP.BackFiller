@@ -71,6 +71,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="options">Validated immutable RabbitMQ runtime options.</param>
         /// <returns>Distinct host list in connection preference order.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         internal static IReadOnlyList<string> BuildHostList(RabbitMqRuntimeOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);

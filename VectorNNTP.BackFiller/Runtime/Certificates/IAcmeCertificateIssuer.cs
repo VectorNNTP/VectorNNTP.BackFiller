@@ -25,6 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Issued certificate artifacts.</returns>
+        /// <typeparam name="AcmeOrderIssueResult">The AcmeOrderIssueResult type parameter.</typeparam>
         public Task<AcmeOrderIssueResult> IssueCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken);

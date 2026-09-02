@@ -59,6 +59,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
         /// <returns>First non-whitespace index or <paramref name="end"/>.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int TrimLeadingWhitespace(ReadOnlySpan<char> span, int start, int end)
         {
@@ -78,6 +79,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
         /// <returns>Exclusive end index after trimming.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int TrimTrailingWhitespace(ReadOnlySpan<char> span, int start, int end)
         {
@@ -97,6 +99,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
         /// <returns><see langword="true"/> when all characters are within 7-bit ASCII range.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsAllAscii(ReadOnlySpan<char> span, int start, int end)
         {
@@ -137,6 +140,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
         /// <returns>Consumed character count.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int ConsumeAtomCharacters(ReadOnlySpan<char> span, int start, int end)
         {
@@ -168,6 +172,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
         /// <returns>Consumed character count.</returns>
+        /// <typeparam name="char">The char type parameter.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int ConsumeAlphanumericPrefix(ReadOnlySpan<char> span, int start, int end)
         {

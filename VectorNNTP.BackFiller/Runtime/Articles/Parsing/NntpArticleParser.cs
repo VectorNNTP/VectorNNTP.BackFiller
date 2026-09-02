@@ -98,6 +98,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// </summary>
         /// <param name="articleBytes">Complete article bytes.</param>
         /// <returns>Parse result with classification, normalized values, and failure metadata.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal NntpArticleParseResult Parse(ReadOnlyMemory<byte> articleBytes)
         {
             if (articleBytes.IsEmpty)

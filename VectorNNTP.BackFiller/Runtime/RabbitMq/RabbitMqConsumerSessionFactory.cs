@@ -326,6 +326,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles execute async for rabbit mq consumer session factory.
         /// </summary>
+        /// <param name="stoppingToken">The stoppingToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             LogConsumerServiceStarting(_logger, _consumerOptions.DeliveryBufferCapacity, _consumerOptions.PrefetchCount);
@@ -369,6 +371,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles stop async for rabbit mq consumer session factory.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             OnShutdownSignaled();
@@ -798,11 +802,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             /// <summary>
             /// Stores instance used by rabbit mq consumer session factory.
             /// </summary>
+            /// <returns>The operation result.</returns>
             internal static readonly AlwaysAvailableBackboneCapacityProvider Instance = new();
 
             /// <summary>
             /// Determines whether the backbone currently has capacity for another delivery.
             /// </summary>
+            /// <param name="backbone">The backbone value.</param>
+            /// <returns>true when the operation succeeds; otherwise false.</returns>
             public bool HasUsableCapacityForBackbone(string backbone)
             {
                 return !string.IsNullOrWhiteSpace(backbone);

@@ -5,7 +5,6 @@
 // VectorNNTP.Backfiller Runtime / RabbitMq
 // Implements the rabbit mq topology behavior.
 
-using System.Collections.Frozen;
 using RabbitMQ.Client;
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
@@ -85,12 +84,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     }));
             }
 
-            return [.. definitions.ToFrozenSet().OrderBy(static x => x.Backbone, StringComparer.OrdinalIgnoreCase)];
+            return [.. definitions.OrderBy(static x => x.Backbone, StringComparer.OrdinalIgnoreCase)];
         }
 
         /// <summary>
         /// Handles build legacy backbone entity name for rabbit mq topology.
         /// </summary>
+        /// <param name="backbone">The backbone name.</param>
+        /// <returns>The legacy backbone entity name.</returns>
         private static string BuildLegacyBackboneEntityName(string backbone)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -103,7 +104,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed partial class RabbitMqTopologyInitializer(
         RabbitMqConnectionManager connectionManager,
-        ILogger<RabbitMqTopologyInitializer> logger)
+        ILogger<RabbitMqTopologyInitializer> logger) : IDisposable
     {
         /// <summary>
         /// Stores connection manager used by rabbit mq topology.
@@ -125,6 +126,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Stores declared topology generation used by rabbit mq topology.
         /// </summary>
         private long _declaredTopologyGeneration;
+        /// <summary>
+        /// Stores disposal state used by rabbit mq topology.
+        /// </summary>
+        private int _disposeSignaled;
 
         /// <summary>
         /// Declares all required RabbitMQ topology for configured backbones.
@@ -187,6 +192,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles build topology declaration key for rabbit mq topology.
         /// </summary>
+        /// <param name="queueName">The queue name.</param>
+        /// <returns>The topology declaration key.</returns>
         private static string BuildTopologyDeclarationKey(string queueName)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
@@ -196,6 +203,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles declare backbone topology async for rabbit mq topology.
         /// </summary>
+        /// <param name="definition">The backbone topology definition.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         private async Task DeclareBackboneTopologyAsync(
             RabbitMqBackboneTopologyDefinition definition,
             CancellationToken cancellationToken)
@@ -209,32 +219,35 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 definition.QueueName,
                 definition.RoutingKey);
 
-            await using RabbitMqOwnedChannel ownedChannel = await _connectionManager
+            RabbitMqOwnedChannel ownedChannel = await _connectionManager
                 .CreateOwnedChannelAsync($"topology:{definition.Backbone}", cancellationToken)
                 .ConfigureAwait(false);
 
-            await ownedChannel.Channel.ExchangeDeclareAsync(
-                exchange: definition.ExchangeName,
-                type: definition.ExchangeType,
-                durable: definition.ExchangeDurable,
-                autoDelete: definition.ExchangeAutoDelete,
-                arguments: definition.ExchangeArguments,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            await using (ownedChannel.ConfigureAwait(false))
+            {
+                await ownedChannel.Channel.ExchangeDeclareAsync(
+                    exchange: definition.ExchangeName,
+                    type: definition.ExchangeType,
+                    durable: definition.ExchangeDurable,
+                    autoDelete: definition.ExchangeAutoDelete,
+                    arguments: definition.ExchangeArguments,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await ownedChannel.Channel.QueueDeclareAsync(
-                queue: definition.QueueName,
-                durable: definition.QueueDurable,
-                exclusive: definition.QueueExclusive,
-                autoDelete: definition.QueueAutoDelete,
-                arguments: definition.QueueArguments,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ownedChannel.Channel.QueueDeclareAsync(
+                    queue: definition.QueueName,
+                    durable: definition.QueueDurable,
+                    exclusive: definition.QueueExclusive,
+                    autoDelete: definition.QueueAutoDelete,
+                    arguments: definition.QueueArguments,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            await ownedChannel.Channel.QueueBindAsync(
-                queue: definition.QueueName,
-                exchange: definition.ExchangeName,
-                routingKey: definition.RoutingKey,
-                arguments: definition.BindingArguments,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+                await ownedChannel.Channel.QueueBindAsync(
+                    queue: definition.QueueName,
+                    exchange: definition.ExchangeName,
+                    routingKey: definition.RoutingKey,
+                    arguments: definition.BindingArguments,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
 
             LogBackboneTopologyInitializationCompleted(
                 _logger,
@@ -242,6 +255,19 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 definition.ExchangeName,
                 definition.QueueName,
                 definition.RoutingKey);
+        }
+
+        /// <summary>
+        /// Disposes topology synchronization resources owned by rabbit mq topology.
+        /// </summary>
+        void IDisposable.Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposeSignaled, 1) != 0)
+            {
+                return;
+            }
+
+            _initializationGate.Dispose();
         }
 
         /// <summary>

@@ -37,6 +37,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <summary>
         /// Displays a constrained configuration view with conservative secret redaction.
         /// </summary>
+        /// <param name="configuration">The configuration value.</param>
+        /// <returns>The operation result.</returns>
         internal static int Handle(IConfiguration? configuration)
         {
             if (configuration == null)

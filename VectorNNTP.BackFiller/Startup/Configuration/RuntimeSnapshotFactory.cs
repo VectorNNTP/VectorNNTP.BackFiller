@@ -24,6 +24,10 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <summary>
         /// Builds an immutable runtime options snapshot from validated/canonicalized startup configuration.
         /// </summary>
+        /// <param name="configuration">The configuration value.</param>
+        /// <param name="backFiller">The backFiller value.</param>
+        /// <param name="configErrors">The configErrors value.</param>
+        /// <returns>The operation result.</returns>
         internal static BackFillerRuntimeOptions? BuildRuntimeOptionsSnapshot(
             IConfiguration configuration,
             BackFillerOptions? backFiller,

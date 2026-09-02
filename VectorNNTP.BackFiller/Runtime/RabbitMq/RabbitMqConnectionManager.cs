@@ -148,6 +148,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Returns the current monotonic RabbitMQ connection generation.
         /// </summary>
+        /// <param name="_connectionGeneration">The _connectionGeneration value.</param>
+        /// <returns>The operation result.</returns>
         internal long ConnectionGeneration => Interlocked.Read(ref _connectionGeneration);
 
         /// <summary>
@@ -208,6 +210,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <param name="cancellationToken">Channel-creation cancellation token.</param>
         /// <param name="enablePublisherConfirmations">Whether publisher confirmations should be enabled on the created channel.</param>
         /// <returns>Independently owned channel lease.</returns>
+        /// <typeparam name="RabbitMqOwnedChannel">The RabbitMqOwnedChannel type parameter.</typeparam>
         internal async Task<RabbitMqOwnedChannel> CreateOwnedChannelAsync(string owner, CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(owner);

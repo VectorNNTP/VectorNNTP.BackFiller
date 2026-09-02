@@ -523,6 +523,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
             /// <summary>
             /// Handles publish snapshot for control plane service.
             /// </summary>
+            /// <param name="capacityByBackbone">The capacityByBackbone value.</param>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);

@@ -51,6 +51,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="workItem">Grabber work item containing canonical Message-ID.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Deterministic grabber result preserving acquisition and parser classifications.</returns>
+        /// <typeparam name="NntpArticleGrabberResult">The NntpArticleGrabberResult type parameter.</typeparam>
         internal async ValueTask<NntpArticleGrabberResult> ProcessAsync(
             NntpArticleAcquisitionSession session,
             NntpArticleGrabberWorkItem workItem,

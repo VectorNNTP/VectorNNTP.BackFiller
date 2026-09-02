@@ -22,6 +22,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Validates RabbitMQ dependency health by opening AMQP connections/channels for configured runtime hosts.
         /// </summary>
+        /// <param name="runtimeOptions">The runtimeOptions value.</param>
+        /// <param name="timeout">The timeout value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateRabbitMqConnectivityAsync(
             BackFillerRuntimeOptions runtimeOptions,
             TimeSpan timeout,
@@ -105,6 +110,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <summary>
         /// Maps socket-level connectivity failures to sanitized startup diagnostics.
         /// </summary>
+        /// <param name="socketError">The socketError value.</param>
+        /// <returns>The operation result.</returns>
         internal static string GetSanitizedSocketFailureReason(SocketError socketError)
         {
 #pragma warning disable IDE0072 // Add missing cases

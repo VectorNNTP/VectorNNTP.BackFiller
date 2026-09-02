@@ -123,6 +123,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="serverCertificateValidationCallback">Optional per-session TLS server-certificate validation callback. When <see langword="null"/>, platform default certificate validation semantics remain in effect.</param>
         /// <param name="connectionLoggingContext">Optional connection metadata used to enrich session logging.</param>
         /// <returns>Connected session or deterministic failure result.</returns>
+        /// <param name="Session">The Session value.</param>
+        /// <param name="Result">The Result value.</param>
         internal static async ValueTask<(NntpArticleAcquisitionSession? Session, NntpArticleAcquisitionResult Result)> ConnectAsync(
             NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionOptions options,
@@ -246,6 +248,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="messageId">Message-ID argument.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Deterministic acquisition result.</returns>
+        /// <typeparam name="NntpArticleAcquisitionResult">The NntpArticleAcquisitionResult type parameter.</typeparam>
         internal async ValueTask<NntpArticleAcquisitionResult> DownloadArticleAsync(string messageId, CancellationToken cancellationToken)
         {
             if (_disposed)
@@ -313,6 +316,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Deterministic result describing DATE keepalive health with command-specific status semantics.</returns>
+        /// <typeparam name="NntpArticleAcquisitionResult">The NntpArticleAcquisitionResult type parameter.</typeparam>
         internal async ValueTask<NntpArticleAcquisitionResult> KeepAliveWithDateAsync(CancellationToken cancellationToken)
         {
             if (_disposed)

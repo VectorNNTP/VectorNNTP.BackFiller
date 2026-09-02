@@ -73,21 +73,25 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <summary>
         /// Returns the effective reconnect initialization timeout.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TimeSpan EffectiveTransitReconnectInitializationTimeout => TransitReconnectInitializationTimeout ?? TimeSpan.FromSeconds(2);
 
         /// <summary>
         /// Returns the effective transit shutdown drain grace period.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TimeSpan EffectiveTransitShutdownDrainGracePeriod => TransitShutdownDrainGracePeriod ?? TimeSpan.FromMinutes(5);
 
         /// <summary>
         /// Returns the effective transit shutdown inactivity watchdog duration.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TimeSpan EffectiveTransitShutdownDrainInactivityWatchdog => TransitShutdownDrainInactivityWatchdog ?? TimeSpan.FromSeconds(30);
 
         /// <summary>
         /// Returns the effective absolute transit shutdown maximum duration.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
 
         /// <summary>

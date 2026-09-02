@@ -89,6 +89,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <exception cref="InvalidOperationException">Thrown when the ACME account, order, challenge, or certificate material is invalid.</exception>
         /// <exception cref="TimeoutException">Thrown when DNS propagation or ACME state transitions do not complete in time.</exception>
         /// <exception cref="OperationCanceledException">Thrown when cancellation is requested before issuance completes.</exception>
+        /// <typeparam name="AcmeOrderIssueResult">The AcmeOrderIssueResult type parameter.</typeparam>
         public async Task<AcmeOrderIssueResult> IssueCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)

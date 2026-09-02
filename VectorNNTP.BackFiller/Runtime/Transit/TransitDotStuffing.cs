@@ -37,6 +37,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="appendTrailingCrlfWhenMissingLf">Whether a final CRLF is added when the source does not end in LF.</param>
         /// <param name="stuffedDotCount">Receives the number of leading line dots that require escaping.</param>
         /// <returns>The required destination length in bytes.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
             stuffedDotCount = 0;
@@ -77,6 +78,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try dot stuff for transit dot stuffing.
         /// </summary>
+        /// <param name="source">The source value.</param>
+        /// <param name="destination">The destination value.</param>
+        /// <param name="result">The result value.</param>
+        /// <param name="algorithm">The algorithm value.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static bool TryDotStuff(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -96,6 +104,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try dot stuff baseline byte loop for transit dot stuffing.
         /// </summary>
+        /// <param name="source">The source value.</param>
+        /// <param name="destination">The destination value.</param>
+        /// <param name="result">The result value.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static bool TryDotStuffBaselineByteLoop(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -153,6 +167,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try dot stuff bulk line oriented single pass for transit dot stuffing.
         /// </summary>
+        /// <param name="source">The source value.</param>
+        /// <param name="destination">The destination value.</param>
+        /// <param name="result">The result value.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static bool TryDotStuffBulkLineOrientedSinglePass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -211,6 +231,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try dot stuff bulk line oriented two pass for transit dot stuffing.
         /// </summary>
+        /// <param name="source">The source value.</param>
+        /// <param name="destination">The destination value.</param>
+        /// <param name="result">The result value.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static bool TryDotStuffBulkLineOrientedTwoPass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,

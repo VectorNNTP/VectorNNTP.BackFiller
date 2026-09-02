@@ -29,6 +29,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <para>External dependency validation is executed only when configuration is structurally valid.</para>
         /// <para>Configuration errors always block startup.</para>
         /// </remarks>
+        /// <param name="ConfigurationValidationResult">The ConfigurationValidationResult value.</param>
+        /// <param name="DependencyValidationResult">The DependencyValidationResult value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal static async Task<(ConfigurationValidationResult, DependencyValidationResult)> ValidateConfigurationAndDependenciesAsync(
             IConfiguration configuration,
             TimeSpan dependencyTimeout,
@@ -50,6 +53,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="dependencyTimeout">Maximum timeout per dependency validation operation.</param>
         /// <param name="cancellationToken">Startup cancellation token.</param>
         /// <returns>Validation results and immutable runtime options when configuration is valid.</returns>
+        /// <param name="ConfigurationValidationResult">The ConfigurationValidationResult value.</param>
+        /// <param name="DependencyValidationResult">The DependencyValidationResult value.</param>
+        /// <param name="RuntimeOptions">The RuntimeOptions value.</param>
         internal static async Task<(ConfigurationValidationResult ConfigurationValidationResult, DependencyValidationResult DependencyValidationResult, BackFillerRuntimeOptions? RuntimeOptions)> ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
             IConfiguration configuration,
             TimeSpan dependencyTimeout,

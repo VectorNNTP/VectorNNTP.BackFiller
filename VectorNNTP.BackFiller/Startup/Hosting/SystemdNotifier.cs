@@ -89,6 +89,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <para>Safe to call multiple times or on non-systemd environments (no-op on Windows/when
         /// environment variable is not set).</para>
         /// </remarks>
+        /// <param name="logger">The logger value.</param>
         public static void NotifySystemdReady(ILogger logger)
         {
             if (NotifySystemd("READY=1", "readiness", logger))
@@ -106,6 +107,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         ///
         /// <para>Optional; systemd will infer stopping state from process termination if not notified.</para>
         /// </remarks>
+        /// <param name="logger">The logger value.</param>
         public static void NotifySystemdStopping(ILogger logger)
         {
             if (NotifySystemd("STOPPING=1", "stopping", logger))

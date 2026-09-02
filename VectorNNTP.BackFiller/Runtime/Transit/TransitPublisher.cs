@@ -210,6 +210,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture timing snapshot for transit publisher.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TransitTimingSnapshot? CaptureTimingSnapshot()
         {
             return _timingCollector?.CaptureSnapshot();
@@ -218,6 +219,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture connection diagnostics snapshot for transit publisher.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TransitPublisherConnectionDiagnosticsSnapshot CaptureConnectionDiagnosticsSnapshot()
         {
             ConnectionSlotSnapshot[] slots = new ConnectionSlotSnapshot[_connections.Length];
@@ -263,6 +265,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture transport snapshot for transit publisher.
         /// </summary>
+        /// <param name="activeConnections">The activeConnections value.</param>
+        /// <param name="outstandingSubmissions">The outstandingSubmissions value.</param>
+        /// <returns>The operation result.</returns>
         internal TransitTransportSnapshot CaptureTransportSnapshot(int activeConnections, int outstandingSubmissions)
         {
             return new TransitTransportSnapshot(
@@ -280,6 +285,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles initialize async for transit publisher.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -322,6 +329,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles publish async for transit publisher.
         /// </summary>
+        /// <param name="messageId">The messageId value.</param>
+        /// <param name="articlePayload">The articlePayload value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <typeparam name="TransitPublishResult">The TransitPublishResult type parameter.</typeparam>
         internal async ValueTask<TransitPublishResult> PublishAsync(
             string messageId,
             ReadOnlyMemory<byte> articlePayload,
@@ -430,6 +442,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles mark submission pump fault measurement window for transit publisher.
         /// </summary>
+        /// <param name="measurementStartStopwatchTick">The measurementStartStopwatchTick value.</param>
+        /// <param name="measurementEndStopwatchTick">The measurementEndStopwatchTick value.</param>
+        /// <param name="measurementBoundaryObserved">The measurementBoundaryObserved value.</param>
         internal static void MarkSubmissionPumpFaultMeasurementWindow(long measurementStartStopwatchTick, long measurementEndStopwatchTick, bool measurementBoundaryObserved)
         {
         }
@@ -437,6 +452,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles mark submission pump fault producer completion for transit publisher.
         /// </summary>
+        /// <param name="allProducersCompleted">The allProducersCompleted value.</param>
         internal static void MarkSubmissionPumpFaultProducerCompletion(bool allProducersCompleted)
         {
         }
@@ -444,6 +460,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles mark submission pump fault dispatchers completed for transit publisher.
         /// </summary>
+        /// <param name="dispatchersCompleted">The dispatchersCompleted value.</param>
         internal static void MarkSubmissionPumpFaultDispatchersCompleted(bool dispatchersCompleted)
         {
         }
@@ -451,6 +468,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture submission pump fault telemetry snapshot for transit publisher.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static PumpFaultTelemetrySnapshot? CaptureSubmissionPumpFaultTelemetrySnapshot()
         {
             return null;
@@ -459,6 +477,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture submission pump fault counts for transit publisher.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static SubmissionPumpFaultCounts CaptureSubmissionPumpFaultCounts()
         {
             return new SubmissionPumpFaultCounts(
@@ -470,6 +489,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture first p1 greeting provenance snapshot for transit publisher.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TransitConnection.P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
             foreach (TransitConnection connection in _connections)
@@ -488,6 +508,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles preempt submission processing async for transit publisher.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task PreemptSubmissionProcessingAsync(CancellationToken cancellationToken)
         {
             _globalQueue.FreezeAdmission();
@@ -530,6 +552,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles dispose async for transit publisher.
         /// </summary>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public async ValueTask DisposeAsync()
         {
             if (_disposeRequested)
@@ -1451,6 +1474,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             /// <summary>
             /// Stores full first fault stack trace used by transit publisher.
             /// </summary>
+            /// <returns>The operation result.</returns>
             internal string FullFirstFaultStackTrace => FirstFault?.SourceException.ToString() ?? string.Empty;
 
             /// <summary>

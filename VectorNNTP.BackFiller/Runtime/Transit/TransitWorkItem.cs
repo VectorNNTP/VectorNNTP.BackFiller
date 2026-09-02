@@ -26,6 +26,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles transit work item for transit work item.
         /// </summary>
+        /// <param name="workItemId">The workItemId value.</param>
+        /// <param name="messageId">The messageId value.</param>
+        /// <param name="payload">The payload value.</param>
+        /// <param name="maxAttempts">The maxAttempts value.</param>
         internal TransitWorkItem(long workItemId, string messageId, byte[] payload, int maxAttempts = 3)
         {
             if (string.IsNullOrWhiteSpace(messageId))
@@ -122,6 +126,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Stores state used by transit work item.
         /// </summary>
+        /// <param name="_stateValue">The _stateValue value.</param>
+        /// <returns>The operation result.</returns>
         internal TransitWorkItemState State => (TransitWorkItemState)Volatile.Read(ref _stateValue);
 
         /// <summary>
@@ -162,6 +168,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try mark queued for transit work item.
         /// </summary>
+        /// <param name="utcNow">The utcNow value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryMarkQueued(DateTimeOffset utcNow)
         {
             while (true)
@@ -199,6 +207,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try revert queued to retry pending for transit work item.
         /// </summary>
+        /// <param name="utcNow">The utcNow value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryRevertQueuedToRetryPending(DateTimeOffset utcNow)
         {
             if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.RetryPending, (int)TransitWorkItemState.Queued)
@@ -216,6 +226,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles mark queued for transit work item.
         /// </summary>
+        /// <param name="utcNow">The utcNow value.</param>
         internal void MarkQueued(DateTimeOffset utcNow)
         {
             if (!TryMarkQueued(utcNow))
@@ -227,6 +238,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try mark claimed for transit work item.
         /// </summary>
+        /// <param name="connectionId">The connectionId value.</param>
+        /// <param name="utcNow">The utcNow value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryMarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
             if (string.IsNullOrWhiteSpace(connectionId))
@@ -250,6 +264,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles mark claimed for transit work item.
         /// </summary>
+        /// <param name="connectionId">The connectionId value.</param>
+        /// <param name="utcNow">The utcNow value.</param>
         internal void MarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
             if (!TryMarkClaimed(connectionId, utcNow))
@@ -290,6 +306,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try move to retry pending for transit work item.
         /// </summary>
+        /// <param name="failureClass">The failureClass value.</param>
+        /// <param name="uncertainty">The uncertainty value.</param>
+        /// <param name="utcNow">The utcNow value.</param>
+        /// <param name="retryDelay">The retryDelay value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryMoveToRetryPending(
             TransitWorkFailureClass failureClass,
             TransitTransmissionUncertainty uncertainty,
@@ -328,6 +349,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles has attempts remaining for transit work item.
         /// </summary>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool HasAttemptsRemaining()
         {
             return AttemptCount < MaxAttempts;
@@ -336,6 +358,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try transition to terminal for transit work item.
         /// </summary>
+        /// <param name="status">The status value.</param>
+        /// <param name="terminalProvenance">The terminalProvenance value.</param>
+        /// <param name="priorState">The priorState value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryTransitionToTerminal(TransitPublishStatus status, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
             if (Interlocked.CompareExchange(ref _terminalCompletionObserved, 1, 0) != 0)
@@ -362,6 +388,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try complete for transit work item.
         /// </summary>
+        /// <param name="result">The result value.</param>
+        /// <param name="terminalProvenance">The terminalProvenance value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -373,6 +402,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try complete for transit work item.
         /// </summary>
+        /// <param name="result">The result value.</param>
+        /// <param name="terminalProvenance">The terminalProvenance value.</param>
+        /// <param name="priorState">The priorState value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -383,6 +416,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try set completion result for transit work item.
         /// </summary>
+        /// <param name="result">The result value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TrySetCompletionResult(TransitPublishResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -431,6 +466,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Stores is terminal used by transit work item.
         /// </summary>
+        /// <param name="_terminalCompletionObserved">The _terminalCompletionObserved value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool IsTerminal => Volatile.Read(ref _terminalCompletionObserved) == 1;
     }
 

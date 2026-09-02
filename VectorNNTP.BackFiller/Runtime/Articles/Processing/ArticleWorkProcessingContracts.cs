@@ -146,6 +146,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="delivery">Source RabbitMQ delivery envelope.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Parse result containing either request payload or parse-failure classification.</returns>
+        /// <typeparam name="RabbitMqArticleWorkParseResult">The RabbitMqArticleWorkParseResult type parameter.</typeparam>
         public ValueTask<RabbitMqArticleWorkParseResult> ParseAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken);
     }
 
@@ -176,6 +177,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="delivery">Authoritative RabbitMQ delivery envelope for transport/RPC metadata.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Processing classification and deferred disposition recommendation.</returns>
+        /// <typeparam name="ArticleWorkProcessingResult">The ArticleWorkProcessingResult type parameter.</typeparam>
         public ValueTask<ArticleWorkProcessingResult> ProcessAsync(RabbitMqArticleWorkRequest request, RabbitMqArticleDelivery delivery, CancellationToken cancellationToken);
     }
 
@@ -282,6 +284,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="response">Response payload to publish.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Publish/confirm attempt result.</returns>
+        /// <typeparam name="RabbitMqResponsePublishResult">The RabbitMqResponsePublishResult type parameter.</typeparam>
         public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
             ArticleWorkProcessingResult result,
             RabbitMqArticleWorkResponse response,
@@ -312,6 +315,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <param name="result">Completed processing result.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask OnProcessedAsync(ArticleWorkProcessingResult result, CancellationToken cancellationToken);
     }
 

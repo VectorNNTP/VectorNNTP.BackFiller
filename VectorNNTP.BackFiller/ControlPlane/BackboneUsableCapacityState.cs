@@ -31,6 +31,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// Replaces the entire authoritative backbone usable-capacity snapshot.
         /// </summary>
         /// <param name="capacityByBackbone">Backbone capacity map where values represent currently usable session counts.</param>
+        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <typeparam name="int">The int type parameter.</typeparam>
         public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone);
     }
 

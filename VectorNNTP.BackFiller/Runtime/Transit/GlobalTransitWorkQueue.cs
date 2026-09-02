@@ -74,6 +74,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles global transit work queue for global transit work queue.
         /// </summary>
+        /// <param name="maxQueuedItemCount">The maxQueuedItemCount value.</param>
+        /// <param name="maxQueuedPayloadBytes">The maxQueuedPayloadBytes value.</param>
         internal GlobalTransitWorkQueue(int maxQueuedItemCount, long maxQueuedPayloadBytes)
         {
             if (maxQueuedItemCount <= 0)
@@ -99,26 +101,36 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Limits queued item count for global transit work queue.
         /// </summary>
+        /// <param name="_queuedItemCount">The _queuedItemCount value.</param>
+        /// <returns>The operation result.</returns>
         internal long QueuedItemCount => Interlocked.Read(ref _queuedItemCount);
 
         /// <summary>
         /// Stores queued payload bytes for global transit work queue.
         /// </summary>
+        /// <param name="_queuedPayloadBytes">The _queuedPayloadBytes value.</param>
+        /// <returns>The operation result.</returns>
         internal long QueuedPayloadBytes => Interlocked.Read(ref _queuedPayloadBytes);
 
         /// <summary>
         /// Limits retry pending count for global transit work queue.
         /// </summary>
+        /// <param name="_retryPendingCount">The _retryPendingCount value.</param>
+        /// <returns>The operation result.</returns>
         internal long RetryPendingCount => Interlocked.Read(ref _retryPendingCount);
 
         /// <summary>
         /// Limits in flight count for global transit work queue.
         /// </summary>
+        /// <param name="_inFlightCount">The _inFlightCount value.</param>
+        /// <returns>The operation result.</returns>
         internal long InFlightCount => Interlocked.Read(ref _inFlightCount);
 
         /// <summary>
         /// Limits admission wait count for global transit work queue.
         /// </summary>
+        /// <param name="_admissionWaitCount">The _admissionWaitCount value.</param>
+        /// <returns>The operation result.</returns>
         internal long AdmissionWaitCount => Interlocked.Read(ref _admissionWaitCount);
 
         /// <summary>
@@ -129,6 +141,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles enqueue async for global transit work queue.
         /// </summary>
+        /// <param name="item">The item value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal async ValueTask EnqueueAsync(TransitWorkItem item, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -177,6 +192,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try claim for global transit work queue.
         /// </summary>
+        /// <param name="connectionId">The connectionId value.</param>
+        /// <param name="item">The item value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryClaim(string connectionId, out TransitWorkItem? item)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
@@ -210,6 +228,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles wait for work async for global transit work queue.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <typeparam name="bool">The bool type parameter.</typeparam>
         internal async ValueTask<bool> WaitForWorkAsync(CancellationToken cancellationToken)
         {
             while (true)
@@ -247,6 +268,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles schedule retry async for global transit work queue.
         /// </summary>
+        /// <param name="item">The item value.</param>
+        /// <param name="failureClass">The failureClass value.</param>
+        /// <param name="uncertainty">The uncertainty value.</param>
+        /// <param name="retryDelay">The retryDelay value.</param>
+        /// <param name="transferOwnershipFromInFlight">The transferOwnershipFromInFlight value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <typeparam name="bool">The bool type parameter.</typeparam>
         internal async ValueTask<bool> ScheduleRetryAsync(
             TransitWorkItem item,
             TransitWorkFailureClass failureClass,
@@ -288,6 +317,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles drain eligible retries async for global transit work queue.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal async ValueTask DrainEligibleRetriesAsync(CancellationToken cancellationToken)
         {
             while (_scheduledRetries.TryPeek(out ScheduledRetry scheduled))
@@ -351,6 +382,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles mark queued terminal for global transit work queue.
         /// </summary>
+        /// <param name="payloadBytes">The payloadBytes value.</param>
         internal void MarkQueuedTerminal(int payloadBytes)
         {
             DecrementQueuedOwnership(payloadBytes);
@@ -375,6 +407,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture snapshot for global transit work queue.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal GlobalTransitWorkQueueSnapshot CaptureSnapshot()
         {
             return new GlobalTransitWorkQueueSnapshot(

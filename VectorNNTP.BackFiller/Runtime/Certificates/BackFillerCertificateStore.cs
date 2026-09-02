@@ -29,6 +29,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="timeProvider">Unified time provider.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Certificate usability and renewal classification.</returns>
+        /// <typeparam name="CertificateEvaluationResult">The CertificateEvaluationResult type parameter.</typeparam>
         public static async Task<CertificateEvaluationResult> EvaluateExistingCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             TimeProvider timeProvider,
@@ -153,6 +154,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <param name="logger">Optional logger used to record certificate loading diagnostics.</param>
         /// <returns>Loaded listener certificate bundle.</returns>
+        /// <typeparam name="BackFillerCertificateBundle">The BackFillerCertificateBundle type parameter.</typeparam>
         public static async Task<BackFillerCertificateBundle> LoadCertificateBundleAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             TimeProvider timeProvider,

@@ -1256,6 +1256,9 @@ namespace VectorNNTP.Backfiller.Tests
                 /// </summary>
                 internal List<LogEntry> Entries { get; } = [];
 
+                /// <summary>
+                /// Creates a capturing logger instance that records entries into the shared test buffer.
+                /// </summary>
                 internal ILogger<T> CreateLogger<T>()
                 {
                     return new CapturingLogger<T>(Entries, _gate);
@@ -1287,6 +1290,9 @@ namespace VectorNNTP.Backfiller.Tests
                     /// </summary>
                     private readonly object _gate = gate;
 
+                    /// <summary>
+                    /// Begins a logger scope for test logging and returns a no-op disposable scope instance.
+                    /// </summary>
                     public IDisposable BeginScope<TState>(TState state) where TState : notnull
                     {
                         return NullScope.Instance;
@@ -1306,6 +1312,9 @@ namespace VectorNNTP.Backfiller.Tests
                         return true;
                     }
 
+                    /// <summary>
+                    /// Captures a formatted log entry emitted by the system under test.
+                    /// </summary>
                     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
                     {
                         string message = formatter(state, exception);

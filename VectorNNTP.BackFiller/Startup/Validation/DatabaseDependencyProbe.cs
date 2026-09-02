@@ -44,6 +44,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <para>Failure to establish the initial database connection SHALL prevent startup if the database
         /// is considered a mandatory dependency for the initial operating state.</para>
         /// </remarks>
+        /// <param name="configuration">The configuration value.</param>
+        /// <param name="timeout">The timeout value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="DependencyValidationResult">The DependencyValidationResult type parameter.</typeparam>
         internal static async Task<DependencyValidationResult> ValidateDatabaseConnectivityAsync(
             IConfiguration configuration,
             TimeSpan timeout,

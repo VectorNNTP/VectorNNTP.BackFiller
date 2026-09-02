@@ -91,6 +91,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// <para>The validator performs a single forward scan through section metadata and encoded payload lines.</para>
         /// <para>Decoded bytes are streamed directly into CRC computation without allocating a decoded payload buffer.</para>
         /// </remarks>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static YEncArticleValidationResult Validate(ReadOnlySpan<byte> articleBody)
         {
             int position = 0;

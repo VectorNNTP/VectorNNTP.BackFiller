@@ -816,6 +816,9 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             private readonly List<CapturedLogEntry> _entries = entries ?? throw new ArgumentNullException(nameof(entries));
 
+            /// <summary>
+            /// Begins a logger scope for test logging and returns a no-op disposable scope instance.
+            /// </summary>
             public IDisposable BeginScope<TState>(TState state)
                 where TState : notnull
             {
@@ -836,6 +839,9 @@ namespace VectorNNTP.Backfiller.Tests
                 return true;
             }
 
+            /// <summary>
+            /// Captures a formatted log entry emitted by the system under test.
+            /// </summary>
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
                 string message = formatter(state, exception);

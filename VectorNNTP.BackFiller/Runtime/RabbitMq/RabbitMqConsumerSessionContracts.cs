@@ -33,6 +33,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Starts or refreshes the broker consumer registration for the current active connection generation.
         /// </summary>
         /// <param name="cancellationToken">Startup/shutdown-aware cancellation token.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task StartAsync(CancellationToken cancellationToken);
 
         /// <summary>
@@ -40,6 +41,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="cancellationToken">Shutdown-aware cancellation token.</param>
         /// <param name="cancelAdmittedWork">When <see langword="true"/>, cancels admitted-delivery processing tokens as part of shutdown semantics.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork);
     }
 
@@ -67,6 +69,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Acknowledges the delivery.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask AckAsync(CancellationToken cancellationToken);
 
         /// <summary>
@@ -74,6 +77,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="requeue">Whether RabbitMQ should requeue the delivery.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken);
     }
 
@@ -87,6 +91,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="delivery">Delivery envelope.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken);
     }
 
@@ -103,6 +108,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles rabbit mq delivery channel sink for rabbit mq consumer session contracts.
         /// </summary>
+        /// <param name="writer">The writer value.</param>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
             _writer = writer ?? throw new ArgumentNullException(nameof(writer));
@@ -111,6 +117,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Handles on delivery async for rabbit mq consumer session contracts.
         /// </summary>
+        /// <param name="delivery">The delivery value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();

@@ -364,6 +364,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Stores connection id used by transit connection.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal string ConnectionId { get; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
@@ -394,6 +395,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Stores is response loop faulted used by transit connection.
         /// </summary>
+        /// <param name="_responseLoopFaulted">The _responseLoopFaulted value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool IsResponseLoopFaulted => Volatile.Read(ref _responseLoopFaulted) == 1;
 
         /// <summary>
@@ -413,6 +416,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles is recorded response loop fault for transit connection.
         /// </summary>
+        /// <param name="exception">The exception value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool IsRecordedResponseLoopFault(Exception exception)
         {
             ArgumentNullException.ThrowIfNull(exception);
@@ -465,6 +470,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles initialize async for transit connection.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -660,6 +667,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles process batch async for transit connection.
         /// </summary>
+        /// <param name="items">The items value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitWorkItem> items, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(items);
@@ -766,6 +776,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles try take completed for transit connection.
         /// </summary>
+        /// <param name="item">The item value.</param>
+        /// <param name="result">The result value.</param>
+        /// <returns>true when the operation succeeds; otherwise false.</returns>
         internal bool TryTakeCompleted(out TransitWorkItem item, out TransitPublishResult result)
         {
             if (_completedQueue.Reader.TryRead(out CompletedWork? completed) && completed is not null)
@@ -790,6 +803,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles wait for completed async for transit connection.
         /// </summary>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal async ValueTask<bool> WaitForCompletedAsync(CancellationToken cancellationToken)
         {
             try
@@ -805,6 +820,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles submit takethis async for transit connection.
         /// </summary>
+        /// <param name="messageId">The messageId value.</param>
+        /// <param name="articlePayload">The articlePayload value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <param name="publishAsyncEnterTick">The publishAsyncEnterTick value.</param>
+        /// <param name="dispatcherAssignedTick">The dispatcherAssignedTick value.</param>
+        /// <param name="onWriteIntentMaterialized">The onWriteIntentMaterialized value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         internal async ValueTask<TransitPublishResult> SubmitTakethisAsync(
             string messageId,
             ReadOnlyMemory<byte> articlePayload,
@@ -924,6 +946,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles drain outstanding owned work for retry for transit connection.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal IReadOnlyList<TransitWorkItem> DrainOutstandingOwnedWorkForRetry()
         {
             IReadOnlyList<TransitWorkItem> drained = [.. DrainOwnedPendingWork(static _ => true).Select(static pending => pending.WorkItem)];
@@ -967,6 +990,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture diagnostics snapshot for transit connection.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TransitConnectionDiagnosticsSnapshot CaptureDiagnosticsSnapshot()
         {
             OutstandingPublishOperationSnapshot[] outstanding = [.. _pendingByMessageId.Values
@@ -1050,6 +1074,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture first p1 greeting provenance snapshot for transit connection.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal static P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
             return null;
@@ -1638,6 +1663,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles dispose async for transit connection.
         /// </summary>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _shutdownRequested, 1) != 0)
@@ -1997,6 +2023,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             /// <summary>
             /// Handles pending owned work for transit connection.
             /// </summary>
+            /// <param name="workItem">The workItem value.</param>
             internal PendingOwnedWork(TransitWorkItem workItem)
             {
                 WorkItem = workItem;
@@ -2061,6 +2088,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             /// <summary>
             /// Handles transit connection lifecycle exception for transit connection.
             /// </summary>
+            /// <param name="failure">The failure value.</param>
+            /// <param name="stageName">The stageName value.</param>
             internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure, string? stageName = null)
                 : base(failure switch
                 {

@@ -23,6 +23,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <param name="clientProvidedConnectionName">Client-provided connection name.</param>
         /// <param name="cancellationToken">Connection cancellation token.</param>
         /// <returns>Owned broker connection handle.</returns>
+        /// <typeparam name="IRabbitMqBrokerConnection">The IRabbitMqBrokerConnection type parameter.</typeparam>
         public Task<IRabbitMqBrokerConnection> ConnectAsync(
             RabbitMqRuntimeOptions runtimeOptions,
             string clientProvidedConnectionName,
@@ -100,6 +101,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <param name="cancellationToken">Channel-creation cancellation token.</param>
         /// <param name="enablePublisherConfirmations">Whether publisher confirmation mode should be enabled for this channel.</param>
         /// <returns>New RabbitMQ channel adapter.</returns>
+        /// <typeparam name="IRabbitMqChannel">The IRabbitMqChannel type parameter.</typeparam>
         public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false);
     }
 
@@ -116,46 +118,98 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Declares an exchange.
         /// </summary>
+        /// <param name="exchange">The exchange value.</param>
+        /// <param name="type">The type value.</param>
+        /// <param name="durable">The durable value.</param>
+        /// <param name="autoDelete">The autoDelete value.</param>
+        /// <param name="arguments">The arguments value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken);
 
         /// <summary>
         /// Declares a queue.
         /// </summary>
+        /// <param name="queue">The queue value.</param>
+        /// <param name="durable">The durable value.</param>
+        /// <param name="exclusive">The exclusive value.</param>
+        /// <param name="autoDelete">The autoDelete value.</param>
+        /// <param name="arguments">The arguments value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken);
 
         /// <summary>
         /// Declares a queue binding.
         /// </summary>
+        /// <param name="queue">The queue value.</param>
+        /// <param name="exchange">The exchange value.</param>
+        /// <param name="routingKey">The routingKey value.</param>
+        /// <param name="arguments">The arguments value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <typeparam name="string">The string type parameter.</typeparam>
         public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken);
 
         /// <summary>
         /// Configures channel QoS for consumer prefetch control.
         /// </summary>
+        /// <param name="prefetchSize">The prefetchSize value.</param>
+        /// <param name="prefetchCount">The prefetchCount value.</param>
+        /// <param name="global">The global value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken);
 
         /// <summary>
         /// Registers an asynchronous consumer on a queue.
         /// </summary>
+        /// <param name="queue">The queue value.</param>
+        /// <param name="autoAck">The autoAck value.</param>
+        /// <param name="consumer">The consumer value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken);
 
         /// <summary>
         /// Cancels a consumer by broker-assigned tag.
         /// </summary>
+        /// <param name="consumerTag">The consumerTag value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
         public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken);
 
         /// <summary>
         /// Acknowledges a delivery tag.
         /// </summary>
+        /// <param name="deliveryTag">The deliveryTag value.</param>
+        /// <param name="multiple">The multiple value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken);
 
         /// <summary>
         /// Negatively acknowledges a delivery tag.
         /// </summary>
+        /// <param name="deliveryTag">The deliveryTag value.</param>
+        /// <param name="multiple">The multiple value.</param>
+        /// <param name="requeue">The requeue value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken);
 
         /// <summary>
         /// Publishes one message payload.
         /// </summary>
+        /// <param name="exchange">The exchange value.</param>
+        /// <param name="routingKey">The routingKey value.</param>
+        /// <param name="mandatory">The mandatory value.</param>
+        /// <param name="basicProperties">The basicProperties value.</param>
+        /// <param name="body">The body value.</param>
+        /// <param name="cancellationToken">The cancellationToken value.</param>
+        /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken);
     }
 

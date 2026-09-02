@@ -90,3 +90,6 @@
 - Culture-invariant formatting standard (repository-wide): machine-facing runtime/protocol/logging formatting and parsing must be deterministic and culture-invariant unless a culture-sensitive representation is explicitly required.
 - UTC timestamp standard (repository-wide): application log timestamps must be UTC across all sinks; do not emit local-time timestamps in application logs.
 - Duration measurement standard (repository-wide): elapsed operation durations must be measured with monotonic timers (for example `Stopwatch`) rather than wall-clock subtraction.
+
+## XML Documentation Guidelines
+- For XML documentation audits, perform additive-only changes: preserve existing valid XML docs verbatim; only add missing documentation elements or minimally fix demonstrably incorrect/invalid XML; no namespace or behavior changes; no tests/benchmarks.

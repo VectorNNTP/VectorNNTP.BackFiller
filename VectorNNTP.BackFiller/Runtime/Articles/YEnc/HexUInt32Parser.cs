@@ -21,6 +21,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// <param name="hexBytes">Hexadecimal byte span that must contain only hexadecimal characters.</param>
         /// <param name="value">Parsed value when the method returns <see langword="true"/>.</param>
         /// <returns><see langword="true"/> when one to eight hexadecimal digits were parsed and consumed fully; otherwise <see langword="false"/>.</returns>
+        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static bool TryParseHexUInt32(ReadOnlySpan<byte> hexBytes, out uint value)
         {
             value = 0;

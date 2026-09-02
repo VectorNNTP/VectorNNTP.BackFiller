@@ -213,6 +213,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record publish payload copy for transit timing collector.
         /// </summary>
+        /// <param name="elapsedTicks">The elapsedTicks value.</param>
         internal void RecordPublishPayloadCopy(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _publishPayloadCopyCount);
@@ -222,6 +223,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record dot stuff stage for transit timing collector.
         /// </summary>
+        /// <param name="elapsedTicks">The elapsedTicks value.</param>
+        /// <param name="payloadBytes">The payloadBytes value.</param>
+        /// <param name="getSpanCalls">The getSpanCalls value.</param>
+        /// <param name="advanceCalls">The advanceCalls value.</param>
+        /// <param name="stuffedDotEvents">The stuffedDotEvents value.</param>
         internal void RecordDotStuffStage(long elapsedTicks, long payloadBytes, long getSpanCalls, long advanceCalls, long stuffedDotEvents)
         {
             _ = Interlocked.Increment(ref _dotStuffStageCount);
@@ -238,6 +244,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record flush wait for transit timing collector.
         /// </summary>
+        /// <param name="elapsedTicks">The elapsedTicks value.</param>
         internal void RecordFlushWait(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _flushCount);
@@ -249,6 +256,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record response line read for transit timing collector.
         /// </summary>
+        /// <param name="elapsedTicks">The elapsedTicks value.</param>
         internal void RecordResponseLineRead(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _responseLineReadCount);
@@ -260,6 +268,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record response correlation for transit timing collector.
         /// </summary>
+        /// <param name="elapsedTicks">The elapsedTicks value.</param>
+        /// <param name="responseAvailableTick">The responseAvailableTick value.</param>
+        /// <param name="correlatedTick">The correlatedTick value.</param>
+        /// <param name="definitive">The definitive value.</param>
         internal void RecordResponseCorrelation(long elapsedTicks, long responseAvailableTick, long correlatedTick, bool definitive)
         {
             _ = Interlocked.Increment(ref _responseCorrelationCount);
@@ -285,6 +297,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record completion observed for transit timing collector.
         /// </summary>
+        /// <param name="completionEnqueuedTick">The completionEnqueuedTick value.</param>
+        /// <param name="workerObservedTick">The workerObservedTick value.</param>
         internal void RecordCompletionObserved(long completionEnqueuedTick, long workerObservedTick)
         {
             long enqueueToObserveTicks = workerObservedTick - completionEnqueuedTick;
@@ -315,6 +329,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record worker poll delay for transit timing collector.
         /// </summary>
+        /// <param name="elapsedTicks">The elapsedTicks value.</param>
         internal void RecordWorkerPollDelay(long elapsedTicks)
         {
             _ = Interlocked.Increment(ref _workerPollDelayCount);
@@ -324,6 +339,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles record staging started for transit timing collector.
         /// </summary>
+        /// <param name="stageStartTick">The stageStartTick value.</param>
         internal void RecordStagingStarted(long stageStartTick)
         {
             long lastObservationTick = Volatile.Read(ref _lastWorkerObservationTick);
@@ -356,6 +372,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Handles capture snapshot for transit timing collector.
         /// </summary>
+        /// <returns>The operation result.</returns>
         internal TransitTimingSnapshot CaptureSnapshot()
         {
             return new TransitTimingSnapshot(
