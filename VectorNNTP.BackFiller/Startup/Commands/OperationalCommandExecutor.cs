@@ -29,9 +29,6 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 OperationalCommand.ValidateStartup => ValidateStartupCommandHandler.Handle(configuration),
                 OperationalCommand.Diagnostics => DiagnosticsCommandHandler.Handle(),
                 OperationalCommand.DumpConfig => DumpConfigCommandHandler.Handle(configuration),
-                /// <summary>
-                /// Defines value and its operational command executor contract.
-                /// </summary>
                 _ => throw new UnreachableException($"Unsupported command enum value: {command}")
             };
         }
