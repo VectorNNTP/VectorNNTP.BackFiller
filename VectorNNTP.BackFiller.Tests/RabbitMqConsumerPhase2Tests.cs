@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for rabbit mq consumer phase2, covering dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the rabbit mq consumer phase 2 test suite.
 
 using System.Reflection;
 using System.Security.Cryptography;
@@ -427,7 +428,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create identity behavior, including the expected result and failure semantics.
+        /// Verifies the create identity behavior and expected contract.
         /// </summary>
         private static RabbitMqConsumerSessionIdentity CreateIdentity(string backbone, int connectionNumber, int connectionLimit)
         {
@@ -444,7 +445,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create runtime options behavior and expected contract.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(ushort? prefetchCount, int maxConsecutiveRecoveryFailures)
         {
@@ -1346,7 +1347,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create account snapshot behavior, including the expected result and failure semantics.
+        /// Verifies the create account snapshot behavior and expected contract.
         /// </summary>
         private static NntpAccountSnapshot CreateAccountSnapshot(Guid entryId, byte maxConnections)
         {
@@ -1364,7 +1365,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises wait for async behavior, including the expected result and failure semantics.
+        /// Verifies the wait for async behavior and expected contract.
         /// </summary>
         private static async Task<bool> WaitForAsync(Func<bool> predicate, TimeSpan timeout)
         {
@@ -1397,7 +1398,7 @@ namespace VectorNNTP.Backfiller.Tests
             private List<NntpAccountSnapshot> _accounts = [];
 
             /// <summary>
-            /// Exercises mutable account snapshot provider behavior, including the expected result and failure semantics.
+        /// Verifies the mutable account snapshot provider behavior and expected contract.
             /// </summary>
             internal MutableAccountSnapshotProvider(byte serverId)
             {
@@ -1413,7 +1414,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal MySqlNntpAccountSnapshotProvider Provider { get; }
 
             /// <summary>
-            /// Exercises set single account async behavior, including the expected result and failure semantics.
+        /// Verifies the set single account async behavior and expected contract.
             /// </summary>
             internal async Task SetSingleAccountAsync(NntpAccountSnapshot account)
             {
@@ -1428,7 +1429,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises query accounts async behavior, including the expected result and failure semantics.
+        /// Verifies the query accounts async behavior and expected contract.
             /// </summary>
             private Task<List<NntpAccountSnapshot>> QueryAccountsAsync(CancellationToken cancellationToken)
             {
@@ -1442,7 +1443,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers tracking session factory behavior and invariants exercised by this test suite.
+        /// Verifies the tracking session factory behavior and expected contract.
         /// </summary>
         private sealed class TrackingSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer) : IRabbitMqConsumerSessionFactory
         {
@@ -1460,7 +1461,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
 
             /// <summary>
-            /// Exercises create session behavior, including the expected result and failure semantics.
+        /// Verifies the create session behavior and expected contract.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -1473,7 +1474,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises require session behavior, including the expected result and failure semantics.
+        /// Verifies the require session behavior and expected contract.
             /// </summary>
             internal TrackingSession RequireSession(string sessionKey)
             {
@@ -1494,7 +1495,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly Dictionary<string, bool> _capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>
-            /// Exercises set backbone capacity behavior, including the expected result and failure semantics.
+        /// Verifies the set backbone capacity behavior and expected contract.
             /// </summary>
             internal void SetBackboneCapacity(string backbone, bool hasCapacity)
             {
@@ -1503,7 +1504,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises has usable capacity for backbone behavior, including the expected result and failure semantics.
+        /// Verifies the has usable capacity for backbone behavior and expected contract.
             /// </summary>
             public bool HasUsableCapacityForBackbone(string backbone)
             {
@@ -1513,7 +1514,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers blocking stop session factory behavior and invariants exercised by this test suite.
+        /// Verifies the blocking stop session factory behavior and expected contract.
         /// </summary>
         private sealed class BlockingStopSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer) : IRabbitMqConsumerSessionFactory
         {
@@ -1543,7 +1544,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
 
             /// <summary>
-            /// Exercises create session behavior, including the expected result and failure semantics.
+        /// Verifies the create session behavior and expected contract.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -1567,7 +1568,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises require latest session behavior, including the expected result and failure semantics.
+        /// Verifies the require latest session behavior and expected contract.
             /// </summary>
             internal BlockingStopTrackingSession RequireLatestSession(string sessionKey)
             {
@@ -1583,7 +1584,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises get created count behavior, including the expected result and failure semantics.
+        /// Verifies the get created count behavior and expected contract.
             /// </summary>
             internal int GetCreatedCount(string sessionKey)
             {
@@ -1594,7 +1595,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises get running count behavior, including the expected result and failure semantics.
+        /// Verifies the get running count behavior and expected contract.
             /// </summary>
             internal int GetRunningCount(string sessionKey)
             {
@@ -1610,7 +1611,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises block stop for session behavior, including the expected result and failure semantics.
+        /// Verifies the block stop for session behavior and expected contract.
             /// </summary>
             internal void BlockStopForSession(string sessionKey)
             {
@@ -1622,7 +1623,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises wait for stop started async behavior, including the expected result and failure semantics.
+        /// Verifies the wait for stop started async behavior and expected contract.
             /// </summary>
             internal async Task WaitForStopStartedAsync(string sessionKey, CancellationToken cancellationToken)
             {
@@ -1641,7 +1642,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises release stop behavior, including the expected result and failure semantics.
+        /// Verifies the release stop behavior and expected contract.
             /// </summary>
             internal void ReleaseStop(string sessionKey)
             {
@@ -1655,7 +1656,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises await stop gate async behavior, including the expected result and failure semantics.
+        /// Verifies the await stop gate async behavior and expected contract.
             /// </summary>
             internal async Task AwaitStopGateAsync(string sessionKey, CancellationToken cancellationToken)
             {
@@ -1707,7 +1708,7 @@ namespace VectorNNTP.Backfiller.Tests
             private RabbitMqOwnedChannel? _ownedChannel;
 
             /// <summary>
-            /// Exercises tracking session behavior, including the expected result and failure semantics.
+        /// Verifies the tracking session behavior and expected contract.
             /// </summary>
             internal TrackingSession(
                 RabbitMqConsumerSessionIdentity identity,
@@ -1759,7 +1760,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal bool DisposeCalled { get; private set; }
 
             /// <summary>
-            /// Exercises start async behavior, including the expected result and failure semantics.
+        /// Verifies the start async behavior and expected contract.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -1788,7 +1789,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises stop async behavior, including the expected result and failure semantics.
+        /// Verifies the stop async behavior and expected contract.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -1811,7 +1812,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -1843,7 +1844,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly RabbitMqTopologyInitializer _topologyInitializer;
 
             /// <summary>
-            /// Exercises observing real session factory behavior, including the expected result and failure semantics.
+        /// Verifies the observing real session factory behavior and expected contract.
             /// </summary>
             internal ObservingRealSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer)
             {
@@ -1852,7 +1853,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises create session behavior, including the expected result and failure semantics.
+        /// Verifies the create session behavior and expected contract.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -1879,7 +1880,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises require latest session behavior, including the expected result and failure semantics.
+        /// Verifies the require latest session behavior and expected contract.
             /// </summary>
             internal ObservedSessionRuntime RequireLatestSession(string sessionKey)
             {
@@ -1895,7 +1896,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises get created count behavior, including the expected result and failure semantics.
+        /// Verifies the get created count behavior and expected contract.
             /// </summary>
             internal int GetCreatedCount(string sessionKey)
             {
@@ -1908,7 +1909,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises wait for delivery async behavior, including the expected result and failure semantics.
+        /// Verifies the wait for delivery async behavior and expected contract.
             /// </summary>
             internal async Task<RabbitMqArticleDelivery> WaitForDeliveryAsync(string sessionKey, CancellationToken cancellationToken)
             {
@@ -1917,7 +1918,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises get deliveries for session behavior, including the expected result and failure semantics.
+        /// Verifies the get deliveries for session behavior and expected contract.
             /// </summary>
             internal IReadOnlyList<RabbitMqArticleDelivery> GetDeliveriesForSession(string sessionKey)
             {
@@ -1952,7 +1953,7 @@ namespace VectorNNTP.Backfiller.Tests
             private RabbitMqBackboneConsumerSession? _inner;
 
             /// <summary>
-            /// Exercises observed session runtime behavior, including the expected result and failure semantics.
+        /// Verifies the observed session runtime behavior and expected contract.
             /// </summary>
             internal ObservedSessionRuntime(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink downstreamSink)
             {
@@ -1996,7 +1997,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal IReadOnlyList<RabbitMqArticleDelivery> Deliveries => _deliveries;
 
             /// <summary>
-            /// Exercises attach session behavior, including the expected result and failure semantics.
+        /// Verifies the attach session behavior and expected contract.
             /// </summary>
             internal void AttachSession(RabbitMqBackboneConsumerSession session)
             {
@@ -2004,7 +2005,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises on delivery observed async behavior, including the expected result and failure semantics.
+        /// Verifies the on delivery observed async behavior and expected contract.
             /// </summary>
             internal ValueTask OnDeliveryObservedAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
             {
@@ -2015,7 +2016,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises wait for delivery async behavior, including the expected result and failure semantics.
+        /// Verifies the wait for delivery async behavior and expected contract.
             /// </summary>
             internal async Task<RabbitMqArticleDelivery> WaitForDeliveryAsync(CancellationToken cancellationToken)
             {
@@ -2023,7 +2024,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises start async behavior, including the expected result and failure semantics.
+        /// Verifies the start async behavior and expected contract.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -2036,7 +2037,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises stop async behavior, including the expected result and failure semantics.
+        /// Verifies the stop async behavior and expected contract.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -2051,7 +2052,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -2080,7 +2081,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly IRabbitMqDeliverySink _inner;
 
             /// <summary>
-            /// Exercises forwarding observing delivery sink behavior, including the expected result and failure semantics.
+        /// Verifies the forwarding observing delivery sink behavior and expected contract.
             /// </summary>
             internal ForwardingObservingDeliverySink(ObservedSessionRuntime owner, IRabbitMqDeliverySink inner)
             {
@@ -2089,7 +2090,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises on delivery async behavior, including the expected result and failure semantics.
+        /// Verifies the on delivery async behavior and expected contract.
             /// </summary>
             public async ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
             {
@@ -2129,7 +2130,7 @@ namespace VectorNNTP.Backfiller.Tests
             private RabbitMqOwnedChannel? _ownedChannel;
 
             /// <summary>
-            /// Exercises blocking stop tracking session behavior, including the expected result and failure semantics.
+        /// Verifies the blocking stop tracking session behavior and expected contract.
             /// </summary>
             internal BlockingStopTrackingSession(
                 RabbitMqConsumerSessionIdentity identity,
@@ -2178,7 +2179,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal bool DisposeCalled { get; private set; }
 
             /// <summary>
-            /// Exercises start async behavior, including the expected result and failure semantics.
+        /// Verifies the start async behavior and expected contract.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -2207,7 +2208,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises stop async behavior, including the expected result and failure semantics.
+        /// Verifies the stop async behavior and expected contract.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -2236,7 +2237,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -2269,7 +2270,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers fault injecting session factory behavior and invariants exercised by this test suite.
+        /// Verifies the fault injecting session factory behavior and expected contract.
         /// </summary>
         private sealed class FaultInjectingSessionFactory(RabbitMqConnectionManager connectionManager, RabbitMqTopologyInitializer topologyInitializer) : IRabbitMqConsumerSessionFactory
         {
@@ -2295,7 +2296,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
 
             /// <summary>
-            /// Exercises create session behavior, including the expected result and failure semantics.
+        /// Verifies the create session behavior and expected contract.
             /// </summary>
             public IRabbitMqConsumerSession CreateSession(RabbitMqConsumerSessionIdentity identity, IRabbitMqDeliverySink deliverySink, ushort? prefetchCount)
             {
@@ -2325,7 +2326,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises set failure mode behavior, including the expected result and failure semantics.
+        /// Verifies the set failure mode behavior and expected contract.
             /// </summary>
             internal void SetFailureMode(string sessionKey, RetirementFailureMode mode)
             {
@@ -2336,7 +2337,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises get created count behavior, including the expected result and failure semantics.
+        /// Verifies the get created count behavior and expected contract.
             /// </summary>
             internal int GetCreatedCount(string sessionKey)
             {
@@ -2378,7 +2379,7 @@ namespace VectorNNTP.Backfiller.Tests
             private RabbitMqOwnedChannel? _ownedChannel;
 
             /// <summary>
-            /// Exercises fault injecting session behavior, including the expected result and failure semantics.
+        /// Verifies the fault injecting session behavior and expected contract.
             /// </summary>
             internal FaultInjectingSession(
                 RabbitMqConsumerSessionIdentity identity,
@@ -2422,7 +2423,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal int DisposeCallCount { get; private set; }
 
             /// <summary>
-            /// Exercises start async behavior, including the expected result and failure semantics.
+        /// Verifies the start async behavior and expected contract.
             /// </summary>
             public async Task StartAsync(CancellationToken cancellationToken)
             {
@@ -2450,7 +2451,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises stop async behavior, including the expected result and failure semantics.
+        /// Verifies the stop async behavior and expected contract.
             /// </summary>
             public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
             {
@@ -2486,7 +2487,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public async ValueTask DisposeAsync()
             {
@@ -2512,7 +2513,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<RabbitMqArticleDelivery> Deliveries { get; } = [];
 
             /// <summary>
-            /// Exercises on delivery async behavior, including the expected result and failure semantics.
+        /// Verifies the on delivery async behavior and expected contract.
             /// </summary>
             public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
             {
@@ -2547,7 +2548,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal IReadOnlyList<TrackingConnection> AllConnections => _connections;
 
             /// <summary>
-            /// Exercises connect async behavior, including the expected result and failure semantics.
+        /// Verifies the connect async behavior and expected contract.
             /// </summary>
             public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
             {
@@ -2560,7 +2561,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises require last connection behavior, including the expected result and failure semantics.
+        /// Verifies the require last connection behavior and expected contract.
             /// </summary>
             internal TrackingConnection RequireLastConnection()
             {
@@ -2644,7 +2645,7 @@ namespace VectorNNTP.Backfiller.Tests
             public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
             /// <summary>
-            /// Exercises create channel async behavior, including the expected result and failure semantics.
+        /// Verifies the create channel async behavior and expected contract.
             /// </summary>
             public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
@@ -2656,7 +2657,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public ValueTask DisposeAsync()
             {
@@ -2666,7 +2667,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise connection shutdown behavior, including the expected result and failure semantics.
+        /// Verifies the raise connection shutdown behavior and expected contract.
             /// </summary>
             internal void RaiseConnectionShutdown()
             {
@@ -2674,7 +2675,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise recovery succeeded behavior, including the expected result and failure semantics.
+        /// Verifies the raise recovery succeeded behavior and expected contract.
             /// </summary>
             internal void RaiseRecoverySucceeded()
             {
@@ -2774,7 +2775,7 @@ namespace VectorNNTP.Backfiller.Tests
             public Task DisposedObserved => _disposedObserved.Task;
 
             /// <summary>
-            /// Exercises exchange declare async behavior, including the expected result and failure semantics.
+        /// Verifies the exchange declare async behavior and expected contract.
             /// </summary>
             public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -2783,7 +2784,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises queue declare async behavior, including the expected result and failure semantics.
+        /// Verifies the queue declare async behavior and expected contract.
             /// </summary>
             public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -2792,7 +2793,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises queue bind async behavior, including the expected result and failure semantics.
+        /// Verifies the queue bind async behavior and expected contract.
             /// </summary>
             public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -2801,7 +2802,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic qos async behavior, including the expected result and failure semantics.
+        /// Verifies the basic qos async behavior and expected contract.
             /// </summary>
             public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken)
             {
@@ -2813,7 +2814,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic consume async behavior, including the expected result and failure semantics.
+        /// Verifies the basic consume async behavior and expected contract.
             /// </summary>
             public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken)
             {
@@ -2828,7 +2829,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic cancel async behavior, including the expected result and failure semantics.
+        /// Verifies the basic cancel async behavior and expected contract.
             /// </summary>
             public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
             {
@@ -2845,7 +2846,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic ack async behavior, including the expected result and failure semantics.
+        /// Verifies the basic ack async behavior and expected contract.
             /// </summary>
             public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
             {
@@ -2858,7 +2859,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic nack async behavior, including the expected result and failure semantics.
+        /// Verifies the basic nack async behavior and expected contract.
             /// </summary>
             public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
             {
@@ -2872,7 +2873,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic publish async behavior, including the expected result and failure semantics.
+        /// Verifies the basic publish async behavior and expected contract.
             /// </summary>
             public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
             {
@@ -2886,7 +2887,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises deliver async behavior, including the expected result and failure semantics.
+        /// Verifies the deliver async behavior and expected contract.
             /// </summary>
             public async Task DeliverAsync(ulong deliveryTag, bool redelivered, string exchange, string routingKey, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
             {
@@ -2909,7 +2910,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public ValueTask DisposeAsync()
             {
@@ -2928,7 +2929,7 @@ namespace VectorNNTP.Backfiller.Tests
         private class NoOpChannelProxy : DispatchProxy
         {
             /// <summary>
-            /// Exercises invoke behavior, including the expected result and failure semantics.
+        /// Verifies the invoke behavior and expected contract.
             /// </summary>
             protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
             {
@@ -2972,7 +2973,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises create default value behavior, including the expected result and failure semantics.
+        /// Verifies the create default value behavior and expected contract.
             /// </summary>
             private static object? CreateDefaultValue(Type type)
             {

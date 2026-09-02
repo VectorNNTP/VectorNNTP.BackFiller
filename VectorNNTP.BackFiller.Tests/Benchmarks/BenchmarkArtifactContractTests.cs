@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for benchmark artifact contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the benchmark artifact contract test suite.
 
 using System.Text.Json;
 using VectorNNTP.BackFiller.Benchmarks;

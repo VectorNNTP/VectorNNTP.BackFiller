@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for control plane service, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the control plane service test suite.
 
 using System.Net;
 using System.Net.Security;
@@ -811,7 +812,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers rabbit mq retirement call behavior and invariants exercised by this test suite.
+        /// Verifies the rabbit mq retirement call behavior and expected contract.
         /// </summary>
         private sealed record RabbitMqRetirementCall(Guid AccountId, int RetainConnectionCount);
 
@@ -826,7 +827,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<RabbitMqRetirementCall> Calls { get; } = [];
 
             /// <summary>
-            /// Exercises retire capacity async behavior, including the expected result and failure semantics.
+        /// Verifies the retire capacity async behavior and expected contract.
             /// </summary>
             public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
@@ -851,7 +852,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal TaskCompletionSource<bool> Called { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             /// <summary>
-            /// Exercises retire capacity async behavior, including the expected result and failure semantics.
+        /// Verifies the retire capacity async behavior and expected contract.
             /// </summary>
             public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
@@ -861,7 +862,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises release behavior, including the expected result and failure semantics.
+        /// Verifies the release behavior and expected contract.
             /// </summary>
             internal void Release()
             {
@@ -895,7 +896,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises publish snapshot behavior, including the expected result and failure semantics.
+        /// Verifies the publish snapshot behavior and expected contract.
             /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
@@ -909,7 +910,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises get latest capacity behavior, including the expected result and failure semantics.
+        /// Verifies the get latest capacity behavior and expected contract.
             /// </summary>
             internal int GetLatestCapacity(string backbone)
             {

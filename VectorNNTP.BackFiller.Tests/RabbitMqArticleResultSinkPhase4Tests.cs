@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for rabbit mq article result sink phase4, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the rabbit mq article result sink phase 4 test suite.
 
 using System.Text;
 using System.Text.Json;
@@ -382,7 +383,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create sink behavior, including the expected result and failure semantics.
+        /// Verifies the create sink behavior and expected contract.
         /// </summary>
         private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher)
         {
@@ -394,7 +395,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create result behavior, including the expected result and failure semantics.
+        /// Verifies the create result behavior and expected contract.
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             RabbitMqArticleDelivery delivery,
@@ -417,7 +418,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create delivery behavior, including the expected result and failure semantics.
+        /// Verifies the create delivery behavior and expected contract.
         /// </summary>
         private static RabbitMqArticleDelivery CreateDelivery(
             string payloadText,
@@ -456,7 +457,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create valid json payload behavior, including the expected result and failure semantics.
+        /// Verifies the create valid json payload behavior and expected contract.
         /// </summary>
         private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
         {
@@ -478,7 +479,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly List<string>? _sharedOperationLog;
 
             /// <summary>
-            /// Exercises tracking response publisher behavior, including the expected result and failure semantics.
+        /// Verifies the tracking response publisher behavior and expected contract.
             /// </summary>
             internal TrackingResponsePublisher(RabbitMqResponsePublishStatus status, List<string>? sharedOperationLog = null)
             {
@@ -517,7 +518,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-            /// Exercises publish and confirm async behavior, including the expected result and failure semantics.
+        /// Verifies the publish and confirm async behavior and expected contract.
             /// </summary>
             public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
                 ArticleWorkProcessingResult result,
@@ -562,7 +563,7 @@ namespace VectorNNTP.Backfiller.Tests
             private ulong _deliveryTag;
 
             /// <summary>
-            /// Exercises tracking delivery settlement behavior, including the expected result and failure semantics.
+        /// Verifies the tracking delivery settlement behavior and expected contract.
             /// </summary>
             internal TrackingDeliverySettlement(List<string>? sharedOperationLog = null)
             {
@@ -590,7 +591,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-            /// Exercises ack async behavior, including the expected result and failure semantics.
+        /// Verifies the ack async behavior and expected contract.
             /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
@@ -607,7 +608,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises nack async behavior, including the expected result and failure semantics.
+        /// Verifies the nack async behavior and expected contract.
             /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
@@ -625,7 +626,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises bind delivery tag behavior, including the expected result and failure semantics.
+        /// Verifies the bind delivery tag behavior and expected contract.
             /// </summary>
             internal void BindDeliveryTag(ulong deliveryTag)
             {

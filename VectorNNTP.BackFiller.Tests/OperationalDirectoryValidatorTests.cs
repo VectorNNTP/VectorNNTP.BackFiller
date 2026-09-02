@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for operational directory validator, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the operational directory validator test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Configuration;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for measurement execution engine drain lifecycle, covering service lifecycle and shutdown contracts; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the measurement execution engine drain lifecycle test suite.
 
 using System.Diagnostics;
 using System.Net;
@@ -200,7 +201,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             private readonly Task _acceptLoop;
 
             /// <summary>
-            /// Exercises drain lifecycle fake server behavior, including the expected result and failure semantics.
+        /// Verifies the drain lifecycle fake server behavior and expected contract.
             /// </summary>
             private DrainLifecycleFakeServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {

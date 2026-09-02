@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit dot stuffing, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit dot stuffing test suite.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
@@ -16,7 +17,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class TransitDotStuffingTests
     {
         /// <summary>
-        /// Exercises payload cases behavior, including the expected result and failure semantics.
+        /// Verifies the payload cases behavior and expected contract.
         /// </summary>
         public static IEnumerable<object[]> PayloadCases()
         {
@@ -99,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build all byte values payload behavior, including the expected result and failure semantics.
+        /// Verifies the build all byte values payload behavior and expected contract.
         /// </summary>
         private static byte[] BuildAllByteValuesPayload()
         {
@@ -118,7 +119,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build random payload behavior, including the expected result and failure semantics.
+        /// Verifies the build random payload behavior and expected contract.
         /// </summary>
         private static byte[] BuildRandomPayload(int size, int seed)
         {
@@ -135,7 +136,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build mixed payload behavior, including the expected result and failure semantics.
+        /// Verifies the build mixed payload behavior and expected contract.
         /// </summary>
         private static byte[] BuildMixedPayload(int size, int seed, int dotStartEvery, int averageLineLength)
         {
@@ -180,7 +181,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises reference dot stuff behavior, including the expected result and failure semantics.
+        /// Verifies the reference dot stuff behavior and expected contract.
         /// </summary>
         private static byte[] ReferenceDotStuff(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf)
         {

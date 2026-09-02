@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for lets encrypt enabled validation flow, covering configuration and validation contracts; certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the lets encrypt enabled validation flow test suite.
 
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -231,7 +232,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build back filler configuration behavior, including the expected result and failure semantics.
+        /// Verifies the build back filler configuration behavior and expected contract.
         /// </summary>
         private static IConfiguration BuildBackFillerConfiguration(bool enabled, params string[]? bindAddresses)
         {
@@ -239,7 +240,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build back filler configuration with raw bind port behavior, including the expected result and failure semantics.
+        /// Verifies the build back filler configuration with raw bind port behavior and expected contract.
         /// </summary>
         private static IConfiguration BuildBackFillerConfigurationWithRawBindPort(
             bool enabled,

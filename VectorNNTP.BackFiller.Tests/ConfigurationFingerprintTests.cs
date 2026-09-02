@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for configuration fingerprint, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the configuration fingerprint test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
@@ -1186,7 +1187,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises resolve configuration fingerprint source path behavior, including the expected result and failure semantics.
+        /// Verifies the resolve configuration fingerprint source path behavior and expected contract.
         /// </summary>
         private static string ResolveConfigurationFingerprintSourcePath()
         {

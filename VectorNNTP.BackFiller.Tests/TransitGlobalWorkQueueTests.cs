@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit global work queue, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit global work queue test suite.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
@@ -193,7 +194,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create item behavior, including the expected result and failure semantics.
+        /// Verifies the create item behavior and expected contract.
         /// </summary>
         private static TransitWorkItem CreateItem(long id, string messageId, int payloadSize)
         {

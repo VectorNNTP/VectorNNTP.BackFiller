@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for program command line, covering the covered test contracts.
+// Primary responsibility: documents the executable contracts covered by the program command line test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup;
@@ -18,7 +19,7 @@ namespace VectorNNTP.Backfiller.Tests
     public sealed class ProgramCommandLineTests
     {
         /// <summary>
-        /// Exercises program command line behavior, including the expected result and failure semantics.
+        /// Verifies the program command line tests behavior and expected contract.
         /// </summary>
         public ProgramCommandLineTests()
         {
@@ -197,7 +198,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises parse and maybe execute behavior, including the expected result and failure semantics.
+        /// Verifies the parse and maybe execute behavior and expected contract.
         /// </summary>
         private static int? ParseAndMaybeExecute(string[] args, IConfiguration? configuration = null)
         {

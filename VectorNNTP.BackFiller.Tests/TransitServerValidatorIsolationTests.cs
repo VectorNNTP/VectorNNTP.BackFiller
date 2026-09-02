@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit server validator isolation, covering configuration and validation contracts; NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit server validator isolation test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -13,7 +14,7 @@ using Xunit.Abstractions;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-    /// Covers transit server validator isolation behavior and invariants exercised by this test suite.
+        /// Verifies the transit server validator isolation tests behavior and expected contract.
     /// </summary>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
@@ -23,7 +24,7 @@ namespace VectorNNTP.Backfiller.Tests
         private readonly ITestOutputHelper _out = output;
 
         /// <summary>
-        /// Exercises build behavior, including the expected result and failure semantics.
+        /// Verifies the build behavior and expected contract.
         /// </summary>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {

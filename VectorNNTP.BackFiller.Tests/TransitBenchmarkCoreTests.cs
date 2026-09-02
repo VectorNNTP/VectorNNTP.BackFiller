@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit benchmark core, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the transit benchmark core test suite.
 
 using System.Text;
 using VectorNNTP.BackFiller.Benchmarks;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for article line scanner, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the article line scanner test suite.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

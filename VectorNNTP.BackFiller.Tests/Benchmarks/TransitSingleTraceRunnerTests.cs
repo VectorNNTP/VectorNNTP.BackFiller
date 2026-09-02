@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for transit single trace runner, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit single trace runner test suite.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
@@ -151,7 +152,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             private int _startedCount;
 
             /// <summary>
-            /// Exercises publish async behavior, including the expected result and failure semantics.
+        /// Verifies the publish async behavior and expected contract.
             /// </summary>
             public ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
             {
@@ -222,7 +223,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             internal int MaxOutstandingObserved { get; private set; }
 
             /// <summary>
-            /// Exercises wait until started async behavior, including the expected result and failure semantics.
+        /// Verifies the wait until started async behavior and expected contract.
             /// </summary>
             internal async Task WaitUntilStartedAsync(int expectedCount)
             {
@@ -241,7 +242,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-            /// Exercises complete next behavior, including the expected result and failure semantics.
+        /// Verifies the complete next behavior and expected contract.
             /// </summary>
             internal void CompleteNext()
             {
@@ -257,7 +258,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-            /// Exercises complete by call index behavior, including the expected result and failure semantics.
+        /// Verifies the complete by call index behavior and expected contract.
             /// </summary>
             internal void CompleteByCallIndex(int callIndex)
             {
@@ -271,7 +272,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             /// <summary>
-            /// Exercises publish async behavior, including the expected result and failure semantics.
+        /// Verifies the publish async behavior and expected contract.
             /// </summary>
             public async ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
             {

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for shutdown coordinator resource ownership, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the shutdown coordinator resource ownership test suite.
 
 using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Shutdown;

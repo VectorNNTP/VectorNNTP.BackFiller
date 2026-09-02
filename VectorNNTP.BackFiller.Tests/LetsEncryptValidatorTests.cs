@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for lets encrypt validator, covering configuration and validation contracts; certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the lets encrypt validator test suite.
 
 using System.Security.Cryptography;
 using VectorNNTP.Backfiller.Configuration;
@@ -951,7 +952,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create unique temp directory behavior, including the expected result and failure semantics.
+        /// Verifies the create unique temp directory behavior and expected contract.
         /// </summary>
         private static string CreateUniqueTempDirectory()
         {
@@ -961,7 +962,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises delete directory if exists behavior, including the expected result and failure semantics.
+        /// Verifies the delete directory if exists behavior and expected contract.
         /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit publisher lifecycle, covering NNTP article and transport behavior; service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the transit publisher lifecycle test suite.
 
 using System.Net;
 using System.Reflection;
@@ -121,7 +122,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create publisher behavior, including the expected result and failure semantics.
+        /// Verifies the create publisher behavior and expected contract.
         /// </summary>
         private static TransitPublisher CreatePublisher(int port, int connectionPoolSize)
         {
@@ -134,7 +135,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create runtime options behavior and expected contract.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int port)
         {
@@ -163,7 +164,7 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class FailingStartupHostedService : IHostedService
         {
             /// <summary>
-            /// Exercises start async behavior, including the expected result and failure semantics.
+        /// Verifies the start async behavior and expected contract.
             /// </summary>
             public Task StartAsync(CancellationToken cancellationToken)
             {
@@ -171,7 +172,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises stop async behavior, including the expected result and failure semantics.
+        /// Verifies the stop async behavior and expected contract.
             /// </summary>
             public Task StopAsync(CancellationToken cancellationToken)
             {

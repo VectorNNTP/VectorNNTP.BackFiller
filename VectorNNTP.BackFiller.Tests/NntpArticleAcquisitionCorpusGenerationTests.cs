@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for nntp article acquisition corpus generation, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the nntp article acquisition corpus generation test suite.
 
 using System.Security.Cryptography;
 using System.Text;

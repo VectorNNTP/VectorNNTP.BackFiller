@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit protocol parser, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit protocol parser test suite.
 
 using System.IO.Pipelines;
 using System.Text;

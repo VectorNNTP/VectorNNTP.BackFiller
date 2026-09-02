@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for logging async sink correctness, covering the covered test contracts.
+// Primary responsibility: documents the executable contracts covered by the logging async sink correctness test suite.
 
 using Serilog;
 using Serilog.Events;
@@ -111,7 +112,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create temp output directory behavior, including the expected result and failure semantics.
+        /// Verifies the create temp output directory behavior and expected contract.
         /// </summary>
         private static string CreateTempOutputDirectory()
         {
@@ -121,7 +122,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises try delete directory behavior, including the expected result and failure semantics.
+        /// Verifies the try delete directory behavior and expected contract.
         /// </summary>
         private static void TryDeleteDirectory(string path)
         {
@@ -154,7 +155,7 @@ namespace VectorNNTP.Backfiller.Tests
             public long Count => Interlocked.Read(ref _count);
 
             /// <summary>
-            /// Exercises emit behavior, including the expected result and failure semantics.
+        /// Verifies the emit behavior and expected contract.
             /// </summary>
             public void Emit(LogEvent logEvent)
             {

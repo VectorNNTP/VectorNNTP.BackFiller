@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for runtime identity guard, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the runtime identity guard test suite.
 
 using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Transit;
@@ -216,7 +217,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create runtime identity behavior, including the expected result and failure semantics.
+        /// Verifies the create runtime identity behavior and expected contract.
         /// </summary>
         private static RuntimeExecutionIdentity CreateRuntimeIdentity(
             string runtimeAssemblyPath = @"C:\bench\VectorNNTP.BackFiller.Benchmarks.dll",
@@ -245,7 +246,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises create expectation behavior, including the expected result and failure semantics.
+        /// Verifies the create expectation behavior and expected contract.
         /// </summary>
         private static RuntimeIdentityExpectation CreateExpectation(
             string expectedAssemblyPath = @"C:\bench\VectorNNTP.BackFiller.Benchmarks.dll",
@@ -272,7 +273,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises get loaded production assembly version behavior, including the expected result and failure semantics.
+        /// Verifies the get loaded production assembly version behavior and expected contract.
         /// </summary>
         private static string GetLoadedProductionAssemblyVersion()
         {
@@ -280,7 +281,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises get loaded production file version behavior, including the expected result and failure semantics.
+        /// Verifies the get loaded production file version behavior and expected contract.
         /// </summary>
         private static string GetLoadedProductionFileVersion()
         {

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for nntp article parser, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the nntp article parser test suite.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.DateParser;

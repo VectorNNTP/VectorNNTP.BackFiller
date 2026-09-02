@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for transit benchmark cli options, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the transit benchmark cli options test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for measurement metrics classification contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the measurement metrics classification contract test suite.
 
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;

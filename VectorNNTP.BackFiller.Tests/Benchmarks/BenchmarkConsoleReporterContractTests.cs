@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for benchmark console reporter contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the benchmark console reporter contract test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;

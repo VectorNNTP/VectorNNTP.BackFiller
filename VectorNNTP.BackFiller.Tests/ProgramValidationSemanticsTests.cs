@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for program validation semantics, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the program validation semantics test suite.
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -3012,7 +3013,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build configuration behavior, including the expected result and failure semantics.
+        /// Verifies the build configuration behavior and expected contract.
         /// </summary>
         private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {

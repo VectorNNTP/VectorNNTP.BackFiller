@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for nntp account snapshot state, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the nntp account snapshot state test suite.
 
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using Xunit;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit publisher, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit publisher test suite.
 
 using System.Collections;
 using System.Collections.Concurrent;

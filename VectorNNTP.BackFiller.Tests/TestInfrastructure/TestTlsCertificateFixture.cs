@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for test tls certificate fixture, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the test tls certificate fixture test suite.
 
 using System.Net;
 using System.Net.Security;

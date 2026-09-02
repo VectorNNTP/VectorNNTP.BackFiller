@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit connection disposal diagnostics, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit connection disposal diagnostics test suite.
 
 using System.Net.Sockets;
 using System.Reflection;
@@ -92,7 +93,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises set transport artifact behavior, including the expected result and failure semantics.
+        /// Verifies the set transport artifact behavior and expected contract.
         /// </summary>
         private static void SetTransportArtifact(TransitConnection connection, string artifactName, Stream stream)
         {
@@ -117,7 +118,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers throwing dispose stream behavior and invariants exercised by this test suite.
+        /// Verifies the throwing dispose stream behavior and expected contract.
         /// </summary>
         private sealed class ThrowingDisposeStream(Exception disposeException) : Stream
         {
@@ -148,7 +149,7 @@ namespace VectorNNTP.Backfiller.Tests
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
             /// <summary>
-            /// Exercises flush behavior, including the expected result and failure semantics.
+        /// Verifies the flush behavior and expected contract.
             /// </summary>
             public override void Flush()
             {
@@ -156,7 +157,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises read behavior, including the expected result and failure semantics.
+        /// Verifies the read behavior and expected contract.
             /// </summary>
             public override int Read(byte[] buffer, int offset, int count)
             {
@@ -164,7 +165,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises seek behavior, including the expected result and failure semantics.
+        /// Verifies the seek behavior and expected contract.
             /// </summary>
             public override long Seek(long offset, SeekOrigin origin)
             {
@@ -172,7 +173,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises set length behavior, including the expected result and failure semantics.
+        /// Verifies the set length behavior and expected contract.
             /// </summary>
             public override void SetLength(long value)
             {
@@ -180,7 +181,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises write behavior, including the expected result and failure semantics.
+        /// Verifies the write behavior and expected contract.
             /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
@@ -188,7 +189,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose behavior, including the expected result and failure semantics.
+        /// Verifies the dispose behavior and expected contract.
             /// </summary>
             protected override void Dispose(bool disposing)
             {
@@ -228,7 +229,7 @@ namespace VectorNNTP.Backfiller.Tests
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
             /// <summary>
-            /// Exercises flush behavior, including the expected result and failure semantics.
+        /// Verifies the flush behavior and expected contract.
             /// </summary>
             public override void Flush()
             {
@@ -236,7 +237,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises read behavior, including the expected result and failure semantics.
+        /// Verifies the read behavior and expected contract.
             /// </summary>
             public override int Read(byte[] buffer, int offset, int count)
             {
@@ -244,7 +245,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises seek behavior, including the expected result and failure semantics.
+        /// Verifies the seek behavior and expected contract.
             /// </summary>
             public override long Seek(long offset, SeekOrigin origin)
             {
@@ -252,7 +253,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises set length behavior, including the expected result and failure semantics.
+        /// Verifies the set length behavior and expected contract.
             /// </summary>
             public override void SetLength(long value)
             {
@@ -260,7 +261,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises write behavior, including the expected result and failure semantics.
+        /// Verifies the write behavior and expected contract.
             /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
@@ -268,7 +269,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose behavior, including the expected result and failure semantics.
+        /// Verifies the dispose behavior and expected contract.
             /// </summary>
             protected override void Dispose(bool disposing)
             {
@@ -298,7 +299,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Covers log entry behavior and invariants exercised by this test suite.
+        /// Verifies the log entry behavior and expected contract.
             /// </summary>
             internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
 
@@ -322,7 +323,7 @@ namespace VectorNNTP.Backfiller.Tests
                 }
 
                 /// <summary>
-                /// Exercises is enabled behavior, including the expected result and failure semantics.
+        /// Verifies the is enabled behavior and expected contract.
                 /// </summary>
                 public bool IsEnabled(LogLevel logLevel)
                 {
@@ -358,7 +359,7 @@ namespace VectorNNTP.Backfiller.Tests
                     internal static readonly NullScope Instance = new();
 
                     /// <summary>
-                    /// Exercises dispose behavior, including the expected result and failure semantics.
+        /// Verifies the dispose behavior and expected contract.
                     /// </summary>
                     public void Dispose()
                     {

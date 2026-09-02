@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for utc timestamp enricher, covering the covered test contracts.
+// Primary responsibility: documents the executable contracts covered by the utc timestamp enricher test suite.
 
 using Serilog.Core;
 using Serilog.Events;

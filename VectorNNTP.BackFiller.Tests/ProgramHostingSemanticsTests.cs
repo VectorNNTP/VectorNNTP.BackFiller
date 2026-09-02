@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for program hosting semantics, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the program hosting semantics test suite.
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -458,7 +459,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create rabbit mq runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create rabbit mq runtime options behavior and expected contract.
         /// </summary>
         private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
         {
@@ -554,7 +555,7 @@ namespace VectorNNTP.Backfiller.Tests
             public CancellationToken ApplicationStopped => _applicationStopped.Token;
 
             /// <summary>
-            /// Exercises stop application behavior, including the expected result and failure semantics.
+        /// Verifies the stop application behavior and expected contract.
             /// </summary>
             public void StopApplication()
             {
@@ -562,7 +563,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises trigger application stopping behavior, including the expected result and failure semantics.
+        /// Verifies the trigger application stopping behavior and expected contract.
             /// </summary>
             internal void TriggerApplicationStopping()
             {

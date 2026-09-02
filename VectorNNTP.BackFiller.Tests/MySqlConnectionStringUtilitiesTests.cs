@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for my sql connection string utilities, covering dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the my sql connection string utilities test suite.
 
 using System.Data.Common;
 using MySqlConnector;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for my sql nntp account snapshot provider refresh, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the my sql nntp account snapshot provider refresh test suite.
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -164,7 +165,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises build account behavior, including the expected result and failure semantics.
+        /// Verifies the build account behavior and expected contract.
         /// </summary>
         private static NntpAccountSnapshot BuildAccount(Guid entryId)
         {

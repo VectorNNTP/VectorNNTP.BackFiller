@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for lets encrypt certificate dependency probe, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the lets encrypt certificate dependency probe test suite.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -41,7 +42,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create runtime options behavior and expected contract.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(string certDir)
         {
@@ -89,7 +90,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create unique temp directory behavior, including the expected result and failure semantics.
+        /// Verifies the create unique temp directory behavior and expected contract.
         /// </summary>
         private static string CreateUniqueTempDirectory()
         {
@@ -99,7 +100,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises delete directory if exists behavior, including the expected result and failure semantics.
+        /// Verifies the delete directory if exists behavior and expected contract.
         /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {

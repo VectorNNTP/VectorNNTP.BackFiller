@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for shutdown coordinator dispose semantics, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the shutdown coordinator dispose semantics test suite.
 
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using Xunit;

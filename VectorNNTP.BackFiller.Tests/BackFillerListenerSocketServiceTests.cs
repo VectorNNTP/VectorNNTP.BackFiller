@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for back filler listener socket service, covering the covered test contracts.
+// Primary responsibility: documents the executable contracts covered by the back filler listener socket service test suite.
 
 using System.Net;
 using System.Net.Security;
@@ -198,7 +199,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises connect and get server thumbprint async behavior, including the expected result and failure semantics.
+        /// Verifies the connect and get server thumbprint async behavior and expected contract.
         /// </summary>
         private static async Task<string> ConnectAndGetServerThumbprintAsync(IPAddress address, int port)
         {
@@ -223,7 +224,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises wait for port ready async behavior, including the expected result and failure semantics.
+        /// Verifies the wait for port ready async behavior and expected contract.
         /// </summary>
         private static async Task WaitForPortReadyAsync(IPAddress address, int port, TimeSpan timeout)
         {
@@ -248,7 +249,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises reserve ephemeral tcp port behavior, including the expected result and failure semantics.
+        /// Verifies the reserve ephemeral tcp port behavior and expected contract.
         /// </summary>
         private static int ReserveEphemeralTcpPort()
         {
@@ -260,7 +261,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create server certificate behavior, including the expected result and failure semantics.
+        /// Verifies the create server certificate behavior and expected contract.
         /// </summary>
         private static X509Certificate2 CreateServerCertificate(string dnsName)
         {
@@ -285,7 +286,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create runtime options behavior and expected contract.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens)
         {

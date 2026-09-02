@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for transit server dependency probe, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit server dependency probe test suite.
 
 using System.Net;
 using System.Net.Sockets;
@@ -117,7 +118,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly Task _acceptLoopTask;
 
             /// <summary>
-            /// Exercises probe nntp server behavior, including the expected result and failure semantics.
+        /// Verifies the probe nntp server behavior and expected contract.
             /// </summary>
             private ProbeNntpServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {
@@ -132,7 +133,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
             /// <summary>
-            /// Exercises start async behavior, including the expected result and failure semantics.
+        /// Verifies the start async behavior and expected contract.
             /// </summary>
             internal static Task<ProbeNntpServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)
             {
@@ -146,7 +147,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises accept loop async behavior, including the expected result and failure semantics.
+        /// Verifies the accept loop async behavior and expected contract.
             /// </summary>
             private async Task AcceptLoopAsync()
             {
@@ -165,7 +166,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises read line async behavior, including the expected result and failure semantics.
+        /// Verifies the read line async behavior and expected contract.
             /// </summary>
             internal static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
             {
@@ -198,7 +199,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises write line async behavior, including the expected result and failure semantics.
+        /// Verifies the write line async behavior and expected contract.
             /// </summary>
             internal static async Task WriteLineAsync(Stream stream, string line, CancellationToken cancellationToken)
             {
@@ -211,7 +212,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public async ValueTask DisposeAsync()
             {

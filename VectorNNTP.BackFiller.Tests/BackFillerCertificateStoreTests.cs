@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for back filler certificate store, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the back filler certificate store test suite.
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -193,7 +194,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create lets encrypt options behavior, including the expected result and failure semantics.
+        /// Verifies the create lets encrypt options behavior and expected contract.
         /// </summary>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir, string fqdn, int renewBeforeExpiryDays = 7)
         {
@@ -221,7 +222,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create and write pfx behavior, including the expected result and failure semantics.
+        /// Verifies the create and write pfx behavior and expected contract.
         /// </summary>
         private static void CreateAndWritePfx(string pfxPath, string password, string fqdn, DateTimeOffset notBeforeUtc, DateTimeOffset notAfterUtc)
         {
@@ -245,7 +246,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create unique temp directory behavior, including the expected result and failure semantics.
+        /// Verifies the create unique temp directory behavior and expected contract.
         /// </summary>
         private static string CreateUniqueTempDirectory()
         {
@@ -255,7 +256,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises delete directory if exists behavior, including the expected result and failure semantics.
+        /// Verifies the delete directory if exists behavior and expected contract.
         /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {

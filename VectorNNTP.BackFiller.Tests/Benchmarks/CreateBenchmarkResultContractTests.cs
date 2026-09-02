@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for create benchmark result contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the create benchmark result contract test suite.
 
 using System.Diagnostics;
 using VectorNNTP.BackFiller.Benchmarks;

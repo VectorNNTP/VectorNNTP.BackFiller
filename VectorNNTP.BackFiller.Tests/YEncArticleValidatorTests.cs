@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for y enc article validator, covering configuration and validation contracts; NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the yenc article validator test suite.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;

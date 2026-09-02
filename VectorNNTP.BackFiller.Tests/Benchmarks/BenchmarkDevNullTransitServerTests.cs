@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
 // Focused tests for benchmark dev null transit server, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the benchmark dev null transit server test suite.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
@@ -410,7 +411,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises perform streaming handshake async behavior, including the expected result and failure semantics.
+        /// Verifies the perform streaming handshake async behavior and expected contract.
         /// </summary>
         private static async Task PerformStreamingHandshakeAsync(NetworkStream stream)
         {
@@ -427,7 +428,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises build takethis command behavior, including the expected result and failure semantics.
+        /// Verifies the build takethis command behavior and expected contract.
         /// </summary>
         private static string BuildTakethisCommand(string messageId, byte[] payload)
         {
@@ -436,7 +437,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises write ascii line async behavior, including the expected result and failure semantics.
+        /// Verifies the write ascii line async behavior and expected contract.
         /// </summary>
         private static async Task WriteAsciiLineAsync(NetworkStream stream, string line)
         {
@@ -444,7 +445,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises write ascii async behavior, including the expected result and failure semantics.
+        /// Verifies the write ascii async behavior and expected contract.
         /// </summary>
         private static async Task WriteAsciiAsync(NetworkStream stream, string value)
         {
@@ -454,7 +455,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Exercises read ascii line async behavior, including the expected result and failure semantics.
+        /// Verifies the read ascii line async behavior and expected contract.
         /// </summary>
         private static async Task<string> ReadAsciiLineAsync(NetworkStream stream)
         {

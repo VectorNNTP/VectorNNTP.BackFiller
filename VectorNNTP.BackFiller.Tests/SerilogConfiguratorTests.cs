@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for serilog configurator, covering the covered test contracts.
+// Primary responsibility: documents the executable contracts covered by the serilog configurator test suite.
 
 using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Startup.Logging;

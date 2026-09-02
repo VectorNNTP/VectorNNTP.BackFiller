@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for my sql nntp account snapshot provider mapping, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the my sql nntp account snapshot provider mapping test suite.
 
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using Xunit;

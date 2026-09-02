@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for rabbit mq article work response wire protocol, covering NNTP article and transport behavior; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the rabbit mq article work response wire protocol test suite.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;

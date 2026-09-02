@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for article work response factory phase4, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the article work response factory phase 4 test suite.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -71,7 +72,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create result behavior, including the expected result and failure semantics.
+        /// Verifies the create result behavior and expected contract.
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
@@ -116,7 +117,7 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Exercises ack async behavior, including the expected result and failure semantics.
+        /// Verifies the ack async behavior and expected contract.
             /// </summary>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
@@ -125,7 +126,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises nack async behavior, including the expected result and failure semantics.
+        /// Verifies the nack async behavior and expected contract.
             /// </summary>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {

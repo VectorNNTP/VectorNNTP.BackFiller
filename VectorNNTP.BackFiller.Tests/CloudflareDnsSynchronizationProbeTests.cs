@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for cloudflare dns synchronization probe, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the cloudflare dns synchronization probe test suite.
 
 using System.Net;
 using CloudFlare.Client.Enumerators;

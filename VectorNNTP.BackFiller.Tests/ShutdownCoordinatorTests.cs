@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for shutdown coordinator, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the shutdown coordinator test suite.
 
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Shutdown;

@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for connection string validation, covering configuration and validation contracts; dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the connection string validation test suite.
 
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;

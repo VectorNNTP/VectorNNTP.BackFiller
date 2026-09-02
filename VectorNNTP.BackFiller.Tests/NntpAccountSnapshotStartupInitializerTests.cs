@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for nntp account snapshot startup initializer, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the nntp account snapshot startup initializer test suite.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -117,12 +118,12 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers delegate provisioning store behavior and invariants exercised by this test suite.
+        /// Verifies the delegate provisioning store behavior and expected contract.
         /// </summary>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore
         {
             /// <summary>
-            /// Exercises ensure database and table async behavior, including the expected result and failure semantics.
+        /// Verifies the ensure database and table async behavior and expected contract.
             /// </summary>
             public Task EnsureDatabaseAndTableAsync(string databaseName, string tableName, string createTableSql, CancellationToken cancellationToken)
             {

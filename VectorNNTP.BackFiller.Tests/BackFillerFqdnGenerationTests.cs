@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for back filler fqdn generation, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the back filler fqdn generation test suite.
 
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;

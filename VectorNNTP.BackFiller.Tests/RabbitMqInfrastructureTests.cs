@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for rabbit mq infrastructure, covering dependency integration and failure handling.
+// Primary responsibility: documents the executable contracts covered by the rabbit mq infrastructure test suite.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
@@ -249,7 +250,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises wait for async behavior, including the expected result and failure semantics.
+        /// Verifies the wait for async behavior and expected contract.
         /// </summary>
         private static async Task<bool> WaitForAsync(Func<bool> condition, TimeSpan timeout)
         {
@@ -268,7 +269,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create runtime options behavior and expected contract.
         /// </summary>
         private static BackFillerRuntimeOptions CreateRuntimeOptions()
         {
@@ -295,7 +296,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Exercises create rabbit mq runtime options behavior, including the expected result and failure semantics.
+        /// Verifies the create rabbit mq runtime options behavior and expected contract.
         /// </summary>
         private static RabbitMqRuntimeOptions CreateRabbitMqRuntimeOptions(bool enableSsl)
         {
@@ -351,7 +352,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal FakeRabbitMqBrokerConnection? LastConnection { get; private set; }
 
             /// <summary>
-            /// Exercises connect async behavior, including the expected result and failure semantics.
+        /// Verifies the connect async behavior and expected contract.
             /// </summary>
             public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
             {
@@ -364,7 +365,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers fake rabbit mq broker connection behavior and invariants exercised by this test suite.
+        /// Verifies the fake rabbit mq broker connection behavior and expected contract.
         /// </summary>
         private sealed class FakeRabbitMqBrokerConnection(string host, int port, string virtualHost, string connectionName) : IRabbitMqBrokerConnection
         {
@@ -439,7 +440,7 @@ namespace VectorNNTP.Backfiller.Tests
             public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
             /// <summary>
-            /// Exercises create channel async behavior, including the expected result and failure semantics.
+        /// Verifies the create channel async behavior and expected contract.
             /// </summary>
             public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
@@ -451,7 +452,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public ValueTask DisposeAsync()
             {
@@ -460,7 +461,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise connection shutdown behavior, including the expected result and failure semantics.
+        /// Verifies the raise connection shutdown behavior and expected contract.
             /// </summary>
             internal void RaiseConnectionShutdown()
             {
@@ -468,7 +469,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise callback exception behavior, including the expected result and failure semantics.
+        /// Verifies the raise callback exception behavior and expected contract.
             /// </summary>
             internal void RaiseCallbackException(Exception exception)
             {
@@ -476,7 +477,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise connection blocked behavior, including the expected result and failure semantics.
+        /// Verifies the raise connection blocked behavior and expected contract.
             /// </summary>
             internal void RaiseConnectionBlocked(string reason)
             {
@@ -484,7 +485,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise connection unblocked behavior, including the expected result and failure semantics.
+        /// Verifies the raise connection unblocked behavior and expected contract.
             /// </summary>
             internal void RaiseConnectionUnblocked()
             {
@@ -492,7 +493,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise connection recovery error behavior, including the expected result and failure semantics.
+        /// Verifies the raise connection recovery error behavior and expected contract.
             /// </summary>
             internal void RaiseConnectionRecoveryError(Exception exception)
             {
@@ -500,7 +501,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises raise recovery succeeded behavior, including the expected result and failure semantics.
+        /// Verifies the raise recovery succeeded behavior and expected contract.
             /// </summary>
             internal void RaiseRecoverySucceeded()
             {
@@ -509,7 +510,7 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Covers fake rabbit mq channel behavior and invariants exercised by this test suite.
+        /// Verifies the fake rabbit mq channel behavior and expected contract.
         /// </summary>
         private sealed class FakeRabbitMqChannel(int id) : IRabbitMqChannel
         {
@@ -519,7 +520,7 @@ namespace VectorNNTP.Backfiller.Tests
             public IChannel UnderlyingChannel => throw new NotSupportedException();
 
             /// <summary>
-            /// Exercises exchange declare async behavior, including the expected result and failure semantics.
+        /// Verifies the exchange declare async behavior and expected contract.
             /// </summary>
             public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -528,7 +529,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises queue declare async behavior, including the expected result and failure semantics.
+        /// Verifies the queue declare async behavior and expected contract.
             /// </summary>
             public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -537,7 +538,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises queue bind async behavior, including the expected result and failure semantics.
+        /// Verifies the queue bind async behavior and expected contract.
             /// </summary>
             public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken)
             {
@@ -546,7 +547,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic qos async behavior, including the expected result and failure semantics.
+        /// Verifies the basic qos async behavior and expected contract.
             /// </summary>
             public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken)
             {
@@ -558,7 +559,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic consume async behavior, including the expected result and failure semantics.
+        /// Verifies the basic consume async behavior and expected contract.
             /// </summary>
             public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken)
             {
@@ -570,7 +571,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic cancel async behavior, including the expected result and failure semantics.
+        /// Verifies the basic cancel async behavior and expected contract.
             /// </summary>
             public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
             {
@@ -580,7 +581,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic ack async behavior, including the expected result and failure semantics.
+        /// Verifies the basic ack async behavior and expected contract.
             /// </summary>
             public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
             {
@@ -591,7 +592,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic nack async behavior, including the expected result and failure semantics.
+        /// Verifies the basic nack async behavior and expected contract.
             /// </summary>
             public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
             {
@@ -603,7 +604,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises basic publish async behavior, including the expected result and failure semantics.
+        /// Verifies the basic publish async behavior and expected contract.
             /// </summary>
             public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken)
             {
@@ -617,7 +618,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-            /// Exercises dispose async behavior, including the expected result and failure semantics.
+        /// Verifies the dispose async behavior and expected contract.
             /// </summary>
             public ValueTask DisposeAsync()
             {

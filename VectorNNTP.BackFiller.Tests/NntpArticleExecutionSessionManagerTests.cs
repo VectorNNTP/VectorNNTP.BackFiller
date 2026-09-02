@@ -4,6 +4,7 @@
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Focused tests for nntp article execution session manager, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the nntp article execution session manager test suite.
 
 using System.Diagnostics;
 using System.Net;
