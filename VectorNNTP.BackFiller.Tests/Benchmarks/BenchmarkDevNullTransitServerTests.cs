@@ -6,10 +6,10 @@
 // Focused tests for benchmark dev null transit server, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
 // Primary responsibility: documents the executable contracts covered by the benchmark dev null transit server test suite.
 
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -64,9 +64,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenMultipleSubmissionsAreSent_ConsumesAllPayloadsAndReturnsAccepted()
         {
-            /// <summary>
-            /// Supplies submission count for the fixture or scenario under test.
-            /// </summary>
             const int SubmissionCount = 8;
             byte[] payload = Encoding.ASCII.GetBytes("X\r\nY\r\nZ\r\n");
 
@@ -98,13 +95,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenTwoTakethisCommandsArePipelinedInSingleWrite_ConsumesBothAndReturnsTwoAccepted()
         {
-            /// <summary>
-            /// Supplies message id1 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId1 = "<pipe-1@example.com>";
-            /// <summary>
-            /// Supplies message id2 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId2 = "<pipe-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("A\r\nB\r\n");
             byte[] payload2 = Encoding.ASCII.GetBytes("C\r\nD\r\nE\r\n");
@@ -139,13 +130,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenTerminatorIsImmediatelyFollowedByNextTakethis_KeepsNextCommandReadable()
         {
-            /// <summary>
-            /// Supplies message id1 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId1 = "<adjacent-1@example.com>";
-            /// <summary>
-            /// Supplies message id2 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId2 = "<adjacent-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("BodyOne\r\n");
             byte[] payload2 = Encoding.ASCII.GetBytes("BodyTwo\r\n");
@@ -180,13 +165,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenTerminatorAndNextCommandArriveInPartialChunks_ParsesWithoutOverflowOrDisconnect()
         {
-            /// <summary>
-            /// Supplies message id1 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId1 = "<partial-1@example.com>";
-            /// <summary>
-            /// Supplies message id2 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId2 = "<partial-2@example.com>";
             byte[] payload1 = Encoding.ASCII.GetBytes("LineOne\r\nLineTwo");
             byte[] payload2 = Encoding.ASCII.GetBytes("LineThree");
@@ -224,13 +203,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenCommandsArePipelinedWithMixedCaseAndCheck_ParsesAndRespondsByCommandKind()
         {
-            /// <summary>
-            /// Supplies check message id for the fixture or scenario under test.
-            /// </summary>
             const string CheckMessageId = "<check-1@example.com>";
-            /// <summary>
-            /// Supplies take message id for the fixture or scenario under test.
-            /// </summary>
             const string TakeMessageId = "<take-1@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("A\r\nB\r\n");
 
@@ -262,9 +235,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenCommandIsFragmentedAcrossManyWrites_ParsesTakethisAndPayload()
         {
-            /// <summary>
-            /// Supplies message id for the fixture or scenario under test.
-            /// </summary>
             const string MessageId = "<fragmented-1@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("BodyLine1\r\nBodyLine2\r\n");
 
@@ -300,9 +270,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenQuitSentAfterTakethisCompletion_ReturnsClosingResponse()
         {
-            /// <summary>
-            /// Supplies message id for the fixture or scenario under test.
-            /// </summary>
             const string MessageId = "<quit-after-complete@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("Q1\r\nQ2\r\n");
 
@@ -329,13 +296,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         [Fact]
         public async Task FakeServer_WhenQuitArrivesWithPendingTakethis_RespondsWithClosingAndStopsWithoutDrain()
         {
-            /// <summary>
-            /// Supplies message id1 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId1 = "<quit-pending-1@example.com>";
-            /// <summary>
-            /// Supplies message id2 for the fixture or scenario under test.
-            /// </summary>
             const string MessageId2 = "<quit-pending-2@example.com>";
             byte[] payload = Encoding.ASCII.GetBytes("Body\r\n");
 

@@ -524,11 +524,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="cancellationToken">Startup cancellation token.</param>
             /// <returns>A completed task.</returns>
-        /// <summary>
-        /// Confirms the start async behavior.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the start async helper.</returns>
+            /// <summary>
+            /// Confirms the start async behavior.
+            /// </summary>
+            /// <returns>The value returned by the start async helper.</returns>
             public Task StartAsync(CancellationToken cancellationToken)
             {
                 hostApplicationLifetime.StopApplication();
@@ -540,11 +539,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="cancellationToken">Stop cancellation token.</param>
             /// <returns>A completed task.</returns>
-        /// <summary>
-        /// Confirms the stop async behavior.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the stop async helper.</returns>
+            /// <summary>
+            /// Confirms the stop async behavior.
+            /// </summary>
+            /// <returns>The value returned by the stop async helper.</returns>
             public Task StopAsync(CancellationToken cancellationToken)
             {
                 return Task.CompletedTask;
@@ -585,7 +583,7 @@ namespace VectorNNTP.Backfiller.Tests
             public CancellationToken ApplicationStopped => _applicationStopped.Token;
 
             /// <summary>
-        /// Confirms the stop application behavior.
+            /// Confirms the stop application behavior.
             /// </summary>
             public void StopApplication()
             {
@@ -593,7 +591,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the trigger application stopping behavior.
+            /// Confirms the trigger application stopping behavior.
             /// </summary>
             internal void TriggerApplicationStopping()
             {

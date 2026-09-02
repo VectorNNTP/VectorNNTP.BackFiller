@@ -14,14 +14,14 @@ using Xunit.Abstractions;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the transit server validator isolation tests behavior.
+    /// Confirms the transit server validator isolation tests behavior.
     /// </summary>
-        /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
-        /// <summary>
-        /// Confirms the transit server validator isolation tests behavior.
-        /// </summary>
-        /// <param name="output">The output used by this test scenario.</param>
-        /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
+    /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
+    /// <summary>
+    /// Confirms the transit server validator isolation tests behavior.
+    /// </summary>
+    /// <param name="output">The output used by this test scenario.</param>
+    /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
         /// <summary>
@@ -36,7 +36,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build behavior.
         /// </summary>
-        /// <param name="string">The string used by this test scenario.</param>
         /// <param name="values">The values used by this test scenario.</param>
         /// <returns>The value returned by the build helper.</returns>
         private static IConfiguration Build(Dictionary<string, string?> values)

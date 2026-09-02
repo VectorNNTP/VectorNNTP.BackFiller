@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the transit benchmark core tests behavior.
+    /// Confirms the transit benchmark core tests behavior.
     /// </summary>
     public sealed class TransitBenchmarkCoreTests
     {

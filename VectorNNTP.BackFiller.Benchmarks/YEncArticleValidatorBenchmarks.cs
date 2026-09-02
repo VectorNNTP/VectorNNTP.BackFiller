@@ -5,11 +5,11 @@
 // VectorNNTP.Backfiller Benchmarks / Articles / YEnc
 // Focused BenchmarkDotNet coverage for yEnc validator correctness-path and hostile-input-path throughput/allocation baselines.
 
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
-using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 
 namespace VectorNNTP.BackFiller.Benchmarks
@@ -21,9 +21,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
     [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
     [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
     [CategoriesColumn]
-    /// <summary>
-    /// Represents the y EncArticleValidatorBenchmarks class used by the benchmark or regression gate.
-    /// </summary>
     public class YEncArticleValidatorBenchmarks
     {
         /// <summary>
@@ -75,9 +72,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Creates deterministic benchmark fixtures.
         /// </summary>
         [GlobalSetup]
-        /// <summary>
-        /// Initializes the reusable benchmark state.
-        /// </summary>
         public void Setup()
         {
             _validSmall = BuildSinglePartArticle(BuildPayload(512, 7), false);
@@ -106,9 +100,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Baseline = true, Description = "ValidSmall")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate ValidSmall contract.
-        /// </summary>
         public int ValidateValidSmall() => (int)YEncArticleValidator.Validate(_validSmall).Status;
 
         /// <summary>
@@ -117,9 +108,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "ValidLarge")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate ValidLarge contract.
-        /// </summary>
         public int ValidateValidLarge() => (int)YEncArticleValidator.Validate(_validLarge).Status;
 
         /// <summary>
@@ -128,9 +116,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "ValidMultipart")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate ValidMultipart contract.
-        /// </summary>
         public int ValidateValidMultipart() => (int)YEncArticleValidator.Validate(_validMultipart).Status;
 
         /// <summary>
@@ -139,9 +124,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "MalformedMetadata")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate MalformedMetadata contract.
-        /// </summary>
         public int ValidateMalformedMetadata() => (int)YEncArticleValidator.Validate(_malformedMetadata).Status;
 
         /// <summary>
@@ -150,9 +132,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "CrcMismatch")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate CrcMismatch contract.
-        /// </summary>
         public int ValidateCrcMismatch() => (int)YEncArticleValidator.Validate(_crcMismatch).Status;
 
         /// <summary>
@@ -161,9 +140,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "InvalidEscape")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate InvalidEscape contract.
-        /// </summary>
         public int ValidateInvalidEscape() => (int)YEncArticleValidator.Validate(_invalidEscape).Status;
 
         /// <summary>
@@ -172,9 +148,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "ValidNonYEnc")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate Nony Enc contract.
-        /// </summary>
         public int ValidateNonYEnc() => (int)YEncArticleValidator.Validate(_nonYEnc).Status;
 
         /// <summary>
@@ -183,9 +156,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "DotStuffedValid")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate DotStuffedValid contract.
-        /// </summary>
         public int ValidateDotStuffedValid() => (int)YEncArticleValidator.Validate(_dotStuffed).Status;
 
         /// <summary>
@@ -194,9 +164,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "MetadataHeavy")]
         [BenchmarkCategory("YEncValidator")]
-        /// <summary>
-        /// Implements the validate MetadataHeavy contract.
-        /// </summary>
         public int ValidateMetadataHeavy() => (int)YEncArticleValidator.Validate(_metadataHeavy).Status;
 
         /// <summary>

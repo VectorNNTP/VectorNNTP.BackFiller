@@ -231,7 +231,6 @@ internal readonly record struct BenchmarkResultArtifact(
 
     /// <summary>
     /// Converts to Csv.
-
     /// </summary>
     internal string ToCsv()
     {

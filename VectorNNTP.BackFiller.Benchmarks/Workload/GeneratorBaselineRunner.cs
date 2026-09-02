@@ -28,7 +28,6 @@ internal static class GeneratorBaselineRunner
 
     /// <summary>
     /// Runs Async.
-
     /// </summary>
     internal static async Task RunAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {

@@ -3019,7 +3019,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build configuration behavior.
         /// </summary>
-        /// <param name="string">The string used by this test scenario.</param>
         /// <param name="values">The values used by this test scenario.</param>
         /// <param name="includeRabbitMqBaseline">The include rabbit mq baseline used by this test scenario.</param>
         /// <returns>The value returned by the build configuration helper.</returns>

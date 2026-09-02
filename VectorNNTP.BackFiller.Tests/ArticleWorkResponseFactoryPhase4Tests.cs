@@ -117,14 +117,14 @@ namespace VectorNNTP.Backfiller.Tests
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-        /// Confirms the ack async behavior.
+            /// Confirms the ack async behavior.
             /// </summary>
-        /// <returns>The value returned by the ack async helper.</returns>
-        /// <summary>
-        /// Confirms the ack async behavior.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the ack async helper.</returns>
+            /// <returns>The value returned by the ack async helper.</returns>
+            /// <summary>
+            /// Confirms the ack async behavior.
+            /// </summary>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the ack async helper.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -132,15 +132,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the nack async behavior.
+            /// Confirms the nack async behavior.
             /// </summary>
-        /// <returns>The value returned by the nack async helper.</returns>
-        /// <summary>
-        /// Confirms the nack async behavior.
-        /// </summary>
-        /// <param name="requeue">The requeue used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the nack async helper.</returns>
+            /// <returns>The value returned by the nack async helper.</returns>
+            /// <summary>
+            /// Confirms the nack async behavior.
+            /// </summary>
+            /// <param name="requeue">The requeue used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();

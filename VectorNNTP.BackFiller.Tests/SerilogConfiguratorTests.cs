@@ -13,7 +13,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the serilog configurator tests behavior.
+    /// Confirms the serilog configurator tests behavior.
     /// </summary>
     public sealed class SerilogConfiguratorTests
     {

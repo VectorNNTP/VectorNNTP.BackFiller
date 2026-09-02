@@ -832,40 +832,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles reconnect async for transit publisher.
-        /// </summary>
-        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
-        {
-            if ((uint)slotIndex >= (uint)_connections.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Connection slot index is out of range.");
-            }
-
-            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
-            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                TransitConnection? current = _connections[slotIndex] ?? throw new InvalidOperationException("Cannot reconnect because no active connection exists for the slot.");
-                await RequeueClaimedAndOutstandingAfterFaultAsync(current, claimed: null, cancellationToken).ConfigureAwait(false);
-                _ = TrackDeferredConnectionDisposal(current);
-
-                if (_disposeRequested || cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                _ = Interlocked.Increment(ref _totalReconnects);
-                TransitConnection replacement = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
-                _connections[slotIndex] = replacement;
-            }
-            finally
-            {
-                _ = reconnectGate.Release();
-            }
-        }
-
-        /// <summary>
         /// Handles requeue claimed and outstanding after fault async for transit publisher.
         /// </summary>
         private async Task RequeueClaimedAndOutstandingAfterFaultAsync(
@@ -1075,6 +1041,43 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             Console.WriteLine($"[TRACE-RI-34] {TraceStamp()} ForceTerminalize EXIT");
             await Task.CompletedTask.ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Handles reconnecting a faulted connection in a single slot and avoids replacing a fresh healthy replacement created concurrently.
+        /// </summary>
+        /// <param name="slotIndex">The connection slot whose current connection is being replaced.</param>
+        /// <param name="cancellationToken">Cancels the reconnect operation.</param>
+        /// <returns>A task that completes when the reconnect attempt finishes.</returns>
+        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
+        {
+            if (slotIndex < 0 || slotIndex >= _connections.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Reconnect slot index must reference a valid connection slot.");
+            }
+
+            TransitConnection? reconnectTarget = _connections[slotIndex];
+            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
+            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                TransitConnection? replacement = _connections[slotIndex];
+                if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
+                {
+                    Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} replacementConnectionId={replacement.ConnectionId}");
+                    return;
+                }
+
+                long reconnects = Interlocked.Increment(ref _totalReconnects);
+                Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync START slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} totalReconnects={reconnects}");
+                TransitConnection connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} ReconnectAsync READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
+                _connections[slotIndex] = connection;
+            }
+            finally
+            {
+                _ = reconnectGate.Release();
+            }
         }
 
         /// <summary>

@@ -155,7 +155,7 @@ namespace VectorNNTP.Backfiller.Tests
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
             /// <summary>
-        /// Confirms the flush behavior.
+            /// Confirms the flush behavior.
             /// </summary>
             public override void Flush()
             {
@@ -163,38 +163,38 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the read behavior.
+            /// Confirms the read behavior.
             /// </summary>
-        /// <returns>The value returned by the read helper.</returns>
-        /// <summary>
-        /// Confirms the read behavior.
-        /// </summary>
-        /// <param name="buffer">The buffer used by this test scenario.</param>
-        /// <param name="offset">The offset used by this test scenario.</param>
-        /// <param name="count">The count used by this test scenario.</param>
-        /// <returns>The value returned by the read helper.</returns>
+            /// <returns>The value returned by the read helper.</returns>
+            /// <summary>
+            /// Confirms the read behavior.
+            /// </summary>
+            /// <param name="buffer">The buffer used by this test scenario.</param>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="count">The count used by this test scenario.</param>
+            /// <returns>The value returned by the read helper.</returns>
             public override int Read(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
             /// <summary>
-        /// Confirms the seek behavior.
+            /// Confirms the seek behavior.
             /// </summary>
-        /// <returns>The value returned by the seek helper.</returns>
-        /// <summary>
-        /// Confirms the seek behavior.
-        /// </summary>
-        /// <param name="offset">The offset used by this test scenario.</param>
-        /// <param name="origin">The origin used by this test scenario.</param>
-        /// <returns>The value returned by the seek helper.</returns>
+            /// <returns>The value returned by the seek helper.</returns>
+            /// <summary>
+            /// Confirms the seek behavior.
+            /// </summary>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="origin">The origin used by this test scenario.</param>
+            /// <returns>The value returned by the seek helper.</returns>
             public override long Seek(long offset, SeekOrigin origin)
             {
                 throw new NotSupportedException();
             }
 
             /// <summary>
-        /// Confirms the set length behavior.
+            /// Confirms the set length behavior.
             /// </summary>
             public override void SetLength(long value)
             {
@@ -202,7 +202,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the write behavior.
+            /// Confirms the write behavior.
             /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
@@ -210,7 +210,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the dispose behavior.
+            /// Confirms the dispose behavior.
             /// </summary>
             protected override void Dispose(bool disposing)
             {
@@ -250,7 +250,7 @@ namespace VectorNNTP.Backfiller.Tests
             public override long Position { get => 0; set => throw new NotSupportedException(); }
 
             /// <summary>
-        /// Confirms the flush behavior.
+            /// Confirms the flush behavior.
             /// </summary>
             public override void Flush()
             {
@@ -258,38 +258,38 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the read behavior.
+            /// Confirms the read behavior.
             /// </summary>
-        /// <returns>The value returned by the read helper.</returns>
-        /// <summary>
-        /// Confirms the read behavior.
-        /// </summary>
-        /// <param name="buffer">The buffer used by this test scenario.</param>
-        /// <param name="offset">The offset used by this test scenario.</param>
-        /// <param name="count">The count used by this test scenario.</param>
-        /// <returns>The value returned by the read helper.</returns>
+            /// <returns>The value returned by the read helper.</returns>
+            /// <summary>
+            /// Confirms the read behavior.
+            /// </summary>
+            /// <param name="buffer">The buffer used by this test scenario.</param>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="count">The count used by this test scenario.</param>
+            /// <returns>The value returned by the read helper.</returns>
             public override int Read(byte[] buffer, int offset, int count)
             {
                 throw new NotSupportedException();
             }
 
             /// <summary>
-        /// Confirms the seek behavior.
+            /// Confirms the seek behavior.
             /// </summary>
-        /// <returns>The value returned by the seek helper.</returns>
-        /// <summary>
-        /// Confirms the seek behavior.
-        /// </summary>
-        /// <param name="offset">The offset used by this test scenario.</param>
-        /// <param name="origin">The origin used by this test scenario.</param>
-        /// <returns>The value returned by the seek helper.</returns>
+            /// <returns>The value returned by the seek helper.</returns>
+            /// <summary>
+            /// Confirms the seek behavior.
+            /// </summary>
+            /// <param name="offset">The offset used by this test scenario.</param>
+            /// <param name="origin">The origin used by this test scenario.</param>
+            /// <returns>The value returned by the seek helper.</returns>
             public override long Seek(long offset, SeekOrigin origin)
             {
                 throw new NotSupportedException();
             }
 
             /// <summary>
-        /// Confirms the set length behavior.
+            /// Confirms the set length behavior.
             /// </summary>
             public override void SetLength(long value)
             {
@@ -297,7 +297,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the write behavior.
+            /// Confirms the write behavior.
             /// </summary>
             public override void Write(byte[] buffer, int offset, int count)
             {
@@ -305,7 +305,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the dispose behavior.
+            /// Confirms the dispose behavior.
             /// </summary>
             protected override void Dispose(bool disposing)
             {
@@ -335,23 +335,22 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the log entry behavior.
+            /// Confirms the log entry behavior.
             /// </summary>
-        /// <returns>The value returned by the log entry helper.</returns>
-        /// <summary>
-        /// Confirms the log entry behavior.
-        /// </summary>
-        /// <param name="EventId">The event id used by this test scenario.</param>
-        /// <param name="LogLevel">The log level used by this test scenario.</param>
-        /// <param name="Message">The message used by this test scenario.</param>
-        /// <param name="Exception">The exception used by this test scenario.</param>
-        /// <param name="string">The string used by this test scenario.</param>
-        /// <param name="StateValues">The state values used by this test scenario.</param>
-        /// <returns>The value returned by the log entry helper.</returns>
+            /// <returns>The value returned by the log entry helper.</returns>
+            /// <summary>
+            /// Confirms the log entry behavior.
+            /// </summary>
+            /// <param name="EventId">The event id used by this test scenario.</param>
+            /// <param name="LogLevel">The log level used by this test scenario.</param>
+            /// <param name="Message">The message used by this test scenario.</param>
+            /// <param name="Exception">The exception used by this test scenario.</param>
+            /// <param name="StateValues">The state values used by this test scenario.</param>
+            /// <returns>The value returned by the log entry helper.</returns>
             internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
 
             /// <summary>
-        /// Confirms the capturing logger behavior.
+            /// Confirms the capturing logger behavior.
             /// </summary>
             private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
             {
@@ -370,14 +369,14 @@ namespace VectorNNTP.Backfiller.Tests
                 }
 
                 /// <summary>
-        /// Confirms the is enabled behavior.
+                /// Confirms the is enabled behavior.
                 /// </summary>
-        /// <returns>The value returned by the is enabled helper.</returns>
-        /// <summary>
-        /// Confirms the is enabled behavior.
-        /// </summary>
-        /// <param name="logLevel">The log level used by this test scenario.</param>
-        /// <returns>The value returned by the is enabled helper.</returns>
+                /// <returns>The value returned by the is enabled helper.</returns>
+                /// <summary>
+                /// Confirms the is enabled behavior.
+                /// </summary>
+                /// <param name="logLevel">The log level used by this test scenario.</param>
+                /// <returns>The value returned by the is enabled helper.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -402,7 +401,7 @@ namespace VectorNNTP.Backfiller.Tests
                 }
 
                 /// <summary>
-        /// Confirms the null scope behavior.
+                /// Confirms the null scope behavior.
                 /// </summary>
                 private sealed class NullScope : IDisposable
                 {
@@ -412,7 +411,7 @@ namespace VectorNNTP.Backfiller.Tests
                     internal static readonly NullScope Instance = new();
 
                     /// <summary>
-        /// Confirms the dispose behavior.
+                    /// Confirms the dispose behavior.
                     /// </summary>
                     public void Dispose()
                     {

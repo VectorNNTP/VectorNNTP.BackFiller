@@ -244,25 +244,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 definition.RoutingKey);
         }
 
-                /// <summary>
+        /// <summary>
         /// Emits the topology initialization started log event for rabbit mq topology.
         /// </summary>
         [LoggerMessage(EventId = 4100, Level = LogLevel.Information, Message = "RabbitMQ topology initialization started. BackboneCount={BackboneCount}")]
         private static partial void LogTopologyInitializationStarted(ILogger logger, int backboneCount);
 
-                /// <summary>
+        /// <summary>
         /// Emits the topology initialization completed log event for rabbit mq topology.
         /// </summary>
         [LoggerMessage(EventId = 4101, Level = LogLevel.Information, Message = "RabbitMQ topology initialization completed. BackboneCount={BackboneCount}")]
         private static partial void LogTopologyInitializationCompleted(ILogger logger, int backboneCount);
 
-                /// <summary>
+        /// <summary>
         /// Emits the backbone topology initialization started log event for rabbit mq topology.
         /// </summary>
         [LoggerMessage(EventId = 4102, Level = LogLevel.Information, Message = "RabbitMQ backbone topology initialization started. Backbone={Backbone} Exchange={Exchange} Queue={Queue} RoutingKey={RoutingKey}")]
         private static partial void LogBackboneTopologyInitializationStarted(ILogger logger, string backbone, string exchange, string queue, string routingKey);
 
-                /// <summary>
+        /// <summary>
         /// Emits the backbone topology initialization completed log event for rabbit mq topology.
         /// </summary>
         [LoggerMessage(EventId = 4103, Level = LogLevel.Information, Message = "RabbitMQ backbone topology initialization completed. Backbone={Backbone} Exchange={Exchange} Queue={Queue} RoutingKey={RoutingKey}")]

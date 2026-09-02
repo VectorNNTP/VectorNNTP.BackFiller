@@ -275,7 +275,6 @@ public partial class LoggingApiBenchmarks
 
     /// <summary>
     /// Creates MelLogger.
-
     /// </summary>
     private static Microsoft.Extensions.Logging.ILogger CreateMelLogger(LogLevel minimumLevel)
     {
@@ -296,7 +295,6 @@ public partial class LoggingApiBenchmarks
 
     /// <summary>
     /// Creates SerilogLogger.
-
     /// </summary>
     private static Serilog.ILogger CreateSerilogLogger(LogEventLevel minimumLevel)
     {
@@ -319,7 +317,6 @@ public partial class LoggingApiBenchmarks
 
     /// <summary>
     /// Converts to SerilogLevel.
-
     /// </summary>
     private static LogEventLevel ToSerilogLevel(LogLevel level)
     {
@@ -368,9 +365,6 @@ public partial class LoggingApiBenchmarks
             EventId = 2000,
             Level = LogLevel.Debug,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
-        /// <summary>
-        /// Implements the log DemoDebug contract.
-        /// </summary>
         public static partial void LogDemoDebug(
             Microsoft.Extensions.Logging.ILogger logger,
             DemoState state,
@@ -384,9 +378,6 @@ public partial class LoggingApiBenchmarks
             EventId = 2001,
             Level = LogLevel.Information,
             Message = "Demo state={State}; int={IntValue}; long={LongValue}; double={DoubleValue}; elapsed={Elapsed}; payload={Payload}")]
-        /// <summary>
-        /// Implements the log DemoInformation contract.
-        /// </summary>
         public static partial void LogDemoInformation(
             Microsoft.Extensions.Logging.ILogger logger,
             DemoState state,
@@ -400,9 +391,6 @@ public partial class LoggingApiBenchmarks
             EventId = 2002,
             Level = LogLevel.Debug,
             Message = "Exception in benchmark path {Path}")]
-        /// <summary>
-        /// Implements the log DemoException contract.
-        /// </summary>
         public static partial void LogDemoException(
             Microsoft.Extensions.Logging.ILogger logger,
             Exception exception,

@@ -37,7 +37,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Runs AllAsync.
-
     /// </summary>
     public static async Task RunAllAsync()
     {
@@ -55,7 +54,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Runs BurstMatrixAsync.
-
     /// </summary>
     private static async Task RunBurstMatrixAsync()
     {
@@ -64,9 +62,6 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("| Producers | Events/Producer | Submitted | Written | EventsLost | ProduceMs | FlushMs | TotalMs | P50us | P95us | P99us | MaxUs |");
         Console.WriteLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
-        /// <summary>
-        /// Gets or sets the events PerProducer.
-        /// </summary>
         const int eventsPerProducer = 50_000;
 
         foreach (int producerCount in ProducerCounts)
@@ -78,7 +73,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Runs SustainedMatrixAsync.
-
     /// </summary>
     private static async Task RunSustainedMatrixAsync()
     {
@@ -99,20 +93,13 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Runs ShutdownFlushScenarioAsync.
-
     /// </summary>
     private static async Task RunShutdownFlushScenarioAsync()
     {
         Console.WriteLine();
         Console.WriteLine("=== Shutdown Flush Scenario ===");
 
-        /// <summary>
-        /// Gets or sets the producer Count.
-        /// </summary>
         const int producerCount = 8;
-        /// <summary>
-        /// Gets or sets the events PerProducer.
-        /// </summary>
         const int eventsPerProducer = 75_000;
 
         StressScenarioResult result = await RunBurstScenarioAsync(producerCount, eventsPerProducer).ConfigureAwait(false);
@@ -127,7 +114,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Runs BurstScenarioAsync.
-
     /// </summary>
     private static async Task<StressScenarioResult> RunBurstScenarioAsync(int producerCount, int eventsPerProducer)
     {
@@ -195,7 +181,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Runs SustainedScenarioAsync.
-
     /// </summary>
     private static async Task<StressScenarioResult> RunSustainedScenarioAsync(int producerCount, int targetRatePerSecond, TimeSpan duration)
     {
@@ -275,7 +260,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Builds ProductionLikeLogger.
-
     /// </summary>
     private static Serilog.ILogger BuildProductionLikeLogger(string outputDirectory, SequenceCountingSink countingSink)
     {
@@ -309,7 +293,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Builds Result.
-
     /// </summary>
     private static StressScenarioResult BuildResult(
         int producerCount,
@@ -342,7 +325,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Creates TempOutputDirectory.
-
     /// </summary>
     private static string CreateTempOutputDirectory(string scenario)
     {
@@ -371,7 +353,6 @@ internal static class AsyncSinkStressRunner
 
     /// <summary>
     /// Converts to Microseconds.
-
     /// </summary>
     private static double ToMicroseconds(long ticks)
     {

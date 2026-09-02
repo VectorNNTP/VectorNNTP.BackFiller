@@ -305,7 +305,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the create runtime options behavior.
         /// </summary>
-        /// <param name="bindAddresses">The bind addresses used by this test scenario.</param>
         /// <returns>The value returned by the create runtime options helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(params string[] bindAddresses)
         {
@@ -344,10 +343,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the create record behavior.
         /// </summary>
-        /// <param name="id">The id used by this test scenario.</param>
-        /// <param name="recordType">The record type used by this test scenario.</param>
-        /// <param name="content">The content used by this test scenario.</param>
-        /// <param name="name">The name used by this test scenario.</param>
         /// <returns>The value returned by the create record helper.</returns>
         private static CloudflareDnsRecordInfo CreateRecord(string id, DnsRecordType recordType, string content, string? name = null)
         {
@@ -372,11 +367,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Initializes the fake facade with existing records.
             /// </summary>
             /// <param name="records">Initial Cloudflare record state.</param>
-        /// <summary>
-        /// Confirms the e behavior.
-        /// </summary>
-        /// <param name="records">The records used by this test scenario.</param>
-        /// <returns>The value returned by the e helper.</returns>
+            /// <summary>
+            /// Confirms the e behavior.
+            /// </summary>
+            /// <returns>The value returned by the e helper.</returns>
             internal FakeCloudflareDnsFacade(IEnumerable<CloudflareDnsRecordInfo> records)
             {
                 _records = [.. records];
@@ -418,12 +412,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="zoneId">Zone identifier.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
             /// <returns>Fake zone information.</returns>
-        /// <summary>
-        /// Confirms the get zone details async behavior.
-        /// </summary>
-        /// <param name="zoneId">The zone id used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the get zone details async helper.</returns>
+            /// <summary>
+            /// Confirms the get zone details async behavior.
+            /// </summary>
+            /// <returns>The value returned by the get zone details async helper.</returns>
             public Task<CloudflareZoneInfo> GetZoneDetailsAsync(string zoneId, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -440,13 +432,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="fqdn">Queried FQDN.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
             /// <returns>Current fake record snapshot.</returns>
-        /// <summary>
-        /// Confirms the get dns records async behavior.
-        /// </summary>
-        /// <param name="zoneId">The zone id used by this test scenario.</param>
-        /// <param name="fqdn">The fqdn used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the get dns records async helper.</returns>
+            /// <summary>
+            /// Confirms the get dns records async behavior.
+            /// </summary>
+            /// <returns>The value returned by the get dns records async helper.</returns>
             public Task<IReadOnlyList<CloudflareDnsRecordInfo>> GetDnsRecordsAsync(string zoneId, string fqdn, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -495,13 +484,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="zoneId">Zone identifier.</param>
             /// <param name="recordId">Record identifier.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
-        /// <summary>
-        /// Confirms the delete dns record async behavior.
-        /// </summary>
-        /// <param name="zoneId">The zone id used by this test scenario.</param>
-        /// <param name="recordId">The record id used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the delete dns record async helper.</returns>
+            /// <summary>
+            /// Confirms the delete dns record async behavior.
+            /// </summary>
+            /// <returns>The value returned by the delete dns record async helper.</returns>
             public Task DeleteDnsRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -516,10 +502,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Disposes fake resources.
             /// </summary>
             /// <returns>A completed value task.</returns>
-        /// <summary>
-        /// Confirms the dispose async behavior.
-        /// </summary>
-        /// <returns>The value returned by the dispose async helper.</returns>
+            /// <summary>
+            /// Confirms the dispose async behavior.
+            /// </summary>
+            /// <returns>The value returned by the dispose async helper.</returns>
             public ValueTask DisposeAsync()
             {
                 return ValueTask.CompletedTask;

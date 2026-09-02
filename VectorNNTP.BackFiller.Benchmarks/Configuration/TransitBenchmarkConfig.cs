@@ -70,58 +70,58 @@ internal readonly record struct TransitBenchmarkConfig(
             bool? endpointUseSslOverride = null,
             string endpointType = "TRANSITSERVER",
             string endpointIdentity = "appsettings:BackFiller:TransitServer")
+    {
+        if (cliOptions.ArticleCount is not null && cliOptions.DurationSeconds is not null)
         {
-            if (cliOptions.ArticleCount is not null && cliOptions.DurationSeconds is not null)
-            {
-                throw new InvalidOperationException("Options '--article-count' and '--duration-seconds' are mutually exclusive for measurement execution.");
-            }
+            throw new InvalidOperationException("Options '--article-count' and '--duration-seconds' are mutually exclusive for measurement execution.");
+        }
 
-            if (string.IsNullOrWhiteSpace(endpointType))
-            {
-                throw new ArgumentException("Endpoint type must be provided.", nameof(endpointType));
-            }
+        if (string.IsNullOrWhiteSpace(endpointType))
+        {
+            throw new ArgumentException("Endpoint type must be provided.", nameof(endpointType));
+        }
 
-            if (string.IsNullOrWhiteSpace(endpointIdentity))
-            {
-                throw new ArgumentException("Endpoint identity must be provided.", nameof(endpointIdentity));
-            }
+        if (string.IsNullOrWhiteSpace(endpointIdentity))
+        {
+            throw new ArgumentException("Endpoint identity must be provided.", nameof(endpointIdentity));
+        }
 
-            string appSettingsPath = FindBackFillerAppSettingsPath();
+        string appSettingsPath = FindBackFillerAppSettingsPath();
 
-            IConfigurationRoot configuration = new ConfigurationBuilder()
-                .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
-                .Build();
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
+            .Build();
 
-            string configuredHost = configuration["BackFiller:TransitServer:Host"]
-                ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is missing in existing application configuration.");
+        string configuredHost = configuration["BackFiller:TransitServer:Host"]
+            ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is missing in existing application configuration.");
 
-            string configuredNormalizedHost = configuredHost.Trim();
-            if (!configuredNormalizedHost.Equals(RequiredTransitHostname, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"Configured TransitServer host must be '{RequiredTransitHostname}', but was '{configuredNormalizedHost}'.");
-            }
+        string configuredNormalizedHost = configuredHost.Trim();
+        if (!configuredNormalizedHost.Equals(RequiredTransitHostname, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Configured TransitServer host must be '{RequiredTransitHostname}', but was '{configuredNormalizedHost}'.");
+        }
 
-            string? configuredPortRaw = configuration["BackFiller:TransitServer:Port"];
-            if (!int.TryParse(configuredPortRaw, out int configuredPort) || configuredPort is <= 0 or > 65535)
-            {
-                throw new InvalidOperationException("BackFiller:TransitServer:Port is missing or invalid in existing application configuration.");
-            }
+        string? configuredPortRaw = configuration["BackFiller:TransitServer:Port"];
+        if (!int.TryParse(configuredPortRaw, out int configuredPort) || configuredPort is <= 0 or > 65535)
+        {
+            throw new InvalidOperationException("BackFiller:TransitServer:Port is missing or invalid in existing application configuration.");
+        }
 
-            bool configuredUseSsl = bool.TryParse(configuration["BackFiller:TransitServer:UseSsl"], out bool parsedUseSsl) && parsedUseSsl;
+        bool configuredUseSsl = bool.TryParse(configuration["BackFiller:TransitServer:UseSsl"], out bool parsedUseSsl) && parsedUseSsl;
 
-            string normalizedHost = endpointHostOverride?.Trim() ?? configuredNormalizedHost;
-            if (string.IsNullOrWhiteSpace(normalizedHost))
-            {
-                throw new InvalidOperationException("Transit benchmark endpoint host resolved to empty value.");
-            }
+        string normalizedHost = endpointHostOverride?.Trim() ?? configuredNormalizedHost;
+        if (string.IsNullOrWhiteSpace(normalizedHost))
+        {
+            throw new InvalidOperationException("Transit benchmark endpoint host resolved to empty value.");
+        }
 
-            int port = endpointPortOverride ?? configuredPort;
-            if (port is <= 0 or > 65535)
-            {
-                throw new InvalidOperationException("Transit benchmark endpoint port is invalid.");
-            }
+        int port = endpointPortOverride ?? configuredPort;
+        if (port is <= 0 or > 65535)
+        {
+            throw new InvalidOperationException("Transit benchmark endpoint port is invalid.");
+        }
 
-            bool useSsl = endpointUseSslOverride ?? configuredUseSsl;
+        bool useSsl = endpointUseSslOverride ?? configuredUseSsl;
 
         int connectionPoolSize = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(cliOptions.ConnectionPoolSize ?? 4, min: 1, max: 64, "connections");
         int perConnectionPipelineDepth = TransitBenchmarkCore.TransitBenchmarkConfigValidator.ValidateIntRange(cliOptions.PipelineDepth ?? 8, min: 1, max: 64, "pipeline-depth");

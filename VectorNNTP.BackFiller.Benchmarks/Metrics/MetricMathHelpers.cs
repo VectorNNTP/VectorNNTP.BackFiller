@@ -77,7 +77,6 @@ internal static class MetricMathHelpers
 
     /// <summary>
     /// Normalizes Min.
-
     /// </summary>
     internal static long NormalizeMin(long value)
     {
@@ -86,7 +85,6 @@ internal static class MetricMathHelpers
 
     /// <summary>
     /// Computes Average.
-
     /// </summary>
     internal static double ComputeAverage(long sum, long count)
     {

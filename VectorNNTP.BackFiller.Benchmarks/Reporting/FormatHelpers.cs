@@ -42,7 +42,6 @@ internal static class FormatHelpers
 
     /// <summary>
     /// Builds DepthBucketSummary.
-
     /// </summary>
     internal static string BuildDepthBucketSummary(List<long>[] submitBuckets, List<long>[] completeBuckets)
     {

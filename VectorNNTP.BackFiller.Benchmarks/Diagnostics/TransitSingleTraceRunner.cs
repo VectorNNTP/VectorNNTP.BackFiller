@@ -88,7 +88,6 @@ internal static class TransitSingleTraceRunner
 
     /// <summary>
     /// Resolves RequestedArticleCount.
-
     /// </summary>
     internal static int ResolveRequestedArticleCount(int? measurementArticleCount)
     {
@@ -316,7 +315,6 @@ internal static class TransitSingleTraceRunner
 
     /// <summary>
     /// Runs Async.
-
     /// </summary>
     internal static async Task RunAsync(
         TransitBenchmarkCliOptions cliOptions,
@@ -379,9 +377,6 @@ internal static class TransitSingleTraceRunner
         await publisher.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
         SingleTracePublishBatchResult publishBatch = await PublishWithPipelineDepthAsync(
-            /// <summary>
-            /// Implements the transit PublisherSingleTracePublishExecutor contract.
-            /// </summary>
             new TransitPublisherSingleTracePublishExecutor(publisher),
             requestedArticleCount,
             config.ArticleTargetBytes,

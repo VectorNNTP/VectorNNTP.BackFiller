@@ -97,7 +97,6 @@ internal static class AppAssemblyMetadata
 {
     /// <summary>
     /// Gets Value.
-
     /// </summary>
     internal static string? GetValue(string key)
     {

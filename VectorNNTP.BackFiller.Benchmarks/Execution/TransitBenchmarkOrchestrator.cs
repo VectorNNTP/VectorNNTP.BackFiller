@@ -19,7 +19,6 @@ internal static class TransitBenchmarkOrchestrator
 {
     /// <summary>
     /// Runs CoreAsync.
-
     /// </summary>
     internal static async Task RunCoreAsync(
         TransitBenchmarkConfig config,
@@ -140,7 +139,6 @@ internal static class TransitBenchmarkOrchestrator
 
     /// <summary>
     /// Runs SmokeAsync.
-
     /// </summary>
     private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
@@ -170,7 +168,6 @@ internal static class TransitBenchmarkOrchestrator
 
     /// <summary>
     /// Runs WarmupAsync.
-
     /// </summary>
     private static async Task RunWarmupAsync(TransitPublisher publisher, TransitBenchmarkConfig config, PreparedBenchmarkWorkload workload, CancellationToken cancellationToken)
     {
@@ -199,7 +196,6 @@ internal static class TransitBenchmarkOrchestrator
 
     /// <summary>
     /// Builds RuntimeOptions.
-
     /// </summary>
     internal static BackFillerRuntimeOptions BuildRuntimeOptions(TransitBenchmarkConfig config)
     {

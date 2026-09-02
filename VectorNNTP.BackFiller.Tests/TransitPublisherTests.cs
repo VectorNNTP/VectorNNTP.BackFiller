@@ -242,13 +242,7 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PublishAsync_WhenCanceledBeforeChannelAdmission_DoesNotLeakQueuedSubmissionCount()
         {
-            /// <summary>
-            /// Supplies queue capacity for the fixture or scenario under test.
-            /// </summary>
             const int QueueCapacity = 2048;
-            /// <summary>
-            /// Supplies expected admitted outstanding for the fixture or scenario under test.
-            /// </summary>
             const int ExpectedAdmittedOutstanding = QueueCapacity + 1;
 
             byte[] payload = [(byte)'Q', (byte)'\n'];
@@ -413,9 +407,6 @@ namespace VectorNNTP.Backfiller.Tests
             List<string> firstSessionObservedMessageIds = [];
             List<string> secondSessionObservedMessageIds = [];
 
-            /// <summary>
-            /// Confirms handle session async behavior.
-            /// </summary>
             async Task HandleSessionAsync(
                 NetworkStream stream,
                 CancellationToken cancellationToken,
@@ -764,9 +755,6 @@ namespace VectorNNTP.Backfiller.Tests
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
             {
-                /// <summary>
-                /// Confirms try extract takethis message id behavior.
-                /// </summary>
                 static bool TryExtractTakethisMessageId(string commandLine, out string? messageId)
                 {
                     if (commandLine.StartsWith("TAKETHIS ", StringComparison.Ordinal))
@@ -796,9 +784,6 @@ namespace VectorNNTP.Backfiller.Tests
                     return builder.ToString();
                 }
 
-                /// <summary>
-                /// Confirms read command with timeout async behavior.
-                /// </summary>
                 async Task<string> ReadCommandWithTimeoutAsync(string expectedStage)
                 {
                     using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -814,9 +799,6 @@ namespace VectorNNTP.Backfiller.Tests
                     }
                 }
 
-                /// <summary>
-                /// Confirms read takethis payload with timeout async behavior.
-                /// </summary>
                 async Task<byte[]> ReadTakethisPayloadWithTimeoutAsync(string expectedStage)
                 {
                     using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -1554,17 +1536,8 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PublishAsync_WhenConnectionCountFourAndPipelineDepthOne_UtilizesAllConnectionsConcurrently()
         {
-            /// <summary>
-            /// Supplies connection count for the fixture or scenario under test.
-            /// </summary>
             const int connectionCount = 4;
-            /// <summary>
-            /// Supplies pipeline depth for the fixture or scenario under test.
-            /// </summary>
             const int pipelineDepth = 1;
-            /// <summary>
-            /// Supplies submission count for the fixture or scenario under test.
-            /// </summary>
             const int submissionCount = connectionCount;
 
             string[] messageIds = Enumerable.Range(0, submissionCount)
@@ -1997,9 +1970,6 @@ namespace VectorNNTP.Backfiller.Tests
 
             FakePublisherServer? fakeServer = null;
 
-            /// <summary>
-            /// Confirms endpoints match behavior.
-            /// </summary>
             static bool EndpointsMatch(string firstEndpoint, string secondEndpoint)
             {
                 if (string.Equals(firstEndpoint, secondEndpoint, StringComparison.Ordinal))
@@ -2018,9 +1988,6 @@ namespace VectorNNTP.Backfiller.Tests
                 return first.Port == second.Port && firstAddress.Equals(secondAddress);
             }
 
-            /// <summary>
-            /// Confirms resolve primary entry behavior.
-            /// </summary>
             static TransitPublisher.ConnectionDiagnosticsEntry? ResolvePrimaryEntry(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot)
             {
                 if (snapshot.Slots.Length == 0)
@@ -2090,9 +2057,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms wait for primary terminal fault async behavior.
-            /// </summary>
             static async Task WaitForPrimaryTerminalFaultAsync(TransitPublisher publisher, CancellationToken cancellationToken)
             {
                 while (true)
@@ -2109,9 +2073,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms wait for primary ready with connection id async behavior.
-            /// </summary>
             static async Task WaitForPrimaryReadyWithConnectionIdAsync(
                 TransitPublisher publisher,
                 string expectedConnectionId,
@@ -2145,9 +2106,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms run first session async behavior.
-            /// </summary>
             async Task RunFirstSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2197,9 +2155,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms run second session async behavior.
-            /// </summary>
             async Task RunSecondSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await releaseSecondSessionHandshake.Task.WaitAsync(cancellationToken);
@@ -2248,9 +2203,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms run third session async behavior.
-            /// </summary>
             async Task RunThirdSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 thirdSessionAccepted.TrySetResult();
@@ -2379,9 +2331,6 @@ namespace VectorNNTP.Backfiller.Tests
             FakePublisherServer? fakeServer = null;
             TransitPublisher? publisher = null;
 
-            /// <summary>
-            /// Confirms resolve slot state behavior.
-            /// </summary>
             static TransitConnectionState ResolveSlotState(
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot,
                 int slotIndex)
@@ -2403,9 +2352,6 @@ namespace VectorNNTP.Backfiller.Tests
                 return entry?.Snapshot.CurrentState ?? TransitConnectionState.Disconnected;
             }
 
-            /// <summary>
-            /// Confirms resolve slot local endpoint behavior.
-            /// </summary>
             static string? ResolveSlotLocalEndpoint(
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot,
                 int slotIndex)
@@ -2427,9 +2373,6 @@ namespace VectorNNTP.Backfiller.Tests
                 return entry?.Snapshot.LocalEndpoint;
             }
 
-            /// <summary>
-            /// Confirms endpoints match behavior.
-            /// </summary>
             static bool EndpointsMatch(string firstEndpoint, string secondEndpoint)
             {
                 if (string.Equals(firstEndpoint, secondEndpoint, StringComparison.Ordinal))
@@ -2448,9 +2391,6 @@ namespace VectorNNTP.Backfiller.Tests
                 return first.Port == second.Port && firstAddress.Equals(secondAddress);
             }
 
-            /// <summary>
-            /// Confirms get connection by slot behavior.
-            /// </summary>
             static TransitConnection GetConnectionBySlot(TransitPublisher publisherInstance, int slotIndex)
             {
                 FieldInfo? connectionsField = typeof(TransitPublisher).GetField("_connections", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -2462,9 +2402,6 @@ namespace VectorNNTP.Backfiller.Tests
                 return Assert.IsType<TransitConnection>(connections[slotIndex]);
             }
 
-            /// <summary>
-            /// Confirms wait for both slots ready async behavior.
-            /// </summary>
             static async Task<TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot> WaitForBothSlotsReadyAsync(
                 TransitPublisher publisherInstance,
                 CancellationToken cancellationToken)
@@ -2491,9 +2428,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms run role agnostic session behavior.
-            /// </summary>
             async Task RunRoleAgnosticSession(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2566,12 +2500,9 @@ namespace VectorNNTP.Backfiller.Tests
                     }
                 }
 
-                Assert.True(false, $"Session endpoint '{acceptedRemoteEndpoint}' did not match slot endpoints '{slot0Endpoint}' or '{slot1Endpoint}'.");
+                Assert.Fail($"Session endpoint '{acceptedRemoteEndpoint}' did not match slot endpoints '{slot0Endpoint}' or '{slot1Endpoint}'.");
             }
 
-            /// <summary>
-            /// Confirms run fallback session behavior.
-            /// </summary>
             async Task RunFallbackSession(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -2683,9 +2614,6 @@ namespace VectorNNTP.Backfiller.Tests
 
             FakePublisherServer? fakeServer = null;
 
-            /// <summary>
-            /// Confirms endpoints match behavior.
-            /// </summary>
             static bool EndpointsMatch(string firstEndpoint, string secondEndpoint)
             {
                 if (string.Equals(firstEndpoint, secondEndpoint, StringComparison.Ordinal))
@@ -2726,9 +2654,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms run session async behavior.
-            /// </summary>
             async Task RunSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -3065,13 +2990,7 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PublishAsync_WhenAdmissionCanceledBeforeEnqueue_DoesNotIncrementTotalSubmittedMetric()
         {
-            /// <summary>
-            /// Supplies queue capacity for the fixture or scenario under test.
-            /// </summary>
             const int queueCapacity = 2048;
-            /// <summary>
-            /// Supplies expected admitted outstanding for the fixture or scenario under test.
-            /// </summary>
             const int expectedAdmittedOutstanding = queueCapacity + 1;
 
             byte[] payload = [(byte)'M', (byte)'\n'];
@@ -3306,9 +3225,6 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PreemptSubmissionProcessingAsync_WhenQueuedBacklogExceedsPipelineDepth_TerminalizesAllAdmittedSubmissionsAndClearsTracking()
         {
-            /// <summary>
-            /// Supplies submission count for the fixture or scenario under test.
-            /// </summary>
             const int submissionCount = 12;
             byte[] payload = [(byte)'Q', (byte)'\n'];
             TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -3419,9 +3335,6 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task PreemptSubmissionProcessingAsync_WhenRacedWithOwnershipTransitionAcrossRepeatedRuns_DoesNotStrandSubmission()
         {
-            /// <summary>
-            /// Supplies iterations for the fixture or scenario under test.
-            /// </summary>
             const int iterations = 20;
 
             for (int iteration = 0; iteration < iterations; iteration++)
@@ -3724,9 +3637,6 @@ namespace VectorNNTP.Backfiller.Tests
 
             TransitPublisher? publisher = null;
 
-            /// <summary>
-            /// Confirms is lifecycle terminal status behavior.
-            /// </summary>
             static bool IsLifecycleTerminalStatus(TransitPublishStatus status)
             {
                 return status is TransitPublishStatus.Accepted
@@ -3734,9 +3644,6 @@ namespace VectorNNTP.Backfiller.Tests
                     or TransitPublishStatus.Ambiguous;
             }
 
-            /// <summary>
-            /// Confirms wait for no stranded work async behavior.
-            /// </summary>
             async Task WaitForNoStrandedWorkAsync(TransitPublisher publisherInstance, CancellationToken cancellationToken)
             {
                 while (true)
@@ -3762,9 +3669,6 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
-            /// <summary>
-            /// Confirms handle responsive session async behavior.
-            /// </summary>
             async Task HandleResponsiveSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
@@ -4034,8 +3938,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the invoke is connection lifecycle submit failure behavior.
         /// </summary>
-        /// <param name="connection">The connection used by this test scenario.</param>
-        /// <param name="exception">The exception used by this test scenario.</param>
         /// <returns>The value returned by the invoke is connection lifecycle submit failure helper.</returns>
         private static bool InvokeIsConnectionLifecycleSubmitFailure(TransitConnection connection, Exception exception)
         {
@@ -4098,7 +4000,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the get queued submission count behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
         /// <returns>The value returned by the get queued submission count helper.</returns>
         private static long GetQueuedSubmissionCount(TransitPublisher publisher)
         {
@@ -4116,7 +4017,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the get active submission count behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
         /// <returns>The value returned by the get active submission count helper.</returns>
         private static int GetActiveSubmissionCount(TransitPublisher publisher)
         {
@@ -4140,7 +4040,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the get primary connection count behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
         /// <returns>The value returned by the get primary connection count helper.</returns>
         private static int GetPrimaryConnectionCount(TransitPublisher publisher)
         {
@@ -4244,8 +4143,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the wait for primary connection async behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
         /// <returns>The value returned by the wait for primary connection async helper.</returns>
         private static async Task<TransitConnection> WaitForPrimaryConnectionAsync(TransitPublisher publisher, CancellationToken cancellationToken)
         {
@@ -4301,8 +4198,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the capture exception async behavior.
         /// </summary>
-        /// <param name="task">The task used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
         /// <returns>The value returned by the capture exception async helper.</returns>
         private static async Task<Exception?> CaptureExceptionAsync(Task task, CancellationToken cancellationToken)
         {
@@ -4332,9 +4227,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the invoke reconnect async behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
-        /// <param name="slotIndex">The slot index used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
         /// <returns>The value returned by the invoke reconnect async helper.</returns>
         private static Task InvokeReconnectAsync(TransitPublisher publisher, int slotIndex, CancellationToken cancellationToken)
         {
@@ -4358,9 +4250,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the create connection for slot async behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
-        /// <param name="slotIndex">The slot index used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
         /// <returns>The value returned by the create connection for slot async helper.</returns>
         private static async Task<TransitConnection> CreateConnectionForSlotAsync(TransitPublisher publisher, int slotIndex, CancellationToken cancellationToken)
         {
@@ -4392,7 +4281,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the get primary connection behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
         /// <returns>The value returned by the get primary connection helper.</returns>
         private static TransitConnection GetPrimaryConnection(TransitPublisher publisher)
         {
@@ -4408,7 +4296,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the try get primary connection behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
         /// <returns>The value returned by the try get primary connection helper.</returns>
         private static TransitConnection? TryGetPrimaryConnection(TransitPublisher publisher)
         {
@@ -4435,7 +4322,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the get connection write gate behavior.
         /// </summary>
-        /// <param name="connection">The connection used by this test scenario.</param>
         /// <returns>The value returned by the get connection write gate helper.</returns>
         private static SemaphoreSlim GetConnectionWriteGate(TransitConnection connection)
         {
@@ -4456,8 +4342,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the set connection state behavior.
         /// </summary>
-        /// <param name="connection">The connection used by this test scenario.</param>
-        /// <param name="state">The state used by this test scenario.</param>
         private static void SetConnectionState(TransitConnection connection, TransitConnectionState state)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -4475,7 +4359,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the get primary connection state behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
         /// <returns>The value returned by the get primary connection state helper.</returns>
         private static TransitConnectionState GetPrimaryConnectionState(TransitPublisher publisher)
         {
@@ -4500,8 +4383,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the force primary connection state behavior.
         /// </summary>
-        /// <param name="publisher">The publisher used by this test scenario.</param>
-        /// <param name="state">The state used by this test scenario.</param>
         private static void ForcePrimaryConnectionState(TransitPublisher publisher, TransitConnectionState state)
         {
             ArgumentNullException.ThrowIfNull(publisher);
@@ -4521,10 +4402,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the create publisher with logger behavior.
         /// </summary>
-        /// <param name="port">The port used by this test scenario.</param>
-        /// <param name="connectionPoolSize">The connection pool size used by this test scenario.</param>
-        /// <param name="logger">The logger used by this test scenario.</param>
-        /// <param name="perConnectionPipelineDepth">The per connection pipeline depth used by this test scenario.</param>
         /// <returns>The value returned by the create publisher with logger helper.</returns>
         private static TransitPublisher CreatePublisherWithLogger(int port, int connectionPoolSize, ILogger<TransitPublisher> logger, int perConnectionPipelineDepth = 8)
         {
@@ -4567,7 +4444,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// Creates a logger instance for the requested logging category.
             /// </summary>
             /// <remarks>
-            /// <param name="T">The logger category type requested by the publisher.</param><returns>A logger that appends entries to the provider's shared capture.</returns>
             /// </remarks>
             internal ILogger<T> CreateLogger<T>()
             {
@@ -4584,16 +4460,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="Exception">The exception associated with the event, if any.</param>
             /// <param name="StateValues">Structured state values supplied with the event.</param>
             /// </remarks>
-        /// <summary>
-        /// Confirms the log entry behavior.
-        /// </summary>
-        /// <param name="EventId">The event id used by this test scenario.</param>
-        /// <param name="LogLevel">The log level used by this test scenario.</param>
-        /// <param name="Message">The message used by this test scenario.</param>
-        /// <param name="Exception">The exception used by this test scenario.</param>
-        /// <param name="string">The string used by this test scenario.</param>
-        /// <param name="StateValues">The state values used by this test scenario.</param>
-        /// <returns>The value returned by the log entry helper.</returns>
+            /// <summary>
+            /// Confirms the log entry behavior.
+            /// </summary>
+            /// <returns>The value returned by the log entry helper.</returns>
             internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
 
             /// <summary>
@@ -4627,11 +4497,10 @@ namespace VectorNNTP.Backfiller.Tests
                 /// <remarks>
                 /// <param name="logLevel">The log level being queried.</param><returns><c>true</c> for every log level.</returns>
                 /// </remarks>
-        /// <summary>
-        /// Confirms the is enabled behavior.
-        /// </summary>
-        /// <param name="logLevel">The log level used by this test scenario.</param>
-        /// <returns>The value returned by the is enabled helper.</returns>
+                /// <summary>
+                /// Confirms the is enabled behavior.
+                /// </summary>
+                /// <returns>The value returned by the is enabled helper.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -4674,9 +4543,9 @@ namespace VectorNNTP.Backfiller.Tests
                     internal static readonly NullScope Instance = new();
 
                     /// <summary>Disposes the no-op scope; no state is held and no action is required.</summary>
-        /// <summary>
-        /// Confirms the dispose behavior.
-        /// </summary>
+                    /// <summary>
+                    /// Confirms the dispose behavior.
+                    /// </summary>
                     public void Dispose()
                     {
                     }
@@ -4704,10 +4573,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <remarks>
             /// <returns>A point-in-time array containing all entries captured so far.</returns>
             /// </remarks>
-        /// <summary>
-        /// Confirms the capture entries snapshot behavior.
-        /// </summary>
-        /// <returns>The value returned by the capture entries snapshot helper.</returns>
+            /// <summary>
+            /// Confirms the capture entries snapshot behavior.
+            /// </summary>
+            /// <returns>The value returned by the capture entries snapshot helper.</returns>
             internal IReadOnlyList<CapturingLoggerProvider.LogEntry> CaptureEntriesSnapshot()
             {
                 lock (_gate)
@@ -4720,7 +4589,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// Creates a throwing logger instance for the requested logging category.
             /// </summary>
             /// <remarks>
-            /// <param name="T">The logger category type requested by the publisher.</param><returns>A logger that captures entries and deliberately throws for event ID <c>2204</c>.</returns>
             /// </remarks>
             internal ILogger<T> CreateLogger<T>()
             {
@@ -4758,11 +4626,10 @@ namespace VectorNNTP.Backfiller.Tests
                 /// <remarks>
                 /// <param name="logLevel">The log level being queried.</param><returns><c>true</c> for every log level.</returns>
                 /// </remarks>
-        /// <summary>
-        /// Confirms the is enabled behavior.
-        /// </summary>
-        /// <param name="logLevel">The log level used by this test scenario.</param>
-        /// <returns>The value returned by the is enabled helper.</returns>
+                /// <summary>
+                /// Confirms the is enabled behavior.
+                /// </summary>
+                /// <returns>The value returned by the is enabled helper.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -4810,9 +4677,9 @@ namespace VectorNNTP.Backfiller.Tests
                     internal static readonly NullScope Instance = new();
 
                     /// <summary>Disposes the no-op scope; no state is held and no action is required.</summary>
-        /// <summary>
-        /// Confirms the dispose behavior.
-        /// </summary>
+                    /// <summary>
+                    /// Confirms the dispose behavior.
+                    /// </summary>
                     public void Dispose()
                     {
                     }
@@ -4848,14 +4715,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="listener">The listener that accepts fake publisher connections.</param>
             /// <param name="sessions">The ordered session handlers assigned to accepted connections.</param>
             /// </remarks>
-        /// <summary>
-        /// Confirms the r behavior.
-        /// </summary>
-        /// <param name="listener">The listener used by this test scenario.</param>
-        /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
-        /// <param name="sessions">The sessions used by this test scenario.</param>
-        /// <returns>The value returned by the r helper.</returns>
+            /// <summary>
+            /// Confirms the r behavior.
+            /// </summary>
+            /// <returns>The value returned by the r helper.</returns>
             private FakePublisherServer(TcpListener listener, IReadOnlyList<Func<NetworkStream, CancellationToken, Task>> sessions)
             {
                 _listener = listener;
@@ -4871,11 +4734,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="stream">The accepted session stream.</param>
             /// <returns>Returns the endpoint string associated with the stream.</returns>
-        /// <summary>
-        /// Confirms the get remote endpoint behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <returns>The value returned by the get remote endpoint helper.</returns>
+            /// <summary>
+            /// Confirms the get remote endpoint behavior.
+            /// </summary>
+            /// <returns>The value returned by the get remote endpoint helper.</returns>
             internal string GetRemoteEndpoint(NetworkStream stream)
             {
                 ArgumentNullException.ThrowIfNull(stream);
@@ -4890,13 +4752,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="session">The handler used for the first accepted session.</param>
             /// <returns>Returns a started <see cref="FakePublisherServer"/>.</returns>
-        /// <summary>
-        /// Confirms the start async behavior.
-        /// </summary>
-        /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
-        /// <param name="session">The session used by this test scenario.</param>
-        /// <returns>The value returned by the start async helper.</returns>
+            /// <summary>
+            /// Confirms the start async behavior.
+            /// </summary>
+            /// <returns>The value returned by the start async helper.</returns>
             internal static Task<FakePublisherServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)
             {
                 ArgumentNullException.ThrowIfNull(session);
@@ -4908,13 +4767,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// </summary>
             /// <param name="sessions">The ordered session handlers to invoke for accepted connections.</param>
             /// <returns>Returns a started <see cref="FakePublisherServer"/>.</returns>
-        /// <summary>
-        /// Confirms the start sessions async behavior.
-        /// </summary>
-        /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
-        /// <param name="sessions">The sessions used by this test scenario.</param>
-        /// <returns>The value returned by the start sessions async helper.</returns>
+            /// <summary>
+            /// Confirms the start sessions async behavior.
+            /// </summary>
+            /// <returns>The value returned by the start sessions async helper.</returns>
             internal static async Task<FakePublisherServer> StartSessionsAsync(IReadOnlyList<Func<NetworkStream, CancellationToken, Task>> sessions)
             {
                 ArgumentNullException.ThrowIfNull(sessions);
@@ -4934,11 +4790,11 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Accepts fake transit TCP connections, assigns each accepted connection to the next configured session handler, and waits for all tracked sessions to finish.
             /// </summary>
-        /// <returns>The value returned by the accept loop async helper.</returns>
-        /// <summary>
-        /// Confirms the accept loop async behavior.
-        /// </summary>
-        /// <returns>The value returned by the accept loop async helper.</returns>
+            /// <returns>The value returned by the accept loop async helper.</returns>
+            /// <summary>
+            /// Confirms the accept loop async behavior.
+            /// </summary>
+            /// <returns>The value returned by the accept loop async helper.</returns>
             private async Task AcceptLoopAsync()
             {
                 foreach (Func<NetworkStream, CancellationToken, Task> session in _sessions)
@@ -4995,12 +4851,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">The stream to read.</param>
             /// <param name="cancellationToken">Cancels the read.</param>
             /// <returns>Returns the decoded line without the CRLF terminator.</returns>
-        /// <summary>
-        /// Confirms the read line async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the read line async helper.</returns>
+            /// <summary>
+            /// Confirms the read line async behavior.
+            /// </summary>
+            /// <returns>The value returned by the read line async helper.</returns>
             internal static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> buffer = [];
@@ -5030,12 +4884,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">The stream carrying the article payload.</param>
             /// <param name="cancellationToken">Cancels the payload read.</param>
             /// <returns>Returns the reconstructed article payload bytes.</returns>
-        /// <summary>
-        /// Confirms the read takethis payload async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the read takethis payload async helper.</returns>
+            /// <summary>
+            /// Confirms the read takethis payload async behavior.
+            /// </summary>
+            /// <returns>The value returned by the read takethis payload async helper.</returns>
             internal static async Task<byte[]> ReadTakethisPayloadAsync(Stream stream, CancellationToken cancellationToken)
             {
                 using MemoryStream payload = new();
@@ -5087,12 +4939,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">The stream to read.</param>
             /// <param name="cancellationToken">Cancels the read.</param>
             /// <returns>Returns the next byte, or throws when the stream reaches EOF.</returns>
-        /// <summary>
-        /// Confirms the read byte async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the read byte async helper.</returns>
+            /// <summary>
+            /// Confirms the read byte async behavior.
+            /// </summary>
+            /// <returns>The value returned by the read byte async helper.</returns>
             private static async ValueTask<byte> ReadByteAsync(Stream stream, CancellationToken cancellationToken)
             {
                 byte[] single = new byte[1];
@@ -5112,13 +4962,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="expected">The exact command line expected from the publisher.</param>
             /// <param name="cancellationToken">Cancels the read.</param>
             /// <returns>Completes after the expected command has been observed.</returns>
-        /// <summary>
-        /// Confirms the expect command async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="expected">The expected used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the expect command async helper.</returns>
+            /// <summary>
+            /// Confirms the expect command async behavior.
+            /// </summary>
+            /// <returns>The value returned by the expect command async helper.</returns>
             internal static async Task ExpectCommandAsync(Stream stream, string expected, CancellationToken cancellationToken)
             {
                 string line = await ReadLineAsync(stream, cancellationToken);
@@ -5131,12 +4978,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="stream">The destination stream.</param>
             /// <param name="line">The protocol line to write without its CRLF terminator.</param>
             /// <returns>Returns the asynchronous write operation.</returns>
-        /// <summary>
-        /// Confirms the write line async behavior.
-        /// </summary>
-        /// <param name="stream">The stream used by this test scenario.</param>
-        /// <param name="line">The line used by this test scenario.</param>
-        /// <returns>The value returned by the write line async helper.</returns>
+            /// <summary>
+            /// Confirms the write line async behavior.
+            /// </summary>
+            /// <returns>The value returned by the write line async helper.</returns>
             internal static Task WriteLineAsync(Stream stream, string line)
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
@@ -5147,10 +4992,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// Stops the fake server, cancels all accepted sessions, waits for the accept loop and tracked session tasks, and finally releases the server cancellation source.
             /// </summary>
             /// <returns>Completes when the fake server and all tracked session activity have been shut down.</returns>
-        /// <summary>
-        /// Confirms the dispose async behavior.
-        /// </summary>
-        /// <returns>The value returned by the dispose async helper.</returns>
+            /// <summary>
+            /// Confirms the dispose async behavior.
+            /// </summary>
+            /// <returns>The value returned by the dispose async helper.</returns>
             public async ValueTask DisposeAsync()
             {
                 _cts.Cancel();
@@ -5181,5 +5026,4 @@ namespace VectorNNTP.Backfiller.Tests
         }
     }
 }
-
 

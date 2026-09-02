@@ -450,31 +450,31 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             shutdownCoordinator.SignalGracefulShutdown(gracefulShutdownTimeout);
         }
 
-                /// <summary>
+        /// <summary>
         /// Emits the hosting environment detected log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1001, Level = LogLevel.Information, Message = "Hosting environment: {Environment}")]
         private static partial void LogHostingEnvironmentDetected(ILogger logger, HostingEnvironment environment);
 
-                /// <summary>
+        /// <summary>
         /// Emits the systemd detected log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1002, Level = LogLevel.Information, Message = "systemd detected: Type=notify will expect READY notification; set TimeoutStartSec to allow time for dependencies and hosted service initialization")]
         private static partial void LogSystemdDetected(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the container detected log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1003, Level = LogLevel.Information, Message = "Container environment detected; ensure orchestration platform can monitor process health and exit codes (see EXIT_CODES_AND_SYSTEMD.md)")]
         private static partial void LogContainerDetected(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the windows service detected log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1004, Level = LogLevel.Information, Message = "Windows Service detected; ensure graceful shutdown timeout is sufficient for cleanup")]
         private static partial void LogWindowsServiceDetected(ILogger logger);
 
-                /// <summary>
+        /// <summary>
         /// Emits the shutdown policy core log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1005, Level = LogLevel.Information, Message = "Shutdown policy: GracePeriodSeconds={GracePeriodSeconds}, StopNewWorkAdmission={StopNewWorkAdmission}, FinishActiveArticles={FinishActiveArticles}, DrainQueuedWork={DrainQueuedWork}")]
@@ -485,7 +485,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             bool finishActiveArticles,
             bool drainQueuedWork);
 
-                /// <summary>
+        /// <summary>
         /// Emits the application started log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1006, Level = LogLevel.Information, Message = "Host startup milestone reached (ApplicationStarted); Program.Main will publish readiness after StartAsync completes; hosting environment={Environment}; graceful shutdown timeout={ShutdownTimeout}s")]
@@ -494,7 +494,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             HostingEnvironment environment,
             double shutdownTimeout);
 
-                /// <summary>
+        /// <summary>
         /// Emits the shutdown signal received log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1007, Level = LogLevel.Information, Message = "Shutdown signal received; establishing shutdown state; hosting environment={Environment}; gracePeriod={GracePeriod}")]
@@ -503,7 +503,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             HostingEnvironment environment,
             TimeSpan gracePeriod);
 
-                /// <summary>
+        /// <summary>
         /// Emits the concurrent lifecycle transition race log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1008, Level = LogLevel.Debug, Message = "Concurrent lifecycle transition race: attempted Ready->Draining but observed {CurrentState}; treating as benign.")]
@@ -511,7 +511,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             ILogger logger,
             ServiceLifecycle.LifecycleState currentState);
 
-                /// <summary>
+        /// <summary>
         /// Emits the application stopping already faulted log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1009, Level = LogLevel.Warning, Message = "ApplicationStopping observed but lifecycle already Faulted (state={CurrentState}); proceeding with shutdown.")]
@@ -520,7 +520,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             Exception exception,
             ServiceLifecycle.LifecycleState currentState);
 
-                /// <summary>
+        /// <summary>
         /// Emits the readiness suppressed due to shutdown log event for host lifetime coordinator.
         /// </summary>
         [LoggerMessage(EventId = 1010, Level = LogLevel.Information, Message = "Suppressing readiness publication because shutdown is already in progress.")]

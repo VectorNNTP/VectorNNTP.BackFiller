@@ -13,7 +13,6 @@ internal static class CsvArtifactWriter
 {
     /// <summary>
     /// Gets ArtifactPath.
-
     /// </summary>
     internal static string GetArtifactPath(string baseDirectory, string stamp)
     {
@@ -22,7 +21,6 @@ internal static class CsvArtifactWriter
 
     /// <summary>
     /// Writes ToPath.
-
     /// </summary>
     internal static void WriteToPath(string path, string csv)
     {

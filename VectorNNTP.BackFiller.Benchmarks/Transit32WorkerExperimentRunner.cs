@@ -58,7 +58,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs Async.
-
     /// </summary>
     internal static async Task RunAsync(CancellationToken cancellationToken = default)
     {
@@ -77,7 +76,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs GeneratorOnlyAsync.
-
     /// </summary>
     private static async Task<GeneratorResult> RunGeneratorOnlyAsync(string label, int warmupSeconds, int measurementSeconds, int workers, CancellationToken cancellationToken)
     {
@@ -165,7 +163,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs QueueNoOpAsync.
-
     /// </summary>
     private static async Task<QueueResult> RunQueueNoOpAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -318,7 +315,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Runs RealPipelineAsync.
-
     /// </summary>
     private static async Task<RealPipelineResult> RunRealPipelineAsync(string label, int warmupSeconds, int measurementSeconds, CancellationToken cancellationToken)
     {
@@ -629,7 +625,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Builds RuntimeOptions.
-
     /// </summary>
     private static BackFillerRuntimeOptions BuildRuntimeOptions(RuntimeConfig runtime)
     {
@@ -724,21 +719,9 @@ internal static class Transit32WorkerExperimentRunner
     /// </summary>
     private static void PrintScalingEfficiency(double current32Rate)
     {
-        /// <summary>
-        /// Gets or sets the baseline 1.
-        /// </summary>
         const double baseline1 = 772.2691;
-        /// <summary>
-        /// Gets or sets the baseline 4.
-        /// </summary>
         const double baseline4 = 2932.5899;
-        /// <summary>
-        /// Gets or sets the baseline 8.
-        /// </summary>
         const double baseline8 = 4264.0247;
-        /// <summary>
-        /// Gets or sets the baseline 16.
-        /// </summary>
         const double baseline16 = 6666.1003;
 
         Console.WriteLine("Scaling efficiency of 32-worker run relative to baselines:");
@@ -789,7 +772,6 @@ internal static class Transit32WorkerExperimentRunner
 
     /// <summary>
     /// Formats Distribution.
-
     /// </summary>
     private static string FormatDistribution(Dictionary<int, int> distribution)
     {

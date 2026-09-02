@@ -4,13 +4,13 @@
 //
 // TransitDotStuffingBenchmarks: compares dot-stuffing implementations across representative payload layouts.
 
+using System.Buffers;
+using System.IO.Pipelines;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
-using System.Buffers;
-using System.IO.Pipelines;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
@@ -161,7 +161,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Writes ipeWriter.
-
     /// </summary>
     private int WriteWithPipeWriter(TransitDotStuffingAlgorithm algorithm)
     {
@@ -188,7 +187,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Builds ad.
-
     /// </summary>
     private static byte[] BuildPayload(DotPayloadDistribution distribution, int size)
     {
@@ -205,7 +203,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Builds lPayload.
-
     /// </summary>
     private static byte[] BuildNormalPayload(int size)
     {
@@ -244,7 +241,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Builds avyPayload.
-
     /// </summary>
     private static byte[] BuildDotHeavyPayload(int size)
     {
@@ -270,7 +266,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Builds Payload.
-
     /// </summary>
     private static byte[] BuildMixedPayload(int size)
     {
@@ -311,7 +306,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Builds LinePayload.
-
     /// </summary>
     private static byte[] BuildLargeLinePayload(int size)
     {
@@ -338,7 +332,6 @@ public class TransitDotStuffingBenchmarks
 
     /// <summary>
     /// Builds LinePayload.
-
     /// </summary>
     private static byte[] BuildSmallLinePayload(int size)
     {

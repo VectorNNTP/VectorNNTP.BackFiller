@@ -147,7 +147,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the read required message ids behavior.
         /// </summary>
-        /// <param name="environmentVariableName">The environment variable name used by this test scenario.</param>
         /// <returns>The value returned by the read required message ids helper.</returns>
         private static string[] ReadRequiredMessageIds(string environmentVariableName)
         {
@@ -217,8 +216,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build deterministic corrupt variants behavior.
         /// </summary>
-        /// <param name="validDirectory">The valid directory used by this test scenario.</param>
-        /// <param name="corruptDirectory">The corrupt directory used by this test scenario.</param>
         private static void BuildDeterministicCorruptVariants(string validDirectory, string corruptDirectory)
         {
             string[] files = Directory.GetFiles(validDirectory, "*.nntp", SearchOption.TopDirectoryOnly);
@@ -242,8 +239,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the corrupt deterministically behavior.
         /// </summary>
-        /// <param name="source">The source used by this test scenario.</param>
-        /// <param name="seed">The seed used by this test scenario.</param>
         /// <returns>The value returned by the corrupt deterministically helper.</returns>
         private static byte[] CorruptDeterministically(byte[] source, int seed)
         {
@@ -274,9 +269,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build corpus readme behavior.
         /// </summary>
-        /// <param name="endpoint">The endpoint used by this test scenario.</param>
-        /// <param name="yEncCount">The y enc count used by this test scenario.</param>
-        /// <param name="plainCount">The plain count used by this test scenario.</param>
         /// <returns>The value returned by the build corpus readme helper.</returns>
         private static string BuildCorpusReadme(NntpArticleAcquisitionEndpoint endpoint, int yEncCount, int plainCount)
         {

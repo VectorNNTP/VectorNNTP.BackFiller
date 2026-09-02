@@ -554,42 +554,34 @@ internal sealed class MeasurementMetrics
 
     /// <summary>
     /// Gets AdmittedCount.
-
     /// </summary>
     internal long GetAdmittedCount() => Interlocked.Read(ref _admittedCount);
     /// <summary>
     /// Gets CompletedCount.
-
     /// </summary>
     internal long GetCompletedCount() => Interlocked.Read(ref _completedCount);
     /// <summary>
     /// Gets AcceptedCount.
-
     /// </summary>
     internal long GetAcceptedCount() => Interlocked.Read(ref _acceptedCount);
     /// <summary>
     /// Gets RejectedCount.
-
     /// </summary>
     internal long GetRejectedCount() => Interlocked.Read(ref _rejectedCount);
     /// <summary>
     /// Gets AmbiguousOnlyCount.
-
     /// </summary>
     internal long GetAmbiguousOnlyCount() => Interlocked.Read(ref _ambiguousOnlyCount);
     /// <summary>
     /// Gets FailedCount.
-
     /// </summary>
     internal long GetFailedCount() => Interlocked.Read(ref _failedCount);
     /// <summary>
     /// Gets UnavailableCount.
-
     /// </summary>
     internal long GetUnavailableCount() => Interlocked.Read(ref _unavailableCount);
     /// <summary>
     /// Gets CanceledCount.
-
     /// </summary>
     internal long GetCanceledCount() => Interlocked.Read(ref _canceledCount);
 
@@ -698,7 +690,6 @@ internal sealed class MeasurementMetrics
 
     /// <summary>
     /// Records Peaks.
-
     /// </summary>
     internal void ObservePeaks(int queueDepth, long queueBytes, int inFlight)
     {
@@ -714,7 +705,6 @@ internal sealed class MeasurementMetrics
 
     /// <summary>
     /// Records ActualPending.
-
     /// </summary>
     internal void ObserveActualPending(int actualPending)
     {
@@ -862,7 +852,6 @@ internal sealed class MeasurementMetrics
 
     /// <summary>
     /// Normalizes Provenance.
-
     /// </summary>
     private static TransitPublishProvenance NormalizeProvenance(TransitPublishResult publishResult)
     {
@@ -880,7 +869,6 @@ internal sealed class MeasurementMetrics
 
     /// <summary>
     /// Converts to MeasurementOffsetMilliseconds.
-
     /// </summary>
     private static double? ToMeasurementOffsetMilliseconds(DateTimeOffset measurementStartUtc, long measurementStartStopwatchTick, long tick)
     {
@@ -1059,7 +1047,6 @@ internal sealed class MeasurementMetrics
 
         /// <summary>
         /// Converts to Summary.
-
         /// </summary>
         internal ProvenanceConnectionSummary ToSummary()
         {

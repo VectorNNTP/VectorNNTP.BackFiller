@@ -493,7 +493,7 @@ namespace VectorNNTP.Backfiller.Tests
             private readonly List<string>? _sharedOperationLog;
 
             /// <summary>
-        /// Confirms the tracking response publisher behavior.
+            /// Confirms the tracking response publisher behavior.
             /// </summary>
             internal TrackingResponsePublisher(RabbitMqResponsePublishStatus status, List<string>? sharedOperationLog = null)
             {
@@ -532,7 +532,7 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-        /// Confirms the publish and confirm async behavior.
+            /// Confirms the publish and confirm async behavior.
             /// </summary>
             public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
                 ArticleWorkProcessingResult result,
@@ -577,7 +577,7 @@ namespace VectorNNTP.Backfiller.Tests
             private ulong _deliveryTag;
 
             /// <summary>
-        /// Confirms the tracking delivery settlement behavior.
+            /// Confirms the tracking delivery settlement behavior.
             /// </summary>
             internal TrackingDeliverySettlement(List<string>? sharedOperationLog = null)
             {
@@ -605,14 +605,14 @@ namespace VectorNNTP.Backfiller.Tests
             internal List<string> OperationLog { get; } = [];
 
             /// <summary>
-        /// Confirms the ack async behavior.
+            /// Confirms the ack async behavior.
             /// </summary>
-        /// <returns>The value returned by the ack async helper.</returns>
-        /// <summary>
-        /// Confirms the ack async behavior.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the ack async helper.</returns>
+            /// <returns>The value returned by the ack async helper.</returns>
+            /// <summary>
+            /// Confirms the ack async behavior.
+            /// </summary>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the ack async helper.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -628,15 +628,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the nack async behavior.
+            /// Confirms the nack async behavior.
             /// </summary>
-        /// <returns>The value returned by the nack async helper.</returns>
-        /// <summary>
-        /// Confirms the nack async behavior.
-        /// </summary>
-        /// <param name="requeue">The requeue used by this test scenario.</param>
-        /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-        /// <returns>The value returned by the nack async helper.</returns>
+            /// <returns>The value returned by the nack async helper.</returns>
+            /// <summary>
+            /// Confirms the nack async behavior.
+            /// </summary>
+            /// <param name="requeue">The requeue used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -653,7 +653,7 @@ namespace VectorNNTP.Backfiller.Tests
             }
 
             /// <summary>
-        /// Confirms the bind delivery tag behavior.
+            /// Confirms the bind delivery tag behavior.
             /// </summary>
             internal void BindDeliveryTag(ulong deliveryTag)
             {

@@ -5,7 +5,6 @@
 // VectorNNTP.Backfiller Runtime / RabbitMq
 // Implements the rabbit mq broker connection abstractions behavior.
 
-using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;

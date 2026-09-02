@@ -14,7 +14,7 @@ using Xunit;
 namespace VectorNNTP.Backfiller.Tests
 {
     /// <summary>
-        /// Confirms the my sql connection string utilities tests behavior.
+    /// Confirms the my sql connection string utilities tests behavior.
     /// </summary>
     public class MySqlConnectionStringUtilitiesTests
     {
@@ -23,107 +23,106 @@ namespace VectorNNTP.Backfiller.Tests
         /// Confirms the try get server accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin", "localhost")]
-        [InlineData("Host=myhost;Database=test;User ID=admin", "myhost")]
-        [InlineData("Data Source=ds01;Database=test;User ID=admin", "ds01")]
-        [InlineData("DataSource=ds02;Database=test;User ID=admin", "ds02")]
-        [InlineData("Address=addr01;Database=test;User ID=admin", "addr01")]
-        [InlineData("Addr=addr02;Database=test;User ID=admin", "addr02")]
-        [InlineData("Network Address=netaddr;Database=test;User ID=admin", "netaddr")]
-        public void TryGetServer_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedServer)
+        [InlineData("server alias: Server", "Server=localhost;Database=test;User ID=admin", "localhost")]
+        [InlineData("server alias: Host", "Host=myhost;Database=test;User ID=admin", "myhost")]
+        [InlineData("server alias: Data Source", "Data Source=ds01;Database=test;User ID=admin", "ds01")]
+        [InlineData("server alias: DataSource", "DataSource=ds02;Database=test;User ID=admin", "ds02")]
+        [InlineData("server alias: Address", "Address=addr01;Database=test;User ID=admin", "addr01")]
+        [InlineData("server alias: Addr", "Addr=addr02;Database=test;User ID=admin", "addr02")]
+        [InlineData("server alias: Network Address", "Network Address=netaddr;Database=test;User ID=admin", "netaddr")]
+        public void TryGetServer_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedServer)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedServer, server);
         }
         /// <summary>
         /// Confirms the try get database accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=mydb;User ID=admin", "mydb")]
-        [InlineData("Server=localhost;Initial Catalog=catalog01;User ID=admin", "catalog01")]
-        [InlineData("Server=localhost;InitialCatalog=catalog02;User ID=admin", "catalog02")]
-        public void TryGetDatabase_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedDatabase)
+        [InlineData("database alias: Database", "Server=localhost;Database=mydb;User ID=admin", "mydb")]
+        [InlineData("database alias: Initial Catalog", "Server=localhost;Initial Catalog=catalog01;User ID=admin", "catalog01")]
+        [InlineData("database alias: InitialCatalog", "Server=localhost;InitialCatalog=catalog02;User ID=admin", "catalog02")]
+        public void TryGetDatabase_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedDatabase)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetDatabase(connectionString, out string? database);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedDatabase, database);
         }
         /// <summary>
         /// Confirms the try get username accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=user1", "user1")]
-        [InlineData("Server=localhost;Database=test;UserID=user2", "user2")]
-        [InlineData("Server=localhost;Database=test;Username=user3", "user3")]
-        [InlineData("Server=localhost;Database=test;Uid=user4", "user4")]
-        [InlineData("Server=localhost;Database=test;User name=user5", "user5")]
-        [InlineData("Server=localhost;Database=test;User=user6", "user6")]
-        public void TryGetUsername_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedUsername)
+        [InlineData("username alias: User ID", "Server=localhost;Database=test;User ID=user1", "user1")]
+        [InlineData("username alias: UserID", "Server=localhost;Database=test;UserID=user2", "user2")]
+        [InlineData("username alias: Username", "Server=localhost;Database=test;Username=user3", "user3")]
+        [InlineData("username alias: Uid", "Server=localhost;Database=test;Uid=user4", "user4")]
+        [InlineData("username alias: User name", "Server=localhost;Database=test;User name=user5", "user5")]
+        [InlineData("username alias: User", "Server=localhost;Database=test;User=user6", "user6")]
+        public void TryGetUsername_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedUsername)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetUsername(connectionString, out string? username);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedUsername, username);
         }
         /// <summary>
         /// Confirms the try get password accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Password=secret", "secret")]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Pwd=pass123", "pass123")]
-        public void TryGetPassword_AcceptsAllMySqlConnectorAliases(string connectionString, string expectedPassword)
+        [InlineData("password alias: Password", "Server=localhost;Database=test;User ID=admin;Password=secret", "secret")]
+        [InlineData("password alias: Password with quoted value", "Server=localhost;Database=test;User ID=admin;Password='pass123'", "pass123")]
+        public void TryGetPassword_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, string expectedPassword)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetPassword(connectionString, out string? password);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedPassword, password);
         }
         /// <summary>
         /// Confirms the try get min pool size accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Min Pool Size=5", 5)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MinPoolSize=10", 10)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Minimum Pool Size=2", 2)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MinimumPoolSize=7", 7)]
-        public void TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(string connectionString, int expectedMinPoolSize)
+        [InlineData("min pool size alias: Min Pool Size", "Server=localhost;Database=test;User ID=admin;Min Pool Size=5", 5)]
+        [InlineData("min pool size alias: MinPoolSize", "Server=localhost;Database=test;User ID=admin;MinPoolSize=10", 10)]
+        [InlineData("min pool size alias: Minimum Pool Size", "Server=localhost;Database=test;User ID=admin;Minimum Pool Size=2", 2)]
+        [InlineData("min pool size alias: MinimumPoolSize", "Server=localhost;Database=test;User ID=admin;MinimumPoolSize=7", 7)]
+        public void TryGetMinPoolSize_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, int expectedMinPoolSize)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetMinPoolSize(connectionString, out int minPoolSize);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedMinPoolSize, minPoolSize);
         }
         /// <summary>
         /// Confirms the try get max pool size accepts all my sql connector aliases behavior.
         /// </summary>
         [Theory]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Max Pool Size=100", 100)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MaxPoolSize=50", 50)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;Maximum Pool Size=200", 200)]
-        [InlineData("Server=localhost;Database=test;User ID=admin;MaximumPoolSize=75", 75)]
-        public void TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(string connectionString, int expectedMaxPoolSize)
+        [InlineData("max pool size alias: Max Pool Size", "Server=localhost;Database=test;User ID=admin;Max Pool Size=100", 100)]
+        [InlineData("max pool size alias: MaxPoolSize", "Server=localhost;Database=test;User ID=admin;MaxPoolSize=50", 50)]
+        [InlineData("max pool size alias: Maximum Pool Size", "Server=localhost;Database=test;User ID=admin;Maximum Pool Size=200", 200)]
+        [InlineData("max pool size alias: MaximumPoolSize", "Server=localhost;Database=test;User ID=admin;MaximumPoolSize=75", 75)]
+        public void TryGetMaxPoolSize_AcceptsAllMySqlConnectorAliases(string scenario, string connectionString, int expectedMaxPoolSize)
         {
             // Act
             bool result = MySqlConnectionStringUtilities.TryGetMaxPoolSize(connectionString, out int maxPoolSize);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result, scenario);
             Assert.Equal(expectedMaxPoolSize, maxPoolSize);
         }
-
         #endregion
 
         #region Missing Values Tests
@@ -1156,9 +1155,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenServerConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting server aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Host=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
@@ -1171,9 +1167,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenDatabaseConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting database aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=dbA;Initial Catalog=dbB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
@@ -1186,9 +1179,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenUsernameConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting username aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous
@@ -1201,9 +1191,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenPasswordConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting password aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Pwd=secret2";
 
             // Act & Assert - This IS ambiguous
@@ -1216,9 +1203,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenMinPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting min pool size aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Min Pool Size=5;MinimumPoolSize=10";
 
             // Act & Assert - This IS ambiguous
@@ -1231,9 +1215,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenMaxPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting max pool size aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Max Pool Size=50;MaximumPoolSize=100";
 
             // Act & Assert - This IS ambiguous
@@ -1246,9 +1227,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenMultipleConflictingGroups_ReturnsTrue()
         {
             // Arrange - Multiple conflicting alias groups at once
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Host=db02;Database=dbA;Initial Catalog=dbB;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous (multiple conflicts should still return true)
@@ -1263,9 +1241,6 @@ namespace VectorNNTP.Backfiller.Tests
             // Arrange - CRITICAL: Server=db01;Server=db02 (same key repeated)
             // DbConnectionStringBuilder would canonicalize this to just the last value,
             // but our raw parser must detect it BEFORE canonicalization
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Server=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous and MUST be detected
@@ -1279,9 +1254,6 @@ namespace VectorNNTP.Backfiller.Tests
         {
             // Arrange - CRITICAL: Password=secret1;Password=secret2 (same key repeated)
             // This is a SECURITY issue if not detected
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Password=secret2";
 
             // Act & Assert - This IS ambiguous and MUST be detected
@@ -1294,9 +1266,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentUsernameValues_ReturnsTrue()
         {
             // Arrange - CRITICAL: User ID=alice;User ID=bob (same key repeated)
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=alice;User ID=bob";
 
             // Act & Assert - This IS ambiguous and MUST be detected
@@ -1309,9 +1278,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithIdenticalValues_ReturnsFalse()
         {
             // Arrange - Server=db01;Server=db01 (same key, same value - redundant but not ambiguous)
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Server=db01;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - Redundant but consistent should NOT be ambiguous
@@ -1615,32 +1581,31 @@ namespace VectorNNTP.Backfiller.Tests
         /// </list>
         /// </remarks>
         [Theory]
-        [InlineData("Server=db01", true, false, "Basic unquoted value")]
-        [InlineData("Server=\"db;01\"", true, false, "Double-quoted value with semicolon")]
-        [InlineData("Server='db;01'", true, false, "Single-quoted value with semicolon")]
-        [InlineData("Server=\"abc\"\"def\"", true, false, "Double-quoted value with escaped double-quote")]
-        [InlineData("Server='abc''def'", true, false, "Single-quoted value with escaped single-quote")]
-        [InlineData("Server=\"abc", false, false, "Unterminated double-quoted value")]
-        [InlineData("Server='abc", false, false, "Unterminated single-quoted value")]
-        [InlineData("Server=\"abc\"x", false, false, "Garbage after closing double-quote")]
-        [InlineData("Server='abc'x", false, false, "Garbage after closing single-quote")]
-        [InlineData("Server = \"abc\"", true, false, "Whitespace before double-quoted value")]
-        [InlineData("Server = 'abc'", true, false, "Whitespace before single-quoted value")]
-        [InlineData("Server=db01;Server=db02", true, true, "Duplicate keys (syntax valid; semantically ambiguous)")]
-        [InlineData("Server=db01;Host=db02", true, true, "Conflicting aliases (syntax valid; semantically ambiguous)")]
-        [InlineData("", true, false, "Empty connection string")]
-        [InlineData("   ", true, false, "Whitespace-only connection string")]
-        [InlineData("Server=", true, false, "Empty value")]
-        [InlineData("Server=\"\"", true, false, "Empty double-quoted value")]
-        [InlineData("Server=''", true, false, "Empty single-quoted value")]
-        [InlineData(";Server=db01", true, false, "Leading semicolon")]
-        [InlineData("Server=db01;", true, false, "Trailing semicolon")]
-        [InlineData("Server=db01;;Host=db02", true, false, "Consecutive semicolons")]
+        [InlineData("Server=db01", true, false)]
+        [InlineData("Server=\"db;01\"", true, false)]
+        [InlineData("Server='db;01'", true, false)]
+        [InlineData("Server=\"abc\"\"def\"", true, false)]
+        [InlineData("Server='abc''def'", true, false)]
+        [InlineData("Server=\"abc", false, false)]
+        [InlineData("Server='abc", false, false)]
+        [InlineData("Server=\"abc\"x", false, false)]
+        [InlineData("Server='abc'x", false, false)]
+        [InlineData("Server = \"abc\"", true, false)]
+        [InlineData("Server = 'abc'", true, false)]
+        [InlineData("Server=db01;Server=db02", true, true)]
+        [InlineData("Server=db01;Host=db02", true, true)]
+        [InlineData("", true, false)]
+        [InlineData("   ", true, false)]
+        [InlineData("Server=", true, false)]
+        [InlineData("Server=\"\"", true, false)]
+        [InlineData("Server=''", true, false)]
+        [InlineData(";Server=db01", true, false)]
+        [InlineData("Server=db01;", true, false)]
+        [InlineData("Server=db01;;Host=db02", true, false)]
         public void RawParser_RejectsExactlySameSyntaxAsProvider(
             string connectionString,
             bool providerShouldAcceptSyntax,
-            bool isSemanticAmbiguity,
-            string scenario)
+            bool isSemanticAmbiguity)
         {
             // Arrange & Act (provider parser - syntax check only)
             bool providerAcceptsSyntax;
