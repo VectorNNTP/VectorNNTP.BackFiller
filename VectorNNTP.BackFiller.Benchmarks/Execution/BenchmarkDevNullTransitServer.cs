@@ -664,9 +664,6 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        /// <summary>
-        /// Gets or sets the terminator Length.
-        /// </summary>
         const int terminatorLength = 5; // "\r\n.\r\n"
         byte[] trailingWindow = new byte[terminatorLength];
         int trailingCount = 0;
@@ -1015,13 +1012,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(messageId);
 
-        /// <summary>
-        /// Gets or sets the response Prefix.
-        /// </summary>
         const string responsePrefix = "238 ";
-        /// <summary>
-        /// Gets or sets the response Suffix.
-        /// </summary>
         const string responseSuffix = " send article to be transferred\r\n";
 
         int maxBytes = responsePrefix.Length + messageId.Length + responseSuffix.Length;
@@ -1042,13 +1033,7 @@ internal sealed class BenchmarkDevNullTransitServer : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(messageId);
 
-        /// <summary>
-        /// Gets or sets the response Prefix.
-        /// </summary>
         const string responsePrefix = "239 ";
-        /// <summary>
-        /// Gets or sets the response Suffix.
-        /// </summary>
         const string responseSuffix = " Article transferred OK\r\n";
 
         int maxBytes = responsePrefix.Length + messageId.Length + responseSuffix.Length;

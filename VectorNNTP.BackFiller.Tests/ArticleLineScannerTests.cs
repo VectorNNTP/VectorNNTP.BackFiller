@@ -133,8 +133,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the index of cr lf scalar reference behavior.
         /// </summary>
-        /// <param name="buffer">The buffer used by this test scenario.</param>
-        /// <param name="startOffset">The start offset used by this test scenario.</param>
         /// <returns>The value returned by the index of cr lf scalar reference helper.</returns>
         private static int IndexOfCrLfScalarReference(ReadOnlySpan<byte> buffer, int startOffset)
         {

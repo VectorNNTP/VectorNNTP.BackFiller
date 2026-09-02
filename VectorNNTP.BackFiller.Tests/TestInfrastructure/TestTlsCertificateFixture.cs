@@ -74,10 +74,6 @@ namespace VectorNNTP.Backfiller.Tests.TestInfrastructure
         /// <summary>
         /// Confirms the validate server certificate behavior.
         /// </summary>
-        /// <param name="sender">The sender used by this test scenario.</param>
-        /// <param name="certificate">The certificate used by this test scenario.</param>
-        /// <param name="chain">The chain used by this test scenario.</param>
-        /// <param name="sslPolicyErrors">The ssl policy errors used by this test scenario.</param>
         /// <returns>The value returned by the validate server certificate helper.</returns>
         private bool ValidateServerCertificate(object? sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
         {

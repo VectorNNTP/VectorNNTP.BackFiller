@@ -379,9 +379,6 @@ internal static class TransitSingleTraceRunner
         await publisher.InitializeAsync(cancellationToken).ConfigureAwait(false);
 
         SingleTracePublishBatchResult publishBatch = await PublishWithPipelineDepthAsync(
-            /// <summary>
-            /// Implements the transit PublisherSingleTracePublishExecutor contract.
-            /// </summary>
             new TransitPublisherSingleTracePublishExecutor(publisher),
             requestedArticleCount,
             config.ArticleTargetBytes,

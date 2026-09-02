@@ -225,8 +225,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             /// <summary>
             /// Confirms the start async behavior.
             /// </summary>
-            /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-            /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
             /// <param name="session">The session used by this test scenario.</param>
             /// <returns>The value returned by the start async helper.</returns>
             internal static Task<DrainLifecycleFakeServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)

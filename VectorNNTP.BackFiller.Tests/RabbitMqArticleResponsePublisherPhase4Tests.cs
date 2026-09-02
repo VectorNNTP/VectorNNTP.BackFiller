@@ -726,7 +726,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="type">The type used by this test scenario.</param>
             /// <param name="durable">The durable used by this test scenario.</param>
             /// <param name="autoDelete">The auto delete used by this test scenario.</param>
-            /// <param name="string">The string used by this test scenario.</param>
             /// <param name="arguments">The arguments used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the exchange declare async helper.</returns>
@@ -747,7 +746,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="durable">The durable used by this test scenario.</param>
             /// <param name="exclusive">The exclusive used by this test scenario.</param>
             /// <param name="autoDelete">The auto delete used by this test scenario.</param>
-            /// <param name="string">The string used by this test scenario.</param>
             /// <param name="arguments">The arguments used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the queue declare async helper.</returns>
@@ -767,7 +765,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="queue">The queue used by this test scenario.</param>
             /// <param name="exchange">The exchange used by this test scenario.</param>
             /// <param name="routingKey">The routing key used by this test scenario.</param>
-            /// <param name="string">The string used by this test scenario.</param>
             /// <param name="arguments">The arguments used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the queue bind async helper.</returns>

@@ -523,9 +523,6 @@ internal static class TransitDiagnosticSuiteRunner
         });
 
         await using TransitPublisher publisher = new(
-            /// <summary>
-            /// Implements the back FillerRuntimeOptions contract.
-            /// </summary>
             new BackFillerRuntimeOptions(
                 CanonicalBackFillerFqdn: "benchmark.backfiller.usenet.ninja",
                 BackFillerId: 1,

@@ -1084,9 +1084,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build article behavior.
         /// </summary>
-        /// <param name="headers">The headers used by this test scenario.</param>
-        /// <param name="body">The body used by this test scenario.</param>
-        /// <param name="bodyBytes">The body bytes used by this test scenario.</param>
         /// <returns>The value returned by the build article helper.</returns>
         private static byte[] BuildArticle(IEnumerable<string> headers, string? body = null, byte[]? bodyBytes = null)
         {
@@ -1117,9 +1114,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build article raw behavior.
         /// </summary>
-        /// <param name="headers">The headers used by this test scenario.</param>
-        /// <param name="rawPath">The raw path used by this test scenario.</param>
-        /// <param name="body">The body used by this test scenario.</param>
         /// <returns>The value returned by the build article raw helper.</returns>
         private static byte[] BuildArticleRaw(IEnumerable<string> headers, string rawPath, string body)
         {
@@ -1142,8 +1136,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build synthetic single part yenc body behavior.
         /// </summary>
-        /// <param name="payloadLength">The payload length used by this test scenario.</param>
-        /// <param name="name">The name used by this test scenario.</param>
         /// <returns>The value returned by the build synthetic single part yenc body helper.</returns>
         private static byte[] BuildSyntheticSinglePartYEncBody(int payloadLength, string name)
         {
@@ -1172,7 +1164,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the encode yenc payload behavior.
         /// </summary>
-        /// <param name="decoded">The decoded used by this test scenario.</param>
         /// <returns>The value returned by the encode yenc payload helper.</returns>
         private static byte[] EncodeYEncPayload(byte[] decoded)
         {
@@ -1221,7 +1212,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the compute crc32 behavior.
         /// </summary>
-        /// <param name="data">The data used by this test scenario.</param>
         /// <returns>The value returned by the compute crc32 helper.</returns>
         private static uint ComputeCrc32(byte[] data)
         {

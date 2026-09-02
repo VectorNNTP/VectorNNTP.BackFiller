@@ -36,7 +36,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build behavior.
         /// </summary>
-        /// <param name="string">The string used by this test scenario.</param>
         /// <param name="values">The values used by this test scenario.</param>
         /// <returns>The value returned by the build helper.</returns>
         private static IConfiguration Build(Dictionary<string, string?> values)

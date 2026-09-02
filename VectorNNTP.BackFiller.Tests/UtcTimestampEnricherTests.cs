@@ -59,9 +59,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the create property behavior.
             /// </summary>
-            /// <param name="name">The name used by this test scenario.</param>
-            /// <param name="value">The value used by this test scenario.</param>
-            /// <param name="destructureObjects">The destructure objects used by this test scenario.</param>
             /// <returns>The value returned by the create property helper.</returns>
             public LogEventProperty CreateProperty(string name, object? value, bool destructureObjects = false)
             {

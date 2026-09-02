@@ -266,13 +266,7 @@ internal static class TransitServerStressRunner
             result,
             config,
             Environment.ProcessorCount,
-            /// <summary>
-            /// Runs the from benchmark scenario.
-            /// </summary>
             static (benchmarkResult, benchmarkConfig, processorCount) => BenchmarkResultArtifact.From(benchmarkResult, benchmarkConfig, processorCount),
-            /// <summary>
-            /// Runs the artifact benchmark scenario.
-            /// </summary>
             static artifact => artifact.ToCsv());
     }
 

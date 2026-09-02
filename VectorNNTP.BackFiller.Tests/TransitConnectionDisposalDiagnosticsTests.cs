@@ -345,7 +345,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="LogLevel">The log level used by this test scenario.</param>
             /// <param name="Message">The message used by this test scenario.</param>
             /// <param name="Exception">The exception used by this test scenario.</param>
-            /// <param name="string">The string used by this test scenario.</param>
             /// <param name="StateValues">The state values used by this test scenario.</param>
             /// <returns>The value returned by the log entry helper.</returns>
             internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);

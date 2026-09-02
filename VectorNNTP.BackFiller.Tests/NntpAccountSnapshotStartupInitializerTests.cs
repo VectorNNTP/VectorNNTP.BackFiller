@@ -124,7 +124,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the delegate provisioning store behavior.
         /// </summary>
-        /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
         /// <param name="callback">The callback used by this test scenario.</param>
         /// <returns>The value returned by the delegate provisioning store helper.</returns>
         private sealed class DelegateProvisioningStore(Func<CancellationToken, Task> callback) : MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore

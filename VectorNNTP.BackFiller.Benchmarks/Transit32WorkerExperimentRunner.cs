@@ -724,21 +724,9 @@ internal static class Transit32WorkerExperimentRunner
     /// </summary>
     private static void PrintScalingEfficiency(double current32Rate)
     {
-        /// <summary>
-        /// Gets or sets the baseline 1.
-        /// </summary>
         const double baseline1 = 772.2691;
-        /// <summary>
-        /// Gets or sets the baseline 4.
-        /// </summary>
         const double baseline4 = 2932.5899;
-        /// <summary>
-        /// Gets or sets the baseline 8.
-        /// </summary>
         const double baseline8 = 4264.0247;
-        /// <summary>
-        /// Gets or sets the baseline 16.
-        /// </summary>
         const double baseline16 = 6666.1003;
 
         Console.WriteLine("Scaling efficiency of 32-worker run relative to baselines:");

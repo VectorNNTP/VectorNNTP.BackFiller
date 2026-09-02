@@ -1156,9 +1156,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenServerConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting server aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Host=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
@@ -1171,9 +1168,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenDatabaseConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting database aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=dbA;Initial Catalog=dbB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
@@ -1186,9 +1180,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenUsernameConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting username aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous
@@ -1201,9 +1192,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenPasswordConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting password aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Pwd=secret2";
 
             // Act & Assert - This IS ambiguous
@@ -1216,9 +1204,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenMinPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting min pool size aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Min Pool Size=5;MinimumPoolSize=10";
 
             // Act & Assert - This IS ambiguous
@@ -1231,9 +1216,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenMaxPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting max pool size aliases
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Max Pool Size=50;MaximumPoolSize=100";
 
             // Act & Assert - This IS ambiguous
@@ -1246,9 +1228,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenMultipleConflictingGroups_ReturnsTrue()
         {
             // Arrange - Multiple conflicting alias groups at once
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Host=db02;Database=dbA;Initial Catalog=dbB;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous (multiple conflicts should still return true)
@@ -1263,9 +1242,6 @@ namespace VectorNNTP.Backfiller.Tests
             // Arrange - CRITICAL: Server=db01;Server=db02 (same key repeated)
             // DbConnectionStringBuilder would canonicalize this to just the last value,
             // but our raw parser must detect it BEFORE canonicalization
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Server=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous and MUST be detected
@@ -1279,9 +1255,6 @@ namespace VectorNNTP.Backfiller.Tests
         {
             // Arrange - CRITICAL: Password=secret1;Password=secret2 (same key repeated)
             // This is a SECURITY issue if not detected
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Password=secret2";
 
             // Act & Assert - This IS ambiguous and MUST be detected
@@ -1294,9 +1267,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentUsernameValues_ReturnsTrue()
         {
             // Arrange - CRITICAL: User ID=alice;User ID=bob (same key repeated)
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=localhost;Database=test;User ID=alice;User ID=bob";
 
             // Act & Assert - This IS ambiguous and MUST be detected
@@ -1309,9 +1279,6 @@ namespace VectorNNTP.Backfiller.Tests
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithIdenticalValues_ReturnsFalse()
         {
             // Arrange - Server=db01;Server=db01 (same key, same value - redundant but not ambiguous)
-            /// <summary>
-            /// Supplies connection string for the fixture or scenario under test.
-            /// </summary>
             const string connectionString = "Server=db01;Server=db01;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - Redundant but consistent should NOT be ambiguous

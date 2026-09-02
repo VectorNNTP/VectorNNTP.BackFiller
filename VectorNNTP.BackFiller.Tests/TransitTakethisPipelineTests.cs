@@ -250,9 +250,6 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task SubmitTakethisAsync_WhenSixteenConcurrentSubmissionsOutOfOrder_CorrelatesAllByMessageId()
         {
-            /// <summary>
-            /// Supplies submission count for the fixture or scenario under test.
-            /// </summary>
             const int SubmissionCount = 16;
             string[] messageIds = [.. Enumerable.Range(0, SubmissionCount).Select(static i => $"<msg-{i:D2}@example.com>")];
 
@@ -1365,9 +1362,6 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public async Task SubmitTakethisAsync_WhenSixteenConcurrentTokenBearingResponses_CapturesMaxOutstandingAtLeastSixteen()
         {
-            /// <summary>
-            /// Supplies submission count for the fixture or scenario under test.
-            /// </summary>
             const int submissionCount = 16;
             string[] messageIds = [.. Enumerable.Range(0, submissionCount).Select(static i => $"<msg-depth-{i:D2}@example.com>")];
 
@@ -1490,8 +1484,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the start async behavior.
             /// </summary>
-            /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-            /// <param name="CancellationToken">The cancellation token used by this test scenario.</param>
             /// <param name="session">The session used by this test scenario.</param>
             /// <returns>The value returned by the start async helper.</returns>
             internal static async Task<FakeTakethisServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)

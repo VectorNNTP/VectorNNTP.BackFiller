@@ -388,8 +388,6 @@ namespace VectorNNTP.Backfiller.Tests
         /// <summary>
         /// Confirms the build article bytes behavior.
         /// </summary>
-        /// <param name="messageId">The message id used by this test scenario.</param>
-        /// <param name="body">The body used by this test scenario.</param>
         /// <returns>The value returned by the build article bytes helper.</returns>
         private static byte[] BuildArticleBytes(string messageId, string body)
         {
@@ -471,9 +469,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the r behavior.
             /// </summary>
-            /// <param name="listener">The listener used by this test scenario.</param>
-            /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-            /// <param name="session">The session used by this test scenario.</param>
             /// <returns>The value returned by the r helper.</returns>
             private FakeServer(TcpListener listener, Func<NetworkStream, Task> session)
             {
@@ -508,8 +503,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the start async behavior.
             /// </summary>
-            /// <param name="NetworkStream">The network stream used by this test scenario.</param>
-            /// <param name="session">The session used by this test scenario.</param>
             /// <returns>The value returned by the start async helper.</returns>
             internal static async Task<FakeServer> StartAsync(Func<NetworkStream, Task> session)
             {
@@ -529,8 +522,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the expect ascii line async behavior.
             /// </summary>
-            /// <param name="stream">The stream used by this test scenario.</param>
-            /// <param name="expected">The expected used by this test scenario.</param>
             /// <returns>The value returned by the expect ascii line async helper.</returns>
             internal static async Task ExpectAsciiLineAsync(Stream stream, string expected)
             {
@@ -547,8 +538,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the read ascii line async behavior.
             /// </summary>
-            /// <param name="stream">The stream used by this test scenario.</param>
-            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the read ascii line async helper.</returns>
             internal static async Task<string> ReadAsciiLineAsync(Stream stream, CancellationToken cancellationToken)
             {
@@ -588,8 +577,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the write ascii line async behavior.
             /// </summary>
-            /// <param name="stream">The stream used by this test scenario.</param>
-            /// <param name="line">The line used by this test scenario.</param>
             /// <returns>The value returned by the write ascii line async helper.</returns>
             internal static async Task WriteAsciiLineAsync(Stream stream, string line)
             {
@@ -607,8 +594,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the write bytes async behavior.
             /// </summary>
-            /// <param name="stream">The stream used by this test scenario.</param>
-            /// <param name="bytes">The bytes used by this test scenario.</param>
             /// <returns>The value returned by the write bytes async helper.</returns>
             internal static async Task WriteBytesAsync(Stream stream, byte[] bytes)
             {

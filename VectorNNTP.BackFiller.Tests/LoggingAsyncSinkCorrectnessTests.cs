@@ -90,9 +90,6 @@ namespace VectorNNTP.Backfiller.Tests
                     blockWhenFull: true)
                 .CreateLogger();
 
-            /// <summary>
-            /// Supplies total events for the fixture or scenario under test.
-            /// </summary>
             const int TotalEvents = 5_000;
 
             _ = Parallel.For(

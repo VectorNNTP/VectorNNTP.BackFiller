@@ -64,9 +64,6 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine("| Producers | Events/Producer | Submitted | Written | EventsLost | ProduceMs | FlushMs | TotalMs | P50us | P95us | P99us | MaxUs |");
         Console.WriteLine("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
 
-        /// <summary>
-        /// Gets or sets the events PerProducer.
-        /// </summary>
         const int eventsPerProducer = 50_000;
 
         foreach (int producerCount in ProducerCounts)
@@ -106,13 +103,7 @@ internal static class AsyncSinkStressRunner
         Console.WriteLine();
         Console.WriteLine("=== Shutdown Flush Scenario ===");
 
-        /// <summary>
-        /// Gets or sets the producer Count.
-        /// </summary>
         const int producerCount = 8;
-        /// <summary>
-        /// Gets or sets the events PerProducer.
-        /// </summary>
         const int eventsPerProducer = 75_000;
 
         StressScenarioResult result = await RunBurstScenarioAsync(producerCount, eventsPerProducer).ConfigureAwait(false);

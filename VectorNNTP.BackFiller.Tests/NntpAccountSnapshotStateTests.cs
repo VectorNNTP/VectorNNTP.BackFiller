@@ -22,9 +22,6 @@ namespace VectorNNTP.Backfiller.Tests
         [Fact]
         public void Empty_ReturnsServerIdAndNoAccounts()
         {
-            /// <summary>
-            /// Supplies server id for the fixture or scenario under test.
-            /// </summary>
             const byte ServerId = 12;
 
             NntpAccountSnapshotState snapshotState = NntpAccountSnapshotState.Empty(ServerId);

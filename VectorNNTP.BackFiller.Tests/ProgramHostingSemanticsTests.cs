@@ -527,7 +527,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the start async behavior.
             /// </summary>
-            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the start async helper.</returns>
             public Task StartAsync(CancellationToken cancellationToken)
             {
@@ -543,7 +542,6 @@ namespace VectorNNTP.Backfiller.Tests
             /// <summary>
             /// Confirms the stop async behavior.
             /// </summary>
-            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the stop async helper.</returns>
             public Task StopAsync(CancellationToken cancellationToken)
             {
