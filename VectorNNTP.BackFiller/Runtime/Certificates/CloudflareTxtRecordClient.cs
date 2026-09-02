@@ -24,6 +24,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed class CloudflareTxtRecordClient : ICloudflareTxtRecordClient, IAsyncDisposable
     {
+        /// <summary>
+        /// Stores client used by cloudflare txt record client.
+        /// </summary>
         private readonly CloudFlareClient _client;
 
         /// <summary>
@@ -335,4 +338,3 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
     }
 }
-

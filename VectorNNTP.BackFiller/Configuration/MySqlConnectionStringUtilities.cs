@@ -108,6 +108,9 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class MySqlConnectionStringUtilities
     {
         // MySqlConnector aliases for server/host (official documentation)
+        /// <summary>
+        /// Stores server aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> ServerAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Server",
@@ -120,6 +123,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for database name
+        /// <summary>
+        /// Stores database aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> DatabaseAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Database",
@@ -128,6 +134,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for username
+        /// <summary>
+        /// Stores username aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> UsernameAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "User ID",
@@ -139,6 +148,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for password
+        /// <summary>
+        /// Stores password aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> PasswordAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Password",
@@ -789,4 +801,3 @@ namespace VectorNNTP.Backfiller.Configuration
         }
     }
 }
-

@@ -21,6 +21,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed partial class AuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
     {
+        /// <summary>
+        /// Stores time provider used by authoritative dns txt propagation verifier.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
         /// Supplies the logger used by authoritative dns txt propagation verifier.
@@ -28,7 +31,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private readonly ILogger<AuthoritativeDnsTxtPropagationVerifier> _logger;
 
         /// <summary>
-        /// Initializes authoritative TXT propagation verifier.
+        /// Initializes the authoritative TXT propagation verifier.
         /// </summary>
         /// <param name="timeProvider">Unified time provider.</param>
         /// <param name="logger">Logger for propagation diagnostics.</param>
@@ -92,12 +95,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 int requiredSuccesses = Math.Max(1, (int)Math.Ceiling(quorum));
                 if (successCount >= requiredSuccesses)
                 {
-                    LogAuthoritativeDnsTxtPropagationVerified(
-                        _logger,
-                        normalizedFqdn,
-                        successCount,
-                        requiredSuccesses,
-                        authoritativeNameServers.Count);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation(
+                            "Authoritative DNS TXT propagation verified for {Fqdn}; Matched={Matched}; Required={Required}; TotalNameservers={TotalNameservers}",
+                            normalizedFqdn,
+                            successCount,
+                            requiredSuccesses,
+                            authoritativeNameServers.Count);
+                    }
                     return;
                 }
 
@@ -198,21 +204,24 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             List<string> servers = [];
 
             string resolvConfPath = "/etc/resolv.conf";
-            if ((OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()) && File.Exists(resolvConfPath))
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                string[] lines = File.ReadAllLines(resolvConfPath);
-                foreach (string line in lines)
+                if (File.Exists(resolvConfPath))
                 {
-                    string trimmed = line.Trim();
-                    if (!trimmed.StartsWith("nameserver ", StringComparison.OrdinalIgnoreCase))
+                    string[] lines = File.ReadAllLines(resolvConfPath);
+                    foreach (string line in lines)
                     {
-                        continue;
-                    }
+                        string trimmed = line.Trim();
+                        if (!trimmed.StartsWith("nameserver ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
 
-                    string[] parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length >= 2)
-                    {
-                        servers.Add(parts[1]);
+                        string[] parts = trimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (parts.Length >= 2)
+                        {
+                            servers.Add(parts[1]);
+                        }
                     }
                 }
             }
@@ -558,21 +567,5 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return value;
             }
         }
-
-        /// <summary>
-        /// Emits a propagation-verified informational log event.
-        /// </summary>
-        [LoggerMessage(
-            EventId = 8200,
-            Level = LogLevel.Information,
-            Message = "Authoritative DNS TXT propagation verified for {Fqdn}; Matched={Matched}; Required={Required}; TotalNameservers={TotalNameservers}")]
-        private static partial void LogAuthoritativeDnsTxtPropagationVerified(
-            ILogger logger,
-            string fqdn,
-            int matched,
-            int required,
-            int totalNameservers);
     }
 }
-
-

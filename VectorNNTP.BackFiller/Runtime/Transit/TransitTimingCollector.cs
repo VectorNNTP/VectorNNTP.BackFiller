@@ -18,28 +18,55 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits publish payload copy count for transit timing collector.
         /// </summary>
         private long _publishPayloadCopyCount;
+        /// <summary>
+        /// Stores publish payload copy total ticks for transit timing collector.
+        /// </summary>
         private long _publishPayloadCopyTotalTicks;
 
         /// <summary>
         /// Limits dot stuff stage count for transit timing collector.
         /// </summary>
         private long _dotStuffStageCount;
+        /// <summary>
+        /// Stores dot stuff stage total ticks used by transit timing collector.
+        /// </summary>
         private long _dotStuffStageTotalTicks;
+        /// <summary>
+        /// Stores dot stuff stage min ticks used by transit timing collector.
+        /// </summary>
         private long _dotStuffStageMinTicks = long.MaxValue;
         /// <summary>
         /// Limits dot stuff stage max ticks for transit timing collector.
         /// </summary>
         private long _dotStuffStageMaxTicks;
+        /// <summary>
+        /// Stores dot stuff payload bytes for transit timing collector.
+        /// </summary>
         private long _dotStuffPayloadBytes;
+        /// <summary>
+        /// Stores dot stuff get span calls used by transit timing collector.
+        /// </summary>
         private long _dotStuffGetSpanCalls;
+        /// <summary>
+        /// Stores dot stuff advance calls used by transit timing collector.
+        /// </summary>
         private long _dotStuffAdvanceCalls;
+        /// <summary>
+        /// Stores dot stuff stuffed dot events used by transit timing collector.
+        /// </summary>
         private long _dotStuffStuffedDotEvents;
 
         /// <summary>
         /// Limits flush count for transit timing collector.
         /// </summary>
         private long _flushCount;
+        /// <summary>
+        /// Stores flush total ticks used by transit timing collector.
+        /// </summary>
         private long _flushTotalTicks;
+        /// <summary>
+        /// Stores flush min ticks used by transit timing collector.
+        /// </summary>
         private long _flushMinTicks = long.MaxValue;
         /// <summary>
         /// Limits flush max ticks for transit timing collector.
@@ -50,7 +77,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits response line read count for transit timing collector.
         /// </summary>
         private long _responseLineReadCount;
+        /// <summary>
+        /// Stores response line read total ticks used by transit timing collector.
+        /// </summary>
         private long _responseLineReadTotalTicks;
+        /// <summary>
+        /// Stores response line read min ticks used by transit timing collector.
+        /// </summary>
         private long _responseLineReadMinTicks = long.MaxValue;
         /// <summary>
         /// Limits response line read max ticks for transit timing collector.
@@ -61,7 +94,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits response correlation count for transit timing collector.
         /// </summary>
         private long _responseCorrelationCount;
+        /// <summary>
+        /// Stores response correlation total ticks used by transit timing collector.
+        /// </summary>
         private long _responseCorrelationTotalTicks;
+        /// <summary>
+        /// Stores response correlation min ticks used by transit timing collector.
+        /// </summary>
         private long _responseCorrelationMinTicks = long.MaxValue;
         /// <summary>
         /// Limits response correlation max ticks for transit timing collector.
@@ -72,7 +111,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits response available to correlated count for transit timing collector.
         /// </summary>
         private long _responseAvailableToCorrelatedCount;
+        /// <summary>
+        /// Stores response available to correlated total ticks used by transit timing collector.
+        /// </summary>
         private long _responseAvailableToCorrelatedTotalTicks;
+        /// <summary>
+        /// Stores response available to correlated min ticks used by transit timing collector.
+        /// </summary>
         private long _responseAvailableToCorrelatedMinTicks = long.MaxValue;
         /// <summary>
         /// Limits response available to correlated max ticks for transit timing collector.
@@ -83,7 +128,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits completion enqueue to observe count for transit timing collector.
         /// </summary>
         private long _completionEnqueueToObserveCount;
+        /// <summary>
+        /// Stores completion enqueue to observe total ticks used by transit timing collector.
+        /// </summary>
         private long _completionEnqueueToObserveTotalTicks;
+        /// <summary>
+        /// Stores completion enqueue to observe min ticks used by transit timing collector.
+        /// </summary>
         private long _completionEnqueueToObserveMinTicks = long.MaxValue;
         /// <summary>
         /// Limits completion enqueue to observe max ticks for transit timing collector.
@@ -103,7 +154,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits response to worker observation count for transit timing collector.
         /// </summary>
         private long _responseToWorkerObservationCount;
+        /// <summary>
+        /// Stores response to worker observation total ticks used by transit timing collector.
+        /// </summary>
         private long _responseToWorkerObservationTotalTicks;
+        /// <summary>
+        /// Stores response to worker observation min ticks used by transit timing collector.
+        /// </summary>
         private long _responseToWorkerObservationMinTicks = long.MaxValue;
         /// <summary>
         /// Limits response to worker observation max ticks for transit timing collector.
@@ -114,7 +171,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits worker observation to next staging count for transit timing collector.
         /// </summary>
         private long _workerObservationToNextStagingCount;
+        /// <summary>
+        /// Stores worker observation to next staging total ticks used by transit timing collector.
+        /// </summary>
         private long _workerObservationToNextStagingTotalTicks;
+        /// <summary>
+        /// Stores worker observation to next staging min ticks used by transit timing collector.
+        /// </summary>
         private long _workerObservationToNextStagingMinTicks = long.MaxValue;
         /// <summary>
         /// Limits worker observation to next staging max ticks for transit timing collector.
@@ -125,13 +188,26 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits response to next staging count for transit timing collector.
         /// </summary>
         private long _responseToNextStagingCount;
+        /// <summary>
+        /// Stores response to next staging total ticks used by transit timing collector.
+        /// </summary>
         private long _responseToNextStagingTotalTicks;
+        /// <summary>
+        /// Stores response to next staging min ticks used by transit timing collector.
+        /// </summary>
         private long _responseToNextStagingMinTicks = long.MaxValue;
         /// <summary>
         /// Limits response to next staging max ticks for transit timing collector.
         /// </summary>
         private long _responseToNextStagingMaxTicks;
+
+        /// <summary>
+        /// Stores last definitive response correlated tick used by transit timing collector.
+        /// </summary>
         private long _lastDefinitiveResponseCorrelatedTick;
+        /// <summary>
+        /// Stores last worker observation tick used by transit timing collector.
+        /// </summary>
         private long _lastWorkerObservationTick;
 
         /// <summary>
@@ -424,4 +500,3 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         long MinTicks,
         long MaxTicks);
 }
-

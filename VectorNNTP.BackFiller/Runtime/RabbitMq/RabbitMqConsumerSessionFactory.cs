@@ -36,12 +36,21 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqConsumerSessionFactory : IRabbitMqConsumerSessionFactory
     {
+        /// <summary>
+        /// Stores connection manager used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
+        /// <summary>
+        /// Stores topology initializer used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
         /// <summary>
         /// Supplies the logger used by rabbit mq consumer session factory.
         /// </summary>
         private readonly ILoggerFactory _loggerFactory;
+        /// <summary>
+        /// Stores diagnostic correlation id used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly string? _diagnosticCorrelationId;
 
         /// <summary>
@@ -101,9 +110,21 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Limits account snapshot provider for rabbit mq consumer session factory.
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider;
+        /// <summary>
+        /// Stores connection manager used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
+        /// <summary>
+        /// Stores session factory used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly IRabbitMqConsumerSessionFactory _sessionFactory;
+        /// <summary>
+        /// Stores shutdown coordinator used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
+        /// <summary>
+        /// Stores consumer options used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly RabbitMqConsumerInfrastructureOptions _consumerOptions;
         /// <summary>
         /// Supplies the logger used by rabbit mq consumer session factory.
@@ -113,14 +134,42 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Limits capacity provider for rabbit mq consumer session factory.
         /// </summary>
         private readonly IBackboneUsableCapacityProvider _capacityProvider;
+        /// <summary>
+        /// Stores state gate used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly SemaphoreSlim _stateGate = new(1, 1);
+        /// <summary>
+        /// Stores shutdown cts used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly CancellationTokenSource _shutdownCts = new();
+        /// <summary>
+        /// Stores session runtimes used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly Dictionary<string, SessionRuntimeState> _sessionRuntimes = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Stores retiring session runtimes used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly Dictionary<string, RetiringSessionRuntimeState> _retiringSessionRuntimes = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Stores delivery channel used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly Channel<RabbitMqArticleDelivery> _deliveryChannel;
+        /// <summary>
+        /// Stores graceful shutdown registration used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly IDisposable _gracefulShutdownRegistration;
+        /// <summary>
+        /// Stores forced shutdown registration used by rabbit mq consumer session factory.
+        /// </summary>
         private readonly IDisposable _forcedShutdownRegistration;
+
+        /// <summary>
+        /// Stores shutdown requested used by rabbit mq consumer session factory.
+        /// </summary>
         private volatile bool _shutdownRequested;
+        /// <summary>
+        /// Stores callbacks disposed used by rabbit mq consumer session factory.
+        /// </summary>
         private int _callbacksDisposed;
 
         /// <summary>
@@ -725,8 +774,19 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class SessionRuntimeState(RabbitMqConsumerSessionIdentity identity, IRabbitMqConsumerSession session)
         {
+            /// <summary>
+            /// Stores identity used by rabbit mq consumer session factory.
+            /// </summary>
             internal RabbitMqConsumerSessionIdentity Identity { get; set; } = identity;
+
+            /// <summary>
+            /// Stores session used by rabbit mq consumer session factory.
+            /// </summary>
             internal IRabbitMqConsumerSession Session { get; } = session;
+
+            /// <summary>
+            /// Stores desired used by rabbit mq consumer session factory.
+            /// </summary>
             internal bool Desired { get; set; }
         }
 
@@ -735,6 +795,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class AlwaysAvailableBackboneCapacityProvider : IBackboneUsableCapacityProvider
         {
+            /// <summary>
+            /// Stores instance used by rabbit mq consumer session factory.
+            /// </summary>
             internal static readonly AlwaysAvailableBackboneCapacityProvider Instance = new();
 
             /// <summary>
@@ -751,7 +814,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class RetiringSessionRuntimeState(RabbitMqConsumerSessionIdentity identity, Task retirementTask)
         {
+            /// <summary>
+            /// Stores identity used by rabbit mq consumer session factory.
+            /// </summary>
             internal RabbitMqConsumerSessionIdentity Identity { get; } = identity;
+
+            /// <summary>
+            /// Stores retirement task used by rabbit mq consumer session factory.
+            /// </summary>
             internal Task RetirementTask { get; } = retirementTask;
         }
 
@@ -760,8 +830,19 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class RetirementOperation(string sessionKey, SessionRuntimeState runtime, TaskCompletionSource<bool> completionSource)
         {
+            /// <summary>
+            /// Stores session key used by rabbit mq consumer session factory.
+            /// </summary>
             internal string SessionKey { get; } = sessionKey;
+
+            /// <summary>
+            /// Stores runtime used by rabbit mq consumer session factory.
+            /// </summary>
             internal SessionRuntimeState Runtime { get; } = runtime;
+
+            /// <summary>
+            /// Stores completion source used by rabbit mq consumer session factory.
+            /// </summary>
             internal TaskCompletionSource<bool> CompletionSource { get; } = completionSource;
         }
 
@@ -820,4 +901,3 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private static partial void LogConsumerSessionStopFailed(ILogger logger, string sessionKey, Exception exception);
     }
 }
-

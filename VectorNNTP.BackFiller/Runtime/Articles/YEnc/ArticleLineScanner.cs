@@ -156,6 +156,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 
             return -1;
         }
+
+        /// <summary>
+        /// Performs scalar line-terminator scanning for non-vectorized tails and fallback paths.
+        /// </summary>
         /// <param name="b">Reference to the first byte in the source span.</param>
         /// <param name="n">Source span length.</param>
         /// <param name="i">Current scan index.</param>
@@ -180,4 +184,3 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         }
     }
 }
-

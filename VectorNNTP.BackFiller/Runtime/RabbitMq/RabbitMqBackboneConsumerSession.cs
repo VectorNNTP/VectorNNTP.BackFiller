@@ -17,10 +17,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed partial class RabbitMqBackboneConsumerSession : IRabbitMqConsumerSession
     {
+        /// <summary>
+        /// Stores identity used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly RabbitMqConsumerSessionIdentity _identity;
+        /// <summary>
+        /// Stores queue name used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly string _queueName;
+        /// <summary>
+        /// Stores connection manager used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
+        /// <summary>
+        /// Stores topology initializer used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
+        /// <summary>
+        /// Stores delivery sink used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly IRabbitMqDeliverySink _deliverySink;
         /// <summary>
         /// Supplies the logger used by rabbit mq backbone consumer session.
@@ -30,20 +45,54 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Limits prefetch count for rabbit mq backbone consumer session.
         /// </summary>
         private readonly ushort? _prefetchCount;
+        /// <summary>
+        /// Stores diagnostic correlation id used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly string? _diagnosticCorrelationId;
+        /// <summary>
+        /// Stores lifecycle gate used by rabbit mq backbone consumer session.
+        /// </summary>
         private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
+
+        /// <summary>
+        /// Stores owned channel used by rabbit mq backbone consumer session.
+        /// </summary>
         private RabbitMqOwnedChannel? _ownedChannel;
+        /// <summary>
+        /// Stores consumer used by rabbit mq backbone consumer session.
+        /// </summary>
         private AsyncEventingBasicConsumer? _consumer;
+        /// <summary>
+        /// Stores consumer tag used by rabbit mq backbone consumer session.
+        /// </summary>
         private string? _consumerTag;
+        /// <summary>
+        /// Stores session cancellation used by rabbit mq backbone consumer session.
+        /// </summary>
         private CancellationTokenSource? _sessionCancellation;
+        /// <summary>
+        /// Stores drain completion used by rabbit mq backbone consumer session.
+        /// </summary>
         private TaskCompletionSource<bool> _drainCompletion = CreateCompletedDrainSource();
+        /// <summary>
+        /// Stores active connection generation used by rabbit mq backbone consumer session.
+        /// </summary>
         private long _activeConnectionGeneration;
         /// <summary>
         /// Limits admitted delivery count for rabbit mq backbone consumer session.
         /// </summary>
         private int _admittedDeliveryCount;
+        /// <summary>
+        /// Stores lifecycle state used by rabbit mq backbone consumer session.
+        /// </summary>
         private RabbitMqConsumerLifecycleState _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+        /// <summary>
+        /// Stores disposed used by rabbit mq backbone consumer session.
+        /// </summary>
         private bool _disposed;
+        /// <summary>
+        /// Stores connection scope used by rabbit mq backbone consumer session.
+        /// </summary>
         private IDisposable? _connectionScope;
 
         /// <summary>
@@ -85,12 +134,24 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 ? null
                 : diagnosticCorrelationId.Trim();
         }
+
+        /// <summary>
+        /// Stores identity used by rabbit mq backbone consumer session.
+        /// </summary>
         internal RabbitMqConsumerSessionIdentity Identity => _identity;
 
         RabbitMqConsumerSessionIdentity IRabbitMqConsumerSession.Identity => _identity;
+
+        /// <summary>
+        /// Stores is running used by rabbit mq backbone consumer session.
+        /// </summary>
         internal bool IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
         bool IRabbitMqConsumerSession.IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
+
+        /// <summary>
+        /// Stores active connection generation used by rabbit mq backbone consumer session.
+        /// </summary>
         internal long ActiveConnectionGeneration => Interlocked.Read(ref _activeConnectionGeneration);
 
         long IRabbitMqConsumerSession.ActiveConnectionGeneration => ActiveConnectionGeneration;
@@ -622,7 +683,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class RabbitMqAdmittedDeliveryTracker : IRabbitMqAdmittedDeliveryTracker
         {
+            /// <summary>
+            /// Stores owner used by rabbit mq backbone consumer session.
+            /// </summary>
             private readonly RabbitMqBackboneConsumerSession _owner;
+            /// <summary>
+            /// Stores completed used by rabbit mq backbone consumer session.
+            /// </summary>
             private int _completed;
 
             /// <summary>
@@ -652,10 +719,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class RabbitMqDeliverySettlement : IRabbitMqDeliverySettlement
         {
+            /// <summary>
+            /// Stores owner used by rabbit mq backbone consumer session.
+            /// </summary>
             private readonly RabbitMqBackboneConsumerSession _owner;
+            /// <summary>
+            /// Stores delivery tag used by rabbit mq backbone consumer session.
+            /// </summary>
             private readonly ulong _deliveryTag;
+            /// <summary>
+            /// Stores delivery generation used by rabbit mq backbone consumer session.
+            /// </summary>
             private readonly long _deliveryGeneration;
+            /// <summary>
+            /// Stores admission tracker used by rabbit mq backbone consumer session.
+            /// </summary>
             private readonly RabbitMqAdmittedDeliveryTracker? _admissionTracker;
+            /// <summary>
+            /// Stores settled used by rabbit mq backbone consumer session.
+            /// </summary>
             private int _settled;
 
             /// <summary>
@@ -759,6 +841,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private sealed class CompositeDisposable(IReadOnlyList<IDisposable> scopes) : IDisposable
         {
+            /// <summary>
+            /// Stores scopes used by rabbit mq backbone consumer session.
+            /// </summary>
             private readonly IReadOnlyList<IDisposable> _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
 
             /// <summary>
@@ -972,4 +1057,3 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
     }
 }
-

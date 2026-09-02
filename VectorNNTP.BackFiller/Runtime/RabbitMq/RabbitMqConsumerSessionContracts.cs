@@ -95,6 +95,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
+        /// <summary>
+        /// Stores writer used by rabbit mq consumer session contracts.
+        /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
         /// <summary>
@@ -115,4 +118,3 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
     }
 }
-

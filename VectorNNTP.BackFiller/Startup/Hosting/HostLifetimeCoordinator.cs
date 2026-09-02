@@ -27,6 +27,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             Container,
             Console,
         }
+
+        /// <summary>
+        /// Stores current environment used by host lifetime coordinator.
+        /// </summary>
         private static HostingEnvironment? _currentEnvironment;
 
         /// <summary>
@@ -523,4 +527,3 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         private static partial void LogReadinessSuppressedDueToShutdown(ILogger logger);
     }
 }
-

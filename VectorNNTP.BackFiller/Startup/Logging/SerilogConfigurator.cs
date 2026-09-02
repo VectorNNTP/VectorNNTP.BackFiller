@@ -15,6 +15,9 @@ namespace VectorNNTP.Backfiller.Startup.Logging
     /// </summary>
     internal static class SerilogConfigurator
     {
+        /// <summary>
+        /// Stores log file prefix used by serilog configurator.
+        /// </summary>
         private const string LogFilePrefix = "vectornntp.backfiller-.log";
 
         /// <summary>
@@ -146,4 +149,3 @@ namespace VectorNNTP.Backfiller.Startup.Logging
         }
     }
 }
-

@@ -26,12 +26,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </remarks>
     internal sealed class RabbitMqArticleWorkRequestParser : IRabbitMqArticleWorkRequestParser
     {
+        /// <summary>
+        /// Stores supported version used by rabbit mq article work request parser.
+        /// </summary>
         private const int SupportedVersion = 1;
 
         /// <summary>
         /// Supplies the logger used by rabbit mq article work request parser.
         /// </summary>
         private readonly ILogger<RabbitMqArticleWorkRequestParser> _logger;
+        /// <summary>
+        /// Stores diagnostic correlation id used by rabbit mq article work request parser.
+        /// </summary>
         private readonly string? _diagnosticCorrelationId;
 
         /// <summary>
@@ -304,4 +310,3 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
     }
 }
-

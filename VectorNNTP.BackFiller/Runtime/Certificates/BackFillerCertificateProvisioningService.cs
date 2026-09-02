@@ -19,14 +19,29 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed class BackFillerCertificateProvisioningService : IDisposable
     {
+        /// <summary>
+        /// Stores certificate store used by back filler certificate provisioning service.
+        /// </summary>
         private readonly BackFillerCertificateStore _certificateStore;
+        /// <summary>
+        /// Stores acme issuer used by back filler certificate provisioning service.
+        /// </summary>
         private readonly IAcmeCertificateIssuer _acmeIssuer;
+        /// <summary>
+        /// Stores certificate state used by back filler certificate provisioning service.
+        /// </summary>
         private readonly BackFillerCertificateState _certificateState;
         /// <summary>
         /// Supplies the logger used by back filler certificate provisioning service.
         /// </summary>
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
+        /// <summary>
+        /// Stores time provider used by back filler certificate provisioning service.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
+        /// <summary>
+        /// Stores provision gate used by back filler certificate provisioning service.
+        /// </summary>
         private static readonly SemaphoreSlim ProvisionGate = new(1, 1);
 
         /// <summary>
@@ -391,16 +406,28 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             LogListenerCertificateActivatedSuccessfullyMessage(logger, subject, notAfterUtc, null);
         }
+
+        /// <summary>
+        /// Stores log certificate issuance failed message used by back filler certificate provisioning service.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2708, nameof(LogCertificateIssuanceFailed)),
                 "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
+
+        /// <summary>
+        /// Stores log certificate persistence failed message used by back filler certificate provisioning service.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
                 new EventId(2709, nameof(LogCertificatePersistenceFailed)),
                 "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
+
+        /// <summary>
+        /// Stores log certificate reload failed message used by back filler certificate provisioning service.
+        /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
             LoggerMessage.Define<string, string, string>(
                 LogLevel.Error,
@@ -432,4 +459,3 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
     }
 }
-

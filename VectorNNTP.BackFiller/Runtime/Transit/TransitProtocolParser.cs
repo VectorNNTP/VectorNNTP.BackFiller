@@ -17,6 +17,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal static class TransitProtocolParser
     {
+        /// <summary>
+        /// Stores capabilities response code used by transit protocol parser.
+        /// </summary>
         private const int CapabilitiesResponseCode = 101;
         /// <summary>
         /// Limits maximum nntp line length bytes for transit protocol parser.
@@ -242,4 +245,3 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
     }
 }
-

@@ -68,6 +68,9 @@ namespace VectorNNTP.Backfiller.Configuration
     /// </remarks>
     internal sealed class ConnectionStringsOptions
     {
+        /// <summary>
+        /// Gets or sets the connection string for the VectorNNTP.Grabber control-plane database.
+        /// </summary>
         /// <remarks>
         /// <para>This connection is expected to have low utilization compared to Usenet provider connections.
         /// Operations should be infrequent, asynchronous, and isolated from the article retrieval pipeline.</para>
@@ -317,4 +320,3 @@ namespace VectorNNTP.Backfiller.Configuration
         }
     }
 }
-

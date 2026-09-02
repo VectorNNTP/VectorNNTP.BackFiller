@@ -364,7 +364,7 @@ namespace VectorNNTP.Backfiller.Tests
             private int _nextIdentifier = 1000;
 
             /// <summary>
-            /// Initializes fake facade with existing records.
+            /// Initializes the fake facade with existing records.
             /// </summary>
             /// <param name="records">Initial Cloudflare record state.</param>
             /// <summary>
@@ -513,4 +513,3 @@ namespace VectorNNTP.Backfiller.Tests
         }
     }
 }
-

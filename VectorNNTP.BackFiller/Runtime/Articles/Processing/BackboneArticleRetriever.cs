@@ -41,7 +41,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class BackboneArticleRetriever : IBackboneArticleRetriever
     {
+        /// <summary>
+        /// Stores lease provider used by backbone article retriever.
+        /// </summary>
         private readonly IBackboneSessionLeaseProvider _leaseProvider;
+        /// <summary>
+        /// Stores workflow used by backbone article retriever.
+        /// </summary>
         private readonly NntpArticleGrabberWorkflow _workflow;
         /// <summary>
         /// Supplies the logger used by backbone article retriever.
@@ -107,4 +113,3 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
     }
 }
-

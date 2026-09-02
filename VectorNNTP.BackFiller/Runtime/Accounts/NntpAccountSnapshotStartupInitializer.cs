@@ -14,6 +14,9 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         MySqlNntpAccountSnapshotProvider snapshotProvider,
         ILogger<NntpAccountSnapshotStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Stores snapshot provider used by nntp account snapshot startup initializer.
+        /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _snapshotProvider = snapshotProvider ?? throw new ArgumentNullException(nameof(snapshotProvider));
         /// <summary>
         /// Supplies the logger used by nntp account snapshot startup initializer.
@@ -56,4 +59,3 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         private static partial void LogStartupInitializerCompleted(ILogger logger, int accountCount);
     }
 }
-

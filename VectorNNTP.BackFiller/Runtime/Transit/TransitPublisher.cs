@@ -24,8 +24,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed partial class TransitPublisher : IAsyncDisposable
     {
+        /// <summary>
+        /// Stores default per connection pipeline depth used by transit publisher.
+        /// </summary>
         private const int DefaultPerConnectionPipelineDepth = 8;
+
+        /// <summary>
+        /// Stores runtime options used by transit publisher.
+        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions;
+        /// <summary>
+        /// Stores time provider used by transit publisher.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
         /// Supplies the logger used by transit publisher.
@@ -35,6 +45,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Limits connection pool size for transit publisher.
         /// </summary>
         private readonly int _connectionPoolSize;
+        /// <summary>
+        /// Stores per connection pipeline depth used by transit publisher.
+        /// </summary>
         private readonly int _perConnectionPipelineDepth;
         /// <summary>
         /// Configures connection response progress timeout for transit publisher.
@@ -44,26 +57,92 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Configures connection response progress check interval for transit publisher.
         /// </summary>
         private readonly TimeSpan? _connectionResponseProgressCheckInterval;
+
+        /// <summary>
+        /// Stores global queue used by transit publisher.
+        /// </summary>
         private readonly GlobalTransitWorkQueue _globalQueue;
+        /// <summary>
+        /// Stores connections used by transit publisher.
+        /// </summary>
         private readonly TransitConnection[] _connections;
+        /// <summary>
+        /// Stores connection workers used by transit publisher.
+        /// </summary>
         private readonly Task[] _connectionWorkers;
+        /// <summary>
+        /// Stores reconnect gates used by transit publisher.
+        /// </summary>
         private readonly SemaphoreSlim[] _reconnectGates;
+        /// <summary>
+        /// Stores connection workers cancellation used by transit publisher.
+        /// </summary>
         private readonly CancellationTokenSource _connectionWorkersCancellation = new();
+        /// <summary>
+        /// Stores active work items used by transit publisher.
+        /// </summary>
         private readonly ConcurrentDictionary<long, TransitWorkItem> _activeWorkItems = new();
+        /// <summary>
+        /// Stores deferred connection disposals used by transit publisher.
+        /// </summary>
         private readonly ConcurrentDictionary<string, Task> _deferredConnectionDisposals = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Stores timing collector used by transit publisher.
+        /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
+
+        /// <summary>
+        /// Stores next work item id used by transit publisher.
+        /// </summary>
         private long _nextWorkItemId;
+        /// <summary>
+        /// Stores total bytes transmitted for transit publisher.
+        /// </summary>
         private long _totalBytesTransmitted;
+        /// <summary>
+        /// Stores total bytes received for transit publisher.
+        /// </summary>
         private long _totalBytesReceived;
+        /// <summary>
+        /// Stores total articles submitted used by transit publisher.
+        /// </summary>
         private long _totalArticlesSubmitted;
+        /// <summary>
+        /// Stores total articles accepted used by transit publisher.
+        /// </summary>
         private long _totalArticlesAccepted;
+        /// <summary>
+        /// Stores total articles rejected used by transit publisher.
+        /// </summary>
         private long _totalArticlesRejected;
+        /// <summary>
+        /// Stores total articles ambiguous used by transit publisher.
+        /// </summary>
         private long _totalArticlesAmbiguous;
+        /// <summary>
+        /// Stores total articles failed used by transit publisher.
+        /// </summary>
         private long _totalArticlesFailed;
+        /// <summary>
+        /// Stores total articles canceled used by transit publisher.
+        /// </summary>
         private long _totalArticlesCanceled;
+        /// <summary>
+        /// Stores total reconnects used by transit publisher.
+        /// </summary>
         private long _totalReconnects;
+
+        /// <summary>
+        /// Stores initialized used by transit publisher.
+        /// </summary>
         private int _initialized;
+        /// <summary>
+        /// Stores dispose requested used by transit publisher.
+        /// </summary>
         private volatile bool _disposeRequested;
+        /// <summary>
+        /// Stores state used by transit publisher.
+        /// </summary>
         private volatile TransitConnectionState _state = TransitConnectionState.Disconnected;
 
         /// <summary>
@@ -122,6 +201,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _reconnectGates[i] = new SemaphoreSlim(1, 1);
             }
         }
+
+        /// <summary>
+        /// Stores current state used by transit publisher.
+        /// </summary>
         internal TransitConnectionState CurrentState => _state;
 
         /// <summary>
@@ -1335,17 +1418,64 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             bool IsTerminalizationMissingTaskInvariant,
             bool IsTerminalizationMissingTrackingInvariant)
         {
+            /// <summary>
+            /// Stores exception type used by transit publisher.
+            /// </summary>
             internal string ExceptionType => FaultType ?? string.Empty;
+
+            /// <summary>
+            /// Stores base exception type used by transit publisher.
+            /// </summary>
             internal string BaseExceptionType => FaultType ?? string.Empty;
+
+            /// <summary>
+            /// Stores hresult used by transit publisher.
+            /// </summary>
             internal int HResult => FirstFault?.SourceException.HResult ?? 0;
+
+            /// <summary>
+            /// Stores invalid operation message class used by transit publisher.
+            /// </summary>
             internal InvalidOperationFingerprintMessageClass InvalidOperationMessageClass => InvalidOperationClass;
+
+            /// <summary>
+            /// Stores sanitized first fault message class used by transit publisher.
+            /// </summary>
             internal SanitizedFirstFaultMessageClass SanitizedFirstFaultMessageClass => SanitizedMessageClass;
+
+            /// <summary>
+            /// Stores sanitized first fault message used by transit publisher.
+            /// </summary>
             internal string SanitizedFirstFaultMessage => FaultMessage ?? string.Empty;
+
+            /// <summary>
+            /// Stores full first fault stack trace used by transit publisher.
+            /// </summary>
             internal string FullFirstFaultStackTrace => FirstFault?.SourceException.ToString() ?? string.Empty;
+
+            /// <summary>
+            /// Stores top stack frame declaring type used by transit publisher.
+            /// </summary>
             internal static string TopStackFrameDeclaringType => string.Empty;
+
+            /// <summary>
+            /// Stores top stack frame method name used by transit publisher.
+            /// </summary>
             internal static string TopStackFrameMethodName => string.Empty;
+
+            /// <summary>
+            /// Stores milliseconds from measurement start used by transit publisher.
+            /// </summary>
             internal static long MillisecondsFromMeasurementStart => 0;
+
+            /// <summary>
+            /// Stores milliseconds from measurement end used by transit publisher.
+            /// </summary>
             internal static long MillisecondsFromMeasurementEnd => 0;
+
+            /// <summary>
+            /// Stores measurement state at fault used by transit publisher.
+            /// </summary>
             internal PumpFaultMeasurementState MeasurementStateAtFault => MeasurementState;
 
             /// <summary>
@@ -1387,8 +1517,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             /// Limits reconnecting connection count for transit publisher.
             /// </summary>
             internal static int ReconnectingConnectionCount => 0;
+
+            /// <summary>
+            /// Stores outstanding connection operations used by transit publisher.
+            /// </summary>
             internal static long OutstandingConnectionOperations => 0;
+
+            /// <summary>
+            /// Stores producer completion state used by transit publisher.
+            /// </summary>
             internal static ProducerCompletionState ProducerCompletionState => ProducerCompletionState.Unknown;
+
+            /// <summary>
+            /// Stores dispatchers completed state used by transit publisher.
+            /// </summary>
             internal static DispatchersCompletedState DispatchersCompletedState => DispatchersCompletedState.Unknown;
         }
 
@@ -1477,4 +1619,3 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
     }
 }
-

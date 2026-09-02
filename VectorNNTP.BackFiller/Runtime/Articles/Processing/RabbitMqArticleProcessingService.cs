@@ -16,9 +16,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class RabbitMqArticleProcessingService : BackgroundService
     {
+        /// <summary>
+        /// Stores consumer service used by rabbit mq article processing service.
+        /// </summary>
         private readonly RabbitMqConsumerService _consumerService;
+        /// <summary>
+        /// Stores request parser used by rabbit mq article processing service.
+        /// </summary>
         private readonly IRabbitMqArticleWorkRequestParser _requestParser;
+        /// <summary>
+        /// Stores processor used by rabbit mq article processing service.
+        /// </summary>
         private readonly IArticleWorkProcessor _processor;
+        /// <summary>
+        /// Stores result sink used by rabbit mq article processing service.
+        /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
         /// <summary>
         /// Supplies the logger used by rabbit mq article processing service.
@@ -112,4 +124,3 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
 }
-

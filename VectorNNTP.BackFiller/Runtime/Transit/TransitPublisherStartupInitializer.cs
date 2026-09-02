@@ -14,11 +14,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         TransitPublisher transitPublisher,
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Stores transit publisher used by transit publisher startup initializer.
+        /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
         /// <summary>
         /// Supplies the logger used by transit publisher startup initializer.
         /// </summary>
         private readonly ILogger<TransitPublisherStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        /// <summary>
+        /// Performs startup-time transit connection initialization and blocks host startup until complete.
+        /// </summary>
         /// <param name="cancellationToken">Startup cancellation token.</param>
         /// <returns>A task that completes after transit publisher initialization succeeds.</returns>
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -51,5 +58,3 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);
     }
 }
-
-
