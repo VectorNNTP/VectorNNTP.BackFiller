@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup
+// Implements the build info service behavior.
 
 using Serilog;
 
@@ -15,6 +14,9 @@ namespace VectorNNTP.Backfiller.Startup
     /// </summary>
     internal static class BuildInfoService
     {
+        /// <summary>
+        /// Stores build info used by build info service.
+        /// </summary>
         private static BuildInfo? _buildInfo;
 
         /// <summary>
@@ -57,7 +59,7 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Gets the full version string suitable for console display.
+        /// Returns the full version string suitable for console display.
         /// </summary>
         /// <returns>The full version string.</returns>
         internal static string GetFullVersionString()
@@ -66,7 +68,7 @@ namespace VectorNNTP.Backfiller.Startup
         }
 
         /// <summary>
-        /// Gets the initialized build information snapshot.
+        /// Returns the initialized build information snapshot.
         /// </summary>
         /// <returns>The current build information snapshot.</returns>
         private static BuildInfo GetBuildInfo()

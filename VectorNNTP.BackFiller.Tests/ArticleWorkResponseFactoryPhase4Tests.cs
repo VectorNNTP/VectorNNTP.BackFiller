@@ -1,9 +1,10 @@
 // <copyright file="ArticleWorkResponseFactoryPhase4Tests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Article Processing
-// Focused Phase 4 tests for deterministic response payload creation semantics.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for article work response factory phase4, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the article work response factory phase 4 test suite.
 
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -17,6 +18,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ArticleWorkResponseFactoryPhase4Tests
     {
+        /// <summary>
+        /// Confirms the create response maps outcome to canonical payload behavior.
+        /// </summary>
         [Theory]
         [InlineData(0, true, false)]
         [InlineData(2, false, true)]
@@ -67,6 +71,9 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Confirms the create result behavior.
+        /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
             Guid requestId,
@@ -104,14 +111,36 @@ namespace VectorNNTP.Backfiller.Tests
                 UnexpectedException: null);
         }
 
+        /// <summary>
+        /// Confirms the no op settlement behavior.
+        /// </summary>
         private sealed class NoOpSettlement : IRabbitMqDeliverySettlement
         {
+            /// <summary>
+            /// Confirms the ack async behavior.
+            /// </summary>
+            /// <returns>The value returned by the ack async helper.</returns>
+            /// <summary>
+            /// Confirms the ack async behavior.
+            /// </summary>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the ack async helper.</returns>
             public ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return ValueTask.CompletedTask;
             }
 
+            /// <summary>
+            /// Confirms the nack async behavior.
+            /// </summary>
+            /// <returns>The value returned by the nack async helper.</returns>
+            /// <summary>
+            /// Confirms the nack async behavior.
+            /// </summary>
+            /// <param name="requeue">The requeue used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();

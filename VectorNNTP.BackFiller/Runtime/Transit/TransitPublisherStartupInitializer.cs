@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit publisher startup initializer behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
@@ -15,7 +14,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         TransitPublisher transitPublisher,
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Stores transit publisher used by transit publisher startup initializer.
+        /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
+        /// <summary>
+        /// Supplies the logger used by transit publisher startup initializer.
+        /// </summary>
         private readonly ILogger<TransitPublisherStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
@@ -40,9 +45,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await _transitPublisher.DisposeAsync().ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Emits the transit startup initializer beginning log event for transit publisher startup initializer.
+        /// </summary>
         [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
         private static partial void LogTransitStartupInitializerBeginning(ILogger logger);
 
+        /// <summary>
+        /// Emits the transit startup initializer completed log event for transit publisher startup initializer.
+        /// </summary>
         [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);
     }

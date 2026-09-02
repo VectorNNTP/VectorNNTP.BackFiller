@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq connection replaced event args behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {

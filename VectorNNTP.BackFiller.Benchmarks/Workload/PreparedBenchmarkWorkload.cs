@@ -1,12 +1,30 @@
+// <copyright file="PreparedBenchmarkWorkload.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Workload/PreparedBenchmarkWorkload: prepares and drives reproducible benchmark input workloads.
+
 using System.Diagnostics.CodeAnalysis;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the prepared BenchmarkWorkload class used by the benchmark or regression gate.
+/// </summary>
 internal sealed class PreparedBenchmarkWorkload : IDisposable
 {
+    /// <summary>
+    /// Gets or sets the _messageIds.
+    /// </summary>
     private readonly string[] _messageIds;
+    /// <summary>
+    /// Gets or sets the _nextMessageIndex.
+    /// </summary>
     private int _nextMessageIndex;
 
+    /// <summary>
+    /// Implements the prepared BenchmarkWorkload contract.
+    /// </summary>
     internal PreparedBenchmarkWorkload(string[] messageIds, byte[] reusablePayloadBytes, WorkloadPreparationSummary summary)
     {
         _messageIds = messageIds;
@@ -14,12 +32,24 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
         PreparationSummary = summary;
     }
 
+    /// <summary>
+    /// Gets or sets the reusable ArticlePayload.
+    /// </summary>
     internal ReadOnlyMemory<byte> ReusableArticlePayload { get; }
 
+    /// <summary>
+    /// Gets or sets the payload Length.
+    /// </summary>
     internal int PayloadLength => ReusableArticlePayload.Length;
 
+    /// <summary>
+    /// Gets or sets the preparation Summary.
+    /// </summary>
     internal WorkloadPreparationSummary PreparationSummary { get; }
 
+    /// <summary>
+    /// Implements the try TakeNextMessageId contract.
+    /// </summary>
     internal bool TryTakeNextMessageId([NotNullWhen(true)] out string? messageId)
     {
         int index = Interlocked.Increment(ref _nextMessageIndex) - 1;
@@ -33,6 +63,9 @@ internal sealed class PreparedBenchmarkWorkload : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Releases resources held by this instance.
+    /// </summary>
     public void Dispose()
     {
     }

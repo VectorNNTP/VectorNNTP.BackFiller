@@ -1,11 +1,10 @@
 // <copyright file="LetsEncryptCertificateDependencyProbeTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for lets encrypt certificate dependency probe, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the lets encrypt certificate dependency probe test suite.
 
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -13,8 +12,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Confirms the lets encrypt certificate dependency probe tests behavior.
+    /// </summary>
     public sealed class LetsEncryptCertificateDependencyProbeTests
     {
+        /// <summary>
+        /// Confirms the ensure certificate availability async when acme account key missing returns certificate dependency failure behavior.
+        /// </summary>
         [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenAcmeAccountKeyMissing_ReturnsCertificateDependencyFailure()
         {
@@ -36,6 +41,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Confirms the create runtime options behavior.
+        /// </summary>
+        /// <returns>The value returned by the create runtime options helper.</returns>
+        /// <summary>
+        /// Confirms the create runtime options behavior.
+        /// </summary>
+        /// <param name="certDir">The cert dir used by this test scenario.</param>
+        /// <returns>The value returned by the create runtime options helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(string certDir)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
@@ -81,6 +95,14 @@ namespace VectorNNTP.Backfiller.Tests
                 LetsEncrypt: letsEncrypt);
         }
 
+        /// <summary>
+        /// Confirms the create unique temp directory behavior.
+        /// </summary>
+        /// <returns>The value returned by the create unique temp directory helper.</returns>
+        /// <summary>
+        /// Confirms the create unique temp directory behavior.
+        /// </summary>
+        /// <returns>The value returned by the create unique temp directory helper.</returns>
         private static string CreateUniqueTempDirectory()
         {
             string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-LetsEncryptProbeTests-{Guid.NewGuid():N}");
@@ -88,6 +110,9 @@ namespace VectorNNTP.Backfiller.Tests
             return path;
         }
 
+        /// <summary>
+        /// Confirms the delete directory if exists behavior.
+        /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {
             if (!Directory.Exists(path))

@@ -17,8 +17,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         BackFillerCertificateProvisioningService provisioningService,
         ILogger<BackFillerCertificateStartupInitializer> logger) : IHostedService
     {
+        /// <summary>
+        /// Stores runtime options used by back filler certificate startup initializer.
+        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
+        /// <summary>
+        /// Stores provisioning service used by back filler certificate startup initializer.
+        /// </summary>
         private readonly BackFillerCertificateProvisioningService _provisioningService = provisioningService ?? throw new ArgumentNullException(nameof(provisioningService));
+        /// <summary>
+        /// Supplies the logger used by back filler certificate startup initializer.
+        /// </summary>
         private readonly ILogger<BackFillerCertificateStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
@@ -49,12 +58,21 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Emits the certificate startup initializer beginning log event for back filler certificate startup initializer.
+        /// </summary>
         [LoggerMessage(EventId = 2600, Level = LogLevel.Information, Message = "Certificate startup initializer beginning certificate availability verification")]
         private static partial void LogCertificateStartupInitializerBeginning(ILogger logger);
 
+        /// <summary>
+        /// Emits the certificate startup initializer completed log event for back filler certificate startup initializer.
+        /// </summary>
         [LoggerMessage(EventId = 2601, Level = LogLevel.Information, Message = "Certificate startup initializer completed certificate state activation")]
         private static partial void LogCertificateStartupInitializerCompleted(ILogger logger);
 
+        /// <summary>
+        /// Emits the certificate startup initializer disabled log event for back filler certificate startup initializer.
+        /// </summary>
         [LoggerMessage(EventId = 2602, Level = LogLevel.Information, Message = "Certificate startup initializer skipped because Let's Encrypt is disabled")]
         private static partial void LogCertificateStartupInitializerDisabled(ILogger logger);
     }

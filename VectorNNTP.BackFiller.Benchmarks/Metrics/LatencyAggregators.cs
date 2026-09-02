@@ -1,13 +1,25 @@
+// <copyright file="LatencyAggregators.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/LatencyAggregators: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the connection CounterState record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct ConnectionCounterState(
     string ConnectionId,
     TimeSpan Elapsed,
     long SubmissionsStarted,
     long Completed);
 
+/// <summary>
+/// Represents the dispatcher SeriesPoint record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct DispatcherSeriesPoint(
     TimeSpan Elapsed,
     int InFlight,
@@ -16,25 +28,67 @@ internal readonly record struct DispatcherSeriesPoint(
     int QueueDepth,
     long QueueBytes);
 
+/// <summary>
+/// Represents the connection SeriesAggregate class used by the benchmark or regression gate.
+/// </summary>
 internal sealed class ConnectionSeriesAggregate
 {
+    /// <summary>
+    /// Gets or sets the _slot.
+    /// </summary>
     private readonly int _slot;
+    /// <summary>
+    /// Gets or sets the _pendingSum.
+    /// </summary>
     private double _pendingSum;
+    /// <summary>
+    /// Gets or sets the _samples.
+    /// </summary>
     private int _samples;
+    /// <summary>
+    /// Gets or sets the _pendingMin.
+    /// </summary>
     private int _pendingMin = int.MaxValue;
+    /// <summary>
+    /// Gets or sets the _pendingMax.
+    /// </summary>
     private int _pendingMax;
+    /// <summary>
+    /// Gets or sets the _maxInFlight.
+    /// </summary>
     private int _maxInFlight;
+    /// <summary>
+    /// Gets or sets the _failures.
+    /// </summary>
     private long _failures;
+    /// <summary>
+    /// Gets or sets the _reconnects.
+    /// </summary>
     private long _reconnects;
+    /// <summary>
+    /// Gets or sets the _submitRateSum.
+    /// </summary>
     private double _submitRateSum;
+    /// <summary>
+    /// Gets or sets the _completeRateSum.
+    /// </summary>
     private double _completeRateSum;
+    /// <summary>
+    /// Gets or sets the _responseRateSum.
+    /// </summary>
     private double _responseRateSum;
 
+    /// <summary>
+    /// Implements the connection SeriesAggregate contract.
+    /// </summary>
     internal ConnectionSeriesAggregate(int slot)
     {
         _slot = slot;
     }
 
+    /// <summary>
+    /// Runs the observe benchmark scenario.
+    /// </summary>
     internal void Observe(TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot, double submitRate, double completeRate, double responseRate, long reconnects)
     {
         _samples++;
@@ -49,6 +103,9 @@ internal sealed class ConnectionSeriesAggregate
         _reconnects = reconnects;
     }
 
+    /// <summary>
+    /// Formats Line.
+    /// </summary>
     internal string FormatLine()
     {
         double avgPending = _samples == 0 ? 0 : _pendingSum / _samples;
@@ -60,8 +117,14 @@ internal sealed class ConnectionSeriesAggregate
     }
 }
 
+/// <summary>
+/// Represents the latency Aggregators class used by the benchmark or regression gate.
+/// </summary>
 internal static class LatencyAggregators
 {
+    /// <summary>
+    /// Builds ConnectionSeriesSummary.
+    /// </summary>
     internal static string BuildConnectionSeriesSummary(Dictionary<int, ConnectionSeriesAggregate> series)
     {
         if (series.Count == 0)
@@ -76,6 +139,9 @@ internal static class LatencyAggregators
         return string.Join(Environment.NewLine, lines);
     }
 
+    /// <summary>
+    /// Builds DispatcherSeriesSummary.
+    /// </summary>
     internal static string BuildDispatcherSeriesSummary(List<DispatcherSeriesPoint> series)
     {
         if (series.Count == 0)
@@ -93,6 +159,9 @@ internal static class LatencyAggregators
         return $"samples={series.Count}, inFlight avg/max={avgInFlight:F2}/{maxInFlight}, dispatchPending avg/max={avgDispatchPending:F2}/{maxDispatchPending}, actualPending avg/max={avgActualPending:F2}/{maxActualPending}";
     }
 
+    /// <summary>
+    /// Updates Peak.
+    /// </summary>
     internal static void UpdatePeak(ref long location, long candidate)
     {
         while (true)
@@ -110,6 +179,9 @@ internal static class LatencyAggregators
         }
     }
 
+    /// <summary>
+    /// Updates Min.
+    /// </summary>
     internal static void UpdateMin(ref long location, long candidate)
     {
         while (true)

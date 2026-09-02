@@ -1,19 +1,19 @@
 // <copyright file="NntpArticleAcquisitionBenchmarks.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks / Articles / Acquisition
 // BenchmarkDotNet suite that measures steady-state ARTICLE throughput over reusable,
 // pre-authenticated NNTP sessions with setup and teardown outside measured regions.
 
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 
 namespace VectorNNTP.BackFiller.Benchmarks

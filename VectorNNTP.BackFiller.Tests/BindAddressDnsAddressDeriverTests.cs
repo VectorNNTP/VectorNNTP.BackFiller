@@ -1,11 +1,10 @@
 // <copyright file="BindAddressDnsAddressDeriverTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for bind address dns address deriver, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the bind address dns address deriver test suite.
 
 using System.Net;
 using VectorNNTP.Backfiller.Configuration;

@@ -1,3 +1,9 @@
+// <copyright file="RuntimeExecutionIdentityCapture.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Identity/RuntimeExecutionIdentityCapture: verifies that benchmark measurements execute against the intended build identity.
+
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -5,6 +11,9 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Captures assembly, file, runtime, and build-metadata identity for benchmark provenance.
+/// </summary>
 internal static class RuntimeExecutionIdentityCapture
 {
     /// <summary>

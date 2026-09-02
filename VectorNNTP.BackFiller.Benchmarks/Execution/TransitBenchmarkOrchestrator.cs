@@ -1,3 +1,9 @@
+// <copyright file="TransitBenchmarkOrchestrator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/TransitBenchmarkOrchestrator: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging;
@@ -6,8 +12,14 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the transit BenchmarkOrchestrator class used by the benchmark or regression gate.
+/// </summary>
 internal static class TransitBenchmarkOrchestrator
 {
+    /// <summary>
+    /// Runs CoreAsync.
+    /// </summary>
     internal static async Task RunCoreAsync(
         TransitBenchmarkConfig config,
         RuntimeExecutionIdentity runtimeIdentity,
@@ -125,6 +137,9 @@ internal static class TransitBenchmarkOrchestrator
         writeStructuredResultArtifacts(result, config);
     }
 
+    /// <summary>
+    /// Runs SmokeAsync.
+    /// </summary>
     private static async Task RunSmokeAsync(TransitPublisher publisher, TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
         const int smokeArticles = 5;
@@ -151,6 +166,9 @@ internal static class TransitBenchmarkOrchestrator
         }
     }
 
+    /// <summary>
+    /// Runs WarmupAsync.
+    /// </summary>
     private static async Task RunWarmupAsync(TransitPublisher publisher, TransitBenchmarkConfig config, PreparedBenchmarkWorkload workload, CancellationToken cancellationToken)
     {
         using CancellationTokenSource warmupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -176,6 +194,9 @@ internal static class TransitBenchmarkOrchestrator
         Console.WriteLine($"Warmup complete ({config.WarmupDuration.TotalSeconds:F0}s).");
     }
 
+    /// <summary>
+    /// Builds RuntimeOptions.
+    /// </summary>
     internal static BackFillerRuntimeOptions BuildRuntimeOptions(TransitBenchmarkConfig config)
     {
         return new BackFillerRuntimeOptions(

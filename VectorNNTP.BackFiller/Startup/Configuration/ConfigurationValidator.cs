@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Configuration
+// Implements the configuration validator behavior.
 
 using System.ComponentModel.DataAnnotations;
 using Serilog;

@@ -1,11 +1,10 @@
 // <copyright file="TransitServerDependencyProbeTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for transit server dependency probe, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the transit server dependency probe test suite.
 
 using System.Net;
 using System.Net.Sockets;
@@ -16,8 +15,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Confirms the transit server dependency probe tests behavior.
+    /// </summary>
     public sealed class TransitServerDependencyProbeTests
     {
+        /// <summary>
+        /// Confirms the validate transit server connectivity async when start tls advertised but rejected fails validation behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateTransitServerConnectivityAsync_WhenStartTlsAdvertisedButRejected_FailsValidation()
         {
@@ -90,13 +95,31 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Confirms the probe nntp server behavior.
+        /// </summary>
         private sealed class ProbeNntpServer : IAsyncDisposable
         {
+            /// <summary>
+            /// Supplies  listener for the fixture or scenario under test.
+            /// </summary>
             private readonly TcpListener _listener;
+            /// <summary>
+            /// Supplies  session for the fixture or scenario under test.
+            /// </summary>
             private readonly Func<NetworkStream, CancellationToken, Task> _session;
+            /// <summary>
+            /// Confirms  cts behavior.
+            /// </summary>
             private readonly CancellationTokenSource _cts = new();
+            /// <summary>
+            /// Supplies  accept loop task for the fixture or scenario under test.
+            /// </summary>
             private readonly Task _acceptLoopTask;
 
+            /// <summary>
+            /// Confirms the probe nntp server behavior.
+            /// </summary>
             private ProbeNntpServer(TcpListener listener, Func<NetworkStream, CancellationToken, Task> session)
             {
                 _listener = listener;
@@ -104,8 +127,20 @@ namespace VectorNNTP.Backfiller.Tests
                 _acceptLoopTask = Task.Run(AcceptLoopAsync);
             }
 
+            /// <summary>
+            /// Confirms port behavior.
+            /// </summary>
             internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
 
+            /// <summary>
+            /// Confirms the start async behavior.
+            /// </summary>
+            /// <returns>The value returned by the start async helper.</returns>
+            /// <summary>
+            /// Confirms the start async behavior.
+            /// </summary>
+            /// <param name="session">The session used by this test scenario.</param>
+            /// <returns>The value returned by the start async helper.</returns>
             internal static Task<ProbeNntpServer> StartAsync(Func<NetworkStream, CancellationToken, Task> session)
             {
                 ArgumentNullException.ThrowIfNull(session);
@@ -117,6 +152,14 @@ namespace VectorNNTP.Backfiller.Tests
                 return Task.FromResult(server);
             }
 
+            /// <summary>
+            /// Confirms the accept loop async behavior.
+            /// </summary>
+            /// <returns>The value returned by the accept loop async helper.</returns>
+            /// <summary>
+            /// Confirms the accept loop async behavior.
+            /// </summary>
+            /// <returns>The value returned by the accept loop async helper.</returns>
             private async Task AcceptLoopAsync()
             {
                 try
@@ -133,6 +176,16 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
 
+            /// <summary>
+            /// Confirms the read line async behavior.
+            /// </summary>
+            /// <returns>The value returned by the read line async helper.</returns>
+            /// <summary>
+            /// Confirms the read line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the read line async helper.</returns>
             internal static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> buffer = [];
@@ -163,6 +216,17 @@ namespace VectorNNTP.Backfiller.Tests
                 return Encoding.ASCII.GetString([.. buffer]);
             }
 
+            /// <summary>
+            /// Confirms the write line async behavior.
+            /// </summary>
+            /// <returns>The value returned by the write line async helper.</returns>
+            /// <summary>
+            /// Confirms the write line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="line">The line used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the write line async helper.</returns>
             internal static async Task WriteLineAsync(Stream stream, string line, CancellationToken cancellationToken)
             {
                 ArgumentNullException.ThrowIfNull(stream);
@@ -173,6 +237,14 @@ namespace VectorNNTP.Backfiller.Tests
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            /// <summary>
+            /// Confirms the dispose async behavior.
+            /// </summary>
+            /// <returns>The value returned by the dispose async helper.</returns>
+            /// <summary>
+            /// Confirms the dispose async behavior.
+            /// </summary>
+            /// <returns>The value returned by the dispose async helper.</returns>
             public async ValueTask DisposeAsync()
             {
                 _cts.Cancel();

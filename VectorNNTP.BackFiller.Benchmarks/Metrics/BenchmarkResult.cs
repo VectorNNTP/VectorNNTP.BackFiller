@@ -1,7 +1,16 @@
+// <copyright file="BenchmarkResult.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/BenchmarkResult: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the boundary ConnectionSnapshot record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct BoundaryConnectionSnapshot(
     int SlotIndex,
     string ConnectionId,
@@ -16,6 +25,9 @@ internal readonly record struct BoundaryConnectionSnapshot(
     long SubmissionsUnavailable,
     long SubmissionsFailed);
 
+/// <summary>
+/// Represents the fixed CountBoundarySnapshot record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct FixedCountBoundarySnapshot(
     string Phase,
     DateTimeOffset TimestampUtc,
@@ -36,6 +48,9 @@ internal readonly record struct FixedCountBoundarySnapshot(
     int ReadyConnectionCount,
     BoundaryConnectionSnapshot[] Connections);
 
+/// <summary>
+/// Represents the post MeasurementTerminalizationReasons record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct PostMeasurementTerminalizationReasons(
     long Response400,
     long ResponseLoopFailure,
@@ -49,6 +64,9 @@ internal readonly record struct PostMeasurementTerminalizationReasons(
     long Failed,
     long OtherOrUnknown);
 
+/// <summary>
+/// Represents the post MeasurementTerminalizationSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct PostMeasurementTerminalizationSummary(
     long TerminalizedBeforeMeasurementEnd,
     long TerminalizedAfterMeasurementEnd,
@@ -62,12 +80,18 @@ internal readonly record struct PostMeasurementTerminalizationSummary(
     DateTimeOffset? LastPostMeasurementTerminalizationUtc,
     PostMeasurementTerminalizationReasons Reasons);
 
+/// <summary>
+/// Represents the fixed CountBoundaryTelemetry record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct FixedCountBoundaryTelemetry(
     FixedCountBoundarySnapshot AtMeasurementEnd,
     FixedCountBoundarySnapshot PostMeasurementPreDrain,
     FixedCountBoundarySnapshot PostDrainFinal,
     PostMeasurementTerminalizationSummary PostMeasurementTerminalization);
 
+/// <summary>
+/// Represents the ambiguity ProvenanceCategorySummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct AmbiguityProvenanceCategorySummary(
     TransitPublishProvenance Category,
     long Count,
@@ -76,12 +100,18 @@ internal readonly record struct AmbiguityProvenanceCategorySummary(
     double? FirstOccurrenceMsFromMeasurementStart,
     double? LastOccurrenceMsFromMeasurementStart);
 
+/// <summary>
+/// Represents the provenance ConnectionCategorySummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct ProvenanceConnectionCategorySummary(
     TransitPublishProvenance Category,
     long Count,
     long BeforeMeasurementEndCount,
     long AfterMeasurementEndCount);
 
+/// <summary>
+/// Represents the provenance ConnectionSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct ProvenanceConnectionSummary(
     string ConnectionId,
     int? SlotIndex,
@@ -89,10 +119,16 @@ internal readonly record struct ProvenanceConnectionSummary(
     string[] StatesObserved,
     ProvenanceConnectionCategorySummary[] Categories);
 
+/// <summary>
+/// Represents the ambiguity ProvenanceSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct AmbiguityProvenanceSummary(
     AmbiguityProvenanceCategorySummary[] Categories,
     ProvenanceConnectionSummary[] Connections);
 
+/// <summary>
+/// Represents the submission PumpInitiatingFaultSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct SubmissionPumpInitiatingFaultSummary(
     long FaultSequence,
     int SlotIndex,
@@ -123,17 +159,26 @@ internal readonly record struct SubmissionPumpInitiatingFaultSummary(
     string ProducerCompletionState,
     string DispatchersCompletedState);
 
+/// <summary>
+/// Represents the submission PumpFaultSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct SubmissionPumpFaultSummary(
     long TotalFaultCount,
     long InitiatingFaultCount,
     long CascadeFaultCount,
     SubmissionPumpInitiatingFaultSummary? InitiatingFault);
 
+/// <summary>
+/// Represents the P1 GreetingLifecycleEventSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct P1GreetingLifecycleEventSummary(
     string Event,
     long Tick,
     int InitializationAttemptId);
 
+/// <summary>
+/// Represents the P1 GreetingProvenanceSummary record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct P1GreetingProvenanceSummary(
     string ConnectionId,
     string Host,
@@ -157,6 +202,9 @@ internal readonly record struct P1GreetingProvenanceSummary(
     bool InitializationCancellationBeforeP1,
     P1GreetingLifecycleEventSummary[] LifecycleEvents);
 
+/// <summary>
+/// Represents the benchmark Result record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct BenchmarkResult(
     string BenchmarkBuildVersion,
     RuntimeExecutionIdentity RuntimeIdentity,

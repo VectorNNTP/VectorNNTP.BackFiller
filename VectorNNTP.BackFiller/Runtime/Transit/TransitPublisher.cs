@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit publisher behavior.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -25,45 +24,138 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed partial class TransitPublisher : IAsyncDisposable
     {
+        /// <summary>
+        /// Stores default per connection pipeline depth used by transit publisher.
+        /// </summary>
         private const int DefaultPerConnectionPipelineDepth = 8;
 
+        /// <summary>
+        /// Stores runtime options used by transit publisher.
+        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions;
+        /// <summary>
+        /// Stores time provider used by transit publisher.
+        /// </summary>
         private readonly TimeProvider _timeProvider;
+        /// <summary>
+        /// Supplies the logger used by transit publisher.
+        /// </summary>
         private readonly ILogger<TransitPublisher> _logger;
+        /// <summary>
+        /// Limits connection pool size for transit publisher.
+        /// </summary>
         private readonly int _connectionPoolSize;
+        /// <summary>
+        /// Stores per connection pipeline depth used by transit publisher.
+        /// </summary>
         private readonly int _perConnectionPipelineDepth;
+        /// <summary>
+        /// Configures connection response progress timeout for transit publisher.
+        /// </summary>
         private readonly TimeSpan? _connectionResponseProgressTimeout;
+        /// <summary>
+        /// Configures connection response progress check interval for transit publisher.
+        /// </summary>
         private readonly TimeSpan? _connectionResponseProgressCheckInterval;
 
+        /// <summary>
+        /// Stores global queue used by transit publisher.
+        /// </summary>
         private readonly GlobalTransitWorkQueue _globalQueue;
+        /// <summary>
+        /// Stores connections used by transit publisher.
+        /// </summary>
         private readonly TransitConnection[] _connections;
+        /// <summary>
+        /// Stores connection workers used by transit publisher.
+        /// </summary>
         private readonly Task[] _connectionWorkers;
+        /// <summary>
+        /// Stores reconnect gates used by transit publisher.
+        /// </summary>
         private readonly SemaphoreSlim[] _reconnectGates;
+        /// <summary>
+        /// Stores connection workers cancellation used by transit publisher.
+        /// </summary>
         private readonly CancellationTokenSource _connectionWorkersCancellation = new();
+        /// <summary>
+        /// Stores active work items used by transit publisher.
+        /// </summary>
         private readonly ConcurrentDictionary<long, TransitWorkItem> _activeWorkItems = new();
+        /// <summary>
+        /// Stores deferred connection disposals used by transit publisher.
+        /// </summary>
         private readonly ConcurrentDictionary<string, Task> _deferredConnectionDisposals = new(StringComparer.Ordinal);
+        /// <summary>
+        /// Stores timing collector used by transit publisher.
+        /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
 
+        /// <summary>
+        /// Stores next work item id used by transit publisher.
+        /// </summary>
         private long _nextWorkItemId;
+        /// <summary>
+        /// Stores total bytes transmitted for transit publisher.
+        /// </summary>
         private long _totalBytesTransmitted;
+        /// <summary>
+        /// Stores total bytes received for transit publisher.
+        /// </summary>
         private long _totalBytesReceived;
+        /// <summary>
+        /// Stores total articles submitted used by transit publisher.
+        /// </summary>
         private long _totalArticlesSubmitted;
+        /// <summary>
+        /// Stores total articles accepted used by transit publisher.
+        /// </summary>
         private long _totalArticlesAccepted;
+        /// <summary>
+        /// Stores total articles rejected used by transit publisher.
+        /// </summary>
         private long _totalArticlesRejected;
+        /// <summary>
+        /// Stores total articles ambiguous used by transit publisher.
+        /// </summary>
         private long _totalArticlesAmbiguous;
+        /// <summary>
+        /// Stores total articles failed used by transit publisher.
+        /// </summary>
         private long _totalArticlesFailed;
+        /// <summary>
+        /// Stores total articles canceled used by transit publisher.
+        /// </summary>
         private long _totalArticlesCanceled;
+        /// <summary>
+        /// Stores total reconnects used by transit publisher.
+        /// </summary>
         private long _totalReconnects;
 
+        /// <summary>
+        /// Stores initialized used by transit publisher.
+        /// </summary>
         private int _initialized;
+        /// <summary>
+        /// Stores dispose requested used by transit publisher.
+        /// </summary>
         private volatile bool _disposeRequested;
+        /// <summary>
+        /// Stores state used by transit publisher.
+        /// </summary>
         private volatile TransitConnectionState _state = TransitConnectionState.Disconnected;
 
+        /// <summary>
+        /// Handles trace stamp for transit publisher.
+        /// </summary>
         private static string TraceStamp()
         {
             return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
         }
 
+        /// <summary>
+        /// Handles transit publisher for transit publisher.
+        /// </summary>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -110,13 +202,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Stores current state used by transit publisher.
+        /// </summary>
         internal TransitConnectionState CurrentState => _state;
 
+        /// <summary>
+        /// Handles capture timing snapshot for transit publisher.
+        /// </summary>
         internal TransitTimingSnapshot? CaptureTimingSnapshot()
         {
             return _timingCollector?.CaptureSnapshot();
         }
 
+        /// <summary>
+        /// Handles capture connection diagnostics snapshot for transit publisher.
+        /// </summary>
         internal TransitPublisherConnectionDiagnosticsSnapshot CaptureConnectionDiagnosticsSnapshot()
         {
             ConnectionSlotSnapshot[] slots = new ConnectionSlotSnapshot[_connections.Length];
@@ -159,6 +260,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 QueueSnapshot: _globalQueue.CaptureSnapshot());
         }
 
+        /// <summary>
+        /// Handles capture transport snapshot for transit publisher.
+        /// </summary>
         internal TransitTransportSnapshot CaptureTransportSnapshot(int activeConnections, int outstandingSubmissions)
         {
             return new TransitTransportSnapshot(
@@ -173,6 +277,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 OutstandingSubmissions: outstandingSubmissions);
         }
 
+        /// <summary>
+        /// Handles initialize async for transit publisher.
+        /// </summary>
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -212,6 +319,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TransitionState(TransitConnectionState.Ready);
         }
 
+        /// <summary>
+        /// Handles publish async for transit publisher.
+        /// </summary>
         internal async ValueTask<TransitPublishResult> PublishAsync(
             string messageId,
             ReadOnlyMemory<byte> articlePayload,
@@ -317,23 +427,38 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             throw new OperationCanceledException("Transit publish canceled.", cancellationToken);
         }
 
+        /// <summary>
+        /// Handles mark submission pump fault measurement window for transit publisher.
+        /// </summary>
         internal static void MarkSubmissionPumpFaultMeasurementWindow(long measurementStartStopwatchTick, long measurementEndStopwatchTick, bool measurementBoundaryObserved)
         {
         }
 
+        /// <summary>
+        /// Handles mark submission pump fault producer completion for transit publisher.
+        /// </summary>
         internal static void MarkSubmissionPumpFaultProducerCompletion(bool allProducersCompleted)
         {
         }
 
+        /// <summary>
+        /// Handles mark submission pump fault dispatchers completed for transit publisher.
+        /// </summary>
         internal static void MarkSubmissionPumpFaultDispatchersCompleted(bool dispatchersCompleted)
         {
         }
 
+        /// <summary>
+        /// Handles capture submission pump fault telemetry snapshot for transit publisher.
+        /// </summary>
         internal static PumpFaultTelemetrySnapshot? CaptureSubmissionPumpFaultTelemetrySnapshot()
         {
             return null;
         }
 
+        /// <summary>
+        /// Handles capture submission pump fault counts for transit publisher.
+        /// </summary>
         internal static SubmissionPumpFaultCounts CaptureSubmissionPumpFaultCounts()
         {
             return new SubmissionPumpFaultCounts(
@@ -342,6 +467,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 CascadeFaultCount: 0);
         }
 
+        /// <summary>
+        /// Handles capture first p1 greeting provenance snapshot for transit publisher.
+        /// </summary>
         internal TransitConnection.P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
             foreach (TransitConnection connection in _connections)
@@ -357,6 +485,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return null;
         }
 
+        /// <summary>
+        /// Handles preempt submission processing async for transit publisher.
+        /// </summary>
         internal async Task PreemptSubmissionProcessingAsync(CancellationToken cancellationToken)
         {
             _globalQueue.FreezeAdmission();
@@ -396,6 +527,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Handles dispose async for transit publisher.
+        /// </summary>
         public async ValueTask DisposeAsync()
         {
             if (_disposeRequested)
@@ -515,6 +649,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TransitionState(TransitConnectionState.Disconnected);
         }
 
+        /// <summary>
+        /// Handles run connection worker async for transit publisher.
+        /// </summary>
         private async Task RunConnectionWorkerAsync(int slotIndex, CancellationToken cancellationToken)
         {
             Console.WriteLine($"[TRACE-RI-10] {TraceStamp()} Worker START slot={slotIndex}");
@@ -694,37 +831,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
-        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
-        {
-            if ((uint)slotIndex >= (uint)_connections.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Connection slot index is out of range.");
-            }
-
-            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
-            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                TransitConnection? current = _connections[slotIndex] ?? throw new InvalidOperationException("Cannot reconnect because no active connection exists for the slot.");
-                await RequeueClaimedAndOutstandingAfterFaultAsync(current, claimed: null, cancellationToken).ConfigureAwait(false);
-                _ = TrackDeferredConnectionDisposal(current);
-
-                if (_disposeRequested || cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
-
-                _ = Interlocked.Increment(ref _totalReconnects);
-                TransitConnection replacement = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
-                _connections[slotIndex] = replacement;
-            }
-            finally
-            {
-                _ = reconnectGate.Release();
-            }
-        }
-
+        /// <summary>
+        /// Handles requeue claimed and outstanding after fault async for transit publisher.
+        /// </summary>
         private async Task RequeueClaimedAndOutstandingAfterFaultAsync(
             TransitConnection connection,
             IReadOnlyList<TransitWorkItem>? claimed,
@@ -771,6 +880,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Console.WriteLine($"[TRACE-RI-25] {TraceStamp()} Requeue END connectionId={connection.ConnectionId} unresolvedCount={unresolvedById.Count}");
         }
 
+        /// <summary>
+        /// Handles requeue or terminalize failure async for transit publisher.
+        /// </summary>
         private async ValueTask RequeueOrTerminalizeFailureAsync(
             TransitWorkItem item,
             TransitWorkFailureClass failureClass,
@@ -837,6 +949,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Console.WriteLine($"[TRACE-RI-28] {TraceStamp()} RequeueOrTerminalize TERMINAL-FAILED workItemId={item.WorkItemId} state={item.State}");
         }
 
+        /// <summary>
+        /// Handles complete terminal for transit publisher.
+        /// </summary>
         private void CompleteTerminal(TransitWorkItem item, TransitPublishResult result, bool inFlightOwnershipAlreadyTransferred = false)
         {
             bool transitioned = item.TryTransitionToTerminal(result.Status, result.Provenance, out TransitWorkItemState priorState);
@@ -868,6 +983,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _ = item.TrySetCompletionResult(result);
         }
 
+        /// <summary>
+        /// Handles force terminalize remaining work async for transit publisher.
+        /// </summary>
         private async Task ForceTerminalizeRemainingWorkAsync()
         {
             TransitWorkItem[] remaining = [.. _activeWorkItems.Values];
@@ -925,6 +1043,46 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Handles reconnecting a faulted connection in a single slot and avoids replacing a fresh healthy replacement created concurrently.
+        /// </summary>
+        /// <param name="slotIndex">The connection slot whose current connection is being replaced.</param>
+        /// <param name="cancellationToken">Cancels the reconnect operation.</param>
+        /// <returns>A task that completes when the reconnect attempt finishes.</returns>
+        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
+        {
+            if (slotIndex < 0 || slotIndex >= _connections.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Reconnect slot index must reference a valid connection slot.");
+            }
+
+            TransitConnection? reconnectTarget = _connections[slotIndex];
+            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
+            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                TransitConnection? replacement = _connections[slotIndex];
+                if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
+                {
+                    Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} replacementConnectionId={replacement.ConnectionId}");
+                    return;
+                }
+
+                long reconnects = Interlocked.Increment(ref _totalReconnects);
+                Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync START slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} totalReconnects={reconnects}");
+                TransitConnection connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} ReconnectAsync READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
+                _connections[slotIndex] = connection;
+            }
+            finally
+            {
+                _ = reconnectGate.Release();
+            }
+        }
+
+        /// <summary>
+        /// Handles create and initialize connection async for transit publisher.
+        /// </summary>
         private async Task<TransitConnection> CreateAndInitializeConnectionAsync(int slotIndex, bool reconnecting, CancellationToken cancellationToken)
         {
             int consecutiveLifecycleInitializationFailures = 0;
@@ -1015,11 +1173,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Handles has outstanding admitted work for transit publisher.
+        /// </summary>
         private bool HasOutstandingAdmittedWork()
         {
             return _activeWorkItems.Values.Any(static item => !item.IsTerminal);
         }
 
+        /// <summary>
+        /// Handles has connection demand for transit publisher.
+        /// </summary>
         private bool HasConnectionDemand()
         {
             GlobalTransitWorkQueueSnapshot snapshot = _globalQueue.CaptureSnapshot();
@@ -1029,6 +1193,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 || HasOutstandingAdmittedWork();
         }
 
+        /// <summary>
+        /// Handles resolve initialization response progress timeout for transit publisher.
+        /// </summary>
         private TimeSpan? ResolveInitializationResponseProgressTimeout(bool reconnecting, bool hasOutstandingAdmittedWork)
         {
             return reconnecting || hasOutstandingAdmittedWork
@@ -1036,6 +1203,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 : _connectionResponseProgressTimeout;
         }
 
+        /// <summary>
+        /// Handles compute retry delay for transit publisher.
+        /// </summary>
         private static TimeSpan ComputeRetryDelay(int attempt)
         {
             int boundedAttempt = Math.Clamp(attempt, 1, 3);
@@ -1051,15 +1221,24 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return TimeSpan.FromMilliseconds(delayMs);
         }
 
+        /// <summary>
+        /// Handles transition state for transit publisher.
+        /// </summary>
         private void TransitionState(TransitConnectionState state)
         {
             _state = state;
         }
 
+        /// <summary>
+        /// Defines no connection demand exception and its transit publisher contract.
+        /// </summary>
         private sealed class NoConnectionDemandException : OperationCanceledException
         {
         }
 
+        /// <summary>
+        /// Handles is connection lifecycle submit failure for transit publisher.
+        /// </summary>
         private static bool IsConnectionLifecycleSubmitFailure(TransitConnection connection, Exception exception)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -1082,6 +1261,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return result;
         }
 
+        /// <summary>
+        /// Handles is initialization protocol failure for transit publisher.
+        /// </summary>
         private static bool IsInitializationProtocolFailure(TransitConnection connection, InvalidOperationException exception)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -1102,6 +1284,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 || message.Contains("STREAMING capability", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// Handles track deferred connection disposal for transit publisher.
+        /// </summary>
         private Task TrackDeferredConnectionDisposal(TransitConnection connection)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -1111,6 +1296,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return disposeTask;
         }
 
+        /// <summary>
+        /// Handles await deferred connection disposals async for transit publisher.
+        /// </summary>
         private async Task AwaitDeferredConnectionDisposalsAsync()
         {
             Task[] pending = [.. _deferredConnectionDisposals.Values];
@@ -1133,6 +1321,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _deferredConnectionDisposals.Clear();
         }
 
+        /// <summary>
+        /// Defines transit publisher connection diagnostics snapshot and its transit publisher contract.
+        /// </summary>
         internal sealed record TransitPublisherConnectionDiagnosticsSnapshot(
             int ConfiguredConnectionPoolSize,
             int ConfiguredPerConnectionPipelineDepth,
@@ -1145,6 +1336,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             PumpFaultTelemetrySnapshot? PumpFaultTelemetry,
             GlobalTransitWorkQueueSnapshot QueueSnapshot);
 
+        /// <summary>
+        /// Defines connection slot snapshot and its transit publisher contract.
+        /// </summary>
         internal sealed record ConnectionSlotSnapshot(
             int SlotIndex,
             bool HasCurrentConnection,
@@ -1157,11 +1351,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long WaitedForCompletionWhilePipelineFullCount,
             long FirstReachedConfiguredDepthTick);
 
+        /// <summary>
+        /// Defines connection diagnostics entry and its transit publisher contract.
+        /// </summary>
         internal sealed record ConnectionDiagnosticsEntry(
             int SlotIndex,
             string ConnectionId,
             TransitConnection.TransitConnectionDiagnosticsSnapshot Snapshot);
 
+        /// <summary>
+        /// Defines struct and its transit publisher contract.
+        /// </summary>
         internal readonly record struct SubmissionTraceRecord(
             string MessageId,
             long RemovedFromSubmissionChannelTick,
@@ -1170,6 +1370,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int InFlightCountAfterAdd,
             int WriteIntentQueueDepthAtPumpRead);
 
+        /// <summary>
+        /// Defines struct and its transit publisher contract.
+        /// </summary>
         internal readonly record struct PublishToConnectionTraceRecord(
             string MessageId,
             int SlotIndex,
@@ -1178,6 +1381,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long BeforeSubmitTakethisTick,
             long AfterSubmitTakethisTick);
 
+        /// <summary>
+        /// Defines pump fault telemetry snapshot and its transit publisher contract.
+        /// </summary>
         internal sealed record PumpFaultTelemetrySnapshot(
             ExceptionDispatchInfo? FirstFault,
             long FaultCount,
@@ -1212,53 +1418,125 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             bool IsTerminalizationMissingTaskInvariant,
             bool IsTerminalizationMissingTrackingInvariant)
         {
+            /// <summary>
+            /// Stores exception type used by transit publisher.
+            /// </summary>
             internal string ExceptionType => FaultType ?? string.Empty;
 
+            /// <summary>
+            /// Stores base exception type used by transit publisher.
+            /// </summary>
             internal string BaseExceptionType => FaultType ?? string.Empty;
 
+            /// <summary>
+            /// Stores hresult used by transit publisher.
+            /// </summary>
             internal int HResult => FirstFault?.SourceException.HResult ?? 0;
 
+            /// <summary>
+            /// Stores invalid operation message class used by transit publisher.
+            /// </summary>
             internal InvalidOperationFingerprintMessageClass InvalidOperationMessageClass => InvalidOperationClass;
 
+            /// <summary>
+            /// Stores sanitized first fault message class used by transit publisher.
+            /// </summary>
             internal SanitizedFirstFaultMessageClass SanitizedFirstFaultMessageClass => SanitizedMessageClass;
 
+            /// <summary>
+            /// Stores sanitized first fault message used by transit publisher.
+            /// </summary>
             internal string SanitizedFirstFaultMessage => FaultMessage ?? string.Empty;
 
+            /// <summary>
+            /// Stores full first fault stack trace used by transit publisher.
+            /// </summary>
             internal string FullFirstFaultStackTrace => FirstFault?.SourceException.ToString() ?? string.Empty;
 
+            /// <summary>
+            /// Stores top stack frame declaring type used by transit publisher.
+            /// </summary>
             internal static string TopStackFrameDeclaringType => string.Empty;
 
+            /// <summary>
+            /// Stores top stack frame method name used by transit publisher.
+            /// </summary>
             internal static string TopStackFrameMethodName => string.Empty;
 
+            /// <summary>
+            /// Stores milliseconds from measurement start used by transit publisher.
+            /// </summary>
             internal static long MillisecondsFromMeasurementStart => 0;
 
+            /// <summary>
+            /// Stores milliseconds from measurement end used by transit publisher.
+            /// </summary>
             internal static long MillisecondsFromMeasurementEnd => 0;
 
+            /// <summary>
+            /// Stores measurement state at fault used by transit publisher.
+            /// </summary>
             internal PumpFaultMeasurementState MeasurementStateAtFault => MeasurementState;
 
+            /// <summary>
+            /// Limits queued submission count for transit publisher.
+            /// </summary>
             internal static long QueuedSubmissionCount => 0;
 
+            /// <summary>
+            /// Limits in flight count for transit publisher.
+            /// </summary>
             internal static int InFlightCount => 0;
 
+            /// <summary>
+            /// Limits active submission count for transit publisher.
+            /// </summary>
             internal static int ActiveSubmissionCount => 0;
 
+            /// <summary>
+            /// Limits channel immediate available count for transit publisher.
+            /// </summary>
             internal static int? ChannelImmediateAvailableCount => 0;
 
+            /// <summary>
+            /// Limits active connection count for transit publisher.
+            /// </summary>
             internal static int ActiveConnectionCount => 0;
 
+            /// <summary>
+            /// Limits ready connection count for transit publisher.
+            /// </summary>
             internal static int ReadyConnectionCount => 0;
 
+            /// <summary>
+            /// Limits faulted connection count for transit publisher.
+            /// </summary>
             internal static int FaultedConnectionCount => 0;
 
+            /// <summary>
+            /// Limits reconnecting connection count for transit publisher.
+            /// </summary>
             internal static int ReconnectingConnectionCount => 0;
 
+            /// <summary>
+            /// Stores outstanding connection operations used by transit publisher.
+            /// </summary>
             internal static long OutstandingConnectionOperations => 0;
 
+            /// <summary>
+            /// Stores producer completion state used by transit publisher.
+            /// </summary>
             internal static ProducerCompletionState ProducerCompletionState => ProducerCompletionState.Unknown;
 
+            /// <summary>
+            /// Stores dispatchers completed state used by transit publisher.
+            /// </summary>
             internal static DispatchersCompletedState DispatchersCompletedState => DispatchersCompletedState.Unknown;
         }
 
+        /// <summary>
+        /// Defines transit publisher pump fault origin and its transit publisher contract.
+        /// </summary>
         internal enum TransitPublisherPumpFaultOrigin
         {
             CompleteInFlightSubmissionAsync = 0,
@@ -1272,6 +1550,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Unknown = 8,
         }
 
+        /// <summary>
+        /// Defines pump fault measurement state and its transit publisher contract.
+        /// </summary>
         internal enum PumpFaultMeasurementState
         {
             Unknown = 0,
@@ -1279,6 +1560,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             AfterMeasurementEnd = 2,
         }
 
+        /// <summary>
+        /// Defines invalid operation fingerprint message class and its transit publisher contract.
+        /// </summary>
         internal enum InvalidOperationFingerprintMessageClass
         {
             None = 0,
@@ -1291,6 +1575,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             NotInvalidOperationException = 7,
         }
 
+        /// <summary>
+        /// Defines producer completion state and its transit publisher contract.
+        /// </summary>
         internal enum ProducerCompletionState
         {
             Unknown = 0,
@@ -1298,6 +1585,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Complete = 2,
         }
 
+        /// <summary>
+        /// Defines dispatchers completed state and its transit publisher contract.
+        /// </summary>
         internal enum DispatchersCompletedState
         {
             Unknown = 0,
@@ -1305,11 +1595,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Complete = 2,
         }
 
+        /// <summary>
+        /// Defines struct and its transit publisher contract.
+        /// </summary>
         internal readonly record struct SubmissionPumpFaultCounts(
             long TotalFaultCount,
             long InitiatingFaultCount,
             long CascadeFaultCount);
 
+        /// <summary>
+        /// Defines sanitized first fault message class and its transit publisher contract.
+        /// </summary>
         internal enum SanitizedFirstFaultMessageClass
         {
             None = 0,

@@ -1,9 +1,10 @@
 // <copyright file="ArticleLineScannerTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Boundary and parity tests for SIMD/scalar line scanning in the yEnc subsystem.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for article line scanner, covering NNTP article and transport behavior.
+// Primary responsibility: documents the executable contracts covered by the article line scanner test suite.
 
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;
@@ -129,6 +130,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// <param name="buffer">Input buffer to scan.</param>
         /// <param name="startOffset">Scan start offset.</param>
         /// <returns>Detected terminator index or -1 when no terminator is found.</returns>
+        /// <summary>
+        /// Confirms the index of cr lf scalar reference behavior.
+        /// </summary>
+        /// <returns>The value returned by the index of cr lf scalar reference helper.</returns>
         private static int IndexOfCrLfScalarReference(ReadOnlySpan<byte> buffer, int startOffset)
         {
             if ((uint)startOffset >= (uint)buffer.Length)
@@ -156,6 +161,10 @@ namespace VectorNNTP.Backfiller.Tests
         /// Builds deterministic input that stresses CR/LF patterns across SIMD block boundaries.
         /// </summary>
         /// <returns>Boundary-focused test buffer.</returns>
+        /// <summary>
+        /// Confirms the build boundary heavy buffer behavior.
+        /// </summary>
+        /// <returns>The value returned by the build boundary heavy buffer helper.</returns>
         private static byte[] BuildBoundaryHeavyBuffer()
         {
             List<byte> data = new(768);

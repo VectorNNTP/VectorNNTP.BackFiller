@@ -17,7 +17,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     internal sealed partial class ArticleWorkProcessor : IArticleWorkProcessor
     {
+        /// <summary>
+        /// Stores retriever used by article work processor.
+        /// </summary>
         private readonly IBackboneArticleRetriever _retriever;
+        /// <summary>
+        /// Supplies the logger used by article work processor.
+        /// </summary>
         private readonly ILogger<ArticleWorkProcessor> _logger;
 
         /// <summary>
@@ -109,6 +115,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Maps an NNTP acquisition result to its processing outcome and RabbitMQ disposition recommendation.
+        /// </summary>
+        /// <param name="result">Acquisition result to classify.</param>
+        /// <returns>The externally reported outcome and recommended delivery disposition.</returns>
         private static (ArticleWorkProcessingOutcome Outcome, ArticleWorkDispositionRecommendation Disposition) Classify(NntpArticleGrabberResult result)
         {
             return result.FailureCode switch

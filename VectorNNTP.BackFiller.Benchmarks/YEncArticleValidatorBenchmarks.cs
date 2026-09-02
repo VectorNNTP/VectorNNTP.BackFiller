@@ -1,15 +1,15 @@
 // <copyright file="YEncArticleValidatorBenchmarks.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Benchmarks / Articles / YEnc
 // Focused BenchmarkDotNet coverage for yEnc validator correctness-path and hostile-input-path throughput/allocation baselines.
 
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
-using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 
 namespace VectorNNTP.BackFiller.Benchmarks

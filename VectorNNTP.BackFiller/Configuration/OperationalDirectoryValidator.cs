@@ -1,3 +1,9 @@
+// <copyright file="OperationalDirectoryValidator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: operational directory validator in the vector nntp.back filler configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // OperationalDirectoryValidator.cs -- Startup filesystem validation for operational directories.
 //
 // Validates BackFiller:DirLogs and BackFiller:DirCerts before host startup continues.

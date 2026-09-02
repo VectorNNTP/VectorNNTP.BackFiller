@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Commands
+// Implements the operational command parser behavior.
 
 using System.Collections.Frozen;
 
@@ -15,6 +14,9 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     /// </summary>
     internal static class OperationalCommandParser
     {
+        /// <summary>
+        /// Stores command map used by operational command parser.
+        /// </summary>
         private static readonly FrozenDictionary<string, OperationalCommand> CommandMap =
             new Dictionary<string, OperationalCommand>(StringComparer.OrdinalIgnoreCase)
             {

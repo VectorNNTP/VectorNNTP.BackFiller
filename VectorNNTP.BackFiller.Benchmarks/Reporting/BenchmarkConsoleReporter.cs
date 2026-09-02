@@ -1,7 +1,19 @@
+// <copyright file="BenchmarkConsoleReporter.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Reporting/BenchmarkConsoleReporter: formats benchmark measurements and topology details for operators and artifacts.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the benchmark ConsoleReporter class used by the benchmark or regression gate.
+/// </summary>
 internal static class BenchmarkConsoleReporter
 {
+    /// <summary>
+    /// Implements the print FinalReport contract.
+    /// </summary>
     internal static void PrintFinalReport(BenchmarkResult result, TransitBenchmarkConfig config)
     {
         Console.WriteLine($"Benchmark Build Version: {result.BenchmarkBuildVersion}");

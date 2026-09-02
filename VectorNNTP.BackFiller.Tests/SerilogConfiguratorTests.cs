@@ -1,11 +1,10 @@
 // <copyright file="SerilogConfiguratorTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for serilog configurator, covering configuration, runtime, and failure-handling contracts exercised by the tests.
+// Primary responsibility: documents the executable contracts covered by the serilog configurator test suite.
 
 using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Startup.Logging;
@@ -13,8 +12,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Confirms the serilog configurator tests behavior.
+    /// </summary>
     public sealed class SerilogConfiguratorTests
     {
+        /// <summary>
+        /// Confirms the parse microsoft log level for testing when configured value provided returns expected level behavior.
+        /// </summary>
         [Theory]
         [InlineData("Verbose", LogLevel.Trace)]
         [InlineData("verbose", LogLevel.Trace)]

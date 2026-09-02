@@ -1,9 +1,10 @@
 // <copyright file="UtcTimestampEnricherTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / Startup / Logging
-// Unit tests that verify UTC timestamp enrichment contracts used by Serilog sink templates.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for utc timestamp enricher, covering configuration, runtime, and failure-handling contracts exercised by the tests.
+// Primary responsibility: documents the executable contracts covered by the utc timestamp enricher test suite.
 
 using Serilog.Core;
 using Serilog.Events;
@@ -55,6 +56,10 @@ namespace VectorNNTP.Backfiller.Tests
             /// <param name="value">Property value.</param>
             /// <param name="destructureObjects">Destructuring hint.</param>
             /// <returns>Log event property instance.</returns>
+            /// <summary>
+            /// Confirms the create property behavior.
+            /// </summary>
+            /// <returns>The value returned by the create property helper.</returns>
             public LogEventProperty CreateProperty(string name, object? value, bool destructureObjects = false)
             {
                 return new LogEventProperty(name, new ScalarValue(value));

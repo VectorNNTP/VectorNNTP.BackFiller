@@ -15,9 +15,21 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </summary>
     internal sealed partial class LetsEncryptCertificateRenewalService : BackgroundService
     {
+        /// <summary>
+        /// Stores runtime options used by lets encrypt certificate renewal service.
+        /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions;
+        /// <summary>
+        /// Stores provisioning service used by lets encrypt certificate renewal service.
+        /// </summary>
         private readonly BackFillerCertificateProvisioningService _provisioningService;
+        /// <summary>
+        /// Stores shutdown coordinator used by lets encrypt certificate renewal service.
+        /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
+        /// <summary>
+        /// Supplies the logger used by lets encrypt certificate renewal service.
+        /// </summary>
         private readonly ILogger<LetsEncryptCertificateRenewalService> _logger;
 
         /// <summary>
@@ -82,6 +94,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Handles compute next delay for lets encrypt certificate renewal service.
+        /// </summary>
         private static TimeSpan ComputeNextDelay(BackFillerLetsEncryptRuntimeOptions options)
         {
             double hours = options.RenewalCheckIntervalHours;

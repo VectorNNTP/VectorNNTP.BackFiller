@@ -1,10 +1,30 @@
+// <copyright file="MeasurementRunCoordinator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/MeasurementRunCoordinator: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks.Execution;
 
+/// <summary>
+/// Coordinates one bounded measurement interval and its post-measurement drain.
+/// </summary>
 internal static class MeasurementRunCoordinator
 {
+    /// <summary>
+    /// Runs the configured workload, then drains outstanding work before returning its result.
+    /// </summary>
+    /// <param name="publisher">Transit publisher used by dispatch workers.</param>
+    /// <param name="config">Validated benchmark configuration.</param>
+    /// <param name="workload">Prepared workload supplied to the measurement engine.</param>
+    /// <param name="runtimeIdentity">Captured runtime identity recorded in the result.</param>
+    /// <param name="benchmarkBuildVersion">Build version recorded in the result.</param>
+    /// <param name="cancellationToken">Token that requests cancellation of the measurement.</param>
+    /// <param name="enableForensicDiagnostics">Whether to collect additional diagnostic snapshots.</param>
+    /// <returns>The completed measurement result.</returns>
     internal static async Task<BenchmarkResult> RunAsync(
         TransitPublisher publisher,
         TransitBenchmarkConfig config,

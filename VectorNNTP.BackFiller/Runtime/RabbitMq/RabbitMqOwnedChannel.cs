@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq owned channel behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
@@ -16,6 +15,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </remarks>
     internal sealed class RabbitMqOwnedChannel : IAsyncDisposable
     {
+        /// <summary>
+        /// Stores channel used by rabbit mq owned channel.
+        /// </summary>
         private readonly IRabbitMqChannel _channel;
 
         /// <summary>
@@ -36,17 +38,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Gets the logical owner identifier for this channel lease.
+        /// Returns the logical owner identifier for this channel lease.
         /// </summary>
         internal string Owner { get; }
 
         /// <summary>
-        /// Gets the owned RabbitMQ channel adapter.
+        /// Returns the owned RabbitMQ channel adapter.
         /// </summary>
         internal IRabbitMqChannel Channel => _channel;
 
         /// <summary>
-        /// Gets the RabbitMQ connection generation associated with this channel lease.
+        /// Returns the RabbitMQ connection generation associated with this channel lease.
         /// </summary>
         internal long ConnectionGeneration { get; }
 

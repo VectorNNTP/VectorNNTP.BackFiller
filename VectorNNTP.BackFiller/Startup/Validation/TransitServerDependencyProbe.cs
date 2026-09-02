@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Validation
+// Implements the transit server dependency probe behavior.
 
 using System.Net.Security;
 using System.Net.Sockets;
@@ -16,6 +15,9 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
+    /// <summary>
+    /// Defines transit server dependency probe and its transit server dependency probe contract.
+    /// </summary>
     internal static class TransitServerDependencyProbe
     {
         /// <summary>
@@ -178,6 +180,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             }
         }
 
+        /// <summary>
+        /// Handles read capabilities async for transit server dependency probe.
+        /// </summary>
         private static async Task<TransitCapabilitySnapshot> ReadCapabilitiesAsync(
             StreamReader reader,
             StreamWriter writer,
@@ -200,6 +205,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             return TransitProtocolParser.ParseCapabilitiesResponse(capabilityLines);
         }
 
+        /// <summary>
+        /// Handles write nntp command async for transit server dependency probe.
+        /// </summary>
         private static async Task WriteNntpCommandAsync(
             StreamWriter writer,
             string command,
@@ -214,11 +222,17 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Handles create reader for transit server dependency probe.
+        /// </summary>
         private static StreamReader CreateReader(Stream stream)
         {
             return new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
         }
 
+        /// <summary>
+        /// Handles create writer for transit server dependency probe.
+        /// </summary>
         private static StreamWriter CreateWriter(Stream stream)
         {
             return new StreamWriter(stream, Encoding.ASCII, leaveOpen: true)
@@ -228,6 +242,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             };
         }
 
+        /// <summary>
+        /// Handles create strict tls stream for transit server dependency probe.
+        /// </summary>
         private static SslStream CreateStrictTlsStream(Stream innerStream, bool leaveInnerStreamOpen)
         {
             return new SslStream(
@@ -240,6 +257,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 });
         }
 
+        /// <summary>
+        /// Handles authenticate tls async for transit server dependency probe.
+        /// </summary>
         private static async Task AuthenticateTlsAsync(SslStream sslStream, string host, CancellationToken cancellationToken)
         {
             SslClientAuthenticationOptions authOptions = new()

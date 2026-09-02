@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit publish contracts behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
@@ -22,6 +21,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         Canceled,
     }
 
+    /// <summary>
+    /// Defines transit publish provenance and its transit publish contracts contract.
+    /// </summary>
     internal enum TransitPublishProvenance
     {
         Response400,

@@ -1,6 +1,12 @@
+// <copyright file="ConnectionStringsOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: connection strings options in the vector nntp.back filler configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // ConnectionStringsOptions.cs -- Strongly-typed configuration for database connection strings.
 //
-// Provides validation for ConnectionStrings:GrabberDB according to specification 3.15.1.
+// Supplies validation for ConnectionStrings:GrabberDB according to specification 3.15.1.
 //
 // Validation rules:
 //   - Must be present and non-empty

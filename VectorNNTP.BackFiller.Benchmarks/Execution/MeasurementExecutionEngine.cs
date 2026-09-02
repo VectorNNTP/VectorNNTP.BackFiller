@@ -1,10 +1,22 @@
+// <copyright file="MeasurementExecutionEngine.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/MeasurementExecutionEngine: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the measurement ExecutionEngine class used by the benchmark or regression gate.
+/// </summary>
 internal static partial class MeasurementExecutionEngine
 {
+    /// <summary>
+    /// Implements the producer LoopAsync contract.
+    /// </summary>
     internal static async Task ProducerLoopAsync(
         BoundedArticleQueue queue,
         MeasurementMetrics metrics,
@@ -59,6 +71,9 @@ internal static partial class MeasurementExecutionEngine
         }
     }
 
+    /// <summary>
+    /// Implements the dispatch LoopAsync contract.
+    /// </summary>
     internal static async Task DispatchLoopAsync(
         BoundedArticleQueue queue,
         TransitPublisher publisher,
@@ -143,6 +158,9 @@ internal static partial class MeasurementExecutionEngine
             dispatcherExitQueuedWriteIntents);
     }
 
+    /// <summary>
+    /// Implements the telemetry LoopAsync contract.
+    /// </summary>
     internal static async Task TelemetryLoopAsync(
         BoundedArticleQueue queue,
         MeasurementMetrics metrics,

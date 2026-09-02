@@ -1,3 +1,9 @@
+// <copyright file="TransitServerStressRunner.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// TransitServerStressRunner: drives bounded transit-server stress scenarios and reports their measurements.
+
 using System.Buffers;
 using System.Globalization;
 using System.Net;
@@ -10,22 +16,49 @@ using VectorNNTP.BackFiller.Benchmarks.Execution;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the transit ServerStressRunner class used by the benchmark or regression gate.
+/// </summary>
 internal static class TransitServerStressRunner
 {
+    /// <summary>
+    /// Gets or sets the default ArticleTargetBytes.
+    /// </summary>
     private const int DefaultArticleTargetBytes = 1 * 1024 * 1024;
+    /// <summary>
+    /// Gets or sets the default WarmupSeconds.
+    /// </summary>
     private const int DefaultWarmupSeconds = 10;
+    /// <summary>
+    /// Gets or sets the validation Seconds.
+    /// </summary>
     private const int ValidationSeconds = 10;
+    /// <summary>
+    /// Gets or sets the default GeneratorMeasurementSeconds.
+    /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;
 
+    /// <summary>
+    /// Implements the runtime Identity contract.
+    /// </summary>
     private static readonly RuntimeExecutionIdentity RuntimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
+    /// <summary>
+    /// Gets or sets the benchmark BuildVersion.
+    /// </summary>
     private static readonly string BenchmarkBuildVersion = RuntimeIdentity.AssemblyFileVersion ?? RuntimeIdentity.RuntimeAssemblyVersion;
 
+    /// <summary>
+    /// Runs Async.
+    /// </summary>
     internal static async Task RunAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(stressDuration, BenchmarkMode.Full, cliOptions);
         await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Runs ValidationAsync.
+    /// </summary>
     internal static async Task RunValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(ValidationSeconds), BenchmarkMode.Validation, cliOptions);
@@ -67,12 +100,18 @@ internal static class TransitServerStressRunner
         await VerifyBenchmarkConnectedToFakeServerAsync(fakeServer.Port, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Runs SaturationAsync.
+    /// </summary>
     internal static async Task RunSaturationAsync(TimeSpan stressDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(stressDuration, BenchmarkMode.Saturation, cliOptions);
         await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Runs GeneratorWorkerSweepAsync.
+    /// </summary>
     internal static async Task RunGeneratorWorkerSweepAsync(CancellationToken cancellationToken = default)
     {
         int[] workerCounts = [1, 2, 4, 8, 16, 32];
@@ -99,6 +138,9 @@ internal static class TransitServerStressRunner
         }
     }
 
+    /// <summary>
+    /// Runs Forensic32 WorkerAsync.
+    /// </summary>
     internal static async Task RunForensic32WorkerAsync(CancellationToken cancellationToken = default)
     {
         TransitBenchmarkCliOptions options = new(
@@ -117,11 +159,17 @@ internal static class TransitServerStressRunner
         await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Runs GeneratorBaselineAsync.
+    /// </summary>
     internal static async Task RunGeneratorBaselineAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         await GeneratorBaselineRunner.RunAsync(cliOptions, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Runs SingleTraceAsync.
+    /// </summary>
     internal static async Task RunSingleTraceAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         await TransitSingleTraceRunner.RunAsync(
@@ -132,6 +180,9 @@ internal static class TransitServerStressRunner
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Runs CoreAsync.
+    /// </summary>
     private static Task RunCoreAsync(TransitBenchmarkConfig config, CancellationToken cancellationToken)
     {
         return TransitBenchmarkOrchestrator.RunCoreAsync(
@@ -164,6 +215,9 @@ internal static class TransitServerStressRunner
         Console.WriteLine($"FakeServer probe greeting prefix: {greeting.TrimEnd('\0', '\r', '\n')}");
     }
 
+    /// <summary>
+    /// Runs MeasurementAsync.
+    /// </summary>
     private static async Task<BenchmarkResult> RunMeasurementAsync(
         TransitPublisher publisher,
         TransitBenchmarkConfig config,
@@ -181,6 +235,9 @@ internal static class TransitServerStressRunner
             enableForensicDiagnostics).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Creates TransitPublisherLogger.
+    /// </summary>
     private static ILogger<TransitPublisher> CreateTransitPublisherLogger(ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
@@ -189,6 +246,9 @@ internal static class TransitServerStressRunner
         return new TransitPublisherBenchmarkLogger(baseLogger);
     }
 
+    /// <summary>
+    /// Writes StructuredResultArtifacts.
+    /// </summary>
     private static void WriteStructuredResultArtifacts(BenchmarkResult result, TransitBenchmarkConfig config)
     {
         BenchmarkArtifactWriter.WriteStructuredResultArtifacts(
@@ -199,4 +259,4 @@ internal static class TransitServerStressRunner
             static artifact => artifact.ToCsv());
     }
 
-    }
+}

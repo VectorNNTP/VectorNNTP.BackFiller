@@ -1,11 +1,10 @@
 // <copyright file="ConfigurationFingerprintTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for configuration fingerprint, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the configuration fingerprint test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
@@ -47,6 +46,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <item><description>SanitizeConnectionString() is called on the actual connection string value</description></item>
         /// </list>
         /// </remarks>
+        /// <summary>
+        /// Confirms the when connection strings section then value bearing entry is detected and sanitized behavior.
+        /// </summary>
         [Fact]
         public void WhenConnectionStringsSection_ThenValueBearingEntryIsDetectedAndSanitized()
         {
@@ -166,6 +168,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>Tests the allowlist approach: only known-safe operational properties are retained,
         /// all others (including all credential types) are excluded.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the sanitize connection string removes all credential properties behavior.
+        /// </summary>
+        /// <param name="connectionString">The connection string used by this test scenario.</param>
+        /// <param name="credentialProperty">The credential property used by this test scenario.</param>
         [Theory]
         [InlineData("Server=db01;Password=secret", "Password")]
         [InlineData("Server=db01;Pwd=secret", "Pwd")]
@@ -207,6 +214,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <item><description>Security modes: Encrypt, TrustServerCertificate, Integrated Security</description></item>
         /// </list>
         /// </remarks>
+        /// <summary>
+        /// Confirms the sanitize connection string preserves operational properties behavior.
+        /// </summary>
         [Fact]
         public void SanitizeConnectionString_PreservesOperationalProperties()
         {
@@ -251,12 +261,17 @@ namespace VectorNNTP.Backfiller.Tests
         }
 
         /// <summary>
-        /// Verifies the critical edge case: quoted password with embedded semicolons is properly parsed and removed.
+        /// Confirms sanitize connection string  handles quoted credentials with special characters behavior.
         /// </summary>
         /// <remarks>
         /// <para>This is the exact edge case that naive string splitting would handle incorrectly.
         /// DbConnectionStringBuilder properly parses: Password="abc;123" as a single value.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the sanitize connection string handles quoted credentials with special characters behavior.
+        /// </summary>
+        /// <param name="connectionString">The connection string used by this test scenario.</param>
+        /// <param name="secretValue">The secret value used by this test scenario.</param>
         [Theory]
         [InlineData("Server=db01;Password=\"abc;123\";Database=NNTP", "abc;123")]
         [InlineData("Server=db01;Password=\"value=with=equals\";Database=NNTP", "value=with=equals")]
@@ -283,6 +298,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>Canonicalization ensures fingerprint stability: operationally equivalent connection strings
         /// should produce identical fingerprints regardless of property ordering.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the sanitize connection string normalizes property ordering behavior.
+        /// </summary>
         [Fact]
         public void SanitizeConnectionString_NormalizesPropertyOrdering()
         {
@@ -311,6 +329,11 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>Alias normalization ensures: "Server=db01" ≡ "Data Source=db01" ≡ "Host=db01"</para>
         /// <para>This prevents false fingerprint differences when administrators use different syntax.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the sanitize connection string normalizes aliases to canonical form behavior.
+        /// </summary>
+        /// <param name="canonical">The canonical used by this test scenario.</param>
+        /// <param name="aliasForm">The alias form used by this test scenario.</param>
         [Theory]
         [InlineData("Server=db01", "Data Source=db01")]
         [InlineData("Server=db01", "DataSource=db01")]
@@ -352,6 +375,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// connection strings with different syntax, ordering, and passwords. The fingerprint
         /// should be identical if the effective endpoint configuration matches.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the sanitize connection string combines alias normalization and ordering behavior.
+        /// </summary>
         [Fact]
         public void SanitizeConnectionString_CombinesAliasNormalizationAndOrdering()
         {
@@ -472,6 +498,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// where "v1:" is the algorithm version identifier.</para>
         /// <para>This test ensures the version is present and properly formatted.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint includes version prefix behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_IncludesVersionPrefix()
         {
@@ -685,6 +714,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>Usernames are operational configuration (not secrets), so changes should affect the fingerprint.
         /// This distinguishes them from passwords/tokens which are true secrets.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint username changes produce different fingerprint behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_UsernameChangesProduceDifferentFingerprint()
         {
@@ -719,6 +751,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>Dictionary insertion order shouldn't matter - the canonical format sorts keys
         /// to ensure deterministic output regardless of how configuration sources are ordered.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint ordering does not affect fingerprint behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_OrderingDoesNotAffectFingerprint()
         {
@@ -768,6 +803,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// → Fingerprints differ (based on different other config)</description></item>
         /// </list>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint malformed connection strings are excluded behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_MalformedConnectionStrings_AreExcluded()
         {
@@ -832,6 +870,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para>This prevents a subtle bug where malformed strings would be treated as "empty" and accidentally
         /// match anything.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint malformed vs valid produce different fingerprints behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_MalformedVsValid_ProduceDifferentFingerprints()
         {
@@ -883,6 +924,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// return properties in original input order, causing semantically identical connection strings
         /// to produce different fingerprints.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint connection string property ordering does not matter behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_ConnectionStringPropertyOrderingDoesNotMatter()
         {
@@ -936,6 +980,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// for example) without causing false fingerprint mismatches. The fingerprint reflects operational
         /// configuration identity, not syntactic representation.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the calculate configuration fingerprint connection string aliases are equivalent behavior.
+        /// </summary>
         [Fact]
         public void CalculateConfigurationFingerprint_ConnectionStringAliasesAreEquivalent()
         {
@@ -1106,6 +1153,9 @@ namespace VectorNNTP.Backfiller.Tests
         /// <para><b>TryGetPassword() MUST NEVER be called in fingerprinting code.</b></para>
         /// <para>Fingerprints intentionally exclude passwords. If this test fails, a security violation was introduced.</para>
         /// </remarks>
+        /// <summary>
+        /// Confirms the fingerprint code never calls try get password behavior.
+        /// </summary>
         [Fact]
         public void FingerprintCode_NeverCallsTryGetPassword()
         {
@@ -1136,6 +1186,14 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain("TryGetPassword", sourceCode, StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// Confirms the resolve configuration fingerprint source path behavior.
+        /// </summary>
+        /// <returns>The value returned by the resolve configuration fingerprint source path helper.</returns>
+        /// <summary>
+        /// Confirms the resolve configuration fingerprint source path behavior.
+        /// </summary>
+        /// <returns>The value returned by the resolve configuration fingerprint source path helper.</returns>
         private static string ResolveConfigurationFingerprintSourcePath()
         {
             const string SolutionMarker = "VectorNNTP.BackFiller.slnx";

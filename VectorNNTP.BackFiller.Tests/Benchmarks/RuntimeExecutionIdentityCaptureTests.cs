@@ -1,11 +1,10 @@
 // <copyright file="RuntimeExecutionIdentityCaptureTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for runtime execution identity capture, covering configuration, runtime, and failure-handling contracts exercised by the tests.
+// Primary responsibility: documents the executable contracts covered by the runtime execution identity capture test suite.
 
 using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Transit;

@@ -1,90 +1,312 @@
+// <copyright file="MeasurementMetricsCollector.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/MeasurementMetricsCollector: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the provenance OccurrenceBounds record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct ProvenanceOccurrenceBounds(long FirstTick, long LastTick);
 
+/// <summary>
+/// Represents the measurement Metrics class used by the benchmark or regression gate.
+/// </summary>
 internal sealed class MeasurementMetrics
 {
+    /// <summary>
+    /// Gets or sets the _generatedCount.
+    /// </summary>
     private long _generatedCount;
+    /// <summary>
+    /// Gets or sets the _generatedBytes.
+    /// </summary>
     private long _generatedBytes;
+    /// <summary>
+    /// Gets or sets the _admittedCount.
+    /// </summary>
     private long _admittedCount;
+    /// <summary>
+    /// Gets or sets the _admittedBytes.
+    /// </summary>
     private long _admittedBytes;
+    /// <summary>
+    /// Gets or sets the _acceptedCount.
+    /// </summary>
     private long _acceptedCount;
+    /// <summary>
+    /// Gets or sets the _acceptedBytes.
+    /// </summary>
     private long _acceptedBytes;
+    /// <summary>
+    /// Gets or sets the _rejectedCount.
+    /// </summary>
     private long _rejectedCount;
+    /// <summary>
+    /// Gets or sets the _ambiguousCount.
+    /// </summary>
     private long _ambiguousCount;
+    /// <summary>
+    /// Gets or sets the _ambiguousOnlyCount.
+    /// </summary>
     private long _ambiguousOnlyCount;
+    /// <summary>
+    /// Gets or sets the _failedCount.
+    /// </summary>
     private long _failedCount;
+    /// <summary>
+    /// Gets or sets the _unavailableCount.
+    /// </summary>
     private long _unavailableCount;
+    /// <summary>
+    /// Gets or sets the _canceledCount.
+    /// </summary>
     private long _canceledCount;
+    /// <summary>
+    /// Gets or sets the _completedCount.
+    /// </summary>
     private long _completedCount;
 
+    /// <summary>
+    /// Gets or sets the _measurementStartStopwatchTick.
+    /// </summary>
     private long _measurementStartStopwatchTick;
+    /// <summary>
+    /// Gets or sets the _measurementEndStopwatchTick.
+    /// </summary>
     private long _measurementEndStopwatchTick;
+    /// <summary>
+    /// Gets or sets the _measurementEndUtcTicks.
+    /// </summary>
     private long _measurementEndUtcTicks;
+    /// <summary>
+    /// Gets or sets the _measurementBoundarySet.
+    /// </summary>
     private long _measurementBoundarySet;
 
+    /// <summary>
+    /// Gets or sets the _provenanceAggregates.
+    /// </summary>
     private readonly ProvenanceAggregate[] _provenanceAggregates = new ProvenanceAggregate[Enum.GetValues<TransitPublishProvenance>().Length];
+    /// <summary>
+    /// Runs the _provenanceConnectionGate benchmark scenario.
+    /// </summary>
     private readonly object _provenanceConnectionGate = new();
+    /// <summary>
+    /// Gets or sets the _provenanceByConnection.
+    /// </summary>
     private readonly Dictionary<string, ProvenanceConnectionAggregate> _provenanceByConnection = [];
 
+    /// <summary>
+    /// Gets or sets the _blockedTicks.
+    /// </summary>
     private long _blockedTicks;
+    /// <summary>
+    /// Gets or sets the _generationTicks.
+    /// </summary>
     private long _generationTicks;
+    /// <summary>
+    /// Gets or sets the _otherActiveTicks.
+    /// </summary>
     private long _otherActiveTicks;
+    /// <summary>
+    /// Gets or sets the _activeTicks.
+    /// </summary>
     private long _activeTicks;
+    /// <summary>
+    /// Gets or sets the _loopTicks.
+    /// </summary>
     private long _loopTicks;
 
+    /// <summary>
+    /// Gets or sets the _peakQueueDepth.
+    /// </summary>
     private long _peakQueueDepth;
+    /// <summary>
+    /// Gets or sets the _peakQueueBytes.
+    /// </summary>
     private long _peakQueueBytes;
+    /// <summary>
+    /// Gets or sets the _peakInFlight.
+    /// </summary>
     private long _peakInFlight;
+    /// <summary>
+    /// Gets or sets the _peakActualPending.
+    /// </summary>
     private long _peakActualPending;
+    /// <summary>
+    /// Gets or sets the _minQueueDepth.
+    /// </summary>
     private long _minQueueDepth = long.MaxValue;
+    /// <summary>
+    /// Gets or sets the _minQueueBytes.
+    /// </summary>
     private long _minQueueBytes = long.MaxValue;
+    /// <summary>
+    /// Gets or sets the _queueDepthSampleCount.
+    /// </summary>
     private long _queueDepthSampleCount;
+    /// <summary>
+    /// Gets or sets the _queueDepthSampleSum.
+    /// </summary>
     private long _queueDepthSampleSum;
+    /// <summary>
+    /// Gets or sets the _queueBytesSampleSum.
+    /// </summary>
     private long _queueBytesSampleSum;
+    /// <summary>
+    /// Gets or sets the _producerQueueWaitTicks.
+    /// </summary>
     private long _producerQueueWaitTicks;
 
+    /// <summary>
+    /// Gets or sets the _dispatchQueueWaitTicksTotal.
+    /// </summary>
     private long _dispatchQueueWaitTicksTotal;
+    /// <summary>
+    /// Gets or sets the _dispatchQueueWaitTicksMax.
+    /// </summary>
     private long _dispatchQueueWaitTicksMax;
+    /// <summary>
+    /// Gets or sets the _dispatchQueueWaitSampleCount.
+    /// </summary>
     private long _dispatchQueueWaitSampleCount;
+    /// <summary>
+    /// Gets or sets the _publishTicksTotal.
+    /// </summary>
     private long _publishTicksTotal;
+    /// <summary>
+    /// Gets or sets the _lifecycleTicksTotal.
+    /// </summary>
     private long _lifecycleTicksTotal;
+    /// <summary>
+    /// Gets or sets the _publishSampleCount.
+    /// </summary>
     private long _publishSampleCount;
+    /// <summary>
+    /// Gets or sets the _publishTicksMin.
+    /// </summary>
     private long _publishTicksMin = long.MaxValue;
+    /// <summary>
+    /// Gets or sets the _publishTicksMax.
+    /// </summary>
     private long _publishTicksMax;
 
+    /// <summary>
+    /// Gets or sets the _socketWriteTicksTotal.
+    /// </summary>
     private long _socketWriteTicksTotal;
+    /// <summary>
+    /// Gets or sets the _socketWriteTicksMax.
+    /// </summary>
     private long _socketWriteTicksMax;
+    /// <summary>
+    /// Gets or sets the _socketWriteSampleCount.
+    /// </summary>
     private long _socketWriteSampleCount;
+    /// <summary>
+    /// Gets or sets the _responseWaitTicksTotal.
+    /// </summary>
     private long _responseWaitTicksTotal;
+    /// <summary>
+    /// Gets or sets the _responseWaitTicksMax.
+    /// </summary>
     private long _responseWaitTicksMax;
+    /// <summary>
+    /// Gets or sets the _responseWaitSampleCount.
+    /// </summary>
     private long _responseWaitSampleCount;
+    /// <summary>
+    /// Gets or sets the _parseCorrelationTicksTotal.
+    /// </summary>
     private long _parseCorrelationTicksTotal;
+    /// <summary>
+    /// Gets or sets the _parseCorrelationTicksMax.
+    /// </summary>
     private long _parseCorrelationTicksMax;
+    /// <summary>
+    /// Gets or sets the _parseCorrelationSampleCount.
+    /// </summary>
     private long _parseCorrelationSampleCount;
+    /// <summary>
+    /// Gets or sets the _totalPublishTicksTotal.
+    /// </summary>
     private long _totalPublishTicksTotal;
+    /// <summary>
+    /// Gets or sets the _totalPublishTicksMax.
+    /// </summary>
     private long _totalPublishTicksMax;
+    /// <summary>
+    /// Gets or sets the _totalPublishSampleCount.
+    /// </summary>
     private long _totalPublishSampleCount;
 
+    /// <summary>
+    /// Runs the _forensicGate benchmark scenario.
+    /// </summary>
     private readonly object _forensicGate = new();
+    /// <summary>
+    /// Gets or sets the _publishTicksSamples.
+    /// </summary>
     private readonly List<long> _publishTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _dispatchWaitTicksSamples.
+    /// </summary>
     private readonly List<long> _dispatchWaitTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _socketWriteTicksSamples.
+    /// </summary>
     private readonly List<long> _socketWriteTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _responseWaitTicksSamples.
+    /// </summary>
     private readonly List<long> _responseWaitTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _parseCorrelationTicksSamples.
+    /// </summary>
     private readonly List<long> _parseCorrelationTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _totalPublishTicksSamples.
+    /// </summary>
     private readonly List<long> _totalPublishTicksSamples = [];
+    /// <summary>
+    /// Gets or sets the _publishBySubmitDepthBucket.
+    /// </summary>
     private readonly List<long>[] _publishBySubmitDepthBucket = [[], [], [], [], []];
+    /// <summary>
+    /// Gets or sets the _publishByCompleteDepthBucket.
+    /// </summary>
     private readonly List<long>[] _publishByCompleteDepthBucket = [[], [], [], [], []];
+    /// <summary>
+    /// Gets or sets the _connectionSeries.
+    /// </summary>
     private readonly Dictionary<int, ConnectionSeriesAggregate> _connectionSeries = [];
+    /// <summary>
+    /// Gets or sets the _connectionPrevious.
+    /// </summary>
     private readonly Dictionary<int, ConnectionCounterState> _connectionPrevious = [];
+    /// <summary>
+    /// Gets or sets the _dispatcherSeries.
+    /// </summary>
     private readonly List<DispatcherSeriesPoint> _dispatcherSeries = [];
+    /// <summary>
+    /// Gets or sets the _forensicSampleCount.
+    /// </summary>
     private int _forensicSampleCount;
 
+    /// <summary>
+    /// Gets or sets the _articleBytes.
+    /// </summary>
     private readonly int _articleBytes;
 
+    /// <summary>
+    /// Implements the measurement Metrics contract.
+    /// </summary>
     internal MeasurementMetrics(int articleBytes)
     {
         _articleBytes = articleBytes;
@@ -95,8 +317,14 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Gets or sets the in FlightSubmissions.
+    /// </summary>
     internal int InFlightSubmissions;
 
+    /// <summary>
+    /// Implements the on Generated contract.
+    /// </summary>
     internal void OnGenerated(int bytes, TransitBenchmarkCore.ProducerTiming producerTiming, long queueWaitTicks)
     {
         Interlocked.Increment(ref _generatedCount);
@@ -109,16 +337,25 @@ internal sealed class MeasurementMetrics
         Interlocked.Add(ref _producerQueueWaitTicks, queueWaitTicks);
     }
 
+    /// <summary>
+    /// Implements the on Dequeued contract.
+    /// </summary>
     internal void OnDequeued(long dequeuedTick)
     {
     }
 
+    /// <summary>
+    /// Implements the on Admitted contract.
+    /// </summary>
     internal void OnAdmitted(int bytes, long dequeuedTick)
     {
         Interlocked.Increment(ref _admittedCount);
         Interlocked.Add(ref _admittedBytes, bytes);
     }
 
+    /// <summary>
+    /// Implements the on PublishResult contract.
+    /// </summary>
     internal void OnPublishResult(
         TransitPublishResult publishResult,
         int bytes,
@@ -263,6 +500,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Implements the record ConnectionSample contract.
+    /// </summary>
     internal void RecordConnectionSample(TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics, TimeSpan elapsed)
     {
         lock (_forensicGate)
@@ -301,6 +541,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Implements the record DispatcherSample contract.
+    /// </summary>
     internal void RecordDispatcherSample(TimeSpan elapsed, int inFlight, long dispatchPending, int actualPending, int queueDepth, long queueBytes)
     {
         lock (_forensicGate)
@@ -309,15 +552,42 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Gets AdmittedCount.
+    /// </summary>
     internal long GetAdmittedCount() => Interlocked.Read(ref _admittedCount);
+    /// <summary>
+    /// Gets CompletedCount.
+    /// </summary>
     internal long GetCompletedCount() => Interlocked.Read(ref _completedCount);
+    /// <summary>
+    /// Gets AcceptedCount.
+    /// </summary>
     internal long GetAcceptedCount() => Interlocked.Read(ref _acceptedCount);
+    /// <summary>
+    /// Gets RejectedCount.
+    /// </summary>
     internal long GetRejectedCount() => Interlocked.Read(ref _rejectedCount);
+    /// <summary>
+    /// Gets AmbiguousOnlyCount.
+    /// </summary>
     internal long GetAmbiguousOnlyCount() => Interlocked.Read(ref _ambiguousOnlyCount);
+    /// <summary>
+    /// Gets FailedCount.
+    /// </summary>
     internal long GetFailedCount() => Interlocked.Read(ref _failedCount);
+    /// <summary>
+    /// Gets UnavailableCount.
+    /// </summary>
     internal long GetUnavailableCount() => Interlocked.Read(ref _unavailableCount);
+    /// <summary>
+    /// Gets CanceledCount.
+    /// </summary>
     internal long GetCanceledCount() => Interlocked.Read(ref _canceledCount);
 
+    /// <summary>
+    /// Implements the mark MeasurementBoundary contract.
+    /// </summary>
     internal void MarkMeasurementBoundary(DateTimeOffset measurementEndUtc, long measurementEndStopwatchTick)
     {
         Interlocked.Exchange(ref _measurementEndUtcTicks, measurementEndUtc.UtcTicks);
@@ -325,11 +595,17 @@ internal sealed class MeasurementMetrics
         Interlocked.Exchange(ref _measurementBoundarySet, 1);
     }
 
+    /// <summary>
+    /// Implements the mark MeasurementStart contract.
+    /// </summary>
     internal void MarkMeasurementStart(long measurementStartStopwatchTick)
     {
         Interlocked.Exchange(ref _measurementStartStopwatchTick, measurementStartStopwatchTick);
     }
 
+    /// <summary>
+    /// Implements the capture PostMeasurementReasons contract.
+    /// </summary>
     internal PostMeasurementTerminalizationReasons CapturePostMeasurementReasons()
     {
         return new PostMeasurementTerminalizationReasons(
@@ -346,6 +622,9 @@ internal sealed class MeasurementMetrics
             OtherOrUnknown: _provenanceAggregates[(int)TransitPublishProvenance.OtherOrUnknown].PostMeasurementCount);
     }
 
+    /// <summary>
+    /// Implements the capture PostMeasurementOccurrenceBounds contract.
+    /// </summary>
     internal ProvenanceOccurrenceBounds CapturePostMeasurementOccurrenceBounds()
     {
         long first = 0;
@@ -375,6 +654,9 @@ internal sealed class MeasurementMetrics
         return new ProvenanceOccurrenceBounds(first, last);
     }
 
+    /// <summary>
+    /// Implements the capture AmbiguityProvenanceSummary contract.
+    /// </summary>
     internal AmbiguityProvenanceSummary CaptureAmbiguityProvenanceSummary(DateTimeOffset measurementStartUtc)
     {
         long measurementStartStopwatchTick = Interlocked.Read(ref _measurementStartStopwatchTick);
@@ -406,6 +688,9 @@ internal sealed class MeasurementMetrics
             Connections: connectionSummaries);
     }
 
+    /// <summary>
+    /// Records Peaks.
+    /// </summary>
     internal void ObservePeaks(int queueDepth, long queueBytes, int inFlight)
     {
         LatencyAggregators.UpdatePeak(ref _peakQueueDepth, queueDepth);
@@ -418,11 +703,17 @@ internal sealed class MeasurementMetrics
         Interlocked.Add(ref _queueBytesSampleSum, queueBytes);
     }
 
+    /// <summary>
+    /// Records ActualPending.
+    /// </summary>
     internal void ObserveActualPending(int actualPending)
     {
         LatencyAggregators.UpdatePeak(ref _peakActualPending, actualPending);
     }
 
+    /// <summary>
+    /// Implements the capture ForensicSnapshot contract.
+    /// </summary>
     internal ForensicSnapshot CaptureForensicSnapshot()
     {
         long publishCount = Math.Max(1, Interlocked.Read(ref _publishSampleCount));
@@ -486,6 +777,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Runs the snapshot benchmark scenario.
+    /// </summary>
     internal MeasurementSnapshot Snapshot()
     {
         long queueDepthSampleCount = Interlocked.Read(ref _queueDepthSampleCount);
@@ -518,6 +812,9 @@ internal sealed class MeasurementMetrics
             ArticleBytes: _articleBytes);
     }
 
+    /// <summary>
+    /// Implements the record ProvenanceClassification contract.
+    /// </summary>
     private void RecordProvenanceClassification(TransitPublishResult publishResult, long completionTick)
     {
         if (publishResult.Status != TransitPublishStatus.Ambiguous)
@@ -553,6 +850,9 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Normalizes Provenance.
+    /// </summary>
     private static TransitPublishProvenance NormalizeProvenance(TransitPublishResult publishResult)
     {
         if (publishResult.Status == TransitPublishStatus.Canceled && publishResult.Provenance == TransitPublishProvenance.Cancellation)
@@ -567,6 +867,9 @@ internal sealed class MeasurementMetrics
         return publishResult.Provenance;
     }
 
+    /// <summary>
+    /// Converts to MeasurementOffsetMilliseconds.
+    /// </summary>
     private static double? ToMeasurementOffsetMilliseconds(DateTimeOffset measurementStartUtc, long measurementStartStopwatchTick, long tick)
     {
         if (tick <= 0)
@@ -583,20 +886,56 @@ internal sealed class MeasurementMetrics
         return (tick - baselineTick) * 1000d / Stopwatch.Frequency;
     }
 
+    /// <summary>
+    /// Represents the provenance Aggregate class used by the benchmark or regression gate.
+    /// </summary>
     private sealed class ProvenanceAggregate
     {
+        /// <summary>
+        /// Gets or sets the _count.
+        /// </summary>
         private long _count;
+        /// <summary>
+        /// Gets or sets the _beforeMeasurementEndCount.
+        /// </summary>
         private long _beforeMeasurementEndCount;
+        /// <summary>
+        /// Gets or sets the _postMeasurementCount.
+        /// </summary>
         private long _postMeasurementCount;
+        /// <summary>
+        /// Gets or sets the _firstOccurrenceTick.
+        /// </summary>
         private long _firstOccurrenceTick;
+        /// <summary>
+        /// Gets or sets the _lastOccurrenceTick.
+        /// </summary>
         private long _lastOccurrenceTick;
 
+        /// <summary>
+        /// Runs the count benchmark scenario.
+        /// </summary>
         internal long Count => Interlocked.Read(ref _count);
+        /// <summary>
+        /// Implements the before MeasurementEndCount contract.
+        /// </summary>
         internal long BeforeMeasurementEndCount => Interlocked.Read(ref _beforeMeasurementEndCount);
+        /// <summary>
+        /// Implements the post MeasurementCount contract.
+        /// </summary>
         internal long PostMeasurementCount => Interlocked.Read(ref _postMeasurementCount);
+        /// <summary>
+        /// Implements the first OccurrenceTick contract.
+        /// </summary>
         internal long FirstOccurrenceTick => Interlocked.Read(ref _firstOccurrenceTick);
+        /// <summary>
+        /// Implements the last OccurrenceTick contract.
+        /// </summary>
         internal long LastOccurrenceTick => Interlocked.Read(ref _lastOccurrenceTick);
 
+        /// <summary>
+        /// Runs the record benchmark scenario.
+        /// </summary>
         internal void Record(long completionTick, bool isPostMeasurement)
         {
             Interlocked.Increment(ref _count);
@@ -639,23 +978,50 @@ internal sealed class MeasurementMetrics
         }
     }
 
+    /// <summary>
+    /// Represents the provenance ConnectionAggregate class used by the benchmark or regression gate.
+    /// </summary>
     private sealed class ProvenanceConnectionAggregate
     {
+        /// <summary>
+        /// Gets or sets the _byProvenance.
+        /// </summary>
         private readonly Dictionary<TransitPublishProvenance, ProvenanceAggregate> _byProvenance = [];
+        /// <summary>
+        /// Gets or sets the _states.
+        /// </summary>
         private readonly HashSet<TransitConnectionState> _states = [];
+        /// <summary>
+        /// Runs the _gate benchmark scenario.
+        /// </summary>
         private readonly object _gate = new();
+        /// <summary>
+        /// Gets or sets the _ambiguousCount.
+        /// </summary>
         private long _ambiguousCount;
 
+        /// <summary>
+        /// Implements the provenance ConnectionAggregate contract.
+        /// </summary>
         internal ProvenanceConnectionAggregate(string connectionId, int? slotIndex)
         {
             ConnectionId = connectionId;
             SlotIndex = slotIndex;
         }
 
+        /// <summary>
+        /// Gets or sets the connection Id.
+        /// </summary>
         internal string ConnectionId { get; }
 
+        /// <summary>
+        /// Gets or sets the slot Index.
+        /// </summary>
         internal int? SlotIndex { get; }
 
+        /// <summary>
+        /// Runs the record benchmark scenario.
+        /// </summary>
         internal void Record(TransitPublishProvenance provenance, long completionTick, bool isPostMeasurement, TransitConnectionState? connectionState, bool isAmbiguous)
         {
             lock (_gate)
@@ -679,6 +1045,9 @@ internal sealed class MeasurementMetrics
             }
         }
 
+        /// <summary>
+        /// Converts to Summary.
+        /// </summary>
         internal ProvenanceConnectionSummary ToSummary()
         {
             lock (_gate)

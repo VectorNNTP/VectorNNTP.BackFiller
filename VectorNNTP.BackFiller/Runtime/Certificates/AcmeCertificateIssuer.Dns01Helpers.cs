@@ -5,13 +5,15 @@
 // VectorNNTP.Backfiller.Runtime.Certificates
 // DNS-01 stale-record recovery helpers for ACME issuance.
 
-using System.Security.Cryptography.X509Certificates;
 using Certes;
 using Certes.Acme;
 using Certes.Acme.Resource;
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
+    /// <summary>
+    /// Defines acme certificate issuer and its acme certificate issuer.dns01 helpers contract.
+    /// </summary>
     internal sealed partial class AcmeCertificateIssuer
     {
         /// <summary>

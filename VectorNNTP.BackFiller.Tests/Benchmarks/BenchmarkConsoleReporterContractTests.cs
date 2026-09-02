@@ -1,19 +1,24 @@
 // <copyright file="BenchmarkConsoleReporterContractTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for benchmark console reporter contract, covering benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the benchmark console reporter contract test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
+    /// <summary>
+    /// Confirms the benchmark console reporter contract tests behavior.
+    /// </summary>
     public sealed class BenchmarkConsoleReporterContractTests
     {
+        /// <summary>
+        /// Confirms the print final report contains expected sections in stable order behavior.
+        /// </summary>
         [Fact]
         public void PrintFinalReport_ContainsExpectedSectionsInStableOrder()
         {

@@ -151,6 +151,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
         /// <param name="timeProvider">Unified time provider.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="logger">Optional logger used to record certificate loading diagnostics.</param>
         /// <returns>Loaded listener certificate bundle.</returns>
         public static async Task<BackFillerCertificateBundle> LoadCertificateBundleAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
@@ -200,6 +201,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
         /// <param name="issueResult">Issued ACME certificate artifacts.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="logger">Optional logger used to record certificate persistence diagnostics.</param>
         /// <returns>A task that completes after atomic persistence succeeds.</returns>
         public static async Task PersistIssuedCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
@@ -242,6 +244,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Handles certificate contains dns name for back filler certificate store.
+        /// </summary>
         private static bool CertificateContainsDnsName(X509Certificate2 certificate, string expectedDnsName)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -285,6 +290,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return false;
         }
 
+        /// <summary>
+        /// Handles has server authentication usage for back filler certificate store.
+        /// </summary>
         private static bool HasServerAuthenticationUsage(X509Certificate2 certificate)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -300,6 +308,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 .Any(oid => string.Equals(oid.Value, ServerAuthenticationOid, StringComparison.Ordinal));
         }
 
+        /// <summary>
+        /// Handles build certificate chain for back filler certificate store.
+        /// </summary>
         private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -339,6 +350,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             return false;
         }
 
+        /// <summary>
+        /// Handles build pfx bundle for back filler certificate store.
+        /// </summary>
         private static byte[] BuildPfxBundle(AcmeOrderIssueResult issueResult, string pfxPassword)
         {
             ArgumentNullException.ThrowIfNull(issueResult);
@@ -378,6 +392,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Handles import certificate private key for back filler certificate store.
+        /// </summary>
         private static AsymmetricAlgorithm ImportCertificatePrivateKey(string pem)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pem);
@@ -405,6 +422,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             throw new InvalidOperationException("Certificate private key PEM is not a supported RSA/ECDSA key.");
         }
 
+        /// <summary>
+        /// Handles write file atomically async for back filler certificate store.
+        /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -415,6 +435,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             await WriteFileAtomicallyAsync(tempPath, targetPath, payload, cancellationToken, logger).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Handles write file atomically async for back filler certificate store.
+        /// </summary>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -468,6 +491,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
+        /// <summary>
+        /// Handles try delete temp file for back filler certificate store.
+        /// </summary>
         private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {
             if (string.IsNullOrWhiteSpace(tempPath))

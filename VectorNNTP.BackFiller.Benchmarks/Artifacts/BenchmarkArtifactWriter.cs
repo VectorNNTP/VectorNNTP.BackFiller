@@ -1,9 +1,22 @@
+// <copyright file="BenchmarkArtifactWriter.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Artifacts/BenchmarkArtifactWriter: writes durable JSON and CSV representations of benchmark measurements.
+
 using System.Globalization;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the benchmark ArtifactWriter class used by the benchmark or regression gate.
+/// </summary>
 internal static class BenchmarkArtifactWriter
 {
+    /// <summary>
+    /// Builds the structured benchmark result and writes its JSON and CSV artifacts using one
+    /// timestamped base name so the two representations describe the same measurement.
+    /// </summary>
     internal static void WriteStructuredResultArtifacts<TArtifact>(
         BenchmarkResult result,
         TransitBenchmarkConfig config,

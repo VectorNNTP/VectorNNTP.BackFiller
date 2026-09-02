@@ -2,11 +2,9 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq broker connection abstractions behavior.
 
-using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
@@ -52,17 +50,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public int EndpointPort { get; }
 
         /// <summary>
-        /// Gets the broker virtual host used for this connection.
+        /// Returns the broker virtual host used for this connection.
         /// </summary>
         public string VirtualHost { get; }
 
         /// <summary>
-        /// Gets the configured client-provided connection name.
+        /// Returns the configured client-provided connection name.
         /// </summary>
         public string ClientProvidedName { get; }
 
         /// <summary>
-        /// Gets the underlying RabbitMQ connection instance.
+        /// Returns the underlying RabbitMQ connection instance.
         /// </summary>
         public IConnection UnderlyingConnection { get; }
 
@@ -111,7 +109,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqChannel : IAsyncDisposable
     {
         /// <summary>
-        /// Gets the underlying RabbitMQ channel.
+        /// Returns the underlying RabbitMQ channel.
         /// </summary>
         public IChannel UnderlyingChannel { get; }
 
@@ -188,13 +186,37 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqBrokerConnectionAdapter : IRabbitMqBrokerConnection
     {
+        /// <summary>
+        /// Stores connection used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly IConnection _connection;
+        /// <summary>
+        /// Stores virtual host used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly string _virtualHost;
+        /// <summary>
+        /// Stores connection shutdown async handler used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<ShutdownEventArgs> _connectionShutdownAsyncHandler;
+        /// <summary>
+        /// Stores callback exception async handler used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<CallbackExceptionEventArgs> _callbackExceptionAsyncHandler;
+        /// <summary>
+        /// Stores connection blocked async handler used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<ConnectionBlockedEventArgs> _connectionBlockedAsyncHandler;
+        /// <summary>
+        /// Stores connection unblocked async handler used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _connectionUnblockedAsyncHandler;
+        /// <summary>
+        /// Stores connection recovery error async handler used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<ConnectionRecoveryErrorEventArgs> _connectionRecoveryErrorAsyncHandler;
+        /// <summary>
+        /// Stores recovery succeeded async handler used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _recoverySucceededAsyncHandler;
 
         /// <summary>
@@ -322,6 +344,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqChannelAdapter : IRabbitMqChannel
     {
+        /// <summary>
+        /// Stores channel used by rabbit mq broker connection abstractions.
+        /// </summary>
         private readonly IChannel _channel;
 
         /// <summary>
@@ -400,6 +425,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             return _channel.DisposeAsync();
         }
 
+        /// <summary>
+        /// Adapts the immutable broker-connection contract to the mutable RabbitMQ connection implementation.
+        /// </summary>
         private static IDictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
         {
             return arguments is null ? null : (IDictionary<string, object?>)arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);

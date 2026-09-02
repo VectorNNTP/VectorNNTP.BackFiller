@@ -1,10 +1,10 @@
 // <copyright file="TestTlsCertificateFixture.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / TestInfrastructure / TLS
-// Shared self-signed certificate fixture for deterministic loopback TLS test sessions
-// without machine trust-store mutation or interactive trust prompts.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for test tls certificate fixture, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the test tls certificate fixture test suite.
 
 using System.Net;
 using System.Net.Security;
@@ -71,6 +71,10 @@ namespace VectorNNTP.Backfiller.Tests.TestInfrastructure
         /// <param name="chain">Remote certificate chain.</param>
         /// <param name="sslPolicyErrors">Policy errors reported by the platform validator.</param>
         /// <returns><see langword="true"/> only when the remote certificate matches this fixture's certificate.</returns>
+        /// <summary>
+        /// Confirms the validate server certificate behavior.
+        /// </summary>
+        /// <returns>The value returned by the validate server certificate helper.</returns>
         private bool ValidateServerCertificate(object? sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors sslPolicyErrors)
         {
             if (certificate is null)

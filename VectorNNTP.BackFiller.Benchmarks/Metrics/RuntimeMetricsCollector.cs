@@ -1,20 +1,62 @@
+// <copyright file="RuntimeMetricsCollector.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/RuntimeMetricsCollector: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 using System.Diagnostics;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the runtime Metrics class used by the benchmark or regression gate.
+/// </summary>
 internal sealed class RuntimeMetrics
 {
+    /// <summary>
+    /// Synchronizes metric sampling with snapshot creation.
+    /// </summary>
     private readonly object _gate = new();
+    /// <summary>
+    /// Gets or sets the _cpuPercentSum.
+    /// </summary>
     private double _cpuPercentSum;
+    /// <summary>
+    /// Gets or sets the _hostCpuPercentSum.
+    /// </summary>
     private double _hostCpuPercentSum;
+    /// <summary>
+    /// Gets or sets the _transitServerCpuPercentSum.
+    /// </summary>
     private double _transitServerCpuPercentSum;
+    /// <summary>
+    /// Gets or sets the _cpuSampleCount.
+    /// </summary>
     private long _cpuSampleCount;
+    /// <summary>
+    /// Gets or sets the _lastWorkingSet.
+    /// </summary>
     private long _lastWorkingSet;
+    /// <summary>
+    /// Gets or sets the _lastGcHeap.
+    /// </summary>
     private long _lastGcHeap;
+    /// <summary>
+    /// Gets or sets the _lastAllocated.
+    /// </summary>
     private long _lastAllocated;
+    /// <summary>
+    /// Gets or sets the _peakHostCpuPercent.
+    /// </summary>
     private double _peakHostCpuPercent;
+    /// <summary>
+    /// Gets or sets the _peakTransitServerCpuPercent.
+    /// </summary>
     private double _peakTransitServerCpuPercent;
 
+    /// <summary>
+    /// Runs the sample benchmark scenario.
+    /// </summary>
     internal void Sample(double cpuPercent, double hostCpuPercent, double transitServerCpuPercent, long workingSet, long gcHeap, long allocated)
     {
         lock (_gate)
@@ -31,6 +73,9 @@ internal sealed class RuntimeMetrics
         }
     }
 
+    /// <summary>
+    /// Runs the snapshot benchmark scenario.
+    /// </summary>
     internal RuntimeSnapshot Snapshot()
     {
         lock (_gate)
@@ -43,16 +88,40 @@ internal sealed class RuntimeMetrics
     }
 }
 
+/// <summary>
+/// Represents the runtime MetricSamplingHelpers class used by the benchmark or regression gate.
+/// </summary>
 internal static class RuntimeMetricSamplingHelpers
 {
+    /// <summary>
+    /// Implements the host CpuGate contract.
+    /// </summary>
     private static readonly object HostCpuGate = new();
+    /// <summary>
+    /// Gets or sets the _hostCpuLastSampleUtc.
+    /// </summary>
     private static DateTime _hostCpuLastSampleUtc;
+    /// <summary>
+    /// Gets or sets the _hostCpuLastTotalProcessTicks.
+    /// </summary>
     private static long _hostCpuLastTotalProcessTicks;
 
+    /// <summary>
+    /// Implements the transit ServerCpuGate contract.
+    /// </summary>
     private static readonly object TransitServerCpuGate = new();
+    /// <summary>
+    /// Gets or sets the _transitServerCpuLastSampleUtc.
+    /// </summary>
     private static DateTime _transitServerCpuLastSampleUtc;
+    /// <summary>
+    /// Gets or sets the _transitServerCpuLastTotalTicks.
+    /// </summary>
     private static long _transitServerCpuLastTotalTicks;
 
+    /// <summary>
+    /// Reads HostCpuPercent.
+    /// </summary>
     internal static double ReadHostCpuPercent()
     {
         lock (HostCpuGate)
@@ -94,6 +163,9 @@ internal static class RuntimeMetricSamplingHelpers
         }
     }
 
+    /// <summary>
+    /// Reads TransitServerCpuPercent.
+    /// </summary>
     internal static double ReadTransitServerCpuPercent()
     {
         lock (TransitServerCpuGate)

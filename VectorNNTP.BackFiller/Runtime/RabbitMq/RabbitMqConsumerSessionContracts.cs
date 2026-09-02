@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq consumer session contracts behavior.
 
 using System.Threading.Channels;
 
@@ -16,7 +15,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqConsumerSession : IAsyncDisposable
     {
         /// <summary>
-        /// Gets the immutable logical identity for this consumer session.
+        /// Returns the immutable logical identity for this consumer session.
         /// </summary>
         public RabbitMqConsumerSessionIdentity Identity { get; }
 
@@ -26,7 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public bool IsRunning { get; }
 
         /// <summary>
-        /// Gets the connection generation currently bound to this consumer session, or zero when not running.
+        /// Returns the connection generation currently bound to this consumer session, or zero when not running.
         /// </summary>
         public long ActiveConnectionGeneration { get; }
 
@@ -45,7 +44,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Coordinates account-capacity retirement boundaries for RabbitMQ consumer sessions.
+    /// Handles account-capacity retirement boundaries for RabbitMQ consumer sessions.
     /// </summary>
     internal interface IRabbitMqCapacityRetirementCoordinator
     {
@@ -96,13 +95,22 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// </summary>
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
+        /// <summary>
+        /// Stores writer used by rabbit mq consumer session contracts.
+        /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
+        /// <summary>
+        /// Handles rabbit mq delivery channel sink for rabbit mq consumer session contracts.
+        /// </summary>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
             _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         }
 
+        /// <summary>
+        /// Handles on delivery async for rabbit mq consumer session contracts.
+        /// </summary>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();

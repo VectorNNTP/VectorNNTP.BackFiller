@@ -1,10 +1,22 @@
+// <copyright file="MeasurementExecutionEngine.Drain.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Execution/MeasurementExecutionEngine.Drain: coordinates bounded benchmark work, transport lifetimes, and deterministic shutdown.
+
 using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the measurement ExecutionEngine class used by the benchmark or regression gate.
+/// </summary>
 internal static partial class MeasurementExecutionEngine
 {
+    /// <summary>
+    /// Implements the drain AndShutdownAsync contract.
+    /// </summary>
     internal static async Task<BenchmarkResult> DrainAndShutdownAsync(
         BoundedArticleQueue queue,
         MeasurementMetrics metrics,
@@ -150,6 +162,9 @@ internal static partial class MeasurementExecutionEngine
             fixedCountBoundaryTelemetry);
     }
 
+    /// <summary>
+    /// Builds BoundarySnapshot.
+    /// </summary>
     private static FixedCountBoundarySnapshot BuildBoundarySnapshot(
         string phase,
         DateTimeOffset timestampUtc,
@@ -203,6 +218,9 @@ internal static partial class MeasurementExecutionEngine
             Connections: connectionSnapshots);
     }
 
+    /// <summary>
+    /// Builds PostMeasurementTerminalizationSummary.
+    /// </summary>
     private static PostMeasurementTerminalizationSummary BuildPostMeasurementTerminalizationSummary(
         DateTimeOffset measurementEndUtc,
         long measurementEndTick,

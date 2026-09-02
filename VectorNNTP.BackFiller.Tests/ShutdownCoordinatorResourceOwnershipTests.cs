@@ -1,11 +1,10 @@
 // <copyright file="ShutdownCoordinatorResourceOwnershipTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for shutdown coordinator resource ownership, covering service lifecycle and shutdown contracts.
+// Primary responsibility: documents the executable contracts covered by the shutdown coordinator resource ownership test suite.
 
 using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
@@ -18,6 +17,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public sealed class ShutdownCoordinatorResourceOwnershipTests
     {
+        /// <summary>
+        /// Confirms the signal forced shutdown from graceful disposes grace period escalation source behavior.
+        /// </summary>
         [Fact]
         public void SignalForcedShutdown_FromGraceful_DisposesGracePeriodEscalationSource()
         {

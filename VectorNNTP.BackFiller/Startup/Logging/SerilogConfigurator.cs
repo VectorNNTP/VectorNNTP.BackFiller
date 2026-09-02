@@ -15,6 +15,9 @@ namespace VectorNNTP.Backfiller.Startup.Logging
     /// </summary>
     internal static class SerilogConfigurator
     {
+        /// <summary>
+        /// Stores log file prefix used by serilog configurator.
+        /// </summary>
         private const string LogFilePrefix = "vectornntp.backfiller-.log";
 
         /// <summary>
@@ -102,16 +105,25 @@ namespace VectorNNTP.Backfiller.Startup.Logging
             }
         }
 
+        /// <summary>
+        /// Parses the minimum log level used by test configuration.
+        /// </summary>
         internal static LogEventLevel ParseMinimumLevelForTesting(string? configuredLevel)
         {
             return ParseMinimumLevel(configuredLevel);
         }
 
+        /// <summary>
+        /// Parses the Microsoft logging level used by test configuration.
+        /// </summary>
         internal static LogLevel ParseMicrosoftLogLevelForTesting(string? configuredLevel)
         {
             return ParseMicrosoftLogLevel(configuredLevel);
         }
 
+        /// <summary>
+        /// Handles parse minimum level for serilog configurator.
+        /// </summary>
         private static LogEventLevel ParseMinimumLevel(string? configuredLevel)
         {
             return Enum.TryParse(configuredLevel, ignoreCase: true, out LogEventLevel level)
@@ -119,6 +131,9 @@ namespace VectorNNTP.Backfiller.Startup.Logging
                 : LogEventLevel.Information;
         }
 
+        /// <summary>
+        /// Handles parse microsoft log level for serilog configurator.
+        /// </summary>
         private static LogLevel ParseMicrosoftLogLevel(string? configuredLevel)
         {
             return string.IsNullOrWhiteSpace(configuredLevel)

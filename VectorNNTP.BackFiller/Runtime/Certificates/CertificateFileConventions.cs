@@ -8,11 +8,17 @@
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Defines the file names used for the persisted BackFiller listener certificate bundle.
+    /// Defines certificate file conventions and its certificate file conventions contract.
     /// </summary>
     internal static class CertificateFileConventions
     {
+        /// <summary>
+        /// Stores listener pfx file name used by certificate file conventions.
+        /// </summary>
         internal const string ListenerPfxFileName = "backfiller-listener.pfx";
+        /// <summary>
+        /// Stores certificate private key pem file name used by certificate file conventions.
+        /// </summary>
         internal const string CertificatePrivateKeyPemFileName = "backfiller-listener.key";
 
         /// <summary>

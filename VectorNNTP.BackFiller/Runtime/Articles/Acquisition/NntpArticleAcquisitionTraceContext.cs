@@ -9,7 +9,7 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {
     /// <summary>
-    /// Identifies the active acquisition operation for classification and logging.
+    /// Defines nntp article acquisition operation and its nntp article acquisition trace context contract.
     /// </summary>
     internal enum NntpArticleAcquisitionOperation
     {

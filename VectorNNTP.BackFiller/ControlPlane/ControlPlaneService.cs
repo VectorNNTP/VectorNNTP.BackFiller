@@ -15,7 +15,7 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 namespace VectorNNTP.Backfiller.ControlPlane
 {
     /// <summary>
-    /// Provides backbone-scoped NNTP session leases from the control-plane managed account runtimes.
+    /// Supplies backbone-scoped NNTP session leases from the control-plane managed account runtimes.
     /// </summary>
     internal interface IBackboneSessionLeaseProvider
     {
@@ -35,6 +35,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
     /// <param name="logger">The logger used for control-plane diagnostics.</param>
     /// <param name="timeProvider">The unified time provider used for control-plane timestamps.</param>
     /// <param name="snapshotProvider">The runtime NNTP account snapshot provider.</param>
+    /// <param name="rabbitMqCapacityRetirementCoordinator">Manages retirement of RabbitMQ capacity during account reconciliation.</param>
+    /// <param name="backboneUsableCapacityStateWriter">Optional writer for publishing usable backbone capacity state.</param>
     /// <param name="loggerFactory">The logger factory used to create account session-manager loggers.</param>
     /// <param name="serverCertificateValidationCallback">Optional per-acquisition-session TLS server-certificate validation callback. When <see langword="null"/>, acquisition sessions retain platform default certificate validation behavior.</param>
     internal sealed partial class ControlPlaneService(
@@ -46,7 +48,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
         ILoggerFactory? loggerFactory = null,
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
+        /// <summary>
+        /// Configures heartbeat interval for control plane service.
+        /// </summary>
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+        /// <summary>
+        /// Configures refresh interval for control plane service.
+        /// </summary>
         private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
 
         /// <summary>
@@ -100,7 +108,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         internal bool IsStartupInitializationComplete { get; private set; }
 
         /// <summary>
-        /// Gets the number of currently managed account runtimes.
+        /// Returns the number of currently managed account runtimes.
         /// </summary>
         internal int ManagedAccountCount
         {
@@ -114,7 +122,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Gets the number of currently active sessions for one managed account runtime.
+        /// Returns the number of currently active sessions for one managed account runtime.
         /// </summary>
         /// <param name="accountId">Stable account identifier.</param>
         /// <returns>Active session count, or zero when the account is not currently managed.</returns>
@@ -462,6 +470,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
             PublishBackboneUsableCapacitySnapshot();
         }
 
+        /// <summary>
+        /// Handles publish backbone usable capacity snapshot for control plane service.
+        /// </summary>
         private void PublishBackboneUsableCapacitySnapshot()
         {
             Dictionary<string, int> capacityByBackbone = new(StringComparer.OrdinalIgnoreCase);
@@ -490,6 +501,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
             _backboneUsableCapacityStateWriter.PublishSnapshot(capacityByBackbone);
         }
 
+        /// <summary>
+        /// Handles retire rabbit mq capacity boundary async for control plane service.
+        /// </summary>
         private Task RetireRabbitMqCapacityBoundaryAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
             return _rabbitMqCapacityRetirementCoordinator
@@ -499,18 +513,25 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <summary>
         /// Holds the runtime state for one managed account session pool.
         /// </summary>
-        /// <param name="LastAppliedAccount">Most recent desired account snapshot applied to this runtime.</param>
-        /// <param name="Manager">Owned session manager implementing persistent session lifecycle for the account.</param>
         private sealed class NoOpBackboneUsableCapacityStateWriter : IBackboneUsableCapacityStateWriter
         {
+            /// <summary>
+            /// Stores instance used by control plane service.
+            /// </summary>
             internal static readonly NoOpBackboneUsableCapacityStateWriter Instance = new();
 
+            /// <summary>
+            /// Handles publish snapshot for control plane service.
+            /// </summary>
             public void PublishSnapshot(IReadOnlyDictionary<string, int> capacityByBackbone)
             {
                 ArgumentNullException.ThrowIfNull(capacityByBackbone);
             }
         }
 
+        /// <summary>
+        /// Defines account runtime state and its control plane service contract.
+        /// </summary>
         private sealed record AccountRuntimeState(
             NntpAccountSnapshot LastAppliedAccount,
             NntpArticleExecutionSessionManager Manager)
@@ -521,7 +542,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
             internal NntpAccountSnapshot LastAppliedAccount { get; set; } = LastAppliedAccount;
 
             /// <summary>
-            /// Gets the persistent session manager owned for this account runtime.
+            /// Returns the persistent session manager owned for this account runtime.
             /// </summary>
             internal NntpArticleExecutionSessionManager Manager { get; } = Manager;
         }

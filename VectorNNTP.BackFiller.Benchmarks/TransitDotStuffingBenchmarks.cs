@@ -1,25 +1,46 @@
+// <copyright file="TransitDotStuffingBenchmarks.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// TransitDotStuffingBenchmarks: compares dot-stuffing implementations across representative payload layouts.
+
+using System.Buffers;
+using System.IO.Pipelines;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
-using System.Buffers;
-using System.IO.Pipelines;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Compares baseline and bulk NNTP dot-stuffing algorithms over representative payload distributions.
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(launchCount: 1, warmupCount: 3, iterationCount: 10)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class TransitDotStuffingBenchmarks
 {
+    /// <summary>
+    /// Gets or sets the payload Size.
+    /// </summary>
     private const int PayloadSize = 2_097_152;
 
+    /// <summary>
+    /// Gets or sets the _source.
+    /// </summary>
     private byte[] _source = null!;
+    /// <summary>
+    /// Gets or sets the _destination.
+    /// </summary>
     private byte[] _destination = null!;
 
+    /// <summary>
+    /// Gets or sets the distribution.
+    /// </summary>
     [Params(
         DotPayloadDistribution.NormalNoDot,
         DotPayloadDistribution.DotHeavy,
@@ -28,6 +49,9 @@ public class TransitDotStuffingBenchmarks
         DotPayloadDistribution.SmallLine)]
     public DotPayloadDistribution Distribution { get; set; }
 
+    /// <summary>
+    /// Builds the selected payload and allocates the exact destination buffer required by the transform.
+    /// </summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -36,6 +60,10 @@ public class TransitDotStuffingBenchmarks
         _destination = GC.AllocateUninitializedArray<byte>(required);
     }
 
+    /// <summary>
+    /// Measures the baseline byte-at-a-time dot-stuffing implementation.
+    /// <returns>The number of bytes written to the destination buffer.</returns>
+    /// </summary>
     [Benchmark(Baseline = true, Description = "Transform/BaselineByteLoop")]
     [BenchmarkCategory("Transform")]
     public int Transform_BaselineByteLoop()
@@ -54,6 +82,10 @@ public class TransitDotStuffingBenchmarks
         return result.BytesWritten;
     }
 
+    /// <summary>
+    /// Measures the line-oriented single-pass dot-stuffing implementation.
+    /// <returns>The number of bytes written to the destination buffer.</returns>
+    /// </summary>
     [Benchmark(Description = "Transform/BulkSinglePass")]
     [BenchmarkCategory("Transform")]
     public int Transform_BulkSinglePass()
@@ -72,6 +104,10 @@ public class TransitDotStuffingBenchmarks
         return result.BytesWritten;
     }
 
+    /// <summary>
+    /// Measures the line-oriented two-pass dot-stuffing implementation.
+    /// <returns>The number of bytes written to the destination buffer.</returns>
+    /// </summary>
     [Benchmark(Description = "Transform/BulkTwoPass")]
     [BenchmarkCategory("Transform")]
     public int Transform_BulkTwoPass()
@@ -90,6 +126,10 @@ public class TransitDotStuffingBenchmarks
         return result.BytesWritten;
     }
 
+    /// <summary>
+    /// Measures baseline dot-stuffing when writing through a <see cref="PipeWriter"/>.
+    /// <returns>The number of bytes written to the pipe-backed stream.</returns>
+    /// </summary>
     [Benchmark(Baseline = true, Description = "PipeWriter/BaselineByteLoop")]
     [BenchmarkCategory("PipeWriter")]
     public int PipeWriter_BaselineByteLoop()
@@ -97,6 +137,10 @@ public class TransitDotStuffingBenchmarks
         return WriteWithPipeWriter(TransitDotStuffingAlgorithm.BaselineByteLoop);
     }
 
+    /// <summary>
+    /// Measures single-pass dot-stuffing when writing through a <see cref="PipeWriter"/>.
+    /// <returns>The number of bytes written to the pipe-backed stream.</returns>
+    /// </summary>
     [Benchmark(Description = "PipeWriter/BulkSinglePass")]
     [BenchmarkCategory("PipeWriter")]
     public int PipeWriter_BulkSinglePass()
@@ -104,6 +148,10 @@ public class TransitDotStuffingBenchmarks
         return WriteWithPipeWriter(TransitDotStuffingAlgorithm.BulkLineOrientedSinglePass);
     }
 
+    /// <summary>
+    /// Measures two-pass dot-stuffing when writing through a <see cref="PipeWriter"/>.
+    /// <returns>The number of bytes written to the pipe-backed stream.</returns>
+    /// </summary>
     [Benchmark(Description = "PipeWriter/BulkTwoPass")]
     [BenchmarkCategory("PipeWriter")]
     public int PipeWriter_BulkTwoPass()
@@ -111,6 +159,9 @@ public class TransitDotStuffingBenchmarks
         return WriteWithPipeWriter(TransitDotStuffingAlgorithm.BulkLineOrientedTwoPass);
     }
 
+    /// <summary>
+    /// Writes ipeWriter.
+    /// </summary>
     private int WriteWithPipeWriter(TransitDotStuffingAlgorithm algorithm)
     {
         int required = TransitDotStuffing.GetRequiredDestinationLength(_source, appendTrailingCrlfWhenMissingLf: true, out _);
@@ -134,6 +185,9 @@ public class TransitDotStuffingBenchmarks
         return result.BytesWritten;
     }
 
+    /// <summary>
+    /// Builds ad.
+    /// </summary>
     private static byte[] BuildPayload(DotPayloadDistribution distribution, int size)
     {
         return distribution switch
@@ -147,6 +201,9 @@ public class TransitDotStuffingBenchmarks
         };
     }
 
+    /// <summary>
+    /// Builds lPayload.
+    /// </summary>
     private static byte[] BuildNormalPayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -182,6 +239,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Builds avyPayload.
+    /// </summary>
     private static byte[] BuildDotHeavyPayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -204,6 +264,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Builds Payload.
+    /// </summary>
     private static byte[] BuildMixedPayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -241,6 +304,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Builds LinePayload.
+    /// </summary>
     private static byte[] BuildLargeLinePayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -264,6 +330,9 @@ public class TransitDotStuffingBenchmarks
         return data;
     }
 
+    /// <summary>
+    /// Builds LinePayload.
+    /// </summary>
     private static byte[] BuildSmallLinePayload(int size)
     {
         byte[] data = GC.AllocateUninitializedArray<byte>(size);
@@ -296,11 +365,19 @@ public class TransitDotStuffingBenchmarks
     }
 }
 
+/// <summary>
+/// Selects the synthetic line and dot distribution used by dot-stuffing benchmarks.
+/// </summary>
 public enum DotPayloadDistribution
 {
+    /// <summary>Payload containing no dot-prefixed lines.</summary>
     NormalNoDot = 0,
+    /// <summary>Payload containing predominantly dot-prefixed lines.</summary>
     DotHeavy = 1,
+    /// <summary>Payload containing a mixed distribution of line types.</summary>
     Mixed = 2,
+    /// <summary>Payload containing unusually large lines.</summary>
     LargeLine = 3,
+    /// <summary>Payload containing many short lines.</summary>
     SmallLine = 4,
 }

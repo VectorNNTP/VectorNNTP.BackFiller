@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit work item behavior.
 
 using System.Diagnostics;
 
@@ -15,9 +14,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed class TransitWorkItem
     {
+        /// <summary>
+        /// Stores terminal completion observed used by transit work item.
+        /// </summary>
         private int _terminalCompletionObserved;
+        /// <summary>
+        /// Stores state value used by transit work item.
+        /// </summary>
         private int _stateValue = (int)TransitWorkItemState.Queued;
 
+        /// <summary>
+        /// Handles transit work item for transit work item.
+        /// </summary>
         internal TransitWorkItem(long workItemId, string messageId, byte[] payload, int maxAttempts = 3)
         {
             if (string.IsNullOrWhiteSpace(messageId))
@@ -46,48 +54,114 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             LastEnqueuedUtc = FirstEnqueuedUtc;
         }
 
+        /// <summary>
+        /// Stores work item id used by transit work item.
+        /// </summary>
         internal long WorkItemId { get; }
 
+        /// <summary>
+        /// Stores message id used by transit work item.
+        /// </summary>
         internal string MessageId { get; }
 
+        /// <summary>
+        /// Stores payload for transit work item.
+        /// </summary>
         internal byte[] Payload { get; }
 
+        /// <summary>
+        /// Stores payload bytes for transit work item.
+        /// </summary>
         internal int PayloadBytes { get; }
 
+        /// <summary>
+        /// Limits attempt count for transit work item.
+        /// </summary>
         internal int AttemptCount { get; private set; }
 
+        /// <summary>
+        /// Limits max attempts for transit work item.
+        /// </summary>
         internal int MaxAttempts { get; }
 
+        /// <summary>
+        /// Stores first enqueued utc used by transit work item.
+        /// </summary>
         internal DateTimeOffset FirstEnqueuedUtc { get; }
 
+        /// <summary>
+        /// Stores last enqueued utc used by transit work item.
+        /// </summary>
         internal DateTimeOffset LastEnqueuedUtc { get; private set; }
 
+        /// <summary>
+        /// Stores last claimed utc used by transit work item.
+        /// </summary>
         internal DateTimeOffset? LastClaimedUtc { get; private set; }
 
+        /// <summary>
+        /// Stores last failure utc used by transit work item.
+        /// </summary>
         internal DateTimeOffset? LastFailureUtc { get; private set; }
 
+        /// <summary>
+        /// Stores next eligible utc used by transit work item.
+        /// </summary>
         internal DateTimeOffset? NextEligibleUtc { get; private set; }
 
+        /// <summary>
+        /// Stores last failure class used by transit work item.
+        /// </summary>
         internal TransitWorkFailureClass? LastFailureClass { get; private set; }
 
+        /// <summary>
+        /// Stores last transmission uncertainty used by transit work item.
+        /// </summary>
         internal TransitTransmissionUncertainty? LastTransmissionUncertainty { get; private set; }
 
+        /// <summary>
+        /// Stores state used by transit work item.
+        /// </summary>
         internal TransitWorkItemState State => (TransitWorkItemState)Volatile.Read(ref _stateValue);
 
+        /// <summary>
+        /// Stores owner connection id used by transit work item.
+        /// </summary>
         internal string? OwnerConnectionId { get; private set; }
 
+        /// <summary>
+        /// Stores cancel requested used by transit work item.
+        /// </summary>
         internal bool CancelRequested { get; private set; }
 
+        /// <summary>
+        /// Stores terminal status used by transit work item.
+        /// </summary>
         internal TransitPublishStatus? TerminalStatus { get; private set; }
 
+        /// <summary>
+        /// Stores terminal provenance used by transit work item.
+        /// </summary>
         internal TransitPublishProvenance? TerminalProvenance { get; private set; }
 
+        /// <summary>
+        /// Stores last state transition tick used by transit work item.
+        /// </summary>
         internal long LastStateTransitionTick { get; private set; }
 
+        /// <summary>
+        /// Stores completion task used by transit work item.
+        /// </summary>
         internal Task<TransitPublishResult> CompletionTask => _completion.Task;
 
+        /// <summary>
+        /// Stores completion used by transit work item.
+        /// </summary>
         private readonly TaskCompletionSource<TransitPublishResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>
+        /// Handles try mark queued for transit work item.
+        /// </summary>
         internal bool TryMarkQueued(DateTimeOffset utcNow)
         {
             while (true)
@@ -122,6 +196,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Handles try revert queued to retry pending for transit work item.
+        /// </summary>
         internal bool TryRevertQueuedToRetryPending(DateTimeOffset utcNow)
         {
             if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.RetryPending, (int)TransitWorkItemState.Queued)
@@ -136,6 +213,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Handles mark queued for transit work item.
+        /// </summary>
         internal void MarkQueued(DateTimeOffset utcNow)
         {
             if (!TryMarkQueued(utcNow))
@@ -144,6 +224,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Handles try mark claimed for transit work item.
+        /// </summary>
         internal bool TryMarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
             if (string.IsNullOrWhiteSpace(connectionId))
@@ -164,6 +247,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Handles mark claimed for transit work item.
+        /// </summary>
         internal void MarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
             if (!TryMarkClaimed(connectionId, utcNow))
@@ -172,16 +258,25 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Handles mark staged for transit work item.
+        /// </summary>
         internal void MarkStaged()
         {
             _ = TryTransitionState(TransitWorkItemState.Claimed, TransitWorkItemState.Staged);
         }
 
+        /// <summary>
+        /// Handles mark flushed for transit work item.
+        /// </summary>
         internal void MarkFlushed()
         {
             _ = TryTransitionState(TransitWorkItemState.Staged, TransitWorkItemState.Flushed);
         }
 
+        /// <summary>
+        /// Handles mark awaiting response for transit work item.
+        /// </summary>
         internal void MarkAwaitingResponse()
         {
             if (State == TransitWorkItemState.AwaitingResponse)
@@ -192,6 +287,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _ = TryTransitionState(TransitWorkItemState.Flushed, TransitWorkItemState.AwaitingResponse);
         }
 
+        /// <summary>
+        /// Handles try move to retry pending for transit work item.
+        /// </summary>
         internal bool TryMoveToRetryPending(
             TransitWorkFailureClass failureClass,
             TransitTransmissionUncertainty uncertainty,
@@ -227,11 +325,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
         }
 
+        /// <summary>
+        /// Handles has attempts remaining for transit work item.
+        /// </summary>
         internal bool HasAttemptsRemaining()
         {
             return AttemptCount < MaxAttempts;
         }
 
+        /// <summary>
+        /// Handles try transition to terminal for transit work item.
+        /// </summary>
         internal bool TryTransitionToTerminal(TransitPublishStatus status, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
             if (Interlocked.CompareExchange(ref _terminalCompletionObserved, 1, 0) != 0)
@@ -247,11 +351,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Handles mark cancel requested for transit work item.
+        /// </summary>
         internal void MarkCancelRequested()
         {
             CancelRequested = true;
         }
 
+        /// <summary>
+        /// Handles try complete for transit work item.
+        /// </summary>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -260,6 +370,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 && _completion.TrySetResult(result);
         }
 
+        /// <summary>
+        /// Handles try complete for transit work item.
+        /// </summary>
         internal bool TryComplete(TransitPublishResult result, TransitPublishProvenance terminalProvenance, out TransitWorkItemState priorState)
         {
             ArgumentNullException.ThrowIfNull(result);
@@ -267,12 +380,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return TryTransitionToTerminal(result.Status, terminalProvenance, out priorState) && _completion.TrySetResult(result);
         }
 
+        /// <summary>
+        /// Handles try set completion result for transit work item.
+        /// </summary>
         internal bool TrySetCompletionResult(TransitPublishResult result)
         {
             ArgumentNullException.ThrowIfNull(result);
             return _completion.TrySetResult(result);
         }
 
+        /// <summary>
+        /// Handles try transition state for transit work item.
+        /// </summary>
         private bool TryTransitionState(TransitWorkItemState expected, TransitWorkItemState next)
         {
             if (Interlocked.CompareExchange(ref _stateValue, (int)next, (int)expected) != (int)expected)
@@ -284,6 +403,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Handles is terminal state for transit work item.
+        /// </summary>
         private static bool IsTerminalState(TransitWorkItemState state)
         {
             return state is TransitWorkItemState.CompletedAccepted
@@ -292,6 +414,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 or TransitWorkItemState.CompletedFailed;
         }
 
+        /// <summary>
+        /// Handles map terminal state for transit work item.
+        /// </summary>
         private static TransitWorkItemState MapTerminalState(TransitPublishStatus status)
         {
             return status switch
@@ -303,9 +428,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             };
         }
 
+        /// <summary>
+        /// Stores is terminal used by transit work item.
+        /// </summary>
         internal bool IsTerminal => Volatile.Read(ref _terminalCompletionObserved) == 1;
     }
 
+    /// <summary>
+    /// Defines transit work item state and its transit work item contract.
+    /// </summary>
     internal enum TransitWorkItemState
     {
         Queued = 0,
@@ -320,6 +451,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         CompletedCanceled = 9,
     }
 
+    /// <summary>
+    /// Defines transit work failure class and its transit work item contract.
+    /// </summary>
     internal enum TransitWorkFailureClass
     {
         ConnectionReset = 0,
@@ -335,6 +469,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         Unknown = 10,
     }
 
+    /// <summary>
+    /// Defines transit transmission uncertainty and its transit work item contract.
+    /// </summary>
     internal enum TransitTransmissionUncertainty
     {
         DefinitelyNotSent = 0,

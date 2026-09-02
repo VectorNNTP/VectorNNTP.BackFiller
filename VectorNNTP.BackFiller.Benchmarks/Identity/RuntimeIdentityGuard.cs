@@ -1,3 +1,9 @@
+// <copyright file="RuntimeIdentityGuard.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Identity/RuntimeIdentityGuard: verifies that benchmark measurements execute against the intended build identity.
+
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Security.Cryptography;
@@ -5,8 +11,17 @@ using System.Text;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Verifies that benchmark execution uses the expected benchmark and production assembly identities.
+/// </summary>
 internal static class RuntimeIdentityGuard
 {
+    /// <summary>
+    /// Compares expected build provenance with loaded assemblies and throws on hard-identity mismatches.
+    /// </summary>
+    /// <param name="expected">Expected paths, versions, framework, and architecture.</param>
+    /// <param name="runtimeIdentity">Identity captured from the current process.</param>
+    /// <exception cref="InvalidOperationException">Thrown when required expectations are missing or identities differ.</exception>
     internal static void EnsureMatches(RuntimeIdentityExpectation expected, RuntimeExecutionIdentity runtimeIdentity)
     {
         if (string.IsNullOrWhiteSpace(expected.ExpectedAssemblyPath) ||
@@ -225,12 +240,18 @@ internal static class RuntimeIdentityGuard
         throw new InvalidOperationException(message.ToString());
     }
 
+    /// <summary>
+    /// Resolves LoadedProductionAssembly.
+    /// </summary>
     private static Assembly? ResolveLoadedProductionAssembly()
     {
         return AssemblyLoadContext.Default.Assemblies
             .FirstOrDefault(static assembly => string.Equals(assembly.GetName().Name, "VectorNNTP.BackFiller", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Resolves ActualProductionAssemblyPath.
+    /// </summary>
     private static string ResolveActualProductionAssemblyPath(RuntimeExecutionIdentity runtimeIdentity, Assembly? loadedProductionAssembly)
     {
         if (loadedProductionAssembly is not null && !string.IsNullOrWhiteSpace(loadedProductionAssembly.Location))
@@ -243,6 +264,9 @@ internal static class RuntimeIdentityGuard
             : Path.GetFullPath(runtimeIdentity.ProductionDependencyPath!);
     }
 
+    /// <summary>
+    /// Computes Sha256.
+    /// </summary>
     private static string ComputeSha256(string filePath)
     {
         using FileStream stream = File.OpenRead(filePath);
@@ -250,11 +274,17 @@ internal static class RuntimeIdentityGuard
         return Convert.ToHexString(hash);
     }
 
+    /// <summary>
+    /// Implements the is UnknownIdentityValue contract.
+    /// </summary>
     private static bool IsUnknownIdentityValue(string? value)
     {
         return string.IsNullOrWhiteSpace(value) || string.Equals(value, "(unknown)", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Normalizes TargetFramework.
+    /// </summary>
     private static string NormalizeTargetFramework(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))

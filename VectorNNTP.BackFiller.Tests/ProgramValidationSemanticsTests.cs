@@ -1,11 +1,10 @@
 // <copyright file="ProgramValidationSemanticsTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for program validation semantics, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the program validation semantics test suite.
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +27,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </remarks>
     public class ProgramValidationSemanticsTests
     {
+        /// <summary>
+        /// Confirms the configuration validation result when only warnings is valid true behavior.
+        /// </summary>
         [Fact]
         public void ConfigurationValidationResult_WhenOnlyWarnings_IsValidTrue()
         {
@@ -39,7 +41,9 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Single(result.Warnings);
             Assert.Empty(result.Errors);
         }
-
+        /// <summary>
+        /// Confirms the configuration validation result when errors present is valid false behavior.
+        /// </summary>
         [Fact]
         public void ConfigurationValidationResult_WhenErrorsPresent_IsValidFalse()
         {
@@ -51,7 +55,9 @@ namespace VectorNNTP.Backfiller.Tests
             _ = Assert.Single(result.Warnings);
             _ = Assert.Single(result.Errors);
         }
-
+        /// <summary>
+        /// Confirms the build validate config command result when dir logs missing from runtime snapshot validation returns configuration error behavior.
+        /// </summary>
         [Fact]
         public void BuildValidateConfigCommandResult_WhenDirLogsMissingFromRuntimeSnapshotValidation_ReturnsConfigurationError()
         {
@@ -68,7 +74,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller"
                 && e.Error.Contains("DirLogs", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when canonical identity available does not use configured domain names behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenCanonicalIdentityAvailable_DoesNotUseConfiguredDomainNames()
         {
@@ -99,7 +107,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:LetsEncrypt:DomainNames", StringComparison.Ordinal));
             Assert.Equal("grabber12.example.com", BackFillerIdentityValidator.BuildBackFillerFqdn("Grabber", 12, "example.com"));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when identity invalid does not fallback to configured domain names behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenIdentityInvalid_DoesNotFallbackToConfiguredDomainNames()
         {
@@ -129,7 +139,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && e.Setting.Contains("Name", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:LetsEncrypt:DomainNames", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when configuration fails skips dependency validation behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenConfigurationFails_SkipsDependencyValidation()
         {
@@ -142,7 +154,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             }, includeRabbitMqBaseline: false);
 
@@ -158,7 +170,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Empty(dependencyResult.Warnings);
             Assert.Empty(dependencyResult.Errors);
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when lets encrypt disabled and cloudflare token missing returns cloudflare configuration error behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenLetsEncryptDisabledAndCloudflareTokenMissing_ReturnsCloudflareConfigurationError()
         {
@@ -186,7 +200,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(dependencyResult.IsValid);
             Assert.Empty(dependencyResult.FailedDependencies);
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when lets encrypt disabled and cloudflare configured still runs cloudflare dependency validation behavior.
+        /// </summary>
         [Trait("Category", "Integration")]
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenLetsEncryptDisabledAndCloudflareConfigured_StillRunsCloudflareDependencyValidation()
@@ -200,7 +216,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             });
 
@@ -213,7 +229,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(configResult.IsValid);
             Assert.Contains(dependencyResult.FailedDependencies, static d => d.Dependency == "CloudflareZone");
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when tls disabled and cloudflare configured preserves warnings without invalidating configuration behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTlsDisabledAndCloudflareConfigured_PreservesWarningsWithoutInvalidatingConfiguration()
         {
@@ -226,7 +244,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             });
 
@@ -240,7 +258,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.Empty(configResult.Errors);
             Assert.Contains(configResult.Warnings, static w => w.Setting == "BackFiller:LetsEncrypt:Enabled");
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when rabbit mq endpoint unreachable does not return rabbit mq dependency failure behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenRabbitMqEndpointUnreachable_DoesNotReturnRabbitMqDependencyFailure()
         {
@@ -253,7 +273,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:Hosts:0"] = "203.0.113.1",
                 ["BackFiller:RabbitMQ:Port"] = "5672",
@@ -274,7 +294,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(dependencyResult.FailedDependencies, static d => d.Dependency == "RabbitMQ");
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when transit server endpoint unreachable returns transit server dependency failure behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTransitServerEndpointUnreachable_ReturnsTransitServerDependencyFailure()
         {
@@ -287,7 +309,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:Hosts:0"] = "203.0.113.2",
                 ["BackFiller:RabbitMQ:Port"] = "5672",
@@ -307,7 +329,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Contains(dependencyResult.FailedDependencies, static d => d.Dependency == "TransitServer");
         }
-
+        /// <summary>
+        /// Confirms the back filler identity validator canonicalize dns suffix normalizes equivalent inputs behavior.
+        /// </summary>
         [Theory]
         [InlineData("example.com")]
         [InlineData("EXAMPLE.COM")]
@@ -318,7 +342,9 @@ namespace VectorNNTP.Backfiller.Tests
             string canonical = BackFillerIdentityValidator.CanonicalizeDnsSuffix(input);
             Assert.Equal("example.com", canonical);
         }
-
+        /// <summary>
+        /// Confirms the back filler identity validator build back filler fqdn uses canonical dns suffix behavior.
+        /// </summary>
         [Theory]
         [InlineData("example.com")]
         [InlineData("EXAMPLE.COM")]
@@ -329,7 +355,9 @@ namespace VectorNNTP.Backfiller.Tests
             string fqdn = BackFillerIdentityValidator.BuildBackFillerFqdn("Grabber", 12, dnsSuffix);
             Assert.Equal("grabber12.example.com", fqdn);
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when already canceled propagates operation canceled exception behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenAlreadyCanceled_PropagatesOperationCanceledException()
         {
@@ -342,7 +370,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             });
 
@@ -356,11 +384,17 @@ namespace VectorNNTP.Backfiller.Tests
                     cts.Token).ConfigureAwait(false));
         }
 
+        /// <summary>
+        /// Supplies invalid dependency timeouts for the fixture or scenario under test.
+        /// </summary>
         public static TheoryData<TimeSpan> InvalidDependencyTimeouts =>
             [
                 TimeSpan.Zero,
                 TimeSpan.FromMilliseconds(-1),
             ];
+        /// <summary>
+        /// Confirms my sql sanitized error mappings behavior.
+        /// </summary>
 
         public static TheoryData<int, string> MySqlSanitizedErrorMappings => new()
         {
@@ -374,7 +408,9 @@ namespace VectorNNTP.Backfiller.Tests
             { 2061, "MySQL connection failed: Authentication plugin error" },
             { 9999, "MySQL connection failed" },
         };
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when timeout is invalid throws argument out of range exception behavior.
+        /// </summary>
         [Theory]
         [MemberData(nameof(InvalidDependencyTimeouts))]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTimeoutIsInvalid_ThrowsArgumentOutOfRangeException(TimeSpan invalidTimeout)
@@ -388,7 +424,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             });
 
@@ -398,7 +434,9 @@ namespace VectorNNTP.Backfiller.Tests
                     invalidTimeout,
                     CancellationToken.None).ConfigureAwait(false));
         }
-
+        /// <summary>
+        /// Confirms the get sanitized my sql connection failure reason when error code known returns sanitized message behavior.
+        /// </summary>
         [Theory]
         [MemberData(nameof(MySqlSanitizedErrorMappings))]
         public void GetSanitizedMySqlConnectionFailureReason_WhenErrorCodeKnown_ReturnsSanitizedMessage(int mySqlErrorNumber, string expectedMessage)
@@ -407,7 +445,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(expectedMessage, sanitizedMessage);
         }
-
+        /// <summary>
+        /// Confirms the validate database connectivity async when unexpected exception occurs returns sanitized failure reason behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateDatabaseConnectivityAsync_WhenUnexpectedExceptionOccurs_ReturnsSanitizedFailureReason()
         {
@@ -425,7 +465,9 @@ namespace VectorNNTP.Backfiller.Tests
                 d.Dependency == "GrabberDB" &&
                 d.Reason == "Failed to connect");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel lease timeout missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelLeaseTimeoutMissing_UsesDefaultWithoutError()
         {
@@ -437,7 +479,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
             });
@@ -448,7 +490,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq rpc timeout seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqRpcTimeoutSecondsMissing_UsesDefaultWithoutError()
         {
@@ -460,7 +504,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
             });
@@ -471,7 +515,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:RpcTimeoutSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq rpc timeout seconds out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("3601")]
@@ -485,7 +531,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = rpcTimeoutSeconds,
@@ -498,7 +544,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && (e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase)
                     || e.Error.Contains("between 1 and 3600", StringComparison.OrdinalIgnoreCase)));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel lease timeout less than rpc timeout returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelLeaseTimeoutLessThanRpcTimeout_ReturnsError()
         {
@@ -510,7 +558,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "20",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -522,7 +570,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"
                 && e.Error.Contains("greater than or equal to RpcTimeoutSeconds", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel lease timeout valid and coherent does not return rabbit mq errors behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelLeaseTimeoutValidAndCoherent_DoesNotReturnRabbitMqErrors()
         {
@@ -534,7 +584,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -544,7 +594,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:RabbitMQ", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq connection blocked timeout missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqConnectionBlockedTimeoutMissing_UsesDefaultWithoutError()
         {
@@ -556,7 +608,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -568,7 +620,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ConnectionBlockedTimeoutSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq connection blocked timeout less than minimum returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqConnectionBlockedTimeoutLessThanMinimum_ReturnsError()
         {
@@ -580,7 +634,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -593,7 +647,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ConnectionBlockedTimeoutSeconds"
                 && e.Error.Contains("between 5 and 3600", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq connection blocked timeout less than rpc timeout returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqConnectionBlockedTimeoutLessThanRpcTimeout_ReturnsError()
         {
@@ -605,7 +661,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -618,7 +674,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ConnectionBlockedTimeoutSeconds"
                 && e.Error.Contains("greater than or equal to RpcTimeoutSeconds", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq enable ssl missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqEnableSslMissing_UsesDefaultWithoutError()
         {
@@ -630,7 +688,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -642,7 +700,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:EnableSsl"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq port missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPortMissing_UsesDefaultWithoutError()
         {
@@ -654,7 +714,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -666,7 +726,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:Port"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq port out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("65536")]
@@ -680,7 +742,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -694,7 +756,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && (e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase)
                     || e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase)));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq username configured and password missing returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqUsernameConfiguredAndPasswordMissing_ReturnsError()
         {
@@ -706,7 +770,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -721,7 +785,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:Password"
                 && e.Error.Contains("required when Username is configured", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq password configured and username missing returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPasswordConfiguredAndUsernameMissing_ReturnsError()
         {
@@ -733,7 +799,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -748,7 +814,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:Username"
                 && e.Error.Contains("required when Password is configured", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq username whitespace returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqUsernameWhitespace_ReturnsError()
         {
@@ -760,7 +828,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -774,7 +842,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:Username"
                 && e.Error.Contains("must not be empty or whitespace", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq virtual host missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqVirtualHostMissing_UsesDefaultWithoutError()
         {
@@ -786,7 +856,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -798,7 +868,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:VirtualHost"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq virtual host whitespace returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqVirtualHostWhitespace_ReturnsError()
         {
@@ -810,7 +882,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -823,7 +895,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:VirtualHost"
                 && e.Error.Contains("must not be empty or whitespace", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq password empty returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPasswordEmpty_ReturnsError()
         {
@@ -835,7 +909,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -849,7 +923,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:Password"
                 && e.Error.Contains("must not be empty", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq password whitespace returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPasswordWhitespace_ReturnsError()
         {
@@ -861,7 +937,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -875,7 +951,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:Password"
                 && e.Error.Contains("must not be empty or whitespace", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq username and password are valid does not return credential errors behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqUsernameAndPasswordAreValid_DoesNotReturnCredentialErrors()
         {
@@ -887,7 +965,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -901,7 +979,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting is "BackFiller:RabbitMQ:Password"
                 or "BackFiller:RabbitMQ:Username");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq enable ssl boolean value does not return error behavior.
+        /// </summary>
         [Theory]
         [InlineData("true")]
         [InlineData("false")]
@@ -915,7 +995,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -926,7 +1006,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:RabbitMQ:EnableSsl");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq hosts missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqHostsMissing_UsesDefaultWithoutError()
         {
@@ -938,7 +1020,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -948,7 +1030,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:RabbitMQ:Hosts", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq host entry contains scheme returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqHostEntryContainsScheme_ReturnsError()
         {
@@ -960,7 +1044,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -973,7 +1057,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting.StartsWith("BackFiller:RabbitMQ:Hosts:", StringComparison.Ordinal)
                 && e.Error.Contains("must not include a URI scheme", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq hosts contain duplicates returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqHostsContainDuplicates_ReturnsError()
         {
@@ -985,7 +1071,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -999,7 +1085,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting.StartsWith("BackFiller:RabbitMQ:Hosts:", StringComparison.Ordinal)
                 && e.Error.Contains("Duplicate host entries", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq hosts are valid does not return host errors behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqHostsAreValid_DoesNotReturnHostErrors()
         {
@@ -1011,7 +1099,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1024,7 +1112,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting.StartsWith("BackFiller:RabbitMQ:Hosts", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq connection scale down idle seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqConnectionScaleDownIdleSecondsMissing_UsesDefaultWithoutError()
         {
@@ -1036,7 +1126,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1049,7 +1139,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ConnectionScaleDownIdleSeconds"
                 && e.Error.Contains("between 30 and 86400", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq scale down cooldown seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqScaleDownCooldownSecondsMissing_UsesDefaultWithoutError()
         {
@@ -1061,7 +1153,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1073,7 +1165,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ScaleDownCooldownSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq scale down cooldown seconds out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("-1")]
         [InlineData("3601")]
@@ -1087,7 +1181,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1101,7 +1195,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && (e.Error.Contains("greater than or equal to zero", StringComparison.OrdinalIgnoreCase)
                     || e.Error.Contains("between 0 and 3600", StringComparison.OrdinalIgnoreCase)));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq min connections missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMinConnectionsMissing_UsesDefaultWithoutError()
         {
@@ -1113,7 +1209,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1126,7 +1222,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MinConnections"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq min connections less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMinConnectionsLessThanOrEqualToZero_ReturnsError()
         {
@@ -1138,7 +1236,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1151,7 +1249,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MinConnections"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max connections missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxConnectionsMissing_UsesDefaultWithoutError()
         {
@@ -1163,7 +1263,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1176,7 +1276,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxConnections"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq min connections greater than max connections returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMinConnectionsGreaterThanMaxConnections_ReturnsError()
         {
@@ -1188,7 +1290,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1203,7 +1305,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MinConnections"
                 && e.Error.Contains("less than or equal to MaxConnections", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max consecutive recovery failures missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxConsecutiveRecoveryFailuresMissing_UsesDefaultWithoutError()
         {
@@ -1215,7 +1319,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1227,7 +1331,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxConsecutiveRecoveryFailures"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max consecutive recovery failures less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxConsecutiveRecoveryFailuresLessThanOrEqualToZero_ReturnsError()
         {
@@ -1239,7 +1345,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1252,7 +1358,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxConsecutiveRecoveryFailures"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max consecutive recovery failures too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxConsecutiveRecoveryFailuresTooLarge_ReturnsError()
         {
@@ -1264,7 +1372,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1277,7 +1385,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxConsecutiveRecoveryFailures"
                 && e.Error.Contains("between 1 and 100", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq publish confirm timeout seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPublishConfirmTimeoutSecondsMissing_UsesDefaultWithoutError()
         {
@@ -1289,7 +1399,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1301,7 +1411,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq publish confirm timeout seconds less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPublishConfirmTimeoutSecondsLessThanOrEqualToZero_ReturnsError()
         {
@@ -1313,7 +1425,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1326,7 +1438,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq publish confirm timeout seconds too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPublishConfirmTimeoutSecondsTooLarge_ReturnsError()
         {
@@ -1338,7 +1452,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1351,7 +1465,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds"
                 && e.Error.Contains("between 1 and 3600", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq maximum shutdown drain timeout seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaximumShutdownDrainTimeoutSecondsMissing_UsesDefaultWithoutError()
         {
@@ -1363,7 +1479,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1375,7 +1491,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq maximum shutdown drain timeout seconds less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaximumShutdownDrainTimeoutSecondsLessThanOrEqualToZero_ReturnsError()
         {
@@ -1387,7 +1505,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1400,7 +1518,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq maximum shutdown drain timeout seconds too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaximumShutdownDrainTimeoutSecondsTooLarge_ReturnsError()
         {
@@ -1412,7 +1532,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1425,7 +1545,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds"
                 && e.Error.Contains("between 1 and 3600", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the configure host shutdown timeout sets configured timeout behavior.
+        /// </summary>
         [Fact]
         public void ConfigureHostShutdownTimeout_SetsConfiguredTimeout()
         {
@@ -1442,7 +1564,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal(TimeSpan.FromSeconds(60), hostOptions.Value.ShutdownTimeout);
         }
-
+        /// <summary>
+        /// Confirms the configure host shutdown timeout when grace period invalid throws behavior.
+        /// </summary>
         [Fact]
         public void ConfigureHostShutdownTimeout_WhenGracePeriodInvalid_Throws()
         {
@@ -1457,7 +1581,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Equal("shutdownOptions", exception.ParamName);
         }
-
+        /// <summary>
+        /// Confirms the shutdown configuration rejects rabbit mq drain longer than grace period behavior.
+        /// </summary>
         [Theory]
         [InlineData(20, 60)]
         [InlineData(30, 31)]
@@ -1473,7 +1599,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1487,7 +1613,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds"
                 && e.Error.Contains("less than or equal to BackFiller:Shutdown:GracePeriodSeconds", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when shutdown section is null returns validation error without throwing behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenShutdownSectionIsNull_ReturnsValidationErrorWithoutThrowing()
         {
@@ -1501,7 +1629,7 @@ namespace VectorNNTP.Backfiller.Tests
                 LetsEncrypt = new LetsEncryptOptions
                 {
                     Enabled = false,
-                    CloudFlareApiToken = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                    CloudFlareApiToken = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     CloudFlareZoneId = "5811a29d39a0732afb5f160c9b137c3d",
                 },
                 RabbitMQ = new RabbitMqOptions(),
@@ -1519,7 +1647,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller.Shutdown"
                 && e.Error.Contains("BackFiller:Shutdown is required", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq minimum connection lifetime seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMinimumConnectionLifetimeSecondsMissing_UsesDefaultWithoutError()
         {
@@ -1531,7 +1661,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1543,7 +1673,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq minimum connection lifetime seconds too small returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMinimumConnectionLifetimeSecondsTooSmall_ReturnsError()
         {
@@ -1555,7 +1687,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1568,7 +1700,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds"
                 && e.Error.Contains("between 30 and 86400", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq network recovery interval seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqNetworkRecoveryIntervalSecondsMissing_UsesDefaultWithoutError()
         {
@@ -1580,7 +1714,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1592,7 +1726,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq network recovery interval seconds less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqNetworkRecoveryIntervalSecondsLessThanOrEqualToZero_ReturnsError()
         {
@@ -1604,7 +1740,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1617,7 +1753,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq network recovery interval seconds too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqNetworkRecoveryIntervalSecondsTooLarge_ReturnsError()
         {
@@ -1629,7 +1767,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1642,7 +1780,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds"
                 && e.Error.Contains("between 1 and 3600", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect base delay ms missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectBaseDelayMsMissing_UsesDefaultWithoutError()
         {
@@ -1654,7 +1794,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1666,7 +1806,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectBaseDelayMs"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect max delay ms missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsMissing_UsesDefaultWithoutError()
         {
@@ -1678,7 +1820,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1690,7 +1832,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectMaxDelayMs"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect max delay ms less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsLessThanOrEqualToZero_ReturnsError()
         {
@@ -1702,7 +1846,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1715,7 +1859,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectMaxDelayMs"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect max delay ms out of range returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsOutOfRange_ReturnsError()
         {
@@ -1727,7 +1873,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1740,7 +1886,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectMaxDelayMs"
                 && e.Error.Contains("between 50 and 300000", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect max delay ms less than base delay returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectMaxDelayMsLessThanBaseDelay_ReturnsError()
         {
@@ -1752,7 +1900,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1766,7 +1914,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectMaxDelayMs"
                 && e.Error.Contains("greater than or equal to PoolReconnectBaseDelayMs", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect base delay ms less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectBaseDelayMsLessThanOrEqualToZero_ReturnsError()
         {
@@ -1778,7 +1928,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1791,7 +1941,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectBaseDelayMs"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq pool reconnect base delay ms out of range returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqPoolReconnectBaseDelayMsOutOfRange_ReturnsError()
         {
@@ -1803,7 +1955,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1816,7 +1968,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:PoolReconnectBaseDelayMs"
                 && e.Error.Contains("between 50 and 60000", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max pending lease waiters missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxPendingLeaseWaitersMissing_UsesDefaultWithoutError()
         {
@@ -1828,7 +1982,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1840,7 +1994,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxPendingLeaseWaiters"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max pending lease waiters less than zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxPendingLeaseWaitersLessThanZero_ReturnsError()
         {
@@ -1852,7 +2008,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1865,7 +2021,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxPendingLeaseWaiters"
                 && e.Error.Contains("greater than or equal to zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq max pending lease waiters too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqMaxPendingLeaseWaitersTooLarge_ReturnsError()
         {
@@ -1877,7 +2035,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1890,7 +2048,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:MaxPendingLeaseWaiters"
                 && e.Error.Contains("between 0 and 65536", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq degraded threshold missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdMissing_UsesDefaultWithoutError()
         {
@@ -1902,7 +2062,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1914,7 +2074,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:DegradedThreshold"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq degraded threshold out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("-0.01")]
@@ -1929,7 +2091,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1942,7 +2104,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:DegradedThreshold"
                 && e.Error.Contains("greater than 0 and less than or equal to 1", StringComparison.Ordinal));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq degraded threshold valid does not return error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqDegradedThresholdValid_DoesNotReturnError()
         {
@@ -1954,7 +2118,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1965,7 +2129,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:RabbitMQ:DegradedThreshold");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq unhealthy threshold missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqUnhealthyThresholdMissing_UsesDefaultWithoutError()
         {
@@ -1977,7 +2143,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -1989,7 +2155,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:UnhealthyThreshold"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq unhealthy threshold out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("121")]
@@ -2003,7 +2171,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2017,7 +2185,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && (e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase)
                     || e.Error.Contains("between 1 and 120", StringComparison.OrdinalIgnoreCase)));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel pool size missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeMissing_UsesDefaultWithoutError()
         {
@@ -2029,7 +2199,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2041,7 +2211,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ChannelPoolSize"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel pool size less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeLessThanOrEqualToZero_ReturnsError()
         {
@@ -2053,7 +2225,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2066,7 +2238,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ChannelPoolSize"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq requested heartbeat seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqRequestedHeartbeatSecondsMissing_UsesDefaultWithoutError()
         {
@@ -2078,7 +2252,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2090,7 +2264,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:RequestedHeartbeatSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq requested heartbeat seconds out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("-1")]
         [InlineData("3601")]
@@ -2104,7 +2280,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2118,7 +2294,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && (e.Error.Contains("greater than or equal to zero", StringComparison.OrdinalIgnoreCase)
                     || e.Error.Contains("between 0 and 3600", StringComparison.OrdinalIgnoreCase)));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq socket timeout seconds missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqSocketTimeoutSecondsMissing_UsesDefaultWithoutError()
         {
@@ -2130,7 +2308,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2142,7 +2320,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:SocketTimeoutSeconds"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq socket timeout seconds out of range returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("601")]
@@ -2156,7 +2336,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2170,7 +2350,9 @@ namespace VectorNNTP.Backfiller.Tests
                 && (e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase)
                     || e.Error.Contains("between 5 and 600", StringComparison.OrdinalIgnoreCase)));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq requested channel max missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqRequestedChannelMaxMissing_UsesDefaultWithoutError()
         {
@@ -2182,7 +2364,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2194,7 +2376,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:RequestedChannelMax"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq requested channel max less than or equal to zero returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqRequestedChannelMaxLessThanOrEqualToZero_ReturnsError()
         {
@@ -2206,7 +2390,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2219,7 +2403,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:RequestedChannelMax"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq requested channel max too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqRequestedChannelMaxTooLarge_ReturnsError()
         {
@@ -2231,7 +2417,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2244,7 +2430,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:RequestedChannelMax"
                 && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel pool size exceeds effective channel limit returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeExceedsEffectiveChannelLimit_ReturnsError()
         {
@@ -2256,7 +2444,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2271,7 +2459,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ChannelPoolSize"
                 && e.Error.Contains("effective channel limit", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq channel pool size within effective channel limit does not return channel pool errors behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenRabbitMqChannelPoolSizeWithinEffectiveChannelLimit_DoesNotReturnChannelPoolErrors()
         {
@@ -2283,7 +2473,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2298,7 +2488,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:RabbitMQ:ChannelPoolSize"
                 && e.Error.Contains("effective channel limit", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostMissing_UsesDefaultWithoutError()
         {
@@ -2310,7 +2502,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2320,7 +2512,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:TransitServer:Host");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host whitespace returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostWhitespace_ReturnsError()
         {
@@ -2332,7 +2526,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2345,7 +2539,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Host"
                 && e.Error.Contains("must not be empty", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host contains scheme returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostContainsScheme_ReturnsError()
         {
@@ -2357,7 +2553,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2370,7 +2566,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Host"
                 && e.Error.Contains("must not include a URI scheme", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host contains credentials returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostContainsCredentials_ReturnsError()
         {
@@ -2382,7 +2580,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2395,7 +2593,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Host"
                 && e.Error.Contains("must not include credentials", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host contains port returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostContainsPort_ReturnsError()
         {
@@ -2407,7 +2607,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2420,7 +2620,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Host"
                 && e.Error.Contains("must not include a port value", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host invalid returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostInvalid_ReturnsError()
         {
@@ -2432,7 +2634,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2445,7 +2647,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Host"
                 && e.Error.Contains("valid hostname or IP address", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server host valid does not return error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerHostValid_DoesNotReturnError()
         {
@@ -2457,7 +2661,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2468,7 +2672,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:TransitServer:Host");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server port missing uses default without error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerPortMissing_UsesDefaultWithoutError()
         {
@@ -2480,7 +2686,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2491,7 +2697,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:TransitServer:Port");
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server port less than or equal to zero returns error behavior.
+        /// </summary>
         [Theory]
         [InlineData("0")]
         [InlineData("-1")]
@@ -2505,7 +2713,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2519,7 +2727,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Port"
                 && e.Error.Contains("greater than zero", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate back filler options when transit server port too large returns error behavior.
+        /// </summary>
         [Fact]
         public void ValidateBackFillerOptions_WhenTransitServerPortTooLarge_ReturnsError()
         {
@@ -2531,7 +2741,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2545,7 +2755,9 @@ namespace VectorNNTP.Backfiller.Tests
                 e.Setting == "BackFiller:TransitServer:Port"
                 && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when transit server use ssl missing uses default false without use ssl errors behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslMissing_UsesDefaultFalseWithoutUseSslErrors()
         {
@@ -2558,7 +2770,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2579,7 +2791,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(configResult.IsValid);
             Assert.DoesNotContain(configResult.Errors, static e => e.Setting == "BackFiller:TransitServer:UseSsl");
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when transit server use ssl true with port119 returns warning behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslTrueWithPort119_ReturnsWarning()
         {
@@ -2592,7 +2806,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2612,7 +2826,9 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:TransitServer:Port"
                 && w.Message.Contains("conventionally non-TLS", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when transit server use ssl false with port563 returns warning behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslFalseWithPort563_ReturnsWarning()
         {
@@ -2625,7 +2841,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2645,7 +2861,9 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:TransitServer:Port"
                 && w.Message.Contains("conventionally TLS", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when transit server use ssl true with port563 does not return port warnings behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenTransitServerUseSslTrueWithPort563_DoesNotReturnPortWarnings()
         {
@@ -2658,7 +2876,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
@@ -2676,7 +2894,9 @@ namespace VectorNNTP.Backfiller.Tests
             Assert.True(configResult.IsValid);
             Assert.DoesNotContain(configResult.Warnings, static w => w.Setting == "BackFiller:TransitServer:Port");
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when rabbit mq network recovery interval exceeds connection blocked timeout returns warning behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenRabbitMqNetworkRecoveryIntervalExceedsConnectionBlockedTimeout_ReturnsWarning()
         {
@@ -2689,7 +2909,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 // Explicit RabbitMQ configuration
                 ["BackFiller:RabbitMQ:Hosts:0"] = "203.0.113.7",
@@ -2722,7 +2942,9 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds"
                 && w.Message.Contains("exceeds ConnectionBlockedTimeoutSeconds", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when rabbit mq publish confirm timeout exceeds rpc timeout returns warning behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenRabbitMqPublishConfirmTimeoutExceedsRpcTimeout_ReturnsWarning()
         {
@@ -2735,7 +2957,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 // Make both values explicit so baseline does not mask the comparison
@@ -2754,7 +2976,9 @@ namespace VectorNNTP.Backfiller.Tests
                 w.Setting == "BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds"
                 && w.Message.Contains("exceeds RpcTimeoutSeconds", StringComparison.OrdinalIgnoreCase));
         }
-
+        /// <summary>
+        /// Confirms the validate configuration and dependencies async when rabbit mq minimum connection lifetime exceeds scale down idle returns warning behavior.
+        /// </summary>
         [Fact]
         public async Task ValidateConfigurationAndDependenciesAsync_WhenRabbitMqMinimumConnectionLifetimeExceedsScaleDownIdle_ReturnsWarning()
         {
@@ -2767,7 +2991,7 @@ namespace VectorNNTP.Backfiller.Tests
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
                 ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
                 // Explicitly set both sides of the inequality to ensure the warning condition is exercised
@@ -2788,6 +3012,16 @@ namespace VectorNNTP.Backfiller.Tests
                 && w.Message.Contains("exceeds ConnectionScaleDownIdleSeconds", StringComparison.OrdinalIgnoreCase));
         }
 
+        /// <summary>
+        /// Confirms the build configuration behavior.
+        /// </summary>
+        /// <returns>The value returned by the build configuration helper.</returns>
+        /// <summary>
+        /// Confirms the build configuration behavior.
+        /// </summary>
+        /// <param name="values">The values used by this test scenario.</param>
+        /// <param name="includeRabbitMqBaseline">The include rabbit mq baseline used by this test scenario.</param>
+        /// <returns>The value returned by the build configuration helper.</returns>
         private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             if (includeRabbitMqBaseline)
@@ -2800,7 +3034,7 @@ namespace VectorNNTP.Backfiller.Tests
                     ["BackFiller:DnsSuffix"] = "example.com",
                     ["BackFiller:DirCerts"] = "certs",
                     ["BackFiller:LetsEncrypt:Enabled"] = "false",
-                    ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "v1.abcdef1234567890abcdef1234567890abcdef12",
+                    ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                     // RabbitMQ baseline prerequisites to allow deeper validator checks
                     ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",

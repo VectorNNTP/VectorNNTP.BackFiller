@@ -2,12 +2,14 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / Transit
+// Implements the transit dot stuffing behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
+    /// <summary>
+    /// Defines transit dot stuffing algorithm and its transit dot stuffing contract.
+    /// </summary>
     internal enum TransitDotStuffingAlgorithm
     {
         BaselineByteLoop = 0,
@@ -15,13 +17,26 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         BulkLineOrientedTwoPass = 2,
     }
 
+    /// <summary>
+    /// Defines struct and its transit dot stuffing contract.
+    /// </summary>
     internal readonly record struct TransitDotStuffTransformResult(
         int BytesWritten,
         int StuffedDotCount,
         bool AppendedTrailingCrlf);
 
+    /// <summary>
+    /// Defines transit dot stuffing and its transit dot stuffing contract.
+    /// </summary>
     internal static class TransitDotStuffing
     {
+        /// <summary>
+        /// Calculates the destination size required after dot-stuffing and optional trailing-CRLF insertion.
+        /// </summary>
+        /// <param name="source">Source article bytes.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf">Whether a final CRLF is added when the source does not end in LF.</param>
+        /// <param name="stuffedDotCount">Receives the number of leading line dots that require escaping.</param>
+        /// <returns>The required destination length in bytes.</returns>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
             stuffedDotCount = 0;
@@ -59,6 +74,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return required;
         }
 
+        /// <summary>
+        /// Handles try dot stuff for transit dot stuffing.
+        /// </summary>
         internal static bool TryDotStuff(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -75,6 +93,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             };
         }
 
+        /// <summary>
+        /// Handles try dot stuff baseline byte loop for transit dot stuffing.
+        /// </summary>
         internal static bool TryDotStuffBaselineByteLoop(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -129,6 +150,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Handles try dot stuff bulk line oriented single pass for transit dot stuffing.
+        /// </summary>
         internal static bool TryDotStuffBulkLineOrientedSinglePass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -184,6 +208,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             return true;
         }
 
+        /// <summary>
+        /// Handles try dot stuff bulk line oriented two pass for transit dot stuffing.
+        /// </summary>
         internal static bool TryDotStuffBulkLineOrientedTwoPass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,

@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Validation
+// Implements the validation results behavior.
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
@@ -19,12 +18,12 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         public bool IsValid { get; }
 
         /// <summary>
-        /// Gets the collection of validation errors (name, message pairs).
+        /// Returns the collection of validation errors (name, message pairs).
         /// </summary>
         public IReadOnlyList<(string Setting, string Error)> Errors { get; }
 
         /// <summary>
-        /// Gets the collection of validation warnings (name, message pairs).
+        /// Returns the collection of validation warnings (name, message pairs).
         /// </summary>
         public IReadOnlyList<(string Setting, string Message)> Warnings { get; }
 
@@ -62,17 +61,17 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         public bool IsValid => FailedDependencies.Count == 0 && Errors.Count == 0;
 
         /// <summary>
-        /// Gets the collection of failed dependencies (name, reason pairs).
+        /// Returns the collection of failed dependencies (name, reason pairs).
         /// </summary>
         public IReadOnlyList<(string Dependency, string Reason)> FailedDependencies { get; }
 
         /// <summary>
-        /// Gets the collection of warnings.
+        /// Returns the collection of warnings.
         /// </summary>
         public IReadOnlyList<(string Category, string Message)> Warnings { get; }
 
         /// <summary>
-        /// Gets the collection of errors.
+        /// Returns the collection of errors.
         /// </summary>
         public IReadOnlyList<(string Category, string Message)> Errors { get; }
 

@@ -1,5 +1,15 @@
+// <copyright file="TransitBenchmarkCliOptions.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// TransitBenchmarkCliOptions: represents the validated command-line controls for a transit benchmark run.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Holds optional command-line overrides and runtime identity expectations for a transit benchmark.
+/// <remarks>All numeric options are parsed as positive integers; omitted values remain <see langword="null"/>.</remarks>
+/// </summary>
 internal readonly record struct TransitBenchmarkCliOptions(
     int? DurationSeconds,
     int? WarmupSeconds,
@@ -24,6 +34,12 @@ internal readonly record struct TransitBenchmarkCliOptions(
     string? ExpectedProductionAssemblyVersion = null,
     string? ExpectedProductionFileVersion = null)
 {
+    /// <summary>
+    /// Parses <c>--key value</c> and <c>--key=value</c> options using invariant option names.
+    /// <param name="args">Command-line arguments to parse.</param>
+    /// <returns>The parsed options, or the default value when <paramref name="args"/> is empty.</returns>
+    /// <exception cref="ArgumentException">Thrown when an option is unknown, missing a value, or has an invalid value.</exception>
+    /// </summary>
     internal static TransitBenchmarkCliOptions Parse(string[] args)
     {
         if (args.Length == 0)
@@ -180,6 +196,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
             ExpectedProductionFileVersion: expectedProductionFileVersion);
     }
 
+    /// <summary>
+    /// Parses PositiveInt.
+    /// </summary>
     private static int ParsePositiveInt(string key, string raw)
     {
         if (!int.TryParse(raw, out int parsed) || parsed <= 0)
@@ -190,6 +209,9 @@ internal readonly record struct TransitBenchmarkCliOptions(
         return parsed;
     }
 
+    /// <summary>
+    /// Parses RequiredString.
+    /// </summary>
     private static string ParseRequiredString(string key, string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))

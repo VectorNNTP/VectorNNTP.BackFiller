@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Runtime / RabbitMq
+// Implements the rabbit mq consumer session identity behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
@@ -32,12 +31,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         bool UseSsl)
     {
         /// <summary>
-        /// Gets the one-based session ordinal used by existing consumer/session diagnostics.
+        /// Returns the one-based session ordinal used by existing consumer/session diagnostics.
         /// </summary>
         internal int SessionOrdinal => ConnectionNumber;
 
         /// <summary>
-        /// Gets the stable logical session key used in diagnostics and reconciliation maps.
+        /// Returns the stable logical session key used in diagnostics and reconciliation maps.
         /// </summary>
         internal string SessionKey => $"{AccountId:N}:{ConnectionNumber}";
     }

@@ -10,7 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Tracks the currently active listener certificate bundle for runtime consumers.
+    /// Stores the currently active listener certificate bundle used by runtime consumers.
     /// </summary>
     /// <remarks>
     /// Replacing the active bundle disposes the previously published certificate. Callers that need a reusable copy
@@ -18,7 +18,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// </remarks>
     internal sealed class BackFillerCertificateState : IDisposable
     {
+        /// <summary>
+        /// Stores gate used by back filler certificate state.
+        /// </summary>
         private readonly object _gate = new();
+        /// <summary>
+        /// Stores current used by back filler certificate state.
+        /// </summary>
         private BackFillerCertificateBundle? _current;
 
         /// <summary>

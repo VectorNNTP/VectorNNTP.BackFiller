@@ -1,6 +1,12 @@
+// <copyright file="ShutdownCoordinator.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: shutdown coordinator in the runtime shutdown subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // ShutdownCoordinator.cs -- Graceful/forced shutdown coordination state machine.
 //
-// Coordinates domain-specific shutdown escalation across worker components using two cancellation tokens:
+// Owns domain-specific shutdown escalation across worker components using two cancellation tokens:
 //   - GracefulShutdownStartedToken: indicates cooperative shutdown should begin
 //   - ForcedShutdownToken: indicates graceful budget expired or immediate forced shutdown
 //
@@ -29,7 +35,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace VectorNNTP.Backfiller.Runtime.Shutdown
 {
     /// <summary>
-    /// Coordinates shutdown state transitions and cancellation signaling for graceful and forced termination.
+    /// Handles shutdown state transitions and cancellation signaling for graceful and forced termination.
     /// </summary>
     /// <remarks>
     /// <para>State transitions are monotonic.</para>
@@ -112,20 +118,59 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
 
         // Technical upper bound for CancellationTokenSource.CancelAfter(TimeSpan) on current runtime.
         // This is distinct from operational shutdown limits, which are enforced by ShutdownOptions validation.
+        /// <summary>
+        /// Limits maximum grace period for shutdown coordinator.
+        /// </summary>
         private static readonly TimeSpan MaximumGracePeriod = TimeSpan.FromMilliseconds(int.MaxValue);
 
+        /// <summary>
+        /// Stores gate used by shutdown coordinator.
+        /// </summary>
         private readonly object _gate = new();
+        /// <summary>
+        /// Stores graceful shutdown started cts used by shutdown coordinator.
+        /// </summary>
         private readonly CancellationTokenSource _gracefulShutdownStartedCts = new();
+        /// <summary>
+        /// Stores forced shutdown cts used by shutdown coordinator.
+        /// </summary>
         private readonly CancellationTokenSource _forcedShutdownCts = new();
+        /// <summary>
+        /// Supplies the logger used by shutdown coordinator.
+        /// </summary>
         private readonly ILogger<ShutdownCoordinator> _logger;
 
+        /// <summary>
+        /// Stores grace period cts used by shutdown coordinator.
+        /// </summary>
         private CancellationTokenSource? _gracePeriodCts;
+        /// <summary>
+        /// Stores state used by shutdown coordinator.
+        /// </summary>
         private ShutdownState _state = ShutdownState.Running;
+        /// <summary>
+        /// Stores graceful shutdown started at utc used by shutdown coordinator.
+        /// </summary>
         private DateTimeOffset? _gracefulShutdownStartedAtUtc;
+        /// <summary>
+        /// Stores forced shutdown at utc used by shutdown coordinator.
+        /// </summary>
         private DateTimeOffset? _forcedShutdownAtUtc;
+        /// <summary>
+        /// Stores graceful shutdown started timestamp used by shutdown coordinator.
+        /// </summary>
         private long? _gracefulShutdownStartedTimestamp;
+        /// <summary>
+        /// Stores forced shutdown timestamp used by shutdown coordinator.
+        /// </summary>
         private long? _forcedShutdownTimestamp;
+        /// <summary>
+        /// Stores graceful shutdown reason used by shutdown coordinator.
+        /// </summary>
         private ShutdownReason _gracefulShutdownReason = ShutdownReason.Unknown;
+        /// <summary>
+        /// Stores forced shutdown reason used by shutdown coordinator.
+        /// </summary>
         private ShutdownReason _forcedShutdownReason = ShutdownReason.Unknown;
 
         /// <summary>
@@ -157,7 +202,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         internal CancellationToken ForcedShutdownToken => _forcedShutdownCts.Token;
 
         /// <summary>
-        /// Gets the current shutdown coordinator state.
+        /// Returns the current shutdown coordinator state.
         /// </summary>
         internal ShutdownState State
         {
@@ -185,7 +230,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the UTC timestamp when graceful shutdown started.
+        /// Returns the UTC timestamp when graceful shutdown started.
         /// </summary>
         internal DateTimeOffset? GracefulShutdownStartedAtUtc
         {
@@ -199,7 +244,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the UTC timestamp when forced shutdown was signaled.
+        /// Returns the UTC timestamp when forced shutdown was signaled.
         /// </summary>
         internal DateTimeOffset? ForcedShutdownAtUtc
         {
@@ -213,7 +258,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the monotonic timestamp when graceful shutdown started.
+        /// Returns the monotonic timestamp when graceful shutdown started.
         /// </summary>
         internal long? GracefulShutdownStartedTimestamp
         {
@@ -227,7 +272,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the monotonic timestamp when forced shutdown was signaled.
+        /// Returns the monotonic timestamp when forced shutdown was signaled.
         /// </summary>
         internal long? ForcedShutdownTimestamp
         {
@@ -241,7 +286,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the reason that initiated graceful shutdown.
+        /// Returns the reason that initiated graceful shutdown.
         /// </summary>
         internal ShutdownReason GracefulShutdownReason
         {
@@ -255,7 +300,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the reason that initiated forced shutdown.
+        /// Returns the reason that initiated forced shutdown.
         /// </summary>
         internal ShutdownReason ForcedShutdownReason
         {
@@ -269,7 +314,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Gets the elapsed graceful-shutdown duration when both monotonic timestamps are available.
+        /// Returns the elapsed graceful-shutdown duration when both monotonic timestamps are available.
         /// </summary>
         internal TimeSpan? GracefulShutdownElapsed
         {
@@ -339,6 +384,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
                 _gracePeriodCts = timeoutCts;
 
                 _ = timeoutCts.Token.Register(
+                    // <summary>
+                    // Stores state used by shutdown coordinator.
+                    // </summary>
                     static state =>
                     {
                         ((ShutdownCoordinator)state!).SignalForcedShutdownFromGracePeriodTimer();
@@ -492,11 +540,17 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Handles throw if disposed for shutdown coordinator.
+        /// </summary>
         private void ThrowIfDisposed()
         {
             ObjectDisposedException.ThrowIf(_state == ShutdownState.Completed, this);
         }
 
+        /// <summary>
+        /// Handles cancel grace period timer safely for shutdown coordinator.
+        /// </summary>
         private static void CancelGracePeriodTimerSafely(CancellationTokenSource gracePeriodCts)
         {
             try
@@ -509,6 +563,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             }
         }
 
+        /// <summary>
+        /// Handles cancel token source safely for shutdown coordinator.
+        /// </summary>
         private static void CancelTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name, ShutdownState state)
         {
             try
@@ -525,6 +582,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             }
         }
 
+        /// <summary>
+        /// Handles dispose cancellation token source safely for shutdown coordinator.
+        /// </summary>
         private static void DisposeCancellationTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name)
         {
             try
@@ -541,6 +601,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             EventId = 1200,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
+        // <summary>
+        // Emits the cancellation callback failed log event for shutdown coordinator.
+        // </summary>
         private static partial void LogCancellationCallbackFailed(
             ILogger logger,
             Exception exception,
@@ -551,6 +614,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             EventId = 1201,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
+        // <summary>
+        // Emits the cancellation skipped already disposed log event for shutdown coordinator.
+        // </summary>
         private static partial void LogCancellationSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,
@@ -561,6 +627,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             EventId = 1202,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
+        // <summary>
+        // Emits the disposal skipped already disposed log event for shutdown coordinator.
+        // </summary>
         private static partial void LogDisposalSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,

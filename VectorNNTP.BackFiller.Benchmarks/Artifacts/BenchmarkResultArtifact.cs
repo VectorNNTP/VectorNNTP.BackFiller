@@ -1,7 +1,16 @@
+// <copyright file="BenchmarkResultArtifact.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Artifacts/BenchmarkResultArtifact: models the complete, culture-invariant row written to benchmark artifacts.
+
 using System.Globalization;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the benchmark ResultArtifact record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct BenchmarkResultArtifact(
     string BenchmarkBuildVersion,
     string RuntimeAssemblyVersion,
@@ -108,6 +117,9 @@ internal readonly record struct BenchmarkResultArtifact(
     SubmissionPumpFaultSummary SubmissionPumpFault,
     P1GreetingProvenanceSummary? P1GreetingProvenance)
 {
+    /// <summary>
+    /// Runs the from benchmark scenario.
+    /// </summary>
     internal static BenchmarkResultArtifact From(BenchmarkResult result, TransitBenchmarkConfig config, int processorCount)
     {
         return new BenchmarkResultArtifact(
@@ -217,6 +229,9 @@ internal readonly record struct BenchmarkResultArtifact(
             P1GreetingProvenance: result.P1GreetingProvenance);
     }
 
+    /// <summary>
+    /// Converts to Csv.
+    /// </summary>
     internal string ToCsv()
     {
         string[] headers =

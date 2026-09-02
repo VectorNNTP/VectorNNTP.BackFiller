@@ -1,6 +1,12 @@
+// <copyright file="MySqlConnectionStringUtilities.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+// Architectural responsibility: my sql connection string utilities in the vector nntp.back filler configuration subsystem.
+// The file owns this boundary; executable behavior is intentionally unchanged.
+
 // MySqlConnectionStringUtilities.cs -- Canonical interpretation of MySQL connection strings.
 //
-// Provides application-level parsing of MySQL connection strings with dual-path architecture
+// Describes application-level parsing of MySQL connection strings with dual-path architecture
 // to enforce ambiguity detection while maintaining provider-correct typed validation.
 //
 // Architecture (dual-path):
@@ -60,8 +66,8 @@
 // Both paths use the same alias lists (ServerAliases, DatabaseAliases, etc.) derived from
 // MySqlConnector documentation to ensure consistent interpretation.
 
-using MySqlConnector;
 using System.Data.Common;
+using MySqlConnector;
 
 namespace VectorNNTP.Backfiller.Configuration
 {
@@ -87,7 +93,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// Utilities for canonical interpretation of MySQL connection strings.
     /// </summary>
     /// <remarks>
-    /// <para>Provides application-level parsing of MySQL connection strings using a dual-path architecture:</para>
+    /// <para>Describes application-level parsing of MySQL connection strings using a dual-path architecture:</para>
     /// <list type="bullet">
     /// <item><description>Path 1: Raw key/value parsing via <see cref="ParseRawKeyValuePairs"/> for ambiguity detection</description></item>
     /// <item><description>Path 2: Provider canonicalization via <see cref="MySqlConnectionStringBuilder"/> for typed validation</description></item>
@@ -102,6 +108,9 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class MySqlConnectionStringUtilities
     {
         // MySqlConnector aliases for server/host (official documentation)
+        /// <summary>
+        /// Stores server aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> ServerAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Server",
@@ -114,6 +123,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for database name
+        /// <summary>
+        /// Stores database aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> DatabaseAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Database",
@@ -122,6 +134,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for username
+        /// <summary>
+        /// Stores username aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> UsernameAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "User ID",
@@ -133,6 +148,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for password
+        /// <summary>
+        /// Stores password aliases used by my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> PasswordAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Password",
@@ -140,6 +158,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for minimum pool size
+        /// <summary>
+        /// Limits min pool size aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> MinPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Min Pool Size",
@@ -149,6 +170,9 @@ namespace VectorNNTP.Backfiller.Configuration
         };
 
         // MySqlConnector aliases for maximum pool size
+        /// <summary>
+        /// Limits max pool size aliases for my sql connection string utilities.
+        /// </summary>
         private static readonly HashSet<string> MaxPoolSizeAliases = new(StringComparer.OrdinalIgnoreCase)
         {
             "Max Pool Size",
@@ -485,26 +509,32 @@ namespace VectorNNTP.Backfiller.Configuration
                    HasConflictingAliases(rawPairs, MaxPoolSizeAliases);
         }
 
-        /// <summary>
-        /// Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
-        /// </summary>
-        /// <param name="connectionString">The connection string to parse.</param>
-        /// <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
-        /// <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
-        /// <remarks>
-        /// <para>This parser respects connection string syntax:</para>
-        /// <list type="bullet">
-        /// <item><description>Semicolon (;) as delimiter</description></item>
-        /// <item><description>Equals (=) as key-value separator</description></item>
-        /// <item><description>Single or double quotes for values containing special characters</description></item>
-        /// <item><description>Escaped quotes ("" or '') within quoted values</description></item>
-        /// <item><description>Whitespace trimming around keys and values</description></item>
-        /// </list>
-        /// <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
-        /// <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
-        /// <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
-        /// </remarks>
+        // <summary>
+        // Parses a connection string into raw key-value pairs BEFORE DbConnectionStringBuilder canonicalization.
+        // </summary>
+        // <param name="connectionString">The connection string to parse.</param>
+        // <returns>List of (key, value) pairs preserving all instances including duplicates.</returns>
+        // <exception cref="ArgumentException">Thrown if the connection string is malformed.</exception>
+        // <remarks>
+        // <para>This parser respects connection string syntax:</para>
+        // <list type="bullet">
+        // <item><description>Semicolon (;) as delimiter</description></item>
+        // <item><description>Equals (=) as key-value separator</description></item>
+        // <item><description>Single or double quotes for values containing special characters</description></item>
+        // <item><description>Escaped quotes ("" or '') within quoted values</description></item>
+        // <item><description>Whitespace trimming around keys and values</description></item>
+        // </list>
+        // <para>Unlike DbConnectionStringBuilder, this preserves duplicate keys so we can detect:</para>
+        // <para><c>Server=db01;Server=db02</c> (same key repeated with different values)</para>
+        // <para>Validates syntax to match DbConnectionStringBuilder behavior (e.g., rejects empty keys, consecutive semicolons).</para>
+        // </remarks>
 #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
+        /// <summary>
+        /// <param name="connectionString">The connection string to parse.</param>
+        /// <returns>Key-value pairs preserving duplicate entries for ambiguity detection.</returns>
+        /// <exception cref="ArgumentException">Thrown when the connection string syntax is malformed.</exception>
+        /// <remarks>Parsing occurs before provider canonicalization so conflicting aliases remain observable.</remarks>
+        /// </summary>
         private static IReadOnlyList<(string Key, string Value)> ParseRawKeyValuePairs(string connectionString)
 #pragma warning restore CA1859
         {

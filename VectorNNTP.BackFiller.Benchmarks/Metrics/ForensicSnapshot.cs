@@ -1,5 +1,14 @@
+// <copyright file="ForensicSnapshot.cs" company="Usenet Ninja">
+// Copyright © Chris Knipe cknipe@opticnetworks.net
+// </copyright>
+//
+// Metrics/ForensicSnapshot: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
+
 namespace VectorNNTP.BackFiller.Benchmarks;
 
+/// <summary>
+/// Represents the forensic Snapshot record struct used by the benchmark or regression gate.
+/// </summary>
 internal readonly record struct ForensicSnapshot(
     double AverageDispatchQueueWaitUs,
     double P50DispatchQueueWaitUs,
@@ -44,6 +53,9 @@ internal readonly record struct ForensicSnapshot(
     string DispatcherTimeSeriesSummary,
     string ObservabilityNotes)
 {
+    /// <summary>
+    /// Runs the empty benchmark scenario.
+    /// </summary>
     internal static ForensicSnapshot Empty => new(
         AverageDispatchQueueWaitUs: 0,
         P50DispatchQueueWaitUs: 0,

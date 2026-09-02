@@ -1,11 +1,10 @@
 // <copyright file="TransitBenchmarkCliOptionsTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Benchmarks
+// Focused tests for transit benchmark cli options, covering NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
+// Primary responsibility: documents the executable contracts covered by the transit benchmark cli options test suite.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -18,7 +17,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     public sealed class TransitBenchmarkCliOptionsTests
     {
         /// <summary>
-        /// Verifies the article-count option is parsed as a positive integer.
+        /// Confirms the parse when article count provided parses expected value behavior.
         /// </summary>
         [Fact]
         public void Parse_WhenArticleCountProvided_ParsesExpectedValue()

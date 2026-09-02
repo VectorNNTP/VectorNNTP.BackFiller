@@ -2,9 +2,8 @@
 // Copyright © Chris Knipe <cknipe@opticnetworks.net>
 // </copyright>
 //
-// VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// VectorNNTP.Backfiller Startup / Configuration
+// Implements the configuration fingerprint service behavior.
 
 using System.Data.Common;
 using System.Security.Cryptography;
@@ -18,8 +17,14 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
     /// </summary>
     internal static class ConfigurationFingerprintService
     {
+        /// <summary>
+        /// Stores fingerprint algorithm version used by configuration fingerprint service.
+        /// </summary>
         private const string FingerprintAlgorithmVersion = "v1";
 
+        /// <summary>
+        /// Stores sensitive segment patterns used by configuration fingerprint service.
+        /// </summary>
         private static readonly string[] SensitiveSegmentPatterns =
         [
             "password",
@@ -43,6 +48,11 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             "credentials"
         ];
 
+        /// <summary>
+        /// Determines whether any colon-delimited configuration-key segment matches a sensitive exact or suffix pattern.
+        /// </summary>
+        /// <param name="configurationKey">Configuration key to inspect.</param>
+        /// <returns><see langword="true"/> when a segment is considered sensitive; otherwise <see langword="false"/>.</returns>
         internal static bool IsSensitiveConfigurationKey(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -62,6 +72,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             return false;
         }
 
+        /// <summary>
+        /// Handles is connection string for configuration fingerprint service.
+        /// </summary>
         internal static bool IsConnectionString(string configurationKey)
         {
             string[] segments = configurationKey.Split(':');
@@ -89,6 +102,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             return false;
         }
 
+        /// <summary>
+        /// Handles sanitize connection string for configuration fingerprint service.
+        /// </summary>
         internal static string? SanitizeConnectionString(string connectionString)
         {
             try
@@ -173,6 +189,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             }
         }
 
+        /// <summary>
+        /// Handles canonicalize non secret value for configuration fingerprint service.
+        /// </summary>
         private static string CanonicalizeNonSecretValue(string configurationKey, string value)
         {
             if (configurationKey.Equals("BackFiller:DnsSuffix", StringComparison.OrdinalIgnoreCase))
@@ -190,6 +209,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             return value;
         }
 
+        /// <summary>
+        /// Handles calculate configuration fingerprint for configuration fingerprint service.
+        /// </summary>
         internal static string CalculateConfigurationFingerprint(IConfiguration configuration)
         {
             ArgumentNullException.ThrowIfNull(configuration);

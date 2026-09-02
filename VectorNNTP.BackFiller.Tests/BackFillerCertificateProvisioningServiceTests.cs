@@ -1,11 +1,10 @@
 // <copyright file="BackFillerCertificateProvisioningServiceTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for back filler certificate provisioning service, covering certificate and DNS dependency behavior.
+// Primary responsibility: documents the executable contracts covered by the back filler certificate provisioning service test suite.
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -16,8 +15,14 @@ using Xunit;
 
 namespace VectorNNTP.Backfiller.Tests
 {
+    /// <summary>
+    /// Confirms the back filler certificate provisioning service tests behavior.
+    /// </summary>
     public sealed class BackFillerCertificateProvisioningServiceTests
     {
+        /// <summary>
+        /// Confirms the ensure certificate availability async when certificate missing provisions and publishes behavior.
+        /// </summary>
         [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenCertificateMissing_ProvisionsAndPublishes()
         {
@@ -47,7 +52,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Confirms the try renew if due async when certificate not due does not issue behavior.
+        /// </summary>
         [Fact]
         public async Task TryRenewIfDueAsync_WhenCertificateNotDue_DoesNotIssue()
         {
@@ -79,7 +86,9 @@ namespace VectorNNTP.Backfiller.Tests
                 DeleteDirectoryIfExists(tempDir);
             }
         }
-
+        /// <summary>
+        /// Confirms the ensure certificate availability async when called concurrently only provisions once behavior.
+        /// </summary>
         [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenCalledConcurrently_OnlyProvisionsOnce()
         {
@@ -113,6 +122,15 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Confirms the create runtime options behavior.
+        /// </summary>
+        /// <returns>The value returned by the create runtime options helper.</returns>
+        /// <summary>
+        /// Confirms the create runtime options behavior.
+        /// </summary>
+        /// <param name="letsEncrypt">The lets encrypt used by this test scenario.</param>
+        /// <returns>The value returned by the create runtime options helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptions(BackFillerLetsEncryptRuntimeOptions letsEncrypt)
         {
             return new BackFillerRuntimeOptions(
@@ -137,6 +155,17 @@ namespace VectorNNTP.Backfiller.Tests
                 LetsEncrypt: letsEncrypt);
         }
 
+        /// <summary>
+        /// Confirms the create lets encrypt options behavior.
+        /// </summary>
+        /// <returns>The value returned by the create lets encrypt options helper.</returns>
+        /// <summary>
+        /// Confirms the create lets encrypt options behavior.
+        /// </summary>
+        /// <param name="tempDir">The temp dir used by this test scenario.</param>
+        /// <param name="fqdn">The fqdn used by this test scenario.</param>
+        /// <param name="renewBeforeExpiryDays">The renew before expiry days used by this test scenario.</param>
+        /// <returns>The value returned by the create lets encrypt options helper.</returns>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir, string fqdn, int renewBeforeExpiryDays = 7)
         {
             _ = Directory.CreateDirectory(tempDir);
@@ -162,6 +191,9 @@ namespace VectorNNTP.Backfiller.Tests
                 CloudFlareZoneId: "zone");
         }
 
+        /// <summary>
+        /// Confirms the write valid pfx behavior.
+        /// </summary>
         private static void WriteValidPfx(string pfxPath, string password, string fqdn, DateTimeOffset notBeforeUtc, DateTimeOffset notAfterUtc)
         {
             using RSA rsa = RSA.Create(2048);
@@ -182,12 +214,37 @@ namespace VectorNNTP.Backfiller.Tests
             File.WriteAllBytes(pfxPath, certificate.Export(X509ContentType.Pkcs12, password));
         }
 
+        /// <summary>
+        /// Confirms the fake acme certificate issuer behavior.
+        /// </summary>
+        /// <returns>The value returned by the fake acme certificate issuer helper.</returns>
+        /// <summary>
+        /// Confirms the fake acme certificate issuer behavior.
+        /// </summary>
+        /// <param name="fqdn">The fqdn used by this test scenario.</param>
+        /// <returns>The value returned by the fake acme certificate issuer helper.</returns>
         private sealed class FakeAcmeCertificateIssuer(string fqdn) : IAcmeCertificateIssuer
         {
+            /// <summary>
+            /// Supplies  fqdn for the fixture or scenario under test.
+            /// </summary>
             private readonly string _fqdn = fqdn;
 
+            /// <summary>
+            /// Supplies issue call count for the fixture or scenario under test.
+            /// </summary>
             internal int IssueCallCount { get; private set; }
 
+            /// <summary>
+            /// Confirms the issue certificate async behavior.
+            /// </summary>
+            /// <returns>The value returned by the issue certificate async helper.</returns>
+            /// <summary>
+            /// Confirms the issue certificate async behavior.
+            /// </summary>
+            /// <param name="letsEncryptOptions">The lets encrypt options used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the issue certificate async helper.</returns>
             public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
             {
                 IssueCallCount++;
@@ -212,6 +269,14 @@ namespace VectorNNTP.Backfiller.Tests
             }
         }
 
+        /// <summary>
+        /// Confirms the create unique temp directory behavior.
+        /// </summary>
+        /// <returns>The value returned by the create unique temp directory helper.</returns>
+        /// <summary>
+        /// Confirms the create unique temp directory behavior.
+        /// </summary>
+        /// <returns>The value returned by the create unique temp directory helper.</returns>
         private static string CreateUniqueTempDirectory()
         {
             string path = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-ProvisionTests-{Guid.NewGuid():N}");
@@ -219,6 +284,9 @@ namespace VectorNNTP.Backfiller.Tests
             return path;
         }
 
+        /// <summary>
+        /// Confirms the delete directory if exists behavior.
+        /// </summary>
         private static void DeleteDirectoryIfExists(string path)
         {
             if (!Directory.Exists(path))

@@ -3,8 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Acquisition
-// Typed exception model for deterministic internal failure classification without relying
-// on exception-message text parsing.
+// Implements the nntp article acquisition exception behavior.
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {

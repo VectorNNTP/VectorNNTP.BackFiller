@@ -1,11 +1,10 @@
 // <copyright file="OperationalDirectoryValidatorTests.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
-// VectorNNTP.Backfiller Tests / yEnc
-// Corpus-backed and synthetic contract tests for the yEnc article validator,
-// covering protocol parsing, integrity classification, malformed input handling,
-// and NNTP dot-stuffing interactions.
+// VectorNNTP.Backfiller Tests / Runtime and startup
+// Focused tests for operational directory validator, covering configuration and validation contracts.
+// Primary responsibility: documents the executable contracts covered by the operational directory validator test suite.
 
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Configuration;
@@ -18,6 +17,9 @@ namespace VectorNNTP.Backfiller.Tests
     /// </summary>
     public class OperationalDirectoryValidatorTests
     {
+        /// <summary>
+        /// Confirms the resolve and validate log directory when configured path is existing file throws invalid operation exception behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenConfiguredPathIsExistingFile_ThrowsInvalidOperationException()
         {
@@ -50,7 +52,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when directory supports required file operations succeeds behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenDirectorySupportsRequiredFileOperations_Succeeds()
         {
@@ -86,7 +90,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when configured path has surrounding whitespace trims before resolving behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenConfiguredPathHasSurroundingWhitespace_TrimsBeforeResolving()
         {
@@ -123,7 +129,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when configuration is missing throws invalid operation exception behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenConfigurationIsMissing_ThrowsInvalidOperationException()
         {
@@ -136,21 +144,27 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Contains("BackFiller:DirLogs", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when configuration is null throws argument null exception behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenConfigurationIsNull_ThrowsArgumentNullException()
         {
             _ = Assert.Throws<ArgumentNullException>(() =>
                 OperationalDirectoryValidator.ResolveAndValidateLogDirectory(null!));
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate certificate directory when configuration is null throws argument null exception behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateCertificateDirectory_WhenConfigurationIsNull_ThrowsArgumentNullException()
         {
             _ = Assert.Throws<ArgumentNullException>(() =>
                 OperationalDirectoryValidator.ResolveAndValidateCertificateDirectory(null!));
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate certificate directory when configuration is missing reports correct setting behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateCertificateDirectory_WhenConfigurationIsMissing_ReportsCorrectSetting()
         {
@@ -163,7 +177,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Contains("BackFiller:DirCerts", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when configured path is whitespace throws invalid operation exception behavior.
+        /// </summary>
         [Theory]
         [InlineData("")]
         [InlineData(" ")]
@@ -183,7 +199,9 @@ namespace VectorNNTP.Backfiller.Tests
 
             Assert.Contains("BackFiller:DirLogs", ex.Message, StringComparison.Ordinal);
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when configured path is absolute returns canonical absolute path behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenConfiguredPathIsAbsolute_ReturnsCanonicalAbsolutePath()
         {
@@ -212,7 +230,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate log directory when directory already exists succeeds behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateLogDirectory_WhenDirectoryAlreadyExists_Succeeds()
         {
@@ -243,7 +263,9 @@ namespace VectorNNTP.Backfiller.Tests
                 }
             }
         }
-
+        /// <summary>
+        /// Confirms the resolve and validate certificate directory when configured path is valid returns canonical absolute path behavior.
+        /// </summary>
         [Fact]
         public void ResolveAndValidateCertificateDirectory_WhenConfiguredPathIsValid_ReturnsCanonicalAbsolutePath()
         {

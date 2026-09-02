@@ -18,21 +18,29 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     /// </remarks>
     internal sealed class NntpConnectionLogContext
     {
+        /// <summary>
+        /// Stores scope properties used by nntp connection log context.
+        /// </summary>
         private readonly KeyValuePair<string, object?>[] _scopeProperties;
+        /// <summary>
+        /// Stores connection prefix used by nntp connection log context.
+        /// </summary>
         private readonly string _connectionPrefix;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="NntpConnectionLogContext"/> class.
         /// </summary>
-        /// <param name="backbone"></param>
-        /// <param name="accountUsername"></param>
-        /// <param name="accountId"></param>
-        /// <param name="serverId"></param>
-        /// <param name="host"></param>
-        /// <param name="port"></param>
-        /// <param name="useSsl"></param>
-        /// <param name="connectionNumber"></param>
-        /// <param name="connectionLimit"></param>
+        /// <param name="backbone">Provider or backbone name used to group the connection.</param>
+        /// <param name="accountUsername">Configured account username associated with the connection.</param>
+        /// <param name="accountId">Stable identifier of the account being served.</param>
+        /// <param name="serverId">Identifier of the owning NNTP server configuration.</param>
+        /// <param name="host">Remote NNTP host name or address.</param>
+        /// <param name="port">Remote NNTP port.</param>
+        /// <param name="useSsl">Whether the connection uses SSL/TLS.</param>
+        /// <param name="connectionNumber">One-based connection number within the account.</param>
+        /// <param name="connectionLimit">Configured maximum number of account connections.</param>
+        /// <exception cref="ArgumentException">Thrown when a required text value is null, empty, or whitespace.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when a connection number or limit is not positive.</exception>
         public NntpConnectionLogContext(
             string backbone,
             string accountUsername,
@@ -78,32 +86,32 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Gets the provider/backbone name.
+        /// Returns the provider/backbone name.
         /// </summary>
         internal string Backbone { get; }
 
         /// <summary>
-        /// Gets the configured account username.
+        /// Returns the configured account username.
         /// </summary>
         internal string AccountUsername { get; }
 
         /// <summary>
-        /// Gets the stable account identifier.
+        /// Returns the stable account identifier.
         /// </summary>
         internal Guid AccountId { get; }
 
         /// <summary>
-        /// Gets the owning server identifier.
+        /// Returns the owning server identifier.
         /// </summary>
         internal byte ServerId { get; }
 
         /// <summary>
-        /// Gets the remote NNTP host.
+        /// Returns the remote NNTP host.
         /// </summary>
         internal string Host { get; }
 
         /// <summary>
-        /// Gets the remote NNTP port.
+        /// Returns the remote NNTP port.
         /// </summary>
         internal int Port { get; }
 
@@ -113,17 +121,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         internal bool UseSsl { get; }
 
         /// <summary>
-        /// Gets the one-based connection number within the account.
+        /// Returns the one-based connection number within the account.
         /// </summary>
         internal int ConnectionNumber { get; }
 
         /// <summary>
-        /// Gets the configured maximum connection count for the account.
+        /// Returns the configured maximum connection count for the account.
         /// </summary>
         internal int ConnectionLimit { get; }
 
         /// <summary>
-        /// Gets the human-readable connection prefix rendered in logs.
+        /// Returns the human-readable connection prefix rendered in logs.
         /// </summary>
         internal string ConnectionPrefix => _connectionPrefix;
 
@@ -153,13 +161,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// </summary>
         private sealed class CompositeDisposable : IDisposable
         {
+            /// <summary>
+            /// Stores disposables used by nntp connection log context.
+            /// </summary>
             private readonly IReadOnlyList<IDisposable> _disposables;
 
+            /// <summary>
+            /// Handles composite disposable for nntp connection log context.
+            /// </summary>
             internal CompositeDisposable(IReadOnlyList<IDisposable> disposables)
             {
                 _disposables = disposables ?? throw new ArgumentNullException(nameof(disposables));
             }
 
+            /// <summary>
+            /// Handles dispose for nntp connection log context.
+            /// </summary>
             public void Dispose()
             {
                 for (int index = _disposables.Count - 1; index >= 0; index--)

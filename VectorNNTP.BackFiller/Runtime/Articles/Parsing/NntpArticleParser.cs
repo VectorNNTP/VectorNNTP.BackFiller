@@ -771,6 +771,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             canonicalPath = string.Create(
                 GetPathLength(fqdn, parts),
                 (fqdn, parts),
+                // <summary>
+                // Handles static for nntp article parser.
+                // </summary>
                 static (span, state) =>
                 {
                     int offset = 0;
