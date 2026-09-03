@@ -20,10 +20,13 @@ namespace VectorNNTP.Backfiller.Startup.Commands
     internal static class OperationalCommandExecutor
     {
         /// <summary>
-        /// Executes a parsed operational command by delegating to its command-specific handler.
+        /// Executes one parsed operational command by delegating to its command-specific handler.
         /// </summary>
         /// <param name="command">The parsed operational command to execute.</param>
-        /// <param name="configuration">Configuration root passed through to handlers that require configuration-backed execution.</param>
+        /// <param name="configuration">
+        /// Configuration root passed through to handlers that require configuration-backed execution.
+        /// Informational commands ignore this argument and callers may pass <see langword="null"/> for those paths.
+        /// </param>
         /// <returns>The exit code returned by the selected command handler.</returns>
         /// <exception cref="UnreachableException">The <paramref name="command"/> value is not a supported <see cref="OperationalCommand"/> member.</exception>
         /// <remarks>
@@ -45,7 +48,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Determines whether a parsed command must be executed after configuration has been loaded.
+        /// Classifies commands that must wait until configuration has been built.
         /// </summary>
         /// <param name="command">The command value to classify.</param>
         /// <returns>

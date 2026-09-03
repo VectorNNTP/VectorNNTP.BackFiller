@@ -55,11 +55,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
         RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
         /// <summary>
-        /// Configures heartbeat interval for control plane service.
+        /// Fixed cadence used for low-cost background-loop wakeups and debug heartbeat emission.
         /// </summary>
         private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
         /// <summary>
-        /// Configures refresh interval for control plane service.
+        /// Target interval between snapshot refresh attempts driven by the heartbeat loop.
         /// </summary>
         private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
 
@@ -156,6 +156,11 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <returns>Exclusive session lease for one account runtime matching <paramref name="backbone"/>.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="backbone"/> or <paramref name="messageId"/> is blank.</exception>
         /// <exception cref="InvalidOperationException">Thrown when no runtime currently exists for the requested backbone.</exception>
+        /// <remarks>
+        /// Matching runtimes are snapshot-copied under the control-plane gate, ordered deterministically by entry identifier,
+        /// and then probed one-by-one outside the lock. Runtimes disposed or concurrently retired after the snapshot is taken
+        /// are skipped so lease acquisition can continue against the remaining candidates.
+        /// </remarks>
         public async ValueTask<NntpArticleSessionLease> AcquireSessionLeaseAsync(string backbone, string messageId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -551,20 +556,20 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
-        /// Defines account runtime state and its control plane service contract.
+        /// Bundles one authoritative account snapshot with the long-lived session manager currently realizing it.
         /// </summary>
         private sealed record AccountRuntimeState(
             NntpAccountSnapshot LastAppliedAccount,
             NntpArticleExecutionSessionManager Manager)
         {
             /// <summary>
-            /// Gets or sets the latest desired account state applied to the runtime.
+            /// Tracks the last authoritative account snapshot successfully applied to this runtime.
             /// </summary>
             /// <value>The most recently applied authoritative snapshot state for this account runtime.</value>
             internal NntpAccountSnapshot LastAppliedAccount { get; set; } = LastAppliedAccount;
 
             /// <summary>
-            /// Returns the persistent session manager owned for this account runtime.
+            /// Exposes the persistent session manager owned for this account runtime.
             /// </summary>
             /// <value>Session-manager instance that executes acquisition work for this account.</value>
             internal NntpArticleExecutionSessionManager Manager { get; } = Manager;

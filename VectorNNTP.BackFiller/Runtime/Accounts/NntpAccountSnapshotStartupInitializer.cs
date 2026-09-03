@@ -23,7 +23,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _snapshotProvider = snapshotProvider ?? throw new ArgumentNullException(nameof(snapshotProvider));
         /// <summary>
-        /// Supplies the logger used by nntp account snapshot startup initializer.
+        /// Logger receiving startup barrier diagnostics for initial account snapshot hydration.
         /// </summary>
         private readonly ILogger<NntpAccountSnapshotStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -51,14 +51,14 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Emits the startup marker indicating initial NNTP account snapshot loading is beginning.
+        /// Logs that hosted startup has reached the account-snapshot initialization phase.
         /// </summary>
         /// <param name="logger">Logger receiving the startup marker event.</param>
         [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "NNTP account startup initializer beginning initial snapshot load")]
         private static partial void LogStartupInitializerBeginning(ILogger logger);
 
         /// <summary>
-        /// Emits the startup completion marker after the initial account snapshot has been loaded.
+        /// Logs that the initial account snapshot has been published and is ready for downstream consumers.
         /// </summary>
         /// <param name="logger">Logger receiving the completion event.</param>
         /// <param name="accountCount">Number of accounts present in the loaded snapshot.</param>

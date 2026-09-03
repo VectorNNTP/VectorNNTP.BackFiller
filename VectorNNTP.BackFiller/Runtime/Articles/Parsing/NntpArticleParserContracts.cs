@@ -265,7 +265,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         int ValueLength);
 
     /// <summary>
-    /// Represents parser resource and hostile-input limits used on the hot path.
+    /// Defines the parser limits that bound hostile-input scanning and memory use on the hot path.
     /// </summary>
     /// <param name="MaxArticleBytes">Maximum article payload size accepted by the parser.</param>
     /// <param name="MaxHeaderSectionBytes">Maximum bytes scanned while searching header/body separation.</param>
@@ -284,9 +284,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         int YEncDetectionScanBytes)
     {
         /// <summary>
-        /// Gets default parser limits tuned for hostile-input safety and transit workloads.
+        /// Gets the default parser limits tuned for hostile-input safety and transit workloads.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <value>Default guardrails for article size, header scanning, and bounded yEnc detection.</value>
         internal static NntpArticleParserOptions Default => new(
             MaxArticleBytes: 64 * 1024 * 1024,
             MaxHeaderSectionBytes: 256 * 1024,
@@ -298,8 +298,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
     }
 
     /// <summary>
-    /// Represents the complete result of one article-parse operation.
+    /// Represents the complete output of one NNTP article parse operation.
     /// </summary>
+    /// <remarks>
+    /// Header, body, and original-header-value members are slices over the caller-supplied article buffer; they do not copy payload data.
+    /// </remarks>
     /// <param name="IsAccepted">Indicates whether the article passed parser validation and is suitable for downstream processing.</param>
     /// <param name="FailureCode">Machine-readable rejection classification when <paramref name="IsAccepted"/> is false.</param>
     /// <param name="ArticleType">Detected article type classification.</param>

@@ -12,24 +12,27 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Runs the Phase 3 article-processing loop over RabbitMQ delivery envelopes.
+    /// Hosts the Phase 3 loop that parses admitted RabbitMQ deliveries, executes article retrieval, and forwards deterministic results to Phase 4.
     /// </summary>
+    /// <remarks>
+    /// The service does not settle deliveries itself. It links host shutdown with per-delivery cancellation so downstream processing can classify cancellation without losing delivery identity.
+    /// </remarks>
     internal sealed partial class RabbitMqArticleProcessingService : BackgroundService
     {
         /// <summary>
-        /// Stores consumer service used by rabbit mq article processing service.
+        /// Consumer infrastructure that owns admitted-delivery buffering for the processing loop.
         /// </summary>
         private readonly RabbitMqConsumerService _consumerService;
         /// <summary>
-        /// Stores request parser used by rabbit mq article processing service.
+        /// Request parser that validates the JSON body and required AMQP RPC properties.
         /// </summary>
         private readonly IRabbitMqArticleWorkRequestParser _requestParser;
         /// <summary>
-        /// Stores processor used by rabbit mq article processing service.
+        /// Processor that performs backbone retrieval and deterministic outcome classification.
         /// </summary>
         private readonly IArticleWorkProcessor _processor;
         /// <summary>
-        /// Stores result sink used by rabbit mq article processing service.
+        /// Result sink that owns Phase 4 publication and settlement policy.
         /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
         /// <summary>
@@ -38,13 +41,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         private readonly ILogger<RabbitMqArticleProcessingService> _logger;
 
         /// <summary>
-        /// Initializes a new processing hosted service instance.
+        /// Initializes the hosted processing loop and its Phase 3/Phase 4 collaborators.
         /// </summary>
-        /// <param name="consumerService">RabbitMQ consumer service exposing delivery reader handoff.</param>
-        /// <param name="requestParser">Delivery payload parser.</param>
-        /// <param name="processor">Article-work processor.</param>
-        /// <param name="resultSink">Result sink boundary for future ACK/NACK/RPC integration.</param>
-        /// <param name="logger">Logger.</param>
+        /// <param name="consumerService">RabbitMQ consumer service that owns delivery admission and exposes the bounded delivery reader.</param>
+        /// <param name="requestParser">Parser that validates the JSON application payload and required AMQP RPC properties.</param>
+        /// <param name="processor">Processor that executes backbone retrieval and outcome classification for valid requests.</param>
+        /// <param name="resultSink">Sink that receives completed results for RPC publication and final broker settlement.</param>
+        /// <param name="logger">Logger used for per-delivery forwarding diagnostics.</param>
         public RabbitMqArticleProcessingService(
             RabbitMqConsumerService consumerService,
             IRabbitMqArticleWorkRequestParser requestParser,
@@ -59,7 +62,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Runs the delivery-processing loop until the host requests shutdown.
+        /// </summary>
+        /// <param name="stoppingToken">Host stopping token that halts reader waits and per-delivery processing.</param>
+        /// <returns>A task that completes after admitted deliveries stop being consumed.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             while (await _consumerService.DeliveryReader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
@@ -104,8 +111,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles create linked token source for rabbit mq article processing service.
+        /// Creates the effective operation token for one delivery by combining host shutdown and per-delivery cancellation when both matter.
         /// </summary>
+        /// <remarks>
+        /// When the delivery token is identical to the host token or cannot be canceled, the method avoids allocating a linked source and the caller continues with the host token directly.
+        /// </remarks>
+        /// <param name="hostToken">Host-level stopping token for the background service.</param>
+        /// <param name="deliveryToken">Per-delivery token supplied by the admitting consumer session.</param>
+        /// <returns>A linked token source when both inputs should participate in cancellation, or <see langword="null"/> when no additional source is required.</returns>
         private static CancellationTokenSource? CreateLinkedTokenSource(CancellationToken hostToken, CancellationToken deliveryToken)
         {
             if (!deliveryToken.CanBeCanceled || deliveryToken == hostToken)

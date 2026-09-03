@@ -12,16 +12,16 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Builds RabbitMQ client connection factories from validated runtime options.
+    /// Converts validated RabbitMQ runtime options into client-library connection settings and log-safe snapshots.
     /// </summary>
     internal static class RabbitMqConnectionFactoryBuilder
     {
         /// <summary>
-        /// Creates a configured RabbitMQ <see cref="ConnectionFactory"/> from validated runtime options.
+        /// Builds a RabbitMQ <see cref="ConnectionFactory"/> configured from the validated runtime snapshot.
         /// </summary>
         /// <param name="options">Validated immutable RabbitMQ runtime options.</param>
-        /// <param name="clientProvidedConnectionName">Client-provided connection name.</param>
-        /// <returns>Configured RabbitMQ connection factory.</returns>
+        /// <param name="clientProvidedConnectionName">Application-supplied connection name exposed by the broker.</param>
+        /// <returns>A connection factory with application-managed recovery and the configured timeouts, heartbeats, and TLS settings.</returns>
         internal static ConnectionFactory BuildConnectionFactory(
             RabbitMqRuntimeOptions options,
             string clientProvidedConnectionName)
@@ -67,11 +67,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Creates endpoint host list consumed by RabbitMQ connection-creation APIs.
+        /// Returns the ordered broker host list used when opening a RabbitMQ connection.
         /// </summary>
         /// <param name="options">Validated immutable RabbitMQ runtime options.</param>
-        /// <returns>Distinct host list in connection preference order.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <returns>The distinct host list preserved in the validated connection-preference order.</returns>
         internal static IReadOnlyList<string> BuildHostList(RabbitMqRuntimeOptions options)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -79,11 +78,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Creates a sanitized configuration snapshot safe for logs and diagnostics.
+        /// Builds a sanitized settings snapshot suitable for structured logging and diagnostics.
         /// </summary>
         /// <param name="options">Validated immutable RabbitMQ runtime options.</param>
-        /// <param name="clientProvidedConnectionName">Client-provided connection name.</param>
-        /// <returns>Sanitized runtime snapshot.</returns>
+        /// <param name="clientProvidedConnectionName">Application-supplied connection name exposed by the broker.</param>
+        /// <returns>A snapshot that preserves operational settings without copying credential material into logs.</returns>
         internal static RabbitMqConnectionFactorySnapshot BuildSanitizedSnapshot(
             RabbitMqRuntimeOptions options,
             string clientProvidedConnectionName)
@@ -111,23 +110,23 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Sanitized RabbitMQ connection-factory settings safe for structured logs.
+    /// Sanitized RabbitMQ connection-factory settings that can be emitted in logs without exposing secrets.
     /// </summary>
-    /// <param name="Hosts">Configured broker host list.</param>
+    /// <param name="Hosts">Configured broker hosts in connection-attempt order.</param>
     /// <param name="Port">Configured broker port.</param>
-    /// <param name="VirtualHost">Configured virtual host.</param>
-    /// <param name="EnableSsl">Configured TLS mode.</param>
-    /// <param name="RequestedHeartbeatSeconds">Requested heartbeat timeout.</param>
-    /// <param name="RequestedConnectionTimeoutSeconds">Requested AMQP connection timeout.</param>
-    /// <param name="RpcTimeoutSeconds">Requested AMQP continuation timeout.</param>
-    /// <param name="SocketTimeoutSeconds">Socket read/write timeout.</param>
-    /// <param name="RequestedChannelMax">Requested channel max.</param>
-    /// <param name="AutomaticRecoveryEnabled">Whether RabbitMQ automatic recovery is enabled.</param>
-    /// <param name="TopologyRecoveryEnabled">Whether RabbitMQ topology recovery is enabled.</param>
-    /// <param name="NetworkRecoveryIntervalSeconds">Network recovery interval in seconds.</param>
-    /// <param name="ClientProvidedConnectionName">Client-provided connection name.</param>
-    /// <param name="UsesUsernameAuthentication">Whether username auth is configured.</param>
-    /// <param name="HasPassword">Whether password is configured.</param>
+    /// <param name="VirtualHost">Configured RabbitMQ virtual host.</param>
+    /// <param name="EnableSsl">Indicates whether TLS is requested for the broker connection.</param>
+    /// <param name="RequestedHeartbeatSeconds">Requested broker heartbeat interval in seconds.</param>
+    /// <param name="RequestedConnectionTimeoutSeconds">Requested AMQP connection timeout in seconds.</param>
+    /// <param name="RpcTimeoutSeconds">Requested continuation and handshake RPC timeout in seconds.</param>
+    /// <param name="SocketTimeoutSeconds">Configured socket read and write timeout in seconds.</param>
+    /// <param name="RequestedChannelMax">Requested maximum channel count.</param>
+    /// <param name="AutomaticRecoveryEnabled">Indicates whether client automatic connection recovery is enabled.</param>
+    /// <param name="TopologyRecoveryEnabled">Indicates whether client automatic topology recovery is enabled.</param>
+    /// <param name="NetworkRecoveryIntervalSeconds">Configured client recovery interval in seconds.</param>
+    /// <param name="ClientProvidedConnectionName">Connection name that will be advertised to the broker.</param>
+    /// <param name="UsesUsernameAuthentication">Indicates whether a username was configured.</param>
+    /// <param name="HasPassword">Indicates whether a password value was configured.</param>
     internal sealed record RabbitMqConnectionFactorySnapshot(
         IReadOnlyList<string> Hosts,
         int Port,

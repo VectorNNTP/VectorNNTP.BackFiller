@@ -10,27 +10,27 @@ using Serilog.Context;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {
     /// <summary>
-    /// Immutable connection-scoped logging metadata for one NNTP acquisition session.
+    /// Precomputes the human-readable prefix and structured properties attached to one reusable acquisition connection.
     /// </summary>
     /// <remarks>
-    /// The context is created once per connection and reused for the full lifetime of the session so that all logs
-    /// emitted while the connection is active can carry the same human-readable prefix and structured properties.
+    /// The session manager creates this context once per connection slot so repeated ARTICLE, DATE, reconnect, and shutdown logs can reuse the same identifiers without reformatting them on every log call.
     /// </remarks>
     internal sealed class NntpConnectionLogContext
     {
         /// <summary>
-        /// Stores scope properties used by nntp connection log context.
+        /// Structured properties pushed into the ambient Serilog context.
         /// </summary>
         private readonly KeyValuePair<string, object?>[] _scopeProperties;
+
         /// <summary>
-        /// Stores connection prefix used by nntp connection log context.
+        /// Human-readable prefix rendered into connection-scoped diagnostics.
         /// </summary>
         private readonly string _connectionPrefix;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="NntpConnectionLogContext"/> class.
+        /// Initializes a new connection logging context.
         /// </summary>
-        /// <param name="backbone">Provider or backbone name used to group the connection.</param>
+        /// <param name="backbone">Provider/backbone namespace that owns the connection.</param>
         /// <param name="accountUsername">Configured account username associated with the connection.</param>
         /// <param name="accountId">Stable identifier of the account being served.</param>
         /// <param name="serverId">Identifier of the owning NNTP server configuration.</param>
@@ -38,9 +38,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="port">Remote NNTP port.</param>
         /// <param name="useSsl">Whether the connection uses SSL/TLS.</param>
         /// <param name="connectionNumber">One-based connection number within the account.</param>
-        /// <param name="connectionLimit">Configured maximum number of account connections.</param>
-        /// <exception cref="ArgumentException">Thrown when a required text value is null, empty, or whitespace.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when a connection number or limit is not positive.</exception>
+        /// <param name="connectionLimit">Configured maximum connection count for the account.</param>
+        /// <exception cref="ArgumentException">Thrown when a required text argument is null, empty, or whitespace.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="connectionNumber"/> or <paramref name="connectionLimit"/> is not positive.</exception>
         public NntpConnectionLogContext(
             string backbone,
             string accountUsername,
@@ -86,64 +86,75 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Returns the provider/backbone name.
+        /// Gets the provider/backbone namespace that owns the connection.
         /// </summary>
+        /// <value>The configured backbone name used for grouping related sessions.</value>
         internal string Backbone { get; }
 
         /// <summary>
-        /// Returns the configured account username.
+        /// Gets the configured provider-account username.
         /// </summary>
+        /// <value>The username associated with this connection slot.</value>
         internal string AccountUsername { get; }
 
         /// <summary>
-        /// Returns the stable account identifier.
+        /// Gets the stable provider-account identifier.
         /// </summary>
+        /// <value>The account identifier attached to emitted log properties.</value>
         internal Guid AccountId { get; }
 
         /// <summary>
-        /// Returns the owning server identifier.
+        /// Gets the owning BackFiller server identifier.
         /// </summary>
+        /// <value>The server identifier propagated into structured logs.</value>
         internal byte ServerId { get; }
 
         /// <summary>
-        /// Returns the remote NNTP host.
+        /// Gets the remote NNTP host.
         /// </summary>
+        /// <value>The host name or address currently associated with the connection.</value>
         internal string Host { get; }
 
         /// <summary>
-        /// Returns the remote NNTP port.
+        /// Gets the remote NNTP port.
         /// </summary>
+        /// <value>The port currently associated with the connection.</value>
         internal int Port { get; }
 
         /// <summary>
-        /// Gets a value indicating whether SSL/TLS is enabled.
+        /// Gets a value indicating whether the connection uses SSL/TLS.
         /// </summary>
+        /// <value><see langword="true"/> when the connection is configured for implicit TLS.</value>
         internal bool UseSsl { get; }
 
         /// <summary>
-        /// Returns the one-based connection number within the account.
+        /// Gets the one-based connection number within the account.
         /// </summary>
+        /// <value>The slot number rendered in <see cref="ConnectionPrefix"/>.</value>
         internal int ConnectionNumber { get; }
 
         /// <summary>
-        /// Returns the configured maximum connection count for the account.
+        /// Gets the configured maximum connection count for the account.
         /// </summary>
+        /// <value>The per-account capacity used to zero-pad connection numbering.</value>
         internal int ConnectionLimit { get; }
 
         /// <summary>
-        /// Returns the human-readable connection prefix rendered in logs.
+        /// Gets the preformatted connection prefix used by human-readable diagnostics.
         /// </summary>
+        /// <value>A prefix such as <c>Backbone/user[001/010]: </c>.</value>
         internal string ConnectionPrefix => _connectionPrefix;
 
         /// <summary>
-        /// Returns the logging scope properties for the connection.
+        /// Gets the structured properties associated with the connection.
         /// </summary>
+        /// <value>The immutable property set pushed by <see cref="Push"/>.</value>
         internal IReadOnlyList<KeyValuePair<string, object?>> ScopeProperties => _scopeProperties;
 
         /// <summary>
-        /// Pushes the connection properties into the current logging context.
+        /// Pushes the connection properties into the current Serilog ambient context.
         /// </summary>
-        /// <returns>A disposable scope that removes the properties when disposed.</returns>
+        /// <returns>A disposable scope that removes the pushed properties in reverse order.</returns>
         internal IDisposable Push()
         {
             List<IDisposable> disposables = [];
@@ -157,26 +168,26 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Empty composite disposable used to unwind multiple LogContext pushes together.
+        /// Unwinds a batch of Serilog context pushes as a single disposable scope.
         /// </summary>
         private sealed class CompositeDisposable : IDisposable
         {
             /// <summary>
-            /// Stores disposables used by nntp connection log context.
+            /// Disposables returned by individual <see cref="LogContext.PushProperty(string, object?, bool)"/> calls.
             /// </summary>
             private readonly IReadOnlyList<IDisposable> _disposables;
 
             /// <summary>
-            /// Handles composite disposable for nntp connection log context.
+            /// Initializes a new composite scope wrapper.
             /// </summary>
-            /// <param name="disposables">The disposables value.</param>
+            /// <param name="disposables">Property scopes that should be unwound together.</param>
             internal CompositeDisposable(IReadOnlyList<IDisposable> disposables)
             {
                 _disposables = disposables ?? throw new ArgumentNullException(nameof(disposables));
             }
 
             /// <summary>
-            /// Handles dispose for nntp connection log context.
+            /// Disposes the pushed property scopes in reverse order of acquisition.
             /// </summary>
             public void Dispose()
             {

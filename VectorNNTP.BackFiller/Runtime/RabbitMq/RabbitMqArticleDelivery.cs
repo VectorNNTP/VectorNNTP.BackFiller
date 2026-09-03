@@ -8,35 +8,44 @@
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Stores admission lifecycle used by one RabbitMQ delivery accepted by a logical consumer session.
+    /// Tracks whether a delivery admitted by a consumer session has reached a terminal settlement path.
     /// </summary>
+    /// <remarks>
+    /// Consumer-session shutdown waits for all admitted deliveries to be marked settled before disposing the owning
+    /// channel. Implementations therefore provide exactly-once drain accounting rather than broker settlement itself.
+    /// </remarks>
     internal interface IRabbitMqAdmittedDeliveryTracker
     {
         /// <summary>
-        /// Marks the admitted delivery as terminally settled on its owning channel.
+        /// Marks the admitted delivery as terminally settled for session-drain accounting.
         /// </summary>
         public void MarkSettled();
     }
 
     /// <summary>
-    /// Immutable RabbitMQ article-work delivery envelope passed from infrastructure to processing layers.
+    /// Immutable RabbitMQ delivery envelope handed from infrastructure-owned consumers to article-processing code.
     /// </summary>
-    /// <param name="Backbone">Backbone namespace that owns the delivery queue.</param>
-    /// <param name="Queue">Queue name receiving the delivery.</param>
-    /// <param name="ConsumerTag">Broker-assigned consumer tag for the receiving consumer.</param>
-    /// <param name="ConsumerIdentity">Stable logical consumer-session identity that received the delivery.</param>
-    /// <param name="DeliveryTag">Broker delivery tag used by future ACK/NACK operations.</param>
-    /// <param name="Redelivered">Whether the broker marked this delivery as a redelivery.</param>
-    /// <param name="RoutingKey">Routing key observed on delivery.</param>
-    /// <param name="Exchange">Exchange observed on delivery.</param>
-    /// <param name="ConnectionGeneration">Connection generation associated with the consumer channel that received this delivery.</param>
-    /// <param name="RabbitMqMessageId">Optional RabbitMQ BasicProperties MessageId value set by the publisher.</param>
-    /// <param name="CorrelationId">Optional RabbitMQ BasicProperties CorrelationId value set by the publisher.</param>
-    /// <param name="ReplyTo">Optional RabbitMQ BasicProperties ReplyTo value set by the publisher.</param>
-    /// <param name="Payload">Raw RabbitMQ payload bytes.</param>
-    /// <param name="CancellationToken">Delivery cancellation token associated with delivery lifecycle semantics.</param>
-    /// <param name="Settlement">Settlement implementation used to acknowledge or reject the delivery.</param>
-    /// <param name="AdmissionTracker">Optional admitted-delivery tracker used by session drain accounting.</param>
+    /// <param name="Backbone">Backbone namespace whose queue produced the delivery.</param>
+    /// <param name="Queue">Queue name from which the broker delivered the message.</param>
+    /// <param name="ConsumerTag">Broker-assigned consumer tag for the active channel registration.</param>
+    /// <param name="ConsumerIdentity">Stable logical consumer-session identity that admitted the delivery.</param>
+    /// <param name="DeliveryTag">Broker delivery tag that must be used for ACK or NACK on the original channel.</param>
+    /// <param name="Redelivered">Indicates whether RabbitMQ marked the delivery as a redelivery.</param>
+    /// <param name="RoutingKey">Routing key observed on the inbound delivery frame.</param>
+    /// <param name="Exchange">Exchange observed on the inbound delivery frame.</param>
+    /// <param name="ConnectionGeneration">Application-managed RabbitMQ connection generation active when the delivery was admitted.</param>
+    /// <param name="RabbitMqMessageId">Optional RabbitMQ <c>BasicProperties.MessageId</c> value supplied by the publisher.</param>
+    /// <param name="CorrelationId">Optional RabbitMQ <c>BasicProperties.CorrelationId</c> value supplied by the publisher.</param>
+    /// <param name="ReplyTo">Optional RabbitMQ <c>BasicProperties.ReplyTo</c> value supplied by the publisher.</param>
+    /// <param name="Payload">Owned delivery payload bytes copied from the broker callback buffer.</param>
+    /// <param name="CancellationToken">Session-scoped cancellation token that is canceled when admitted work should stop cooperatively.</param>
+    /// <param name="Settlement">Exactly-once settlement handle that ACKs or NACKs on the original consumer channel generation.</param>
+    /// <param name="AdmissionTracker">Optional drain-accounting tracker used to release session shutdown once work is settled.</param>
+    /// <remarks>
+    /// The payload is copied before publication to downstream code so the delivery remains valid after RabbitMQ callback
+    /// buffers are reused. Settlement and admission tracking are separate concerns: settlement talks to the broker,
+    /// while the optional tracker releases consumer-session drain waits once a terminal outcome is observed.
+    /// </remarks>
     internal sealed record RabbitMqArticleDelivery(
         string Backbone,
         string Queue,

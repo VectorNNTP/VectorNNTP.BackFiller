@@ -13,12 +13,15 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Default article-work processor implementation for Phase 3.
+    /// Executes one backbone retrieval workflow and normalizes its result into Phase 3 outcome and disposition classifications.
     /// </summary>
+    /// <remarks>
+    /// The processor disposes any acquired NNTP session lease before returning so the result object carries only grabber-result ownership into later phases.
+    /// </remarks>
     internal sealed partial class ArticleWorkProcessor : IArticleWorkProcessor
     {
         /// <summary>
-        /// Stores retriever used by article work processor.
+        /// Retrieval boundary that acquires a backbone session and runs the underlying grabber workflow.
         /// </summary>
         private readonly IBackboneArticleRetriever _retriever;
         /// <summary>
@@ -27,10 +30,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         private readonly ILogger<ArticleWorkProcessor> _logger;
 
         /// <summary>
-        /// Initializes a new article-work processor.
+        /// Initializes a processor bound to the backbone retrieval adapter and workflow diagnostics logger.
         /// </summary>
-        /// <param name="retriever">Backbone retrieval adapter using existing session/workflow architecture.</param>
-        /// <param name="logger">Logger.</param>
+        /// <param name="retriever">Retrieval boundary that acquires a backbone session, runs the grabber workflow, and returns a classified result.</param>
+        /// <param name="logger">Logger used for terminal per-request outcome diagnostics.</param>
         public ArticleWorkProcessor(
             IBackboneArticleRetriever retriever,
             ILogger<ArticleWorkProcessor> logger)
@@ -39,7 +42,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Processes one parsed request by running backbone retrieval and translating the grabber outcome into Phase 3 classifications.
+        /// </summary>
+        /// <param name="request">Parsed article-work request.</param>
+        /// <param name="delivery">Authoritative delivery envelope that supplies AMQP correlation and settlement context.</param>
+        /// <param name="cancellationToken">Cancellation token for retrieval and classification work.</param>
+        /// <returns>
+        /// A processing result that captures the terminal outcome, deferred disposition recommendation, and any grabber payload ownership transferred to later phases.
+        /// </returns>
         public async ValueTask<ArticleWorkProcessingResult> ProcessAsync(RabbitMqArticleWorkRequest request, RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(request);
@@ -116,10 +127,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Maps an NNTP acquisition result to its processing outcome and RabbitMQ disposition recommendation.
+        /// Maps grabber workflow failures into terminal Phase 3 outcome classes and downstream RabbitMQ settlement guidance.
         /// </summary>
-        /// <param name="result">Acquisition result to classify.</param>
-        /// <returns>The externally reported outcome and recommended delivery disposition.</returns>
+        /// <param name="result">Grabber workflow result whose deterministic failure code is being translated.</param>
+        /// <returns>
+        /// The externally reported outcome together with the recommended broker action: terminal content errors drop, transient provider failures requeue, and success acknowledges.
+        /// </returns>
         private static (ArticleWorkProcessingOutcome Outcome, ArticleWorkDispositionRecommendation Disposition) Classify(NntpArticleGrabberResult result)
         {
             return result.FailureCode switch

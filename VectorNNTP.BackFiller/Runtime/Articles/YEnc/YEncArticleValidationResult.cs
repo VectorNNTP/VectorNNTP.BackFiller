@@ -9,7 +9,7 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 {
     /// <summary>
-    /// Represents the high-level validation classification for a raw NNTP article's yEnc payload semantics.
+    /// Represents the terminal yEnc validation classification for a raw NNTP article body.
     /// </summary>
     internal enum YEncArticleValidationStatus
     {
@@ -93,9 +93,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
             && !IsValid;
 
         /// <summary>
-        /// Creates a successful non-yEnc result.
+        /// Creates the canonical success result used when no <c>=ybegin</c> section was validated.
         /// </summary>
-        /// <returns>Successful non-yEnc result.</returns>
+        /// <returns>A non-yEnc success result with zero validated sections.</returns>
         internal static YEncArticleValidationResult ValidNonYEnc()
         {
             return new(YEncArticleValidationStatus.ValidNonYEnc, 0);

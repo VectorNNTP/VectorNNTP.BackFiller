@@ -11,10 +11,11 @@ using VectorNNTP.Backfiller.Runtime.Accounts;
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Startup initializer that establishes RabbitMQ connectivity and topology before runtime execution continues.
+    /// Hosted-service initializer that establishes RabbitMQ connectivity and declares required topology before runtime work begins.
     /// </summary>
     /// <remarks>
-    /// Phase 1 scope: connection and topology only. No message consumption or message processing starts here.
+    /// This startup phase stops after connection and topology readiness. It does not start consumer reconciliation or
+    /// article processing; later hosted services depend on the readiness established here.
     /// </remarks>
     internal sealed partial class RabbitMqStartupInitializer(
         RabbitMqConnectionManager connectionManager,
@@ -24,31 +25,35 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         ILogger<RabbitMqStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Stores connection manager used by rabbit mq startup initializer.
+        /// Connection manager responsible for initial broker connectivity and recovery ownership.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+
         /// <summary>
-        /// Stores topology initializer used by rabbit mq startup initializer.
+        /// Topology initializer that declares backbone exchanges, queues, and bindings.
         /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer = topologyInitializer ?? throw new ArgumentNullException(nameof(topologyInitializer));
+
         /// <summary>
-        /// Limits account snapshot provider for rabbit mq startup initializer.
+        /// Authoritative account snapshot provider used to discover backbone names at startup.
         /// </summary>
         private readonly MySqlNntpAccountSnapshotProvider _accountSnapshotProvider = accountSnapshotProvider ?? throw new ArgumentNullException(nameof(accountSnapshotProvider));
+
         /// <summary>
-        /// Stores runtime options used by rabbit mq startup initializer.
+        /// Validated runtime options used to supply the BackFiller server identifier.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
+
         /// <summary>
-        /// Supplies the logger used by rabbit mq startup initializer.
+        /// Logger for startup readiness events.
         /// </summary>
         private readonly ILogger<RabbitMqStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
-        /// Establishes RabbitMQ connection and declares backbone-specific topology.
+        /// Connects to RabbitMQ and declares topology for every distinct non-empty backbone in the current account snapshot.
         /// </summary>
         /// <param name="cancellationToken">Startup cancellation token.</param>
-        /// <returns>A task that completes when RabbitMQ infrastructure is ready.</returns>
+        /// <returns>A task that completes when RabbitMQ infrastructure is ready for later hosted services.</returns>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             LogStartupInitializationBeginning(_logger);
@@ -68,24 +73,28 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Stops RabbitMQ recovery activity and disposes the RabbitMQ connection manager.
+        /// Disposes RabbitMQ connection-management resources during host shutdown.
         /// </summary>
         /// <param name="cancellationToken">Shutdown cancellation token.</param>
-        /// <returns>A task that completes after shutdown/disposal is complete.</returns>
+        /// <returns>A task that completes after the connection manager has been disposed.</returns>
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             await _connectionManager.DisposeAsync().ConfigureAwait(false);
         }
 
         /// <summary>
-        /// Emits the startup initialization beginning log event for rabbit mq startup initializer.
+        /// Declares the informational log emitted when RabbitMQ startup initialization begins.
         /// </summary>
         [LoggerMessage(EventId = 4200, Level = LogLevel.Information, Message = "RabbitMQ startup initializer beginning infrastructure initialization")]
         private static partial void LogStartupInitializationBeginning(ILogger logger);
 
         /// <summary>
-        /// Emits the startup initialization completed log event for rabbit mq startup initializer.
+        /// Declares the informational log emitted after startup connection and topology readiness are established.
         /// </summary>
+        /// <remarks>
+        /// The structured payload reports the final <see cref="RabbitMqInfrastructureState"/> and the number of unique
+        /// backbones whose topology was declared.
+        /// </remarks>
         [LoggerMessage(EventId = 4201, Level = LogLevel.Information, Message = "RabbitMQ startup initializer completed. State={State} BackboneCount={BackboneCount}")]
         private static partial void LogStartupInitializationCompleted(ILogger logger, RabbitMqInfrastructureState state, int backboneCount);
     }

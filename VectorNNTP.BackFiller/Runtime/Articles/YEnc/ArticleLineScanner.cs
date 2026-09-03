@@ -14,8 +14,11 @@ using System.Runtime.Intrinsics;
 namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 {
     /// <summary>
-    /// Supplies byte-level CRLF and line-prefix scanning for raw NNTP article body spans.
+    /// Supplies byte-level line scanning primitives used by the yEnc validator.
     /// </summary>
+    /// <remarks>
+    /// Control lines are recognized only on CRLF boundaries and standalone LF boundaries. A lone carriage return is treated as ordinary payload data.
+    /// </remarks>
     internal static class ArticleLineScanner
     {
         /// <summary>
@@ -35,12 +38,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
             0xFF, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
 
         /// <summary>
-        /// Finds the first line terminator at or after <paramref name="startOffset"/> as CRLF or standalone LF.
+        /// Finds the first CRLF or standalone LF line terminator at or after <paramref name="startOffset"/>.
         /// </summary>
         /// <param name="span">Article body bytes.</param>
         /// <param name="startOffset">Search start offset.</param>
-        /// <returns>Index of CR or LF terminator byte, or -1 when none is found.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <returns>Index of the CR byte in a CRLF pair or the LF byte in a standalone LF terminator, or -1 when none is found.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int IndexOfCrLf(ReadOnlySpan<byte> span, int startOffset)
         {
@@ -99,12 +101,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         }
 
         /// <summary>
-        /// Advances from a line terminator index to the first byte of the following line.
+        /// Advances from a terminator index returned by <see cref="IndexOfCrLf(ReadOnlySpan{byte}, int)"/> to the first byte of the following line.
         /// </summary>
         /// <param name="span">Article body bytes.</param>
         /// <param name="lineEndIndex">Index returned by <see cref="IndexOfCrLf"/>.</param>
-        /// <returns>Index immediately following the detected terminator.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <returns>Index immediately following a CRLF pair or standalone LF terminator, or <c>span.Length</c> when the supplied index is out of range.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int AdvancePastLineTerminator(ReadOnlySpan<byte> span, int lineEndIndex)
         {
@@ -123,7 +124,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// <param name="startOffset">Search start offset.</param>
         /// <param name="prefix">Byte prefix to match at line start.</param>
         /// <returns>Line start offset, or -1 when no matching line exists.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static int FindLineStartingWith(ReadOnlySpan<byte> span, int startOffset, ReadOnlySpan<byte> prefix)
         {
             if ((uint)startOffset >= (uint)span.Length)

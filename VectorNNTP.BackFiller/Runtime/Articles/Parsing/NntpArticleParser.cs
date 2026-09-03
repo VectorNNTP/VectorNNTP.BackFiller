@@ -18,6 +18,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
     /// </summary>
     /// <remarks>
     /// <para>Contract: input bytes are expected to be article-normalized payload bytes received after transport-level framing.</para>
+    /// <para>Header, body, and header-value slices in the returned result alias the caller-provided buffer and therefore inherit its lifetime.</para>
     /// <para>The parser does not perform download, retry, queueing, or publish decisions; it only validates and classifies content.</para>
     /// </remarks>
     internal sealed class NntpArticleParser
@@ -94,11 +95,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Parses one NNTP article payload and returns deterministic acceptance/rejection metadata.
+        /// Parses one NNTP article payload and returns deterministic acceptance, rejection, and normalization metadata.
         /// </summary>
-        /// <param name="articleBytes">Complete article bytes.</param>
-        /// <returns>Parse result with classification, normalized values, and failure metadata.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <param name="articleBytes">Complete article bytes after ARTICLE framing has already been removed.</param>
+        /// <returns>
+        /// A parse result that preserves slices into the original buffer, validates required headers, canonicalizes Date and Path, and classifies yEnc and content-type hints.
+        /// </returns>
         internal NntpArticleParseResult Parse(ReadOnlyMemory<byte> articleBytes)
         {
             if (articleBytes.IsEmpty)
@@ -247,8 +249,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Parses headers and computes body offsets without decoding the full article.
+        /// Parses the article header block, preserves header-value slices, and locates the body boundary without decoding the payload.
         /// </summary>
+        /// <remarks>
+        /// A first line without a colon is treated as body content rather than a malformed header block, which allows later required-header validation to reject the article deterministically.
+        /// </remarks>
         /// <param name="articleSpan">Article bytes.</param>
         /// <param name="articleBytes">Article memory for slicing.</param>
         /// <param name="options">Parser limits.</param>
@@ -522,7 +527,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Validates Newsgroups header presence, uniqueness, and basic structure.
+        /// Validates required <c>Newsgroups</c> header presence, uniqueness, and comma-separated token structure.
         /// </summary>
         /// <param name="articleSpan">Article bytes.</param>
         /// <param name="headerOutcome">Header parse outcome.</param>
@@ -605,7 +610,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Validates optional From header structure when present.
+        /// Validates the optional <c>From</c> header when present.
         /// </summary>
         /// <param name="articleSpan">Article bytes.</param>
         /// <param name="headerOutcome">Header parse outcome.</param>
@@ -664,7 +669,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Canonicalizes Path header by prepending local FQDN when missing and preserving deterministic form.
+        /// Canonicalizes the <c>Path</c> header by validating components, dropping empty separators, and prepending the local FQDN exactly once.
         /// </summary>
         /// <param name="articleSpan">Article bytes.</param>
         /// <param name="headerOutcome">Header parse outcome.</param>
@@ -772,9 +777,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             canonicalPath = string.Create(
                 GetPathLength(fqdn, parts),
                 (fqdn, parts),
-                // <summary>
-                // Handles static for nntp article parser.
-                // </summary>
+                // Writes the canonical local FQDN followed by the validated existing path components.
                 static (span, state) =>
                 {
                     int offset = 0;
@@ -791,7 +794,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Computes canonical-path string length.
+        /// Computes the exact character count required for a canonicalized path string.
         /// </summary>
         /// <param name="fqdn">Configured FQDN component.</param>
         /// <param name="parts">Existing path components.</param>
@@ -850,7 +853,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Returns a value indicating whether body bytes contain yEnc begin markers within a bounded scan window.
+        /// Performs a bounded line-start scan for <c>=ybegin </c> markers before invoking full yEnc validation.
         /// </summary>
         /// <param name="body">Article body bytes.</param>
         /// <param name="maxScanBytes">Maximum bytes to inspect.</param>
@@ -881,7 +884,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Determines whether a body appears primarily textual using bounded control-byte heuristics.
+        /// Heuristically distinguishes likely text bodies from binary bodies using a bounded control-byte sample.
         /// </summary>
         /// <param name="body">Body bytes.</param>
         /// <returns><see langword="true"/> when body appears textual.</returns>
@@ -912,11 +915,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Finds one line terminator from an index, supporting CRLF, LF-only, and CR-only separators.
+        /// Finds the next line terminator from an index, treating NUL as a hostile-input sentinel.
         /// </summary>
         /// <param name="buffer">Input bytes.</param>
         /// <param name="start">Start offset.</param>
-        /// <returns>Line-terminator index, or -1 when none remains.</returns>
+        /// <returns>The index of the next CR or LF byte, -1 when no terminator remains, or -2 when a NUL byte is encountered before any terminator.</returns>
         private static int FindLineTerminator(ReadOnlySpan<byte> buffer, int start)
         {
             for (int i = start; i < buffer.Length; i++)
@@ -942,7 +945,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Advances index past CRLF or LF line terminators.
+        /// Advances an index past a CRLF pair or a single-character terminator.
         /// </summary>
         /// <param name="buffer">Input bytes.</param>
         /// <param name="lineTerminatorIndex">Terminator index returned by <see cref="FindLineTerminator"/>.</param>
@@ -1084,7 +1087,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Represents intermediate header-parse state and slices.
+        /// Represents the intermediate output of header parsing before required-header validation and article classification.
         /// </summary>
         /// <param name="Success">Indicates whether parsing succeeded.</param>
         /// <param name="FailureCode">Failure code when parse fails.</param>
@@ -1101,7 +1104,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             IReadOnlyList<NntpArticleHeaderEntry> Headers)
         {
             /// <summary>
-            /// Creates success outcome.
+            /// Creates a successful header-parse outcome that preserves header and body slices over the original buffer.
             /// </summary>
             /// <param name="articleBytes">Original article bytes.</param>
             /// <param name="headerBytes">Header bytes slice.</param>
@@ -1118,7 +1121,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             }
 
             /// <summary>
-            /// Creates failure outcome.
+            /// Creates a failed header-parse outcome while preserving the portion of the article already classified as header or body.
             /// </summary>
             /// <param name="failureCode">Failure code.</param>
             /// <param name="article">Original article bytes.</param>

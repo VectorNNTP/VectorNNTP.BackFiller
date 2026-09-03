@@ -27,7 +27,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal sealed partial class RabbitMqArticleWorkRequestParser : IRabbitMqArticleWorkRequestParser
     {
         /// <summary>
-        /// Stores supported version used by rabbit mq article work request parser.
+        /// Only application payload version accepted by this parser.
         /// </summary>
         private const int SupportedVersion = 1;
 
@@ -36,15 +36,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly ILogger<RabbitMqArticleWorkRequestParser> _logger;
         /// <summary>
-        /// Stores diagnostic correlation id used by rabbit mq article work request parser.
+        /// Optional correlation identifier that enables targeted payload preview logging for one RPC conversation.
         /// </summary>
         private readonly string? _diagnosticCorrelationId;
 
         /// <summary>
-        /// Initializes a new parser instance.
+        /// Initializes a parser instance with optional targeted payload-diagnostic support.
         /// </summary>
-        /// <param name="runtimeOptions">Immutable runtime options used for optional targeted diagnostics.</param>
-        /// <param name="logger">Logger.</param>
+        /// <param name="runtimeOptions">
+        /// Immutable runtime options that may supply <c>DiagnosticPayloadCorrelationId</c> for one-correlation payload preview logging.
+        /// </param>
+        /// <param name="logger">Logger used for request rejection and optional diagnostic payload events.</param>
         public RabbitMqArticleWorkRequestParser(
             BackFillerRuntimeOptions? runtimeOptions = null,
             ILogger<RabbitMqArticleWorkRequestParser>? logger = null)
@@ -57,7 +59,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 : rabbitMq.DiagnosticPayloadCorrelationId.Trim();
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Parses one admitted delivery into the canonical application request model.
+        /// </summary>
+        /// <param name="delivery">Admitted RabbitMQ delivery whose JSON body and AMQP RPC metadata must satisfy the request contract.</param>
+        /// <param name="cancellationToken">Cancellation token for parsing work.</param>
+        /// <returns>
+        /// A successful parse result when the payload matches the version-1 wire contract, or an invalid-request failure result when validation fails.
+        /// </returns>
         public ValueTask<RabbitMqArticleWorkParseResult> ParseAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(delivery);
@@ -168,10 +177,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles should log diagnostic payload for rabbit mq article work request parser.
+        /// Determines whether this delivery matches the optional one-correlation diagnostic payload logging gate.
         /// </summary>
-        /// <param name="correlationId">The correlation identifier.</param>
-        /// <returns><c>true</c> if the diagnostic payload should be logged; otherwise, <c>false</c>.</returns>
+        /// <param name="correlationId">Correlation identifier carried by the admitted RabbitMQ delivery.</param>
+        /// <returns><see langword="true"/> when runtime configuration selected this exact correlation identifier for payload diagnostics.</returns>
         private bool ShouldLogDiagnosticPayload(string? correlationId)
         {
             return !string.IsNullOrWhiteSpace(_diagnosticCorrelationId)
@@ -180,16 +189,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Emits the payload diagnostic at parser entry log event for rabbit mq article work request parser.
+        /// Emits the targeted parser-entry diagnostic event with bounded payload previews and a full-payload digest.
         /// </summary>
-        /// <param name="logger">The logger.</param>
-        /// <param name="timestampUtc">The timestamp in UTC.</param>
-        /// <param name="correlationId">The correlation identifier.</param>
-        /// <param name="rabbitMqMessageId">The RabbitMQ message identifier.</param>
-        /// <param name="replyTo">The reply-to address.</param>
-        /// <param name="consumerIdentity">The consumer identity.</param>
-        /// <param name="deliveryTag">The delivery tag.</param>
-        /// <param name="payload">The payload.</param>
+        /// <param name="logger">Logger receiving the diagnostic event.</param>
+        /// <param name="timestampUtc">UTC timestamp captured at parser entry.</param>
+        /// <param name="correlationId">AMQP correlation identifier used to target diagnostics.</param>
+        /// <param name="rabbitMqMessageId">Optional AMQP message identifier supplied by the publisher.</param>
+        /// <param name="replyTo">AMQP reply destination carried by the delivery.</param>
+        /// <param name="consumerIdentity">Logical consumer identity that admitted the delivery.</param>
+        /// <param name="deliveryTag">Broker delivery tag for the admitted message.</param>
+        /// <param name="payload">
+        /// Raw payload bytes. The log includes a UTF-8 preview capped at 256 characters, a hexadecimal preview of the first 128 bytes, and a SHA-256 of the full payload.
+        /// </param>
         private static void LogPayloadDiagnosticAtParserEntry(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -240,15 +251,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Emits the payload diagnostic json exception log event for rabbit mq article work request parser.
+        /// Emits the targeted JSON parse-failure diagnostic for a payload selected by correlation identifier.
         /// </summary>
-        /// <param name="logger">The logger.</param>
-        /// <param name="correlationId">The correlation identifier.</param>
-        /// <param name="deliveryTag">The delivery tag.</param>
-        /// <param name="message">The exception message.</param>
-        /// <param name="path">The JSON path.</param>
-        /// <param name="lineNumber">The line number.</param>
-        /// <param name="bytePositionInLine">The byte position in line.</param> 
+        /// <param name="logger">Logger receiving the diagnostic event.</param>
+        /// <param name="correlationId">AMQP correlation identifier for the rejected payload.</param>
+        /// <param name="deliveryTag">Broker delivery tag for the rejected payload.</param>
+        /// <param name="message">Parser-supplied JSON exception message.</param>
+        /// <param name="path">JSON path reported by <see cref="JsonException"/>, when available.</param>
+        /// <param name="lineNumber">Line number reported by <see cref="JsonException"/>, when available.</param>
+        /// <param name="bytePositionInLine">Byte position within the line reported by <see cref="JsonException"/>, when available.</param>
         private static void LogPayloadDiagnosticJsonException(
             ILogger logger,
             string? correlationId,
@@ -269,11 +280,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles failed for rabbit mq article work request parser.
+        /// Constructs the invalid-request result returned for malformed payloads or missing transport metadata.
         /// </summary>
-        /// <param name="delivery">The RabbitMQ article delivery.</param>
-        /// <param name="reason">The reason for the failure.</param>
-        /// <returns>The parse result representing the failure.</returns>
+        /// <param name="delivery">Delivery that could not be converted into a valid application request.</param>
+        /// <param name="reason">Human-readable rejection reason surfaced to logs and any terminal invalid-request response.</param>
+        /// <returns>A parse result whose <see cref="RabbitMqArticleWorkParseResult.Failure"/> is preclassified as <see cref="ArticleWorkProcessingOutcome.InvalidRequest"/>.</returns>
         private RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
         {
             if (_logger.IsEnabled(LogLevel.Warning))
@@ -311,12 +322,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles try read required int32 for rabbit mq article work request parser.
+        /// Reads a required integer property from the request object without allocating an intermediate model.
         /// </summary>
-        /// <param name="root">The JSON element root.</param>
-        /// <param name="propertyName">The property name.</param>
-        /// <param name="value">The output value.</param>
-        /// <returns><c>true</c> if the property was successfully read; otherwise, <c>false</c>.</returns>
+        /// <param name="root">Root JSON object representing the payload.</param>
+        /// <param name="propertyName">Required property name.</param>
+        /// <param name="value">Parsed integer value when the property exists and is a valid <see cref="int"/>.</param>
+        /// <returns><see langword="true"/> when the property exists, is numeric, and fits in <see cref="int"/>.</returns>
         private static bool TryReadRequiredInt32(JsonElement root, string propertyName, out int value)
         {
             value = default;
@@ -324,12 +335,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles try read required guid for rabbit mq article work request parser.
+        /// Reads a required GUID property from the request object.
         /// </summary>
-        /// <param name="root">The JSON element root.</param>
-        /// <param name="propertyName">The property name.</param>
-        /// <param name="value">The output value.</param>
-        /// <returns><c>true</c> if the property was successfully read; otherwise, <c>false</c>.</returns>
+        /// <param name="root">Root JSON object representing the payload.</param>
+        /// <param name="propertyName">Required property name.</param>
+        /// <param name="value">Parsed GUID value when the property exists and contains a non-blank GUID string.</param>
+        /// <returns><see langword="true"/> when the property exists, is a string, and parses as a GUID.</returns>
         private static bool TryReadRequiredGuid(JsonElement root, string propertyName, out Guid value)
         {
             value = Guid.Empty;
@@ -337,12 +348,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles try read required string for rabbit mq article work request parser.
+        /// Reads a required string property from the request object.
         /// </summary>
-        /// <param name="root">The JSON element root.</param>
-        /// <param name="propertyName">The property name.</param>
-        /// <param name="value">The output value.</param>
-        /// <returns><c>true</c> if the property was successfully read; otherwise, <c>false</c>.</returns>
+        /// <param name="root">Root JSON object representing the payload.</param>
+        /// <param name="propertyName">Required property name.</param>
+        /// <param name="value">String value when the property exists and contains a JSON string.</param>
+        /// <returns><see langword="true"/> when the property exists, is a JSON string, and deserializes to a non-null managed string.</returns>
         private static bool TryReadRequiredString(JsonElement root, string propertyName, out string? value)
         {
             value = null;
@@ -356,8 +367,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Logs a diagnostic entry for a RabbitMQ payload.
+        /// Writes the parser-entry payload diagnostic event.
         /// </summary>
+        /// <remarks>
+        /// The event is informational and can be suppressed by log filtering. Structured fields include payload previews plus a SHA-256 of the full body for later correlation without replaying the entire payload.
+        /// </remarks>
         /// <param name="logger">The logger instance.</param>
         /// <param name="timestampUtc">The timestamp in UTC.</param>
         /// <param name="consumerIdentity">The consumer identity.</param>
@@ -384,7 +398,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             string payloadSha256);
 
         /// <summary>
-        /// Logs a diagnostic entry for a RabbitMQ payload JSON exception.
+        /// Writes the targeted JSON parse-failure diagnostic event for a selected payload.
         /// </summary>
         /// <param name="logger">The logger instance.</param>
         /// <param name="correlationId">The correlation ID.</param>
@@ -404,8 +418,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             long? jsonBytePositionInLine);
 
         /// <summary>
-        /// Logs a diagnostic entry for a rejected RabbitMQ article-work request.
+        /// Writes the invalid-request rejection event emitted when a delivery cannot be converted into a canonical article-work request.
         /// </summary>
+        /// <remarks>
+        /// The structured payload digest allows correlating repeated malformed deliveries without logging the full message body.
+        /// </remarks>
         /// <param name="logger">The logger instance.</param>
         /// <param name="reason">The reason for rejection.</param>
         /// <param name="correlationId">The correlation ID.</param>

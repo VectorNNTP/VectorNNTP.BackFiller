@@ -11,17 +11,16 @@ using System.Runtime.CompilerServices;
 namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 {
     /// <summary>
-    /// Parses variable-length ASCII hexadecimal values for yEnc trailer metadata fields.
+    /// Parses strict one-to-eight digit hexadecimal ASCII values for yEnc CRC metadata fields.
     /// </summary>
     internal static class HexUInt32Parser
     {
         /// <summary>
         /// Parses hexadecimal ASCII bytes into a <see cref="uint"/> value.
         /// </summary>
-        /// <param name="hexBytes">Hexadecimal byte span that must contain only hexadecimal characters.</param>
-        /// <param name="value">Parsed value when the method returns <see langword="true"/>.</param>
+        /// <param name="hexBytes">Hexadecimal byte span that must contain between one and eight ASCII hex digits with no prefixes, separators, signs, or whitespace.</param>
+        /// <param name="value">Parsed value when the method returns <see langword="true"/>; otherwise zero.</param>
         /// <returns><see langword="true"/> when one to eight hexadecimal digits were parsed and consumed fully; otherwise <see langword="false"/>.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static bool TryParseHexUInt32(ReadOnlySpan<byte> hexBytes, out uint value)
         {
             value = 0;

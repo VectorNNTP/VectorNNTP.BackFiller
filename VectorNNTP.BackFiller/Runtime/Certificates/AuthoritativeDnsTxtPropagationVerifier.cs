@@ -22,11 +22,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed partial class AuthoritativeDnsTxtPropagationVerifier : IAuthoritativeDnsTxtPropagationVerifier
     {
         /// <summary>
-        /// Stores time provider used by authoritative dns txt propagation verifier.
+        /// Clock source used for propagation deadlines and poll scheduling.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Supplies the logger used by authoritative dns txt propagation verifier.
+        /// Logger used for successful authoritative-propagation diagnostics.
         /// </summary>
         private readonly ILogger<AuthoritativeDnsTxtPropagationVerifier> _logger;
 
@@ -46,7 +46,22 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             _logger = logger;
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Waits until enough authoritative nameservers return the expected TXT value for the ACME challenge host name.
+        /// </summary>
+        /// <remarks>
+        /// The verifier first resolves authoritative nameserver addresses, optionally waits the configured initial delay,
+        /// and then polls each discovered server directly until the configured quorum is satisfied or the timeout
+        /// expires. Recursive-resolver caches are bypassed after nameserver discovery.
+        /// </remarks>
+        /// <param name="fqdn">Fully qualified ACME TXT host name to verify.</param>
+        /// <param name="expectedTxtValue">TXT value that ACME validation must observe.</param>
+        /// <param name="options">Validated ACME runtime options that define propagation delay, poll cadence, timeout, and quorum.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts propagation waiting.</param>
+        /// <returns>A task that completes when authoritative propagation criteria are met.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no authoritative nameserver addresses can be resolved for the challenge name.</exception>
+        /// <exception cref="TimeoutException">Thrown when the required authoritative quorum does not observe the expected TXT value before the timeout expires.</exception>
+        /// <exception cref="OperationCanceledException">Thrown when cancellation is requested before propagation succeeds.</exception>
         public async Task WaitForPropagationAsync(
             string fqdn,
             string expectedTxtValue,
@@ -114,8 +129,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles resolve authoritative name server addresses async for authoritative dns txt propagation verifier.
+        /// Resolves IP addresses for the authoritative nameservers responsible for the candidate DNS zone.
         /// </summary>
+        /// <remarks>
+        /// The search walks from the full challenge name toward parent labels until it finds NS records, then resolves
+        /// those nameserver host names to IPv4/IPv6 addresses.
+        /// </remarks>
+        /// <param name="fqdn">Normalized challenge host name whose authoritative zone should be discovered.</param>
+        /// <param name="cancellationToken">Cancellation token observed while querying recursive resolvers and resolving nameserver host names.</param>
+        /// <returns>The discovered authoritative nameserver addresses, or an empty list when discovery fails.</returns>
         private static async Task<IReadOnlyList<IPAddress>> ResolveAuthoritativeNameServerAddressesAsync(string fqdn, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
@@ -158,8 +180,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles query ns record names from system resolvers async for authoritative dns txt propagation verifier.
+        /// Queries system-configured recursive resolvers for NS records for one candidate zone name.
         /// </summary>
+        /// <remarks>
+        /// Resolver failures are treated as probe misses so the caller can continue trying additional configured system
+        /// nameservers.
+        /// </remarks>
+        /// <param name="zoneName">Candidate zone name whose NS records should be discovered.</param>
+        /// <param name="cancellationToken">Cancellation token observed while querying the recursive resolvers.</param>
+        /// <returns>Normalized nameserver host names returned by the first resolver that produces any NS answers.</returns>
         private static async Task<IReadOnlyList<string>> QueryNsRecordNamesFromSystemResolversAsync(string zoneName, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneName);
@@ -197,8 +226,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles resolve system name servers for authoritative dns txt propagation verifier.
+        /// Returns the recursive resolvers used to discover authoritative NS records.
         /// </summary>
+        /// <remarks>
+        /// On Linux and macOS the resolver list is read from <c>/etc/resolv.conf</c>. When no usable entries are found,
+        /// the implementation falls back to a small public-resolver set so authoritative discovery can still proceed.
+        /// </remarks>
+        /// <returns>Distinct resolver IP-address strings in probe order.</returns>
         private static string[] ResolveSystemNameServers()
         {
             List<string> servers = [];
@@ -238,8 +272,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles query txt contains value async for authoritative dns txt propagation verifier.
+        /// Queries one authoritative nameserver and checks whether any TXT answer exactly matches the expected value.
         /// </summary>
+        /// <param name="nameServer">Authoritative nameserver address to query.</param>
+        /// <param name="fqdn">Normalized challenge host name to request.</param>
+        /// <param name="expectedTxtValue">TXT payload expected in the nameserver response.</param>
+        /// <param name="cancellationToken">Cancellation token observed while sending and receiving the DNS query.</param>
+        /// <returns><see langword="true"/> when the nameserver response contains the expected TXT value.</returns>
         private static async Task<bool> QueryTxtContainsValueAsync(IPAddress nameServer, string fqdn, string expectedTxtValue, CancellationToken cancellationToken)
         {
             byte[] request = DnsWireMessageBuilder.BuildQuery(fqdn, DnsRecordTypeCode.Txt);
@@ -249,8 +288,16 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles send dns udp query async for authoritative dns txt propagation verifier.
+        /// Sends one DNS query over UDP and returns the received response payload.
         /// </summary>
+        /// <remarks>
+        /// Each query uses a fresh datagram socket and applies an internal five-second receive timeout in addition to the
+        /// caller's cancellation token.
+        /// </remarks>
+        /// <param name="nameServer">Resolver or authoritative nameserver address to query.</param>
+        /// <param name="request">Wire-format DNS query bytes.</param>
+        /// <param name="cancellationToken">Cancellation token observed while sending and receiving.</param>
+        /// <returns>The received DNS response bytes.</returns>
         private static async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
         {
             using Socket socket = new(nameServer.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -267,15 +314,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles normalize dns name for authoritative dns txt propagation verifier.
+        /// Normalizes a DNS name for comparisons and wire-format generation.
         /// </summary>
+        /// <param name="value">DNS name to normalize.</param>
+        /// <returns>Lower-cased DNS name without surrounding whitespace or a trailing root dot.</returns>
         private static string NormalizeDnsName(string value)
         {
             return value.Trim().TrimEnd('.').ToLowerInvariant();
         }
 
         /// <summary>
-        /// Defines dns record type code and its authoritative dns txt propagation verifier contract.
+        /// DNS record type codes used by the minimal wire-format query builder and parser.
         /// </summary>
         private enum DnsRecordTypeCode : ushort
         {
@@ -284,16 +333,16 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Defines dns wire message builder and its authoritative dns txt propagation verifier contract.
+        /// Builds the minimal DNS wire-format queries needed for authoritative NS and TXT lookups.
         /// </summary>
         private static class DnsWireMessageBuilder
         {
             /// <summary>
-            /// Handles build query for authoritative dns txt propagation verifier.
+            /// Builds a standard-recursion-desired DNS query for the supplied name and record type.
             /// </summary>
-            /// <param name="fqdn">The fqdn value.</param>
-            /// <param name="type">The type value.</param>
-            /// <returns>The operation result.</returns>
+            /// <param name="fqdn">DNS name to encode into the question section.</param>
+            /// <param name="type">Record type to request.</param>
+            /// <returns>Wire-format DNS query bytes.</returns>
             internal static byte[] BuildQuery(string fqdn, DnsRecordTypeCode type)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
@@ -321,8 +370,10 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles encode dns name for authoritative dns txt propagation verifier.
+            /// Encodes a DNS name into length-prefixed wire-format labels terminated by a root label.
             /// </summary>
+            /// <param name="fqdn">DNS name to encode.</param>
+            /// <returns>Wire-format label bytes for <paramref name="fqdn"/>.</returns>
             private static byte[] EncodeDnsName(string fqdn)
             {
                 string[] labels = fqdn.Trim().TrimEnd('.').Split('.', StringSplitOptions.RemoveEmptyEntries);
@@ -339,8 +390,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles write uint16 for authoritative dns txt propagation verifier.
+            /// Writes one unsigned 16-bit integer in network byte order.
             /// </summary>
+            /// <param name="buffer">Buffer receiving the encoded value.</param>
+            /// <param name="offset">Offset at which the value should be written.</param>
+            /// <param name="value">Unsigned 16-bit value to encode.</param>
             private static void WriteUInt16(byte[] buffer, int offset, ushort value)
             {
                 buffer[offset] = (byte)(value >> 8);
@@ -349,15 +403,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Defines dns wire message parser and its authoritative dns txt propagation verifier contract.
+        /// Parses the DNS wire-format responses needed for authoritative NS and TXT verification.
         /// </summary>
         private static class DnsWireMessageParser
         {
             /// <summary>
-            /// Handles parse ns record names for authoritative dns txt propagation verifier.
+            /// Parses NS record names from the answer and authority sections of a DNS response.
             /// </summary>
-            /// <param name="message">The message value.</param>
-            /// <returns>The operation result.</returns>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <returns>Normalized NS host names discovered in the response.</returns>
             internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
@@ -398,10 +452,10 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles parse txt values for authoritative dns txt propagation verifier.
+            /// Parses TXT values from the answer section of a DNS response.
             /// </summary>
-            /// <param name="message">The message value.</param>
-            /// <returns>The operation result.</returns>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <returns>TXT payload strings reconstructed from the response.</returns>
             internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
@@ -451,9 +505,10 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles static for authoritative dns txt propagation verifier.
+            /// Reads the DNS header section counts from a response message.
             /// </summary>
-            /// <param name="message">The message value.</param>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <returns>The question, answer, authority, and additional-record counts from the DNS header.</returns>
             private static (int QuestionCount, int AnswerCount, int AuthorityCount, int AdditionalCount) ReadHeaderCounts(byte[] message)
             {
                 if (message.Length < 12)
@@ -469,8 +524,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles skip name for authoritative dns txt propagation verifier.
+            /// Advances past one encoded DNS name, including compression pointers.
             /// </summary>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <param name="offset">Current offset of the encoded name.</param>
+            /// <returns>The offset immediately after the encoded name.</returns>
             private static int SkipName(byte[] message, int offset)
             {
                 while (offset < message.Length)
@@ -493,8 +551,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles read name for authoritative dns txt propagation verifier.
+            /// Reads one DNS name, expanding compression pointers when present.
             /// </summary>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <param name="offset">Offset of the encoded name. On success the offset advances past the consumed bytes.</param>
+            /// <returns>The decoded DNS name.</returns>
             private static string ReadName(byte[] message, ref int offset)
             {
                 List<string> labels = [];
@@ -545,16 +606,22 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles read uint16 for authoritative dns txt propagation verifier.
+            /// Reads one unsigned 16-bit integer from a fixed response offset.
             /// </summary>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <param name="offset">Offset of the value to decode.</param>
+            /// <returns>The decoded unsigned 16-bit integer.</returns>
             private static ushort ReadUInt16(byte[] message, int offset)
             {
                 return (ushort)((message[offset] << 8) | message[offset + 1]);
             }
 
             /// <summary>
-            /// Handles read uint16 for authoritative dns txt propagation verifier.
+            /// Reads one unsigned 16-bit integer and advances the supplied response offset.
             /// </summary>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <param name="offset">Offset of the value to decode. The method advances it past the decoded bytes.</param>
+            /// <returns>The decoded unsigned 16-bit integer.</returns>
             private static ushort ReadUInt16(byte[] message, ref int offset)
             {
                 ushort value = ReadUInt16(message, offset);
@@ -563,8 +630,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             /// <summary>
-            /// Handles read uint32 for authoritative dns txt propagation verifier.
+            /// Reads one unsigned 32-bit integer and advances the supplied response offset.
             /// </summary>
+            /// <param name="message">Wire-format DNS response bytes.</param>
+            /// <param name="offset">Offset of the value to decode. The method advances it past the decoded bytes.</param>
+            /// <returns>The decoded unsigned 32-bit integer.</returns>
             private static uint ReadUInt32(byte[] message, ref int offset)
             {
                 uint value = (uint)((message[offset] << 24) |

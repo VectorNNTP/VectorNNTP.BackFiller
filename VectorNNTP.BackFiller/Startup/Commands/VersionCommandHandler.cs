@@ -8,7 +8,7 @@
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
     /// <summary>
-    /// Handles the <c>version</c> operational command by writing build/version diagnostics to standard output.
+    /// Handles the <c>--version</c> operational command by writing build/version diagnostics to standard output.
     /// </summary>
     /// <remarks>
     /// This command-path helper is output-only and does not participate in configuration validation or validation

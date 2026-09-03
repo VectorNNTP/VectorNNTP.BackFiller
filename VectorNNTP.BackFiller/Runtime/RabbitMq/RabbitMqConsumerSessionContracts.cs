@@ -10,116 +10,120 @@ using System.Threading.Channels;
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Owns one logical RabbitMQ consumer session lifecycle for one backbone.
+    /// Owns the lifecycle of one logical RabbitMQ consumer registration bound to a single backbone queue.
     /// </summary>
     internal interface IRabbitMqConsumerSession : IAsyncDisposable
     {
         /// <summary>
-        /// Returns the immutable logical identity for this consumer session.
+        /// Gets the stable logical identity used for reconciliation, diagnostics, and connection-scoped logging.
         /// </summary>
         public RabbitMqConsumerSessionIdentity Identity { get; }
 
         /// <summary>
-        /// Gets whether this consumer session currently has an active broker registration.
+        /// Gets whether the session currently owns an active broker consumer registration.
         /// </summary>
         public bool IsRunning { get; }
 
         /// <summary>
-        /// Returns the connection generation currently bound to this consumer session, or zero when not running.
+        /// Gets the RabbitMQ connection generation currently bound to the session, or zero when no consumer is active.
         /// </summary>
         public long ActiveConnectionGeneration { get; }
 
         /// <summary>
-        /// Starts or refreshes the broker consumer registration for the current active connection generation.
+        /// Creates the broker consumer registration for the current connection generation when the session is stopped.
         /// </summary>
-        /// <param name="cancellationToken">Startup/shutdown-aware cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Cancellation token for startup or reconciliation shutdown.</param>
+        /// <returns>A task that completes after the session reaches its running state or observes that it is already started.</returns>
         public Task StartAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Requests cooperative stop and disposes broker registration/channel for this session.
+        /// Stops the broker consumer, drains admitted deliveries, and releases session-owned channel resources.
         /// </summary>
-        /// <param name="cancellationToken">Shutdown-aware cancellation token.</param>
-        /// <param name="cancelAdmittedWork">When <see langword="true"/>, cancels admitted-delivery processing tokens as part of shutdown semantics.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Cancellation token for the stop operation.</param>
+        /// <param name="cancelAdmittedWork"><see langword="true"/> to cancel admitted-delivery tokens while draining work; otherwise in-flight work is allowed to continue cooperatively.</param>
+        /// <returns>A task that completes after the session has drained and torn down its broker registration.</returns>
         public Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork);
     }
 
     /// <summary>
-    /// Handles account-capacity retirement boundaries for RabbitMQ consumer sessions.
+    /// Coordinates retirement of excess consumer sessions when account capacity shrinks.
     /// </summary>
     internal interface IRabbitMqCapacityRetirementCoordinator
     {
         /// <summary>
-        /// Retires all logical RabbitMQ consumer sessions for one account above the retained capacity boundary.
+        /// Retires consumer sessions for one account whose one-based connection number exceeds the retained capacity boundary.
         /// </summary>
-        /// <param name="accountId">Stable account identifier.</param>
-        /// <param name="retainConnectionCount">Number of logical consumer ordinals that must remain active.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="accountId">Stable account identifier whose sessions are being trimmed.</param>
+        /// <param name="retainConnectionCount">Number of lowest-numbered logical sessions that must remain active.</param>
+        /// <param name="cancellationToken">Cancellation token for the retirement wait.</param>
         /// <returns>A task that completes after targeted sessions have drained and been disposed.</returns>
         public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken);
     }
 
     /// <summary>
-    /// Owns settlement of one RabbitMQ delivery on its original consumer channel.
+    /// Owns exactly-once ACK or NACK settlement for a delivery on the consumer channel that admitted it.
     /// </summary>
     internal interface IRabbitMqDeliverySettlement
     {
         /// <summary>
-        /// Acknowledges the delivery.
+        /// Acknowledges the delivery on its original RabbitMQ consumer channel generation.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Cancellation token for the broker settlement call.</param>
+        /// <returns>A value task that completes after the broker ACK has been issued.</returns>
         public ValueTask AckAsync(CancellationToken cancellationToken);
 
         /// <summary>
-        /// Negatively acknowledges the delivery.
+        /// Negatively acknowledges the delivery on its original RabbitMQ consumer channel generation.
         /// </summary>
-        /// <param name="requeue">Whether RabbitMQ should requeue the delivery.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="requeue"><see langword="true"/> to request broker requeue; otherwise the message is rejected without requeue.</param>
+        /// <param name="cancellationToken">Cancellation token for the broker settlement call.</param>
+        /// <returns>A value task that completes after the broker NACK has been issued.</returns>
         public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken);
     }
 
     /// <summary>
-    /// Receives RabbitMQ deliveries from infrastructure-owned consumer sessions.
+    /// Accepts deliveries emitted by infrastructure-owned consumer sessions.
     /// </summary>
     internal interface IRabbitMqDeliverySink
     {
         /// <summary>
-        /// Accepts one infrastructure delivery.
+        /// Accepts one admitted delivery for downstream processing.
         /// </summary>
-        /// <param name="delivery">Delivery envelope.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="delivery">Immutable delivery envelope, including payload ownership and settlement handle.</param>
+        /// <param name="cancellationToken">Cancellation token for the handoff.</param>
+        /// <returns>A value task that completes after the sink has accepted or rejected the delivery handoff.</returns>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken);
     }
 
     /// <summary>
-    /// Bounded in-memory RabbitMQ delivery buffer for phase-boundary handoff.
+    /// Writes admitted deliveries into a bounded in-memory channel shared with the next processing phase.
     /// </summary>
+    /// <remarks>
+    /// The sink does not settle deliveries itself. It only transfers ownership into the configured channel writer and
+    /// therefore inherits that channel's backpressure behavior.
+    /// </remarks>
     internal sealed class RabbitMqDeliveryChannelSink : IRabbitMqDeliverySink
     {
         /// <summary>
-        /// Stores writer used by rabbit mq consumer session contracts.
+        /// Channel writer that receives admitted deliveries for downstream processing.
         /// </summary>
         private readonly ChannelWriter<RabbitMqArticleDelivery> _writer;
 
         /// <summary>
-        /// Handles rabbit mq delivery channel sink for rabbit mq consumer session contracts.
+        /// Initializes a sink that forwards deliveries into the supplied channel writer.
         /// </summary>
-        /// <param name="writer">The writer value.</param>
+        /// <param name="writer">Bounded or unbounded channel writer that owns downstream buffering semantics.</param>
         internal RabbitMqDeliveryChannelSink(ChannelWriter<RabbitMqArticleDelivery> writer)
         {
             _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         }
 
         /// <summary>
-        /// Handles on delivery async for rabbit mq consumer session contracts.
+        /// Writes the admitted delivery into the configured channel writer.
         /// </summary>
-        /// <param name="delivery">The delivery value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="delivery">Delivery to buffer for downstream processing.</param>
+        /// <param name="cancellationToken">Cancellation token for the channel write.</param>
+        /// <returns>A value task that completes after the delivery is accepted by the channel writer.</returns>
         public ValueTask OnDeliveryAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();

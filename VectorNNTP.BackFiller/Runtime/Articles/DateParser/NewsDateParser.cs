@@ -12,8 +12,11 @@ using System.Text.RegularExpressions;
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Parses and canonicalizes NNTP/Usenet date values.
+    /// Parses raw article date-header values into the repository's canonical UTC RFC 5322 representation.
     /// </summary>
+    /// <remarks>
+    /// The parser trims input, enforces printable-ASCII and length guardrails, tries a fast invariant parse first, then falls back to curated cleanup and exact-format parsing with optional timezone-abbreviation validation.
+    /// </remarks>
     internal static partial class NewsDateParser
     {
         /// <summary>
@@ -97,26 +100,28 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         private static readonly FrozenDictionary<string, string> TimezoneMappings = CreateDefaultTimezoneMappings();
 
         /// <summary>
-        /// Tries to parse and canonicalize an NNTP date value.
+        /// Tries to canonicalize an NNTP date value using the repository default parse options.
         /// </summary>
         /// <param name="input">Raw date value.</param>
-        /// <param name="canonicalValue">Canonical UTC date string when parse succeeds.</param>
-        /// <param name="failure">Failure reason when parse fails.</param>
-        /// <returns><see langword="true"/> when parse succeeds.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <param name="canonicalValue">Canonical UTC date string ending in <c>+0000</c> when parsing succeeds.</param>
+        /// <param name="failure">Failure reason when parsing fails.</param>
+        /// <returns><see langword="true"/> when <paramref name="input"/> could be normalized into canonical UTC form.</returns>
         internal static bool TryGetCanonicalDateValue(ReadOnlySpan<char> input, out string canonicalValue, out DateParseFailureReason failure)
         {
             return TryGetCanonicalDateValue(input, DateParseOptions.Default, out canonicalValue, out failure);
         }
 
         /// <summary>
-        /// Tries to parse and canonicalize an NNTP date value using explicit options.
+        /// Tries to canonicalize an NNTP date value using explicit normalization options.
         /// </summary>
-        /// <param name="input">Raw date value.</param>
-        /// <param name="options">Parsing and normalization options.</param>
-        /// <param name="canonicalValue">Canonical UTC date string when parse succeeds.</param>
-        /// <param name="failure">Failure reason when parse fails.</param>
-        /// <returns><see langword="true"/> when parse succeeds.</returns>
+        /// <param name="input">Raw candidate date value.</param>
+        /// <param name="options">Guardrails and normalization toggles applied before exact parsing.</param>
+        /// <param name="canonicalValue">Canonical UTC date string ending in <c>+0000</c> when parsing succeeds.</param>
+        /// <param name="failure">Failure reason describing the stage that rejected <paramref name="input"/>.</param>
+        /// <returns><see langword="true"/> when parsing succeeds.</returns>
+        /// <remarks>
+        /// The method trims the input, enforces <see cref="PrintableAsciiSimd.IsAllPrintableAscii(ReadOnlySpan{char})"/>, optionally collapses repeated interior spaces, optionally rejects unknown trailing timezone abbreviations, and finally formats successful results with <see cref="FormatCanonicalRfc5322Utc"/>.
+        /// </remarks>
         internal static bool TryGetCanonicalDateValue(
             ReadOnlySpan<char> input,
             DateParseOptions options,
@@ -176,10 +181,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         }
 
         /// <summary>
-        /// Formats a UTC instant in canonical NNTP format.
+        /// Formats a date-time value as the canonical UTC RFC 5322 string used by the parser.
         /// </summary>
-        /// <param name="utc">Date value normalized to UTC.</param>
-        /// <returns>Canonical date string ending with <c>+0000</c>.</returns>
+        /// <param name="utc">Date-time value that should be interpreted as UTC output.</param>
+        /// <returns>A canonical string in the form <c>ddd, dd MMM yyyy HH:mm:ss +0000</c>.</returns>
+        /// <remarks>
+        /// <paramref name="utc"/> is normalized to UTC before formatting: local values are converted with <see cref="DateTime.ToUniversalTime"/>, and unspecified values are treated as already UTC.
+        /// </remarks>
         internal static string FormatCanonicalRfc5322Utc(DateTime utc)
         {
             if (utc.Kind == DateTimeKind.Local)
@@ -193,6 +201,5 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 
             return utc.ToString(CanonicalFormat, CultureInfo.InvariantCulture) + " +0000";
         }
-
     }
 }

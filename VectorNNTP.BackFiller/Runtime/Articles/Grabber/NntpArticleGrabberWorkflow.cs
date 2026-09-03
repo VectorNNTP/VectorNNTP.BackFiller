@@ -16,7 +16,7 @@ using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 {
     /// <summary>
-    /// Orchestrates one reusable-session NNTP article workflow from Message-ID acquisition through parser validation.
+    /// Runs one article workflow over an already-established acquisition session and preserves the distinction between acquisition, parser, and yEnc failures.
     /// </summary>
     internal sealed partial class NntpArticleGrabberWorkflow
     {
@@ -33,7 +33,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <summary>
         /// Initializes a new workflow orchestrator bound to the validated runtime parser identity.
         /// </summary>
-        /// <param name="runtimeOptions">Validated immutable runtime snapshot used to build parser identity.</param>
+        /// <param name="runtimeOptions">Validated runtime snapshot supplying the canonical local FQDN used by parser path canonicalization.</param>
         /// <param name="logger">Workflow logger.</param>
         public NntpArticleGrabberWorkflow(
             BackFillerRuntimeOptions runtimeOptions,
@@ -47,11 +47,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <summary>
         /// Acquires and parses one article over an already-connected authenticated acquisition session.
         /// </summary>
-        /// <param name="session">Reusable authenticated acquisition session.</param>
-        /// <param name="workItem">Grabber work item containing canonical Message-ID.</param>
+        /// <param name="session">Reusable acquisition session that is expected to execute commands sequentially.</param>
+        /// <param name="workItem">Grabber work item identifying the canonical Message-ID to retrieve.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Deterministic grabber result preserving acquisition and parser classifications.</returns>
-        /// <typeparam name="NntpArticleGrabberResult">The NntpArticleGrabberResult type parameter.</typeparam>
+        /// <returns>A deterministic workflow result that preserves the original acquisition and parser classifications.</returns>
+        /// <remarks>
+        /// Acquisition buffers are disposed internally on failed paths. On success, buffer ownership is transferred into the returned <see cref="NntpArticleGrabberResult.Success"/> payload and remains the caller's responsibility.
+        /// </remarks>
         internal async ValueTask<NntpArticleGrabberResult> ProcessAsync(
             NntpArticleAcquisitionSession session,
             NntpArticleGrabberWorkItem workItem,
@@ -116,10 +118,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Maps acquisition failure classifications into workflow-level deterministic failure semantics.
+        /// Maps acquisition-layer outcomes into workflow-level deterministic failure semantics.
         /// </summary>
         /// <param name="acquisitionFailureCode">Acquisition failure classification.</param>
-        /// <returns>Workflow failure classification.</returns>
+        /// <returns>The workflow classification reported to downstream processing.</returns>
         private static NntpArticleGrabberFailureCode MapAcquisitionFailure(NntpArticleAcquisitionFailureCode acquisitionFailureCode)
         {
             return acquisitionFailureCode switch
@@ -137,10 +139,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Maps parser rejection classifications into workflow-level deterministic failure semantics.
+        /// Maps parser-layer rejection details into workflow-level failure semantics.
         /// </summary>
         /// <param name="parse">Rejected parse result.</param>
-        /// <returns>Workflow failure classification.</returns>
+        /// <returns>The workflow classification reported to downstream processing.</returns>
         private static NntpArticleGrabberFailureCode MapParseFailure(NntpArticleParseResult parse)
         {
             return parse.FailureCode == NntpArticleParseFailureCode.YEncDecodingFailed
@@ -162,23 +164,23 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Formats elapsed duration with invariant machine-facing representation.
+        /// Formats elapsed durations using an invariant machine-facing representation.
         /// </summary>
         /// <param name="elapsed">Elapsed duration.</param>
-        /// <returns>Formatted duration.</returns>
+        /// <returns>A seconds string with two fractional digits and an <c>s</c> suffix.</returns>
         private static string FormatElapsed(TimeSpan elapsed)
         {
             return elapsed.TotalSeconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "s";
         }
 
         /// <summary>
-        /// Logs successful workflow outcomes with canonical message correlation.
+        /// Logs successful workflow outcomes with canonical Message-ID correlation.
         /// </summary>
         /// <param name="logger">Logger receiving the entry.</param>
-        /// <param name="messageId">Canonical message identifier.</param>
-        /// <param name="articleType">Detected article type.</param>
-        /// <param name="articleSize">Article body size in bytes.</param>
-        /// <param name="duration">Operation duration text.</param>
+        /// <param name="messageId">Canonical Message-ID.</param>
+        /// <param name="articleType">Detected parser article type.</param>
+        /// <param name="articleSize">Accepted article body size in bytes.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration.</param>
         private static void LogWorkflowSuccess(ILogger logger, string messageId, NntpArticleType articleType, int articleSize, string duration)
         {
             logger.LogInformation(
@@ -190,15 +192,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Logs failed workflow outcomes while preserving distinct acquisition/parser/yEnc failure classes.
+        /// Logs failed workflow outcomes while preserving distinct acquisition, parser, and yEnc classifications.
         /// </summary>
         /// <param name="logger">Logger receiving the entry.</param>
-        /// <param name="messageId">Canonical message identifier.</param>
+        /// <param name="messageId">Canonical Message-ID.</param>
         /// <param name="failureCode">Workflow-level deterministic failure code.</param>
         /// <param name="acquisitionFailureCode">Acquisition-level failure code when available.</param>
         /// <param name="parseFailureCode">Parser-level failure code when available.</param>
         /// <param name="yEncStatus">yEnc validation status when available.</param>
-        /// <param name="duration">Operation duration text.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration.</param>
         private static void LogWorkflowFailure(
             ILogger logger,
             string messageId,

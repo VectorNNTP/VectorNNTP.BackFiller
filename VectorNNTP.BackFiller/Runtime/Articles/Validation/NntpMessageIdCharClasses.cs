@@ -11,7 +11,7 @@ using System.Runtime.CompilerServices;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
 {
     /// <summary>
-    /// Bitmap-backed character-class lookup for NNTP/INN Message-ID grammar checks.
+    /// Provides allocation-free ASCII character-class tests used by the NNTP Message-ID validator.
     /// </summary>
     /// <remarks>
     /// This implementation is a temporary BackFiller-local adaptation of the reference validation subsystem.
@@ -59,10 +59,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Builds a bitmap for the provided character set.
+        /// Builds a 256-bit lookup bitmap for the supplied ASCII character set.
         /// </summary>
-        /// <param name="characters">Character set that should be marked in bitmap.</param>
-        /// <returns>Bitmap words.</returns>
+        /// <param name="characters">Characters that should be marked as valid in the returned bitmap.</param>
+        /// <returns>Eight 32-bit words covering the 0-255 byte range.</returns>
         private static uint[] CreateBitmap(ReadOnlySpan<char> characters)
         {
             uint[] bitmap = new uint[BitmapWordCount];
