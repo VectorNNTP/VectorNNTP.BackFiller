@@ -11,14 +11,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// Captures whether a persisted listener certificate can be served and whether renewal should be attempted.
     /// </summary>
     /// <remarks>
-    /// When <see cref="Certificate"/> is present, the caller owns the clone and is responsible for disposing the
-    /// loaded certificate bundle once the active state has been updated or rejected.
+    /// When <see cref="Certificate"/> is present, the caller owns the loaded certificate bundle and must either publish
+    /// it into <see cref="BackFillerCertificateState"/> or dispose the contained certificate when it will not be activated.
     /// </remarks>
-    /// <param name="HasCertificate">Whether a certificate artifact was successfully loaded.</param>
-    /// <param name="IsUsable">Whether the certificate is currently valid for listener use.</param>
-    /// <param name="RequiresRenewal">Whether renewal should be attempted now.</param>
-    /// <param name="Reason">Human-readable evaluation reason.</param>
-    /// <param name="Certificate">Loaded certificate bundle when available.</param>
+    /// <param name="HasCertificate">Whether a certificate artifact was successfully located on disk.</param>
+    /// <param name="IsUsable">Whether the located certificate passed listener-usage validation.</param>
+    /// <param name="RequiresRenewal">Whether the certificate should trigger immediate renewal work.</param>
+    /// <param name="Reason">Human-readable explanation describing the evaluation outcome.</param>
+    /// <param name="Certificate">Loaded certificate bundle when validation produced an activatable certificate.</param>
     internal sealed record CertificateEvaluationResult(
         bool HasCertificate,
         bool IsUsable,

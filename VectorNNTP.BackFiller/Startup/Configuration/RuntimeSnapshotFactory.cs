@@ -243,7 +243,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Resolves and validates the configured log directory.
+        /// Resolves the configured log directory through the shared operational-directory validator.
         /// </summary>
         /// <param name="configuration">Application configuration root.</param>
         /// <returns>Canonical absolute path to the validated logging directory.</returns>
@@ -255,7 +255,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
-        /// Resolves and validates the configured certificate directory.
+        /// Resolves the configured certificate directory through the shared operational-directory validator.
         /// </summary>
         /// <param name="configuration">Application configuration root.</param>
         /// <returns>Canonical absolute path to the validated certificate directory.</returns>

@@ -244,7 +244,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         {
             byte[] output = new byte[source.Length + 16];
             Buffer.BlockCopy(source, 0, output, 0, source.Length);
-            byte[] hashBytes = SHA256.HashData(BitConverter.GetBytes(seed));
+
+            using SHA256 hash = SHA256.Create();
+            byte[] hashBytes = hash.ComputeHash(BitConverter.GetBytes(seed));
 
             for (int i = 0; i < 8 && i < source.Length; i++)
             {

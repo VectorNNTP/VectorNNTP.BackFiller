@@ -13,8 +13,11 @@ using System.Text.Json;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Defines the canonical JSON wire protocol contract for RabbitMQ article-work requests.
+    /// Defines the canonical JSON body contract for RabbitMQ article-work requests.
     /// </summary>
+    /// <remarks>
+    /// The application payload carries only version, request identity, Message-ID, and backbone. AMQP RPC fields such as <c>CorrelationId</c> and <c>ReplyTo</c> stay on broker metadata instead of being duplicated in the JSON body.
+    /// </remarks>
     internal static class RabbitMqArticleWorkRequestWireProtocol
     {
         /// <summary>
@@ -28,10 +31,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         internal const int CurrentVersion = 1;
 
         /// <summary>
-        /// Creates a deterministic compact JSON payload for the canonical version-1 request object.
+        /// Serializes a version-1 article-work request into its compact canonical JSON form.
         /// </summary>
-        /// <param name="request">Structured request to serialize.</param>
-        /// <returns>UTF-8 encoded compact JSON payload.</returns>
+        /// <param name="request">Structured request whose application fields should be written into the payload body.</param>
+        /// <returns>UTF-8 encoded compact JSON containing <c>version</c>, <c>requestId</c>, <c>messageId</c>, and <c>backbone</c> in that order.</returns>
         internal static byte[] SerializeV1(RabbitMqArticleWorkRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);

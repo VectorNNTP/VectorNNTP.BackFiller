@@ -17,6 +17,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
     /// <remarks>
     /// <para>The validator scans for <c>=ybegin</c> sections, optionally handles <c>=ypart</c>, decodes payload bytes
     /// directly into a streaming CRC accumulator, and validates trailer metadata from <c>=yend</c>.</para>
+    /// <para>Control lines are recognized on CRLF and LF-only boundaries via <see cref="ArticleLineScanner"/>; CR-only framing remains part of the payload and therefore typically yields <see cref="YEncArticleValidationStatus.Truncated"/>.</para>
     /// <para>Corrupt or malformed remote article data is reported through <see cref="YEncArticleValidationResult"/>
     /// instead of exceptions so callers can classify failures as yEnc decoding failed and retry alternate backbones.</para>
     /// </remarks>
@@ -83,15 +84,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         private static ReadOnlySpan<byte> YEncPartEndKeyWithLeadingSpace => " end="u8;
 
         /// <summary>
-        /// Validates yEnc correctness for a raw NNTP article body.
+        /// Validates the yEnc sections contained in a raw NNTP article body.
         /// </summary>
         /// <param name="articleBody">Raw article body bytes.</param>
-        /// <returns>Allocation-free validation result with status classification and validated section count.</returns>
+        /// <returns>Allocation-free validation result containing the terminal status and the number of independently validated sections.</returns>
         /// <remarks>
         /// <para>The validator performs a single forward scan through section metadata and encoded payload lines.</para>
         /// <para>Decoded bytes are streamed directly into CRC computation without allocating a decoded payload buffer.</para>
+        /// <para>Multipart success means each encountered section validated independently; it does not reconstruct the complete file across articles.</para>
         /// </remarks>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
         internal static YEncArticleValidationResult Validate(ReadOnlySpan<byte> articleBody)
         {
             int position = 0;
@@ -263,6 +264,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// <summary>
         /// Finds and parses the next plausible <c>=yend</c> line after <paramref name="startOffset"/>.
         /// </summary>
+        /// <remarks>
+        /// The scan skips payload lines that merely contain the <c>=yend</c> stem inside encoded data and only accepts printable ASCII metadata candidates.
+        /// </remarks>
         /// <param name="body">Article body bytes.</param>
         /// <param name="startOffset">Payload search start offset.</param>
         /// <param name="isMultipart">When <see langword="true"/>, prefer <c>pcrc32=</c> and fallback to <c>crc32=</c>.</param>
@@ -472,8 +476,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         }
 
         /// <summary>
-        /// Parses one strict <c>=yend</c> metadata line and validates token uniqueness and ordering semantics.
+        /// Parses one strict <c>=yend</c> metadata line and validates token uniqueness and CRC-key selection semantics.
         /// </summary>
+        /// <remarks>
+        /// Unknown keys are rejected except for the tolerated informational tokens <c>part</c>, <c>line</c>, <c>name</c>, and <c>total</c>. Multipart validation prefers <c>pcrc32</c> over <c>crc32</c> when both are present.
+        /// </remarks>
         /// <param name="line">Candidate <c>=yend</c> line without line terminator bytes.</param>
         /// <param name="isMultipart">Whether multipart semantics apply for preferred CRC key selection.</param>
         /// <param name="declaredSize">Parsed declared decoded size.</param>

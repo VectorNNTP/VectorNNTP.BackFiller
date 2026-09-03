@@ -53,13 +53,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         private static readonly Vector128<ushort> LowerHiVec128 = Vector128.Create((ushort)'z');
 
         /// <summary>
-        /// Trims ASCII whitespace from the beginning of a span range.
+        /// Trims whitespace from the beginning of a span range.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
-        /// <returns>First non-whitespace index or <paramref name="end"/>.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <returns>First index whose character is not considered whitespace by <see cref="char.IsWhiteSpace(char)"/>, or <paramref name="end"/>.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int TrimLeadingWhitespace(ReadOnlySpan<char> span, int start, int end)
         {
@@ -73,13 +72,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Trims ASCII whitespace from the end of a span range.
+        /// Trims whitespace from the end of a span range.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
-        /// <returns>Exclusive end index after trimming.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <returns>Exclusive end index after trimming characters recognized by <see cref="char.IsWhiteSpace(char)"/>.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int TrimTrailingWhitespace(ReadOnlySpan<char> span, int start, int end)
         {
@@ -93,13 +91,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Determines whether all characters in range are ASCII.
+        /// Determines whether every UTF-16 code unit in the range is 7-bit ASCII.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
-        /// <returns><see langword="true"/> when all characters are within 7-bit ASCII range.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <returns><see langword="true"/> when all characters are within the 0-127 range.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsAllAscii(ReadOnlySpan<char> span, int start, int end)
         {
@@ -134,13 +131,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Consumes a maximal prefix of atom characters from range.
+        /// Consumes the longest prefix of valid atom characters from the supplied range.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
-        /// <returns>Consumed character count.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <returns>The number of consecutive characters accepted by the Message-ID atom character class.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int ConsumeAtomCharacters(ReadOnlySpan<char> span, int start, int end)
         {
@@ -166,13 +162,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Consumes a maximal ASCII alphanumeric prefix from range.
+        /// Consumes the longest contiguous ASCII letter-or-digit prefix from the supplied range.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="start">Inclusive start index.</param>
         /// <param name="end">Exclusive end index.</param>
-        /// <returns>Consumed character count.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <returns>The number of consecutive ASCII alphanumeric characters consumed.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int ConsumeAlphanumericPrefix(ReadOnlySpan<char> span, int start, int end)
         {

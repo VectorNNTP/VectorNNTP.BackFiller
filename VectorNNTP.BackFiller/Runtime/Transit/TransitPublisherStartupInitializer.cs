@@ -8,26 +8,27 @@
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// Hosted startup initializer that performs transit publisher initialization before runtime loops begin.
+    /// Hosted-service initializer that brings the transit publisher to readiness before producer loops begin.
     /// </summary>
     internal sealed partial class TransitPublisherStartupInitializer(
         TransitPublisher transitPublisher,
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Stores transit publisher used by transit publisher startup initializer.
+        /// Transit publisher whose connection workers are initialized during startup.
         /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
+
         /// <summary>
-        /// Supplies the logger used by transit publisher startup initializer.
+        /// Logger for transit startup lifecycle events.
         /// </summary>
         private readonly ILogger<TransitPublisherStartupInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
-        /// Performs startup-time transit connection initialization and blocks host startup until complete.
+        /// Initializes the transit publisher and blocks host startup until publisher readiness is established.
         /// </summary>
         /// <param name="cancellationToken">Startup cancellation token.</param>
-        /// <returns>A task that completes after transit publisher initialization succeeds.</returns>
+        /// <returns>A task that completes after transit connection workers have been initialized.</returns>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             LogTransitStartupInitializerBeginning(_logger);
@@ -36,23 +37,23 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Disposes transit publisher resources when host shutdown begins.
+        /// Disposes the transit publisher during host shutdown.
         /// </summary>
         /// <param name="cancellationToken">Shutdown cancellation token.</param>
-        /// <returns>A task that completes after publisher disposal finishes.</returns>
+        /// <returns>A task that completes after publisher teardown finishes.</returns>
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             await _transitPublisher.DisposeAsync().ConfigureAwait(false);
         }
 
         /// <summary>
-        /// Emits the transit startup initializer beginning log event for transit publisher startup initializer.
+        /// Declares the informational log emitted when transit publisher initialization begins.
         /// </summary>
         [LoggerMessage(EventId = 2206, Level = LogLevel.Information, Message = "Transit publisher startup initializer beginning connection initialization")]
         private static partial void LogTransitStartupInitializerBeginning(ILogger logger);
 
         /// <summary>
-        /// Emits the transit startup initializer completed log event for transit publisher startup initializer.
+        /// Declares the informational log emitted after publisher initialization completes.
         /// </summary>
         [LoggerMessage(EventId = 2207, Level = LogLevel.Information, Message = "Transit publisher startup initializer completed; State={State}")]
         private static partial void LogTransitStartupInitializerCompleted(ILogger logger, TransitConnectionState state);

@@ -9,11 +9,20 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Default deterministic disposition planner for article-work outcomes.
+    /// Translates Phase 3 processing outcomes into the response-publication and ACK/NACK policy applied by Phase 4.
     /// </summary>
     internal sealed class ArticleWorkDispositionPlanner : IArticleWorkDispositionPlanner
     {
-        /// <inheritdoc/>
+        /// <summary>
+        /// Creates the RabbitMQ settlement plan for one processed result.
+        /// </summary>
+        /// <param name="result">Completed processing result to classify for response publication and broker settlement.</param>
+        /// <param name="cancellationToken">
+        /// Host or operation cancellation token. A canceled token forces requeue semantics so work is retried instead of being treated as terminal.
+        /// </param>
+        /// <returns>
+        /// A deterministic plan that either publishes a terminal RPC response before settlement or requests broker requeue for transient and shutdown paths.
+        /// </returns>
         public RabbitMqDispositionPlan CreatePlan(ArticleWorkProcessingResult result, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(result);

@@ -50,7 +50,7 @@ namespace VectorNNTP.Backfiller
         private const string UnknownValue = "unknown";
 
         /// <summary>
-        /// Stores metadata token separators used by build info.
+        /// Token separators recognized when compatibility-parsing commit and dirty markers from informational-version metadata.
         /// </summary>
         private static readonly char[] MetadataTokenSeparators = ['.', '-', '_'];
 
@@ -683,23 +683,27 @@ namespace VectorNNTP.Backfiller
     public sealed class RuntimeDetails
     {
         /// <summary>
-        /// Returns the .NET runtime description.
+        /// Gets the .NET runtime description captured from the current process.
         /// </summary>
+        /// <value>Framework description reported by <see cref="RuntimeInformation.FrameworkDescription"/>.</value>
         public string Framework { get; init; } = "unknown";
 
         /// <summary>
-        /// Returns the operating system description.
+        /// Gets the operating system description captured from the current process.
         /// </summary>
+        /// <value>Operating-system description reported by <see cref="RuntimeInformation.OSDescription"/>.</value>
         public string OS { get; init; } = "unknown";
 
         /// <summary>
-        /// Returns the operating system architecture.
+        /// Gets the operating-system architecture captured from the current process.
         /// </summary>
+        /// <value>Architecture text reported by <see cref="RuntimeInformation.OSArchitecture"/>.</value>
         public string OSArchitecture { get; init; } = "unknown";
 
         /// <summary>
-        /// Returns the current process architecture.
+        /// Gets the current process architecture captured from the running worker.
         /// </summary>
+        /// <value>Architecture text reported by <see cref="RuntimeInformation.ProcessArchitecture"/>.</value>
         public string ProcessArchitecture { get; init; } = "unknown";
 
         /// <summary>

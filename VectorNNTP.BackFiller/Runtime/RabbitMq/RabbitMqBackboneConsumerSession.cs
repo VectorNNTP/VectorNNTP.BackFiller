@@ -18,85 +18,85 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed partial class RabbitMqBackboneConsumerSession : IRabbitMqConsumerSession
     {
         /// <summary>
-        /// Stores identity used by rabbit mq backbone consumer session.
+        /// Gets the authoritative logical identity for this session.
         /// </summary>
         private readonly RabbitMqConsumerSessionIdentity _identity;
         /// <summary>
-        /// Stores queue name used by rabbit mq backbone consumer session.
+        /// Canonical backbone queue name consumed by this session.
         /// </summary>
         private readonly string _queueName;
         /// <summary>
-        /// Stores connection manager used by rabbit mq backbone consumer session.
+        /// Connection manager that supplies generation-aware owned channels.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
         /// <summary>
-        /// Stores topology initializer used by rabbit mq backbone consumer session.
+        /// Topology initializer that ensures the target queue and exchange exist before consumption begins.
         /// </summary>
         private readonly RabbitMqTopologyInitializer _topologyInitializer;
         /// <summary>
-        /// Stores delivery sink used by rabbit mq backbone consumer session.
+        /// Delivery sink that receives admitted deliveries for downstream processing.
         /// </summary>
         private readonly IRabbitMqDeliverySink _deliverySink;
         /// <summary>
-        /// Supplies the logger used by rabbit mq backbone consumer session.
+        /// Logger that records consumer lifecycle, drain, recreation, and diagnostic payload events.
         /// </summary>
         private readonly ILogger<RabbitMqBackboneConsumerSession> _logger;
         /// <summary>
-        /// Limits prefetch count for rabbit mq backbone consumer session.
+        /// Optional broker prefetch limit applied to this consumer channel.
         /// </summary>
         private readonly ushort? _prefetchCount;
         /// <summary>
-        /// Stores diagnostic correlation id used by rabbit mq backbone consumer session.
+        /// Optional correlation identifier that enables payload-diagnostic logging for matching deliveries only.
         /// </summary>
         private readonly string? _diagnosticCorrelationId;
         /// <summary>
-        /// Stores lifecycle gate used by rabbit mq backbone consumer session.
+        /// Gate that serializes start, stop, replacement, and admitted-delivery drain accounting.
         /// </summary>
         private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
 
         /// <summary>
-        /// Stores owned channel used by rabbit mq backbone consumer session.
+        /// Channel lease currently owned by the session.
         /// </summary>
         private RabbitMqOwnedChannel? _ownedChannel;
         /// <summary>
-        /// Stores consumer used by rabbit mq backbone consumer session.
+        /// Active asynchronous broker consumer bound to the owned channel.
         /// </summary>
         private AsyncEventingBasicConsumer? _consumer;
         /// <summary>
-        /// Stores consumer tag used by rabbit mq backbone consumer session.
+        /// Broker-assigned consumer tag for the current registration.
         /// </summary>
         private string? _consumerTag;
         /// <summary>
-        /// Stores session cancellation used by rabbit mq backbone consumer session.
+        /// Cancellation source propagated to admitted deliveries when the session retires.
         /// </summary>
         private CancellationTokenSource? _sessionCancellation;
         /// <summary>
-        /// Stores drain completion used by rabbit mq backbone consumer session.
+        /// Completion source that signals when all admitted deliveries have been settled.
         /// </summary>
         private TaskCompletionSource<bool> _drainCompletion = CreateCompletedDrainSource();
         /// <summary>
-        /// Stores active connection generation used by rabbit mq backbone consumer session.
+        /// Connection generation associated with the currently owned channel and consumer.
         /// </summary>
         private long _activeConnectionGeneration;
         /// <summary>
-        /// Limits admitted delivery count for rabbit mq backbone consumer session.
+        /// Count of deliveries admitted to the sink and not yet terminally settled.
         /// </summary>
         private int _admittedDeliveryCount;
         /// <summary>
-        /// Stores lifecycle state used by rabbit mq backbone consumer session.
+        /// Internal running, retiring, or stopped lifecycle state.
         /// </summary>
         private RabbitMqConsumerLifecycleState _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
         /// <summary>
-        /// Stores disposed used by rabbit mq backbone consumer session.
+        /// Indicates that disposal has started and the session must reject further lifecycle work.
         /// </summary>
         private bool _disposed;
         /// <summary>
-        /// Stores connection scope used by rabbit mq backbone consumer session.
+        /// Serilog diagnostic scope pushed while a live consumer is active.
         /// </summary>
         private IDisposable? _connectionScope;
 
         /// <summary>
-        /// Defines rabbit mq consumer lifecycle state and its rabbit mq backbone consumer session contract.
+        /// Internal consumer-session lifecycle states.
         /// </summary>
         private enum RabbitMqConsumerLifecycleState
         {
@@ -106,7 +106,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles rabbit mq backbone consumer session for rabbit mq backbone consumer session.
+        /// Initializes one logical consumer session for a single backbone queue.
         /// </summary>
         internal RabbitMqBackboneConsumerSession(
             RabbitMqConsumerSessionIdentity identity,
@@ -136,34 +136,33 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Stores identity used by rabbit mq backbone consumer session.
+        /// Gets the authoritative logical identity for this session.
         /// </summary>
         internal RabbitMqConsumerSessionIdentity Identity => _identity;
 
         RabbitMqConsumerSessionIdentity IRabbitMqConsumerSession.Identity => _identity;
 
         /// <summary>
-        /// Stores is running used by rabbit mq backbone consumer session.
+        /// Gets a value indicating whether the session is actively consuming deliveries.
         /// </summary>
         internal bool IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
         bool IRabbitMqConsumerSession.IsRunning => _lifecycleState is RabbitMqConsumerLifecycleState.Running;
 
         /// <summary>
-        /// Stores active connection generation used by rabbit mq backbone consumer session.
+        /// Gets the connection generation associated with the currently owned channel and consumer.
         /// </summary>
-        /// <param name="_activeConnectionGeneration">The _activeConnectionGeneration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <value>The active generation, or zero when the session is stopped.</value>
         internal long ActiveConnectionGeneration => Interlocked.Read(ref _activeConnectionGeneration);
 
         long IRabbitMqConsumerSession.ActiveConnectionGeneration => ActiveConnectionGeneration;
 
         /// <summary>
-        /// Handles handle connection replaced async for rabbit mq backbone consumer session.
+        /// Recreates the consumer when the connection manager installs a newer connection generation.
         /// </summary>
-        /// <param name="args">The args value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="args">Connection-generation replacement details.</param>
+        /// <param name="cancellationToken">Cancellation token for the replacement work.</param>
+        /// <returns>A task that completes after any required recreation finishes.</returns>
         internal async Task HandleConnectionReplacedAsync(RabbitMqConnectionReplacedEventArgs args, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(args);
@@ -201,10 +200,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles start async for rabbit mq backbone consumer session.
+        /// Starts the session by ensuring connectivity, declaring topology, and registering a broker consumer.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Cancellation token for startup.</param>
+        /// <returns>A task that completes after the broker consumer is active.</returns>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
@@ -227,11 +226,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles stop async for rabbit mq backbone consumer session.
+        /// Stops the session, optionally canceling admitted work before waiting for drain completion.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <param name="cancelAdmittedWork">The cancelAdmittedWork value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Cancellation token for the stop sequence.</param>
+        /// <param name="cancelAdmittedWork"><see langword="true"/> to cancel admitted deliveries before draining.</param>
+        /// <returns>A task that completes after the consumer is canceled and admitted deliveries have drained.</returns>
         public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
         {
             await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -246,9 +245,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles dispose async for rabbit mq backbone consumer session.
+        /// Disposes the session by performing a final stop that cancels admitted work.
         /// </summary>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <returns>A value task that completes after owned session resources are released.</returns>
         public async ValueTask DisposeAsync()
         {
             if (_disposed)
@@ -271,7 +270,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles start core async for rabbit mq backbone consumer session.
+        /// Core start path that acquires a generation-bound channel and registers the consumer callbacks.
         /// </summary>
         private async Task StartCoreAsync(CancellationToken cancellationToken)
         {
@@ -344,7 +343,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles stop core async for rabbit mq backbone consumer session.
+        /// Core stop path that retires the consumer, optionally cancels admitted work, and waits for drain completion.
         /// </summary>
         private async Task StopCoreAsync(CancellationToken cancellationToken, bool expectedShutdown, bool cancelAdmittedWork)
         {
@@ -451,7 +450,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on received async for rabbit mq backbone consumer session.
+        /// Admits a broker delivery, copies its payload, and forwards a settlement-capable envelope to the sink.
         /// </summary>
         private async Task OnReceivedAsync(object sender, BasicDeliverEventArgs args)
         {
@@ -545,7 +544,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on consumer shutdown async for rabbit mq backbone consumer session.
+        /// Recreates the consumer when the broker shuts down the active registration unexpectedly.
         /// </summary>
         private async Task OnConsumerShutdownAsync(object sender, ShutdownEventArgs args)
         {
@@ -577,7 +576,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on consumer unregistered async for rabbit mq backbone consumer session.
+        /// Recreates the consumer when the broker unregisters the active consumer unexpectedly.
         /// </summary>
         private async Task OnConsumerUnregisteredAsync(object sender, ConsumerEventArgs args)
         {
@@ -610,7 +609,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles recreate consumer core async for rabbit mq backbone consumer session.
+        /// Recreates the consumer against a newer connection generation.
         /// </summary>
         private async Task RecreateConsumerCoreAsync(long requestedGeneration, CancellationToken cancellationToken)
         {
@@ -648,7 +647,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles is event from active consumer for rabbit mq backbone consumer session.
+        /// Determines whether an event callback came from the currently active consumer instance.
         /// </summary>
         private bool IsEventFromActiveConsumer(object sender)
         {
@@ -656,7 +655,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on admitted delivery settled async for rabbit mq backbone consumer session.
+        /// Updates admitted-delivery drain accounting after a delivery reaches terminal settlement.
         /// </summary>
         private async Task OnAdmittedDeliverySettledAsync()
         {
@@ -709,30 +708,30 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Defines rabbit mq admitted delivery tracker and its rabbit mq backbone consumer session contract.
+        /// Tracks whether one admitted delivery has contributed back to session drain accounting.
         /// </summary>
         private sealed class RabbitMqAdmittedDeliveryTracker : IRabbitMqAdmittedDeliveryTracker
         {
             /// <summary>
-            /// Stores owner used by rabbit mq backbone consumer session.
+            /// Session whose admitted-delivery counters are updated when settlement completes.
             /// </summary>
             private readonly RabbitMqBackboneConsumerSession _owner;
             /// <summary>
-            /// Stores completed used by rabbit mq backbone consumer session.
+            /// Single-bit guard that prevents duplicate settlement accounting.
             /// </summary>
             private int _completed;
 
             /// <summary>
-            /// Handles rabbit mq admitted delivery tracker for rabbit mq backbone consumer session.
+            /// Initializes the tracker for one admitted delivery.
             /// </summary>
-            /// <param name="owner">The owner value.</param>
+            /// <param name="owner">Owning consumer session.</param>
             internal RabbitMqAdmittedDeliveryTracker(RabbitMqBackboneConsumerSession owner)
             {
                 _owner = owner ?? throw new ArgumentNullException(nameof(owner));
             }
 
             /// <summary>
-            /// Handles mark settled for rabbit mq backbone consumer session.
+            /// Records terminal settlement once and releases one admitted-delivery slot.
             /// </summary>
             public void MarkSettled()
             {
@@ -746,38 +745,38 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Defines rabbit mq delivery settlement and its rabbit mq backbone consumer session contract.
+        /// Settlement handle that ACKs or NACKs a delivery on the original consumer channel generation.
         /// </summary>
         private sealed class RabbitMqDeliverySettlement : IRabbitMqDeliverySettlement
         {
             /// <summary>
-            /// Stores owner used by rabbit mq backbone consumer session.
+            /// Session whose admitted-delivery counters are updated when settlement completes.
             /// </summary>
             private readonly RabbitMqBackboneConsumerSession _owner;
             /// <summary>
-            /// Stores delivery tag used by rabbit mq backbone consumer session.
+            /// Broker delivery tag to settle.
             /// </summary>
             private readonly ulong _deliveryTag;
             /// <summary>
-            /// Stores delivery generation used by rabbit mq backbone consumer session.
+            /// Connection generation on which the delivery was admitted.
             /// </summary>
             private readonly long _deliveryGeneration;
             /// <summary>
-            /// Stores admission tracker used by rabbit mq backbone consumer session.
+            /// Optional tracker that returns admitted-delivery capacity after settlement.
             /// </summary>
             private readonly RabbitMqAdmittedDeliveryTracker? _admissionTracker;
             /// <summary>
-            /// Stores settled used by rabbit mq backbone consumer session.
+            /// Single-bit guard that enforces exactly-once settlement.
             /// </summary>
             private int _settled;
 
             /// <summary>
-            /// Handles rabbit mq delivery settlement for rabbit mq backbone consumer session.
+            /// Initializes a settlement handle for one admitted delivery.
             /// </summary>
-            /// <param name="owner">The owner value.</param>
-            /// <param name="deliveryTag">The deliveryTag value.</param>
-            /// <param name="deliveryGeneration">The deliveryGeneration value.</param>
-            /// <param name="admissionTracker">The admissionTracker value.</param>
+            /// <param name="owner">Owning consumer session.</param>
+            /// <param name="deliveryTag">Broker delivery tag to settle.</param>
+            /// <param name="deliveryGeneration">Connection generation on which the delivery was admitted.</param>
+            /// <param name="admissionTracker">Optional admitted-delivery tracker.</param>
             internal RabbitMqDeliverySettlement(RabbitMqBackboneConsumerSession owner, ulong deliveryTag, long deliveryGeneration, RabbitMqAdmittedDeliveryTracker? admissionTracker)
             {
                 _owner = owner ?? throw new ArgumentNullException(nameof(owner));
@@ -787,28 +786,28 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             /// <summary>
-            /// Handles ack async for rabbit mq backbone consumer session.
+            /// Positively acknowledges the delivery on the original consumer channel generation.
             /// </summary>
-            /// <param name="cancellationToken">The cancellationToken value.</param>
-            /// <returns>A value task representing the asynchronous operation.</returns>
+            /// <param name="cancellationToken">Cancellation token for broker acknowledgement.</param>
+            /// <returns>A value task that completes after broker acknowledgement succeeds.</returns>
             public async ValueTask AckAsync(CancellationToken cancellationToken)
             {
                 await SettleAsync(requeue: null, cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
-            /// Handles nack async for rabbit mq backbone consumer session.
+            /// Negatively acknowledges the delivery on the original consumer channel generation.
             /// </summary>
-            /// <param name="requeue">The requeue value.</param>
-            /// <param name="cancellationToken">The cancellationToken value.</param>
-            /// <returns>A value task representing the asynchronous operation.</returns>
+            /// <param name="requeue"><see langword="true"/> to request broker requeue.</param>
+            /// <param name="cancellationToken">Cancellation token for broker negative acknowledgement.</param>
+            /// <returns>A value task that completes after broker settlement succeeds.</returns>
             public async ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
                 await SettleAsync(requeue, cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
-            /// Handles settle async for rabbit mq backbone consumer session.
+            /// Performs generation-checked broker settlement and returns admitted-delivery capacity exactly once.
             /// </summary>
             private async ValueTask SettleAsync(bool? requeue, CancellationToken cancellationToken)
             {
@@ -855,7 +854,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles begin connection scope for rabbit mq backbone consumer session.
+        /// Pushes the connection-scoped Serilog properties used while the consumer is active.
         /// </summary>
         private IDisposable BeginConnectionScope()
         {
@@ -877,17 +876,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Defines composite disposable and its rabbit mq backbone consumer session contract.
+        /// Disposable that unwinds pushed logging scopes in reverse order.
         /// </summary>
         private sealed class CompositeDisposable(IReadOnlyList<IDisposable> scopes) : IDisposable
         {
             /// <summary>
-            /// Stores scopes used by rabbit mq backbone consumer session.
+            /// Logging scopes to dispose in reverse push order.
             /// </summary>
             private readonly IReadOnlyList<IDisposable> _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
 
             /// <summary>
-            /// Handles dispose for rabbit mq backbone consumer session.
+            /// Disposes the captured scopes in reverse order.
             /// </summary>
             public void Dispose()
             {
@@ -899,7 +898,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles build connection prefix for rabbit mq backbone consumer session.
+        /// Builds the fixed-width connection prefix used in connection-scoped diagnostics.
         /// </summary>
         private static string BuildConnectionPrefix(string backbone, string accountUsername, int connectionNumber, int connectionLimit)
         {
@@ -913,7 +912,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles throw if disposed for rabbit mq backbone consumer session.
+        /// Throws when the session has already been disposed.
         /// </summary>
         private void ThrowIfDisposed()
         {
@@ -1036,7 +1035,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles should log diagnostic payload for rabbit mq backbone consumer session.
+        /// Determines whether a delivery matches the configured diagnostic correlation identifier.
         /// </summary>
         private bool ShouldLogDiagnosticPayload(string? correlationId)
         {

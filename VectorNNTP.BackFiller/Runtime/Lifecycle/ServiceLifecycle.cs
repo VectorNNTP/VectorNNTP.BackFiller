@@ -176,8 +176,12 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             TimeSpan DurationInPreviousState);
 
         /// <summary>
-        /// Fired when state transitions.
+        /// Raised after one validated lifecycle transition has been committed and logged.
         /// </summary>
+        /// <remarks>
+        /// Handlers observe an immutable transition snapshot. They must not call <see cref="TransitionTo(LifecycleState, string)"/>
+        /// because the lifecycle blocks reentrant and concurrent transitions while notifications are in progress.
+        /// </remarks>
         public event Action<StateTransition>? StateTransitioned;
 
         /// <summary>
@@ -266,39 +270,39 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         }
 
         /// <summary>
-        /// Stores sync used by service lifecycle.
+        /// Serializes lifecycle state reads that require a coherent snapshot with transition mutations.
         /// </summary>
         private readonly object _sync = new();
         /// <summary>
-        /// Stores time provider used by service lifecycle.
+        /// Supplies monotonic timestamps and UTC wall-clock values for transition tracking.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Supplies the logger used by service lifecycle.
+        /// Logger receiving transition, invalid-transition, and slow-phase diagnostics.
         /// </summary>
         private readonly ILogger<ServiceLifecycle> _logger;
         /// <summary>
-        /// Stores current state used by service lifecycle.
+        /// Current authoritative lifecycle state guarded by <see cref="_sync"/>.
         /// </summary>
         private LifecycleState _currentState = LifecycleState.Starting;
         /// <summary>
-        /// Stores state entered timestamp used by service lifecycle.
+        /// Monotonic timestamp captured when <see cref="_currentState"/> was entered.
         /// </summary>
         private long _stateEnteredTimestamp; // Monotonic timestamp from TimeProvider.GetTimestamp()
         /// <summary>
-        /// Stores transition history used by service lifecycle.
+        /// Bounded in-memory history of committed lifecycle transitions.
         /// </summary>
         private readonly List<StateTransition> _transitionHistory = [];
         /// <summary>
-        /// Limits max history size for service lifecycle.
+        /// Maximum number of transition records retained in <see cref="_transitionHistory"/>.
         /// </summary>
         private const int MaxHistorySize = 50;
         /// <summary>
-        /// Stores is notifying observers used by service lifecycle.
+        /// Indicates that subscriber callbacks are currently executing for the latest committed transition.
         /// </summary>
         private bool _isNotifyingObservers; // Prevents transitions during observer notification (reentrancy + concurrency)
         /// <summary>
-        /// Stores slow phase warning logged used by service lifecycle.
+        /// Tracks whether the current state has already emitted its one-time slow-phase warning.
         /// </summary>
         private bool _slowPhaseWarningLogged; // One warning per phase
 
@@ -343,8 +347,8 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// handlers creates state confusion where transition logs/notifications become inconsistent with
         /// actual state.</para>
         /// </remarks>
-        /// <param name="newState">The newState value.</param>
-        /// <param name="reason">The reason value.</param>
+        /// <param name="newState">Target lifecycle state to commit when the transition is permitted.</param>
+        /// <param name="reason">Operator-facing reason recorded in transition history and logs.</param>
         internal void TransitionTo(LifecycleState newState, string reason)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(reason);
@@ -520,8 +524,8 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// Prevents log spam during stuck initialization (e.g., 600 warnings if called every second for 10 minutes).
         /// The eventual state transition log will show final duration.</para>
         /// </remarks>
-        /// <param name="threshold">The threshold value.</param>
-        /// <param name="phaseName">The phaseName value.</param>
+        /// <param name="threshold">Elapsed-time threshold that must be exceeded before a warning is emitted.</param>
+        /// <param name="phaseName">Human-readable phase label included in the warning event.</param>
         public void LogSlowPhaseWarning(TimeSpan threshold, string phaseName)
         {
             ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(threshold, TimeSpan.Zero);
@@ -552,9 +556,9 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         }
 
         /// <summary>
-        /// Gets a summary of current state (thread-safe snapshot, monotonic timing).
+        /// Produces a compact diagnostic summary of the current lifecycle state, elapsed time, and retained history size.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns>Formatted summary string for shutdown logging and diagnostics.</returns>
         public string GetSummary()
         {
             lock (_sync)
@@ -564,48 +568,61 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             }
         }
 
+        /// <summary>
+        /// Logs a rejected transition attempt that occurred while observer callbacks for another transition were still running.
+        /// </summary>
+        /// <param name="logger">Logger receiving the rejection event.</param>
+        /// <param name="newState">State that the rejected caller attempted to enter.</param>
         [LoggerMessage(
             EventId = 1100,
             Level = LogLevel.Error,
             Message = "TransitionTo({NewState}) cannot be called while observers are being notified. Observers MUST NOT call TransitionTo() from StateTransitioned handlers (reentrancy forbidden). Concurrent transitions from other threads are also blocked during notification.")]
-        // <summary>
-        // Emits the transition during observer notification rejected log event for service lifecycle.
-        // </summary>
         private static partial void LogTransitionDuringObserverNotificationRejected(
             ILogger logger,
             LifecycleState newState);
 
+        /// <summary>
+        /// Logs that a requested transition was ignored because the lifecycle was already in the requested state.
+        /// </summary>
+        /// <param name="logger">Logger receiving the no-op transition event.</param>
+        /// <param name="state">State that was already active.</param>
         [LoggerMessage(
             EventId = 1101,
             Level = LogLevel.Warning,
             Message = "State transition ignored: already in {State}")]
-        // <summary>
-        // Emits the state transition ignored already in state log event for service lifecycle.
-        // </summary>
         private static partial void LogStateTransitionIgnoredAlreadyInState(
             ILogger logger,
             LifecycleState state);
 
+        /// <summary>
+        /// Logs an invalid state-machine edge together with the set of allowed next states.
+        /// </summary>
+        /// <param name="logger">Logger receiving the invalid-transition event.</param>
+        /// <param name="currentState">State active when the invalid request was made.</param>
+        /// <param name="targetState">Rejected target state.</param>
+        /// <param name="allowedTransitions">Human-readable description of the valid next states.</param>
         [LoggerMessage(
             EventId = 1102,
             Level = LogLevel.Error,
             Message = "Invalid state transition: {CurrentState} -> {TargetState} (allowed: {AllowedTransitions})")]
-        // <summary>
-        // Emits the invalid state transition log event for service lifecycle.
-        // </summary>
         private static partial void LogInvalidStateTransition(
             ILogger logger,
             LifecycleState currentState,
             LifecycleState targetState,
             string allowedTransitions);
 
+        /// <summary>
+        /// Logs one committed lifecycle transition after the authoritative state has been updated.
+        /// </summary>
+        /// <param name="logger">Logger receiving the transition event.</param>
+        /// <param name="from">Previous lifecycle state.</param>
+        /// <param name="to">New lifecycle state.</param>
+        /// <param name="reason">Reason recorded for the transition.</param>
+        /// <param name="elapsed">Monotonic seconds spent in the previous state.</param>
         [LoggerMessage(
             EventId = 1103,
             Level = LogLevel.Information,
             Message = "State transition: {From} -> {To} (reason: {Reason}; elapsed={Elapsed:F2}s)")]
-        // <summary>
-        // Emits the state transition log event for service lifecycle.
-        // </summary>
         private static partial void LogStateTransition(
             ILogger logger,
             LifecycleState from,
@@ -613,26 +630,34 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             string reason,
             double elapsed);
 
+        /// <summary>
+        /// Logs that one transition observer threw after the lifecycle transition had already completed successfully.
+        /// </summary>
+        /// <param name="logger">Logger receiving the observer-failure event.</param>
+        /// <param name="exception">Exception recorded from the failing observer callback.</param>
+        /// <param name="from">Previous lifecycle state of the committed transition.</param>
+        /// <param name="to">New lifecycle state of the committed transition.</param>
         [LoggerMessage(
             EventId = 1104,
             Level = LogLevel.Error,
             Message = "Lifecycle transition subscriber failed for {From} -> {To} (transition completed successfully)")]
-        // <summary>
-        // Emits the lifecycle transition subscriber failed log event for service lifecycle.
-        // </summary>
         private static partial void LogLifecycleTransitionSubscriberFailed(
             ILogger logger,
             Exception exception,
             LifecycleState from,
             LifecycleState to);
 
+        /// <summary>
+        /// Logs the first warning that one lifecycle phase has exceeded its expected duration threshold.
+        /// </summary>
+        /// <param name="logger">Logger receiving the slow-phase event.</param>
+        /// <param name="phase">Human-readable phase label supplied by the caller.</param>
+        /// <param name="elapsed">Observed monotonic elapsed seconds for the current phase.</param>
+        /// <param name="threshold">Configured warning threshold in seconds.</param>
         [LoggerMessage(
             EventId = 1105,
             Level = LogLevel.Warning,
             Message = "Slow phase warning: {Phase} has taken {Elapsed:F2}s (threshold: {Threshold:F2}s)")]
-        // <summary>
-        // Emits the slow phase warning exceeded log event for service lifecycle.
-        // </summary>
         private static partial void LogSlowPhaseWarningExceeded(
             ILogger logger,
             string phase,

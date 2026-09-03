@@ -20,27 +20,31 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class BackFillerCertificateProvisioningService : IDisposable
     {
         /// <summary>
-        /// Stores certificate store used by back filler certificate provisioning service.
+        /// Registered certificate-store dependency supplied when composing the provisioning stack.
         /// </summary>
+        /// <remarks>
+        /// The current implementation relies on <see cref="BackFillerCertificateStore"/>'s static helpers rather than
+        /// invoking this instance directly.
+        /// </remarks>
         private readonly BackFillerCertificateStore _certificateStore;
         /// <summary>
-        /// Stores acme issuer used by back filler certificate provisioning service.
+        /// ACME issuer used when a replacement listener certificate must be requested.
         /// </summary>
         private readonly IAcmeCertificateIssuer _acmeIssuer;
         /// <summary>
-        /// Stores certificate state used by back filler certificate provisioning service.
+        /// Shared runtime certificate state updated after evaluation or successful issuance.
         /// </summary>
         private readonly BackFillerCertificateState _certificateState;
         /// <summary>
-        /// Supplies the logger used by back filler certificate provisioning service.
+        /// Logger used for provisioning, activation, and fallback diagnostics.
         /// </summary>
         private readonly ILogger<BackFillerCertificateProvisioningService> _logger;
         /// <summary>
-        /// Stores time provider used by back filler certificate provisioning service.
+        /// Clock source used when evaluating certificate validity and renewal windows.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
-        /// Stores provision gate used by back filler certificate provisioning service.
+        /// Process-wide gate that serializes certificate evaluation and issuance across all service callers.
         /// </summary>
         private static readonly SemaphoreSlim ProvisionGate = new(1, 1);
 
@@ -73,10 +77,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Ensures a usable certificate exists and is activated, provisioning through ACME when required.
+        /// Ensures a usable listener certificate exists and is published into runtime state.
         /// </summary>
-        /// <param name="runtimeOptions">Validated runtime options.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <remarks>
+        /// When Let's Encrypt is disabled the method logs the skip decision and returns immediately. Otherwise callers
+        /// serialize through <see cref="ProvisionGate"/> so only one evaluation or issuance workflow runs at a time.
+        /// </remarks>
+        /// <param name="runtimeOptions">Validated runtime options snapshot that provides the effective ACME policy.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts evaluation or provisioning.</param>
         /// <returns>A task that completes when certificate availability has been decided and applied.</returns>
         public async Task EnsureCertificateAvailabilityAsync(
             BackFillerRuntimeOptions runtimeOptions,
@@ -103,12 +111,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Attempts renewal when required while preserving currently active valid certificate on failure.
+        /// Attempts certificate renewal when the persisted listener certificate is due.
         /// </summary>
-        /// <param name="runtimeOptions">Validated runtime options.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <remarks>
+        /// If renewal fails but the existing certificate remains usable, that existing certificate is republished and the
+        /// method reports <see langword="false"/> so the listener can continue serving traffic.
+        /// </remarks>
+        /// <param name="runtimeOptions">Validated runtime options snapshot that provides the effective ACME policy.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts evaluation or renewal.</param>
         /// <returns><see langword="true"/> when a new certificate was issued and activated; otherwise <see langword="false"/>.</returns>
-        /// <typeparam name="bool">The bool type parameter.</typeparam>
         public async Task<bool> TryRenewIfDueAsync(BackFillerRuntimeOptions runtimeOptions, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -167,8 +178,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles ensure certificate availability core async for back filler certificate provisioning service.
+        /// Applies evaluation results by activating an existing certificate or provisioning a replacement.
         /// </summary>
+        /// <remarks>
+        /// Startup uses this core path after entering <see cref="ProvisionGate"/> so only one caller decides whether the
+        /// listener can reuse persisted state, attempt renewal, or require fresh issuance.
+        /// </remarks>
         private async Task EnsureCertificateAvailabilityCoreAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -207,8 +222,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles provision new certificate async for back filler certificate provisioning service.
+        /// Issues, persists, reloads, and activates a replacement listener certificate.
         /// </summary>
+        /// <remarks>
+        /// The workflow intentionally reloads the persisted artifacts before publication so activation reflects the same
+        /// on-disk material that later restarts will consume.
+        /// </remarks>
+        /// <param name="letsEncryptOptions">Validated ACME runtime options for the certificate target being renewed.</param>
+        /// <param name="cancellationToken">Cancellation token observed between issuance, persistence, reload, and activation.</param>
         private async Task ProvisionNewCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -261,11 +282,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Releases the owned provisioning gate when the host disposes this singleton service.
+        /// Performs no resource cleanup beyond suppressing finalization for the DI-managed service instance.
         /// </summary>
         /// <remarks>
-        /// The host owns the service lifetime through dependency injection, so disposal is deterministic at shutdown.
-        /// Disposing the gate here is safe because callers are rejected once disposal begins.
+        /// The provisioning workflow does not own per-instance unmanaged resources. The static gate remains available for
+        /// the lifetime of the process.
         /// </remarks>
         public void Dispose()
         {
@@ -345,7 +366,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}");
 
         /// <summary>
-        /// Emits the certificate provisioning disabled log event for back filler certificate provisioning service.
+        /// Emits the warning log indicating certificate provisioning is disabled by configuration.
         /// </summary>
         private static void LogCertificateProvisioningDisabled(ILogger logger)
         {
@@ -353,7 +374,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the certificate renewal required with unusable certificate log event for back filler certificate provisioning service.
+        /// Emits the warning log indicating renewal is required and the currently loaded certificate cannot be reused.
         /// </summary>
         private static void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason)
         {
@@ -361,7 +382,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the certificate renewal failed using existing certificate log event for back filler certificate provisioning service.
+        /// Emits the warning log indicating renewal failed but the previously active certificate remains usable.
         /// </summary>
         private static void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception)
         {
@@ -369,7 +390,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the using existing listener certificate log event for back filler certificate provisioning service.
+        /// Emits the informational log indicating the persisted listener certificate was reused without renewal.
         /// </summary>
         private static void LogUsingExistingListenerCertificate(ILogger logger, string reason)
         {
@@ -377,7 +398,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the listener certificate inside renewal window log event for back filler certificate provisioning service.
+        /// Emits the informational log indicating renewal will be attempted because the current certificate is inside its renewal window.
         /// </summary>
         private static void LogListenerCertificateInsideRenewalWindow(ILogger logger)
         {
@@ -385,7 +406,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the certificate renewal failed retaining existing certificate log event for back filler certificate provisioning service.
+        /// Emits the warning log indicating startup renewal failed and the existing valid certificate will remain active.
         /// </summary>
         private static void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception)
         {
@@ -393,7 +414,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the listener certificate unavailable or unusable log event for back filler certificate provisioning service.
+        /// Emits the informational log indicating persisted certificate state cannot be used and fresh ACME provisioning will start.
         /// </summary>
         private static void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason)
         {
@@ -401,7 +422,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the listener certificate activated successfully log event for back filler certificate provisioning service.
+        /// Emits the informational log indicating a newly loaded listener certificate bundle became active.
         /// </summary>
         private static void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc)
         {
@@ -409,7 +430,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Stores log certificate issuance failed message used by back filler certificate provisioning service.
+        /// Precompiled error log for ACME issuance failures before persistence begins.
         /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
             LoggerMessage.Define<string, string, string>(
@@ -418,7 +439,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
         /// <summary>
-        /// Stores log certificate persistence failed message used by back filler certificate provisioning service.
+        /// Precompiled error log for failures while persisting newly issued certificate artifacts.
         /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
             LoggerMessage.Define<string, string, string>(
@@ -427,7 +448,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
         /// <summary>
-        /// Stores log certificate reload failed message used by back filler certificate provisioning service.
+        /// Precompiled error log for failures while reloading persisted certificate artifacts before activation.
         /// </summary>
         private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
             LoggerMessage.Define<string, string, string>(
@@ -436,7 +457,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
 
         /// <summary>
-        /// Emits the certificate issuance failed log event for back filler certificate provisioning service.
+        /// Emits the error log indicating ACME issuance failed for the configured listener certificate target.
         /// </summary>
         private static void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
@@ -444,7 +465,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the certificate persistence failed log event for back filler certificate provisioning service.
+        /// Emits the error log indicating persistence of newly issued certificate artifacts failed.
         /// </summary>
         private static void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {
@@ -452,7 +473,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the certificate reload failed log event for back filler certificate provisioning service.
+        /// Emits the error log indicating reload of the persisted certificate bundle failed before activation.
         /// </summary>
         private static void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
         {

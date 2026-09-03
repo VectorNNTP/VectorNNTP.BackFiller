@@ -17,13 +17,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqBrokerConnector
     {
         /// <summary>
-        /// Opens a broker connection using validated runtime options.
+        /// Opens a broker connection using the validated runtime snapshot and client-provided connection name.
         /// </summary>
         /// <param name="runtimeOptions">Validated immutable RabbitMQ runtime options.</param>
-        /// <param name="clientProvidedConnectionName">Client-provided connection name.</param>
-        /// <param name="cancellationToken">Connection cancellation token.</param>
-        /// <returns>Owned broker connection handle.</returns>
-        /// <typeparam name="IRabbitMqBrokerConnection">The IRabbitMqBrokerConnection type parameter.</typeparam>
+        /// <param name="clientProvidedConnectionName">Connection name exposed to the broker for diagnostics.</param>
+        /// <param name="cancellationToken">Cancellation token for the connect attempt.</param>
+        /// <returns>An owned broker connection abstraction.</returns>
         public Task<IRabbitMqBrokerConnection> ConnectAsync(
             RabbitMqRuntimeOptions runtimeOptions,
             string clientProvidedConnectionName,
@@ -33,75 +32,78 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     /// <summary>
     /// RabbitMQ broker connection abstraction used to isolate lifecycle ownership and testing seams.
     /// </summary>
+    /// <remarks>
+    /// The abstraction exposes only the connection members required by the backfiller so production code can manage
+    /// connection replacement, channel ownership, and event wiring without depending directly on RabbitMQ.Client types.
+    /// </remarks>
     internal interface IRabbitMqBrokerConnection : IAsyncDisposable
     {
         /// <summary>
-        /// Gets whether the underlying broker connection is open.
+        /// Gets a value indicating whether the underlying broker connection is currently open.
         /// </summary>
         public bool IsOpen { get; }
 
         /// <summary>
-        /// Gets broker endpoint host used for the current connection.
+        /// Gets the broker endpoint host name selected for the current connection.
         /// </summary>
         public string EndpointHostName { get; }
 
         /// <summary>
-        /// Gets broker endpoint port used for the current connection.
+        /// Gets the broker endpoint port selected for the current connection.
         /// </summary>
         public int EndpointPort { get; }
 
         /// <summary>
-        /// Returns the broker virtual host used for this connection.
+        /// Gets the virtual host used to establish the current connection.
         /// </summary>
         public string VirtualHost { get; }
 
         /// <summary>
-        /// Returns the configured client-provided connection name.
+        /// Gets the client-provided connection name visible in broker diagnostics.
         /// </summary>
         public string ClientProvidedName { get; }
 
         /// <summary>
-        /// Returns the underlying RabbitMQ connection instance.
+        /// Gets the underlying RabbitMQ.Client connection instance.
         /// </summary>
         public IConnection UnderlyingConnection { get; }
 
         /// <summary>
-        /// Raised when the broker connection is shut down.
+        /// Raised when the broker shuts the connection down.
         /// </summary>
         public event EventHandler<ShutdownEventArgs>? ConnectionShutdown;
 
         /// <summary>
-        /// Raised when the broker reports a callback exception.
+        /// Raised when RabbitMQ.Client surfaces an asynchronous callback exception.
         /// </summary>
         public event EventHandler<CallbackExceptionEventArgs>? CallbackException;
 
         /// <summary>
-        /// Raised when the broker blocks this connection.
+        /// Raised when the broker blocks publishing or consumption on the connection.
         /// </summary>
         public event EventHandler<ConnectionBlockedEventArgs>? ConnectionBlocked;
 
         /// <summary>
-        /// Raised when the broker unblocks this connection.
+        /// Raised when the broker lifts a prior connection block.
         /// </summary>
         public event EventHandler<AsyncEventArgs>? ConnectionUnblocked;
 
         /// <summary>
-        /// Raised when RabbitMQ.Client reports automatic-recovery failure for this connection.
+        /// Raised when RabbitMQ.Client automatic recovery reports a failure.
         /// </summary>
         public event EventHandler<ConnectionRecoveryErrorEventArgs>? ConnectionRecoveryError;
 
         /// <summary>
-        /// Raised when RabbitMQ.Client automatic recovery succeeds for this connection.
+        /// Raised when RabbitMQ.Client automatic recovery reports success.
         /// </summary>
         public event EventHandler<AsyncEventArgs>? RecoverySucceeded;
 
         /// <summary>
-        /// Creates a dedicated owned channel on this connection.
+        /// Creates an independently owned channel on this connection.
         /// </summary>
-        /// <param name="cancellationToken">Channel-creation cancellation token.</param>
-        /// <param name="enablePublisherConfirmations">Whether publisher confirmation mode should be enabled for this channel.</param>
-        /// <returns>New RabbitMQ channel adapter.</returns>
-        /// <typeparam name="IRabbitMqChannel">The IRabbitMqChannel type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token for channel creation.</param>
+        /// <param name="enablePublisherConfirmations"><see langword="true"/> to enable publisher confirmations for the new channel.</param>
+        /// <returns>A new channel abstraction owned by the caller.</returns>
         public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false);
     }
 
@@ -111,105 +113,102 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqChannel : IAsyncDisposable
     {
         /// <summary>
-        /// Returns the underlying RabbitMQ channel.
+        /// Gets the underlying RabbitMQ.Client channel instance.
         /// </summary>
         public IChannel UnderlyingChannel { get; }
 
         /// <summary>
-        /// Declares an exchange.
+        /// Declares an exchange on the channel.
         /// </summary>
-        /// <param name="exchange">The exchange value.</param>
-        /// <param name="type">The type value.</param>
-        /// <param name="durable">The durable value.</param>
-        /// <param name="autoDelete">The autoDelete value.</param>
-        /// <param name="arguments">The arguments value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <param name="exchange">Exchange name to declare.</param>
+        /// <param name="type">Exchange type, such as <c>fanout</c>.</param>
+        /// <param name="durable"><see langword="true"/> to keep the exchange durable.</param>
+        /// <param name="autoDelete"><see langword="true"/> to auto-delete the exchange when unused.</param>
+        /// <param name="arguments">Optional broker-specific declaration arguments.</param>
+        /// <param name="cancellationToken">Cancellation token for the declaration.</param>
+        /// <returns>A task that completes when the declaration succeeds.</returns>
         public Task ExchangeDeclareAsync(string exchange, string type, bool durable, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Declares a queue.
+        /// Declares a queue on the channel.
         /// </summary>
-        /// <param name="queue">The queue value.</param>
-        /// <param name="durable">The durable value.</param>
-        /// <param name="exclusive">The exclusive value.</param>
-        /// <param name="autoDelete">The autoDelete value.</param>
-        /// <param name="arguments">The arguments value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <param name="queue">Queue name to declare.</param>
+        /// <param name="durable"><see langword="true"/> to keep the queue durable.</param>
+        /// <param name="exclusive"><see langword="true"/> to make the queue exclusive to the connection.</param>
+        /// <param name="autoDelete"><see langword="true"/> to auto-delete the queue when unused.</param>
+        /// <param name="arguments">Optional broker-specific declaration arguments.</param>
+        /// <param name="cancellationToken">Cancellation token for the declaration.</param>
+        /// <returns>A task that completes when the declaration succeeds.</returns>
         public Task QueueDeclareAsync(string queue, bool durable, bool exclusive, bool autoDelete, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Declares a queue binding.
+        /// Declares a queue binding on the channel.
         /// </summary>
-        /// <param name="queue">The queue value.</param>
-        /// <param name="exchange">The exchange value.</param>
-        /// <param name="routingKey">The routingKey value.</param>
-        /// <param name="arguments">The arguments value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <param name="queue">Queue name to bind.</param>
+        /// <param name="exchange">Exchange providing the messages.</param>
+        /// <param name="routingKey">Routing key used for the binding.</param>
+        /// <param name="arguments">Optional broker-specific binding arguments.</param>
+        /// <param name="cancellationToken">Cancellation token for the bind operation.</param>
+        /// <returns>A task that completes when the binding succeeds.</returns>
         public Task QueueBindAsync(string queue, string exchange, string routingKey, IReadOnlyDictionary<string, object?>? arguments, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Configures channel QoS for consumer prefetch control.
+        /// Configures consumer QoS on the channel.
         /// </summary>
-        /// <param name="prefetchSize">The prefetchSize value.</param>
-        /// <param name="prefetchCount">The prefetchCount value.</param>
-        /// <param name="global">The global value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="prefetchSize">Prefetch size requested from the broker.</param>
+        /// <param name="prefetchCount">Prefetch count requested from the broker.</param>
+        /// <param name="global"><see langword="true"/> to apply the limit to the whole channel instead of one consumer.</param>
+        /// <param name="cancellationToken">Cancellation token for the QoS change.</param>
+        /// <returns>A task that completes when QoS is applied.</returns>
         public Task BasicQosAsync(uint prefetchSize, ushort prefetchCount, bool global, CancellationToken cancellationToken);
 
         /// <summary>
         /// Registers an asynchronous consumer on a queue.
         /// </summary>
-        /// <param name="queue">The queue value.</param>
-        /// <param name="autoAck">The autoAck value.</param>
-        /// <param name="consumer">The consumer value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="queue">Queue to consume from.</param>
+        /// <param name="autoAck"><see langword="true"/> to enable broker auto-acknowledgement.</param>
+        /// <param name="consumer">Consumer callback target.</param>
+        /// <param name="cancellationToken">Cancellation token for broker registration.</param>
+        /// <returns>The broker-assigned consumer tag.</returns>
         public Task<string> BasicConsumeAsync(string queue, bool autoAck, IAsyncBasicConsumer consumer, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Cancels a consumer by broker-assigned tag.
+        /// Cancels a previously registered consumer.
         /// </summary>
-        /// <param name="consumerTag">The consumerTag value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="consumerTag">Broker-assigned consumer tag.</param>
+        /// <param name="cancellationToken">Cancellation token for broker cancellation.</param>
+        /// <returns>A task that completes when broker cancellation is issued.</returns>
         public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Acknowledges a delivery tag.
+        /// Positively acknowledges one delivery.
         /// </summary>
-        /// <param name="deliveryTag">The deliveryTag value.</param>
-        /// <param name="multiple">The multiple value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="deliveryTag">Broker delivery tag to acknowledge.</param>
+        /// <param name="multiple"><see langword="true"/> to acknowledge all deliveries up to the tag.</param>
+        /// <param name="cancellationToken">Cancellation token for the acknowledgement.</param>
+        /// <returns>A value task that completes when the acknowledgement is sent.</returns>
         public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Negatively acknowledges a delivery tag.
+        /// Negatively acknowledges one delivery.
         /// </summary>
-        /// <param name="deliveryTag">The deliveryTag value.</param>
-        /// <param name="multiple">The multiple value.</param>
-        /// <param name="requeue">The requeue value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="deliveryTag">Broker delivery tag to reject.</param>
+        /// <param name="multiple"><see langword="true"/> to reject all deliveries up to the tag.</param>
+        /// <param name="requeue"><see langword="true"/> to request broker requeue of the delivery.</param>
+        /// <param name="cancellationToken">Cancellation token for the rejection.</param>
+        /// <returns>A value task that completes when the negative acknowledgement is sent.</returns>
         public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken);
 
         /// <summary>
         /// Publishes one message payload.
         /// </summary>
-        /// <param name="exchange">The exchange value.</param>
-        /// <param name="routingKey">The routingKey value.</param>
-        /// <param name="mandatory">The mandatory value.</param>
-        /// <param name="basicProperties">The basicProperties value.</param>
-        /// <param name="body">The body value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="exchange">Exchange to publish to.</param>
+        /// <param name="routingKey">Routing key supplied with the publish.</param>
+        /// <param name="mandatory"><see langword="true"/> to require a routable destination.</param>
+        /// <param name="basicProperties">Basic properties attached to the published message.</param>
+        /// <param name="body">Published payload bytes.</param>
+        /// <param name="cancellationToken">Cancellation token for the publish.</param>
+        /// <returns>A value task that completes when the client has issued the publish call.</returns>
         public ValueTask BasicPublishAsync(string exchange, string routingKey, bool mandatory, BasicProperties basicProperties, ReadOnlyMemory<byte> body, CancellationToken cancellationToken);
     }
 
@@ -236,47 +235,54 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Adapts RabbitMQ.Client.IConnection to <see cref="IRabbitMqBrokerConnection"/>.
+    /// Adapts RabbitMQ.Client <see cref="IConnection"/> to <see cref="IRabbitMqBrokerConnection"/>.
     /// </summary>
     internal sealed class RabbitMqBrokerConnectionAdapter : IRabbitMqBrokerConnection
     {
         /// <summary>
-        /// Stores connection used by rabbit mq broker connection abstractions.
+        /// Underlying live broker connection owned by the adapter.
         /// </summary>
         private readonly IConnection _connection;
+
         /// <summary>
-        /// Stores virtual host used by rabbit mq broker connection abstractions.
+        /// Validated virtual host associated with the connection.
         /// </summary>
         private readonly string _virtualHost;
+
         /// <summary>
-        /// Stores connection shutdown async handler used by rabbit mq broker connection abstractions.
+        /// Forwarder attached to the client's asynchronous shutdown event.
         /// </summary>
         private readonly AsyncEventHandler<ShutdownEventArgs> _connectionShutdownAsyncHandler;
+
         /// <summary>
-        /// Stores callback exception async handler used by rabbit mq broker connection abstractions.
+        /// Forwarder attached to the client's asynchronous callback-exception event.
         /// </summary>
         private readonly AsyncEventHandler<CallbackExceptionEventArgs> _callbackExceptionAsyncHandler;
+
         /// <summary>
-        /// Stores connection blocked async handler used by rabbit mq broker connection abstractions.
+        /// Forwarder attached to the client's asynchronous connection-blocked event.
         /// </summary>
         private readonly AsyncEventHandler<ConnectionBlockedEventArgs> _connectionBlockedAsyncHandler;
+
         /// <summary>
-        /// Stores connection unblocked async handler used by rabbit mq broker connection abstractions.
+        /// Forwarder attached to the client's asynchronous connection-unblocked event.
         /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _connectionUnblockedAsyncHandler;
+
         /// <summary>
-        /// Stores connection recovery error async handler used by rabbit mq broker connection abstractions.
+        /// Forwarder attached to the client's automatic-recovery-error event.
         /// </summary>
         private readonly AsyncEventHandler<ConnectionRecoveryErrorEventArgs> _connectionRecoveryErrorAsyncHandler;
+
         /// <summary>
-        /// Stores recovery succeeded async handler used by rabbit mq broker connection abstractions.
+        /// Forwarder attached to the client's recovery-succeeded event.
         /// </summary>
         private readonly AsyncEventHandler<AsyncEventArgs> _recoverySucceededAsyncHandler;
 
         /// <summary>
         /// Initializes a new adapter for a live RabbitMQ connection.
         /// </summary>
-        /// <param name="connection">Connected RabbitMQ connection.</param>
+        /// <param name="connection">Connected RabbitMQ connection owned by the adapter.</param>
         /// <param name="virtualHost">Configured virtual host used to establish the connection.</param>
         internal RabbitMqBrokerConnectionAdapter(IConnection connection, string virtualHost)
         {
@@ -394,19 +400,19 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Adapts RabbitMQ.Client.IChannel to <see cref="IRabbitMqChannel"/>.
+    /// Adapts RabbitMQ.Client <see cref="IChannel"/> to <see cref="IRabbitMqChannel"/>.
     /// </summary>
     internal sealed class RabbitMqChannelAdapter : IRabbitMqChannel
     {
         /// <summary>
-        /// Stores channel used by rabbit mq broker connection abstractions.
+        /// Underlying channel owned by the adapter.
         /// </summary>
         private readonly IChannel _channel;
 
         /// <summary>
         /// Initializes a new channel adapter.
         /// </summary>
-        /// <param name="channel">Underlying RabbitMQ channel.</param>
+        /// <param name="channel">Underlying RabbitMQ channel owned by the adapter.</param>
         internal RabbitMqChannelAdapter(IChannel channel)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
@@ -480,8 +486,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Adapts the immutable broker-connection contract to the mutable RabbitMQ connection implementation.
+        /// Copies immutable argument dictionaries into the mutable shape expected by RabbitMQ.Client.
         /// </summary>
+        /// <param name="arguments">Immutable declaration arguments.</param>
+        /// <returns>A mutable dictionary copy, or <see langword="null"/> when no arguments were supplied.</returns>
         private static IDictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
         {
             return arguments is null ? null : (IDictionary<string, object?>)arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);

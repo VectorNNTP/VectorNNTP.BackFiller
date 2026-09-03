@@ -14,16 +14,18 @@ using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Represents one provider retrieval execution outcome with lease/account context.
+    /// Carries the grabber workflow result together with the NNTP session lease used to obtain it.
     /// </summary>
-    /// <param name="Lease">Session lease used for this retrieval operation.</param>
+    /// <param name="Lease">
+    /// Lease associated with the retrieval attempt. The concrete retriever returns a non-null lease after acquisition succeeds; test doubles may use <see langword="null"/>.
+    /// </param>
     /// <param name="GrabberResult">Workflow result emitted by the grabber processor.</param>
     internal sealed record BackboneArticleRetrievalResult(
         NntpArticleSessionLease? Lease,
         NntpArticleGrabberResult GrabberResult);
 
     /// <summary>
-    /// Executes backbone-scoped article retrieval operations over control-plane managed session pools.
+    /// Acquires a backbone-scoped NNTP session lease and runs one grabber workflow operation against it.
     /// </summary>
     internal interface IBackboneArticleRetriever
     {
@@ -31,23 +33,27 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// Retrieves one article for the specified work request.
         /// </summary>
         /// <param name="request">Parsed article-work request.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Retrieval result containing lease context and deterministic workflow result.</returns>
-        /// <typeparam name="BackboneArticleRetrievalResult">The BackboneArticleRetrievalResult type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token that aborts lease acquisition or the underlying grabber workflow.</param>
+        /// <returns>
+        /// Retrieval result containing the workflow classification and any acquired lease. Callers that receive a non-null lease must dispose it exactly once.
+        /// </returns>
         public ValueTask<BackboneArticleRetrievalResult> RetrieveAsync(RabbitMqArticleWorkRequest request, CancellationToken cancellationToken);
     }
 
     /// <summary>
-    /// Default retrieval implementation that reuses existing grabber workflow and control-plane session managers.
+    /// Default retriever that reuses control-plane session pools and the existing grabber workflow.
     /// </summary>
+    /// <remarks>
+    /// The retriever reports an acquisition outcome back to the lease before control returns so the session manager can account for the attempt when the lease is released.
+    /// </remarks>
     internal sealed partial class BackboneArticleRetriever : IBackboneArticleRetriever
     {
         /// <summary>
-        /// Stores lease provider used by backbone article retriever.
+        /// Control-plane lease provider used to route work to a backbone-specific account runtime.
         /// </summary>
         private readonly IBackboneSessionLeaseProvider _leaseProvider;
         /// <summary>
-        /// Stores workflow used by backbone article retriever.
+        /// Grabber workflow that performs acquisition, parsing, and failure classification once a session is leased.
         /// </summary>
         private readonly NntpArticleGrabberWorkflow _workflow;
         /// <summary>
@@ -56,11 +62,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         private readonly ILogger<BackboneArticleRetriever> _logger;
 
         /// <summary>
-        /// Initializes a new backbone article retriever.
+        /// Initializes a retriever bound to the control-plane lease provider and grabber workflow.
         /// </summary>
-        /// <param name="leaseProvider">Backbone-scoped lease provider backed by control-plane account runtimes.</param>
-        /// <param name="workflow">Grabber workflow that performs acquisition and parser classification.</param>
-        /// <param name="logger">Logger for retrieval outcomes.</param>
+        /// <param name="leaseProvider">Backbone-scoped lease provider backed by control-plane managed account runtimes.</param>
+        /// <param name="workflow">Grabber workflow that downloads, parses, and classifies one article over the leased session.</param>
+        /// <param name="logger">Logger used for correlated per-retrieval outcome diagnostics.</param>
         public BackboneArticleRetriever(
             IBackboneSessionLeaseProvider leaseProvider,
             NntpArticleGrabberWorkflow workflow,
@@ -71,7 +77,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Acquires a backbone session, runs the grabber workflow, and records the terminal acquisition outcome on the lease before returning.
+        /// </summary>
+        /// <param name="request">Parsed RabbitMQ work request that supplies the target backbone and canonical Message-ID.</param>
+        /// <param name="cancellationToken">Cancellation token that cancels lease acquisition or the underlying workflow execution.</param>
+        /// <returns>
+        /// A retrieval result that transfers lease ownership to the caller together with the deterministic workflow result.
+        /// </returns>
         public async ValueTask<BackboneArticleRetrievalResult> RetrieveAsync(RabbitMqArticleWorkRequest request, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(request);

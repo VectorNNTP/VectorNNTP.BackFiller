@@ -8,15 +8,15 @@
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Captures the certificate material returned by one successful ACME order.
+    /// Captures the certificate artifacts returned after one successful ACME order finalization.
     /// </summary>
     /// <remarks>
     /// The ACME protocol yields the leaf and issuer chain bytes, while the matching private key remains the local
     /// .NET-generated key that was used to create the CSR and later persisted alongside the listener certificate.
     /// </remarks>
-    /// <param name="LeafCertificateDer">Leaf certificate DER bytes returned by ACME.</param>
-    /// <param name="ChainDer">Issuer chain DER bytes ordered from intermediate to root.</param>
-    /// <param name="CertificatePrivateKeyPem">PEM-encoded certificate private key used for CSR.</param>
+    /// <param name="LeafCertificateDer">Leaf certificate DER bytes returned by the ACME order download.</param>
+    /// <param name="ChainDer">Issuer certificates returned with the order, preserved in ACME download order.</param>
+    /// <param name="CertificatePrivateKeyPem">PEM-encoded private key that matches <paramref name="LeafCertificateDer"/>.</param>
     internal sealed record AcmeOrderIssueResult(
         byte[] LeafCertificateDer,
         IReadOnlyList<byte[]> ChainDer,

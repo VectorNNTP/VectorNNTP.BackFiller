@@ -213,7 +213,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Formats the configured shutdown grace period into a human-readable host-timeout description string.
+        /// Formats the validated Generic Host shutdown timeout description used by startup diagnostics.
         /// </summary>
         /// <param name="shutdownOptions">Validated shutdown options containing the grace-period value.</param>
         /// <returns>Formatted text describing Generic Host shutdown timeout in seconds.</returns>

@@ -8,24 +8,27 @@
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Defines certificate file conventions and its certificate file conventions contract.
+    /// Centralizes file-name and temporary-path conventions for persisted listener certificate artifacts.
     /// </summary>
     internal static class CertificateFileConventions
     {
         /// <summary>
-        /// Stores listener pfx file name used by certificate file conventions.
+        /// Canonical PFX file name used for the persisted listener certificate bundle.
         /// </summary>
         internal const string ListenerPfxFileName = "backfiller-listener.pfx";
+
         /// <summary>
-        /// Stores certificate private key pem file name used by certificate file conventions.
+        /// Canonical PEM file name used for the persisted listener certificate private key.
         /// </summary>
         internal const string CertificatePrivateKeyPemFileName = "backfiller-listener.key";
 
         /// <summary>
-        /// Builds a deterministic temporary path used for atomic file replacement.
+        /// Builds a same-directory temporary path for atomic replacement of a certificate artifact.
         /// </summary>
-        /// <param name="targetPath">Final artifact path.</param>
-        /// <returns>Temporary file path in the same directory.</returns>
+        /// <param name="targetPath">Final artifact path that will be replaced.</param>
+        /// <returns>A unique temporary path in the same directory as <paramref name="targetPath"/>.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="targetPath"/> is blank.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when <paramref name="targetPath"/> has no directory component.</exception>
         internal static string BuildAtomicTempPath(string targetPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);

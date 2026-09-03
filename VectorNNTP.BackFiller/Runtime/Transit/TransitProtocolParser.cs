@@ -13,25 +13,28 @@ using System.Text;
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// NNTP protocol parsing helpers for greeting, status lines, multiline capability responses, and tokenization.
+    /// Parses NNTP greeting, status, and CAPABILITIES responses from the transit transport pipeline.
     /// </summary>
     internal static class TransitProtocolParser
     {
         /// <summary>
-        /// Stores capabilities response code used by transit protocol parser.
+        /// NNTP status code expected on a successful <c>CAPABILITIES</c> multiline response.
         /// </summary>
         private const int CapabilitiesResponseCode = 101;
+
         /// <summary>
-        /// Limits maximum nntp line length bytes for transit protocol parser.
+        /// Maximum unterminated protocol line length checked while the parser is waiting for a line terminator.
         /// </summary>
         private const int MaximumNntpLineLengthBytes = 16 * 1024;
 
         /// <summary>
-        /// Handles read nntp line async for transit protocol parser.
+        /// Reads one NNTP line and throws if the underlying stream reaches EOF before a full line is available.
         /// </summary>
-        /// <param name="reader">The reader value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="reader">Pipe reader supplying NNTP protocol bytes.</param>
+        /// <param name="cancellationToken">Cancellation token for the read loop.</param>
+        /// <returns>The decoded NNTP line without trailing CRLF.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the stream completes before a full line is available, or an unterminated line exceeds <see cref="MaximumNntpLineLengthBytes"/>.</exception>
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -39,10 +42,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles read nntp line with byte count async for transit protocol parser.
+        /// Reads one NNTP line and returns both the decoded text and the consumed byte count.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="reader">Pipe reader supplying NNTP protocol bytes.</param>
+        /// <param name="cancellationToken">Cancellation token for the read loop.</param>
+        /// <returns>The decoded NNTP line without trailing CRLF together with the number of consumed bytes.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the stream completes before a full line is available, or an unterminated line exceeds <see cref="MaximumNntpLineLengthBytes"/>.</exception>
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -56,9 +62,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <param name="reader">Pipe reader providing NNTP protocol bytes.</param>
         /// <param name="cancellationToken">Cancellation token for cooperative shutdown.</param>
-        /// <returns>
-        /// A tuple containing the decoded line when available, byte count consumed, and a completion marker indicating EOF before newline.
-        /// </returns>
+        /// <returns>A tuple containing the decoded line, consumed byte count, and an EOF marker for completion before newline.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when a protocol line exceeds <see cref="MaximumNntpLineLengthBytes"/>.</exception>
         internal static async ValueTask<(string? Line, int BytesRead, bool CompletedWithoutLine)> ReadNntpLineWithByteCountAndCompletionAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(reader);
@@ -97,10 +103,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Parses an NNTP status line into its numeric code, response text, and whitespace-delimited response tokens.
+        /// Parses an NNTP status line into its numeric code, trailing text, and whitespace-delimited text tokens.
         /// </summary>
         /// <param name="line">NNTP status line to parse.</param>
-        /// <returns>The status code, response text, and response-text tokens.</returns>
+        /// <returns>The parsed status code, trailing response text, and tokenized response text.</returns>
         internal static (int Code, string ResponseText, string[] Tokens) ParseStatusLine(string line)
         {
             (int code, string responseText) = ParseStatusCodeAndText(line);
@@ -112,11 +118,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Parses and validates the numeric code and text of an NNTP status line.
+        /// Parses and validates the three-digit status code and trailing text from an NNTP status line.
         /// </summary>
         /// <param name="line">NNTP status line to parse.</param>
-        /// <returns>The three-digit status code and trailing response text.</returns>
-        /// <exception cref="InvalidOperationException">Thrown when the line is empty or has an invalid code or separator.</exception>
+        /// <returns>The parsed status code and trailing response text.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the line is empty, does not begin with a valid NNTP status code, or has a malformed separator after the three-digit code.</exception>
         internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
         {
             if (string.IsNullOrWhiteSpace(line))
@@ -140,9 +146,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles validate greeting for transit protocol parser.
+        /// Validates that the greeting line permits transit posting.
         /// </summary>
-        /// <param name="greetingLine">The greetingLine value.</param>
+        /// <param name="greetingLine">Greeting line returned by the remote NNTP server.</param>
+        /// <exception cref="InvalidOperationException">Thrown when the greeting code is not <c>200</c> or <c>201</c>.</exception>
         internal static void ValidateGreeting(string greetingLine)
         {
             (int code, _, _) = ParseStatusLine(greetingLine);
@@ -156,11 +163,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles parse capabilities response for transit protocol parser.
+        /// Parses an NNTP <c>CAPABILITIES</c> response and extracts the capability flags used by the transit pipeline.
         /// </summary>
-        /// <param name="responseLines">The responseLines value.</param>
-        /// <returns>The operation result.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <param name="responseLines">Ordered response lines including the initial status line and terminating <c>.</c> line.</param>
+        /// <returns>A capability snapshot describing STARTTLS and STREAMING support.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="responseLines"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the response is malformed or does not report status code <c>101</c>.</exception>
         internal static TransitCapabilitySnapshot ParseCapabilitiesResponse(IReadOnlyList<string> responseLines)
         {
             ArgumentNullException.ThrowIfNull(responseLines);
@@ -217,8 +225,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles decode line for transit protocol parser.
+        /// Decodes an NNTP line from ASCII bytes, trimming a trailing carriage return when present.
         /// </summary>
+        /// <param name="line">Sequence containing the line bytes up to but excluding the newline byte.</param>
+        /// <returns>The decoded ASCII line text.</returns>
         private static string DecodeLine(ReadOnlySequence<byte> line)
         {
             if (line.IsSingleSegment)

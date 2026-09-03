@@ -9,43 +9,43 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {
     /// <summary>
-    /// Defines nntp article acquisition operation and its nntp article acquisition trace context contract.
+    /// Identifies the acquisition phase that was active when session code classified or raised a failure.
     /// </summary>
     internal enum NntpArticleAcquisitionOperation
     {
         /// <summary>
-        /// No specific operation is active.
+        /// No phase has been associated with the current context.
         /// </summary>
         None = 0,
 
         /// <summary>
-        /// Connection or greeting/auth initialization phase.
+        /// Session establishment, greeting validation, or authentication setup is in progress.
         /// </summary>
         Connect = 1,
 
         /// <summary>
-        /// Command-write phase.
+        /// An NNTP command line is being transmitted.
         /// </summary>
         CommandWrite = 2,
 
         /// <summary>
-        /// Status-line read/parse phase.
+        /// A single-line NNTP status response is being read and parsed.
         /// </summary>
         StatusRead = 3,
 
         /// <summary>
-        /// Multiline article payload receive phase.
+        /// A multiline article payload is being received.
         /// </summary>
         ArticleReceive = 4,
     }
 
     /// <summary>
-    /// Carries active operation and optional Message-ID correlation details.
+    /// Carries lightweight correlation data for one acquisition operation.
     /// </summary>
-    /// <param name="Operation">Current operation phase.</param>
-    /// <param name="MessageId">Optional Message-ID correlation identifier.</param>
-    /// <param name="MaximumValue">Optional configured maximum used by size guardrails.</param>
-    /// <param name="ActualValue">Optional observed value used by size guardrails.</param>
+    /// <param name="Operation">Acquisition phase that owns the current work.</param>
+    /// <param name="MessageId">ARTICLE Message-ID correlation value when the operation is article-specific.</param>
+    /// <param name="MaximumValue">Configured maximum involved in a guardrail failure, such as line or article size limits.</param>
+    /// <param name="ActualValue">Observed value that exceeded or was compared against <paramref name="MaximumValue"/>.</param>
     internal readonly record struct NntpArticleAcquisitionTraceContext(
         NntpArticleAcquisitionOperation Operation,
         string? MessageId,

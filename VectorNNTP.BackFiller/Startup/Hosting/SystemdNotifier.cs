@@ -34,7 +34,8 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
     /// <remarks>
     /// Called from host lifecycle coordination to expose coarse operational state to systemd deployments.
     /// Notification delivery is best-effort and intentionally non-fatal: startup and shutdown behavior does not
-    /// depend on notification success.
+    /// depend on notification success. Off-systemd and missing-library environments degrade to no-op behavior
+    /// after emitting, at most, debug diagnostics.
     /// </remarks>
     internal static partial class SystemdNotifier
     {
@@ -78,16 +79,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// Signals to systemd that the service is ready (Type=notify services only).
         /// </summary>
         /// <remarks>
-        /// <para>Sends <c>READY=1</c> notification to systemd. Systemd will not mark the service
-        /// as "started" until this notification is received (when <c>Type=notify</c> is set in the
-        /// service file). This prevents dependent services from starting before this service is
-        /// truly ready to accept work.</para>
-        ///
-        /// <para>Safe to call multiple times or on non-systemd environments (no-op on Windows/when
-        /// environment variable is not set).</para>
+        /// <para>Sends <c>READY=1</c> only when Linux/systemd notification prerequisites are present and the native entry point is available.</para>
+        /// <para>Successful delivery emits a debug confirmation log; unsupported environments and delivery failures are treated as non-fatal no-ops.</para>
         /// </remarks>
         /// <param name="logger">Logger used for source-generated debug diagnostics around notify delivery.</param>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         public static void NotifySystemdReady(ILogger logger)
         {
             if (NotifySystemd("READY=1", "readiness", logger))
@@ -100,13 +95,10 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// Signals to systemd that the service is stopping gracefully (Type=notify services only).
         /// </summary>
         /// <remarks>
-        /// <para>Sends <c>STOPPING=1</c> notification to systemd, indicating graceful shutdown is
-        /// in progress. systemd can use this state information while managing the service.</para>
-        ///
-        /// <para>Optional; systemd will infer stopping state from process termination if not notified.</para>
+        /// <para>Sends <c>STOPPING=1</c> only when Linux/systemd notification prerequisites are present and the native entry point is available.</para>
+        /// <para>Delivery is best-effort; unsupported environments and failures do not change shutdown flow.</para>
         /// </remarks>
         /// <param name="logger">Logger used for source-generated debug diagnostics around notify delivery.</param>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         public static void NotifySystemdStopping(ILogger logger)
         {
             if (NotifySystemd("STOPPING=1", "stopping", logger))
@@ -126,7 +118,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <para>STATUS updates are rate-limited and intended for coarse operational state, not high-frequency telemetry.</para>
         /// <para>Only successful sends consume the throttle slot; transient failures can be retried immediately.</para>
         /// </remarks>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="statusMessage"/> or <paramref name="logger"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="statusMessage"/> is <see langword="null"/>.</exception>
         public static void NotifySystemdStatus(string statusMessage, ILogger logger)
         {
             ArgumentNullException.ThrowIfNull(statusMessage);
@@ -170,10 +162,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         #region Systemd Environment
 
         /// <summary>
-        /// Normalizes a systemd STATUS value to a bounded single-line status payload.
+        /// Normalizes a systemd <c>STATUS=</c> value to a bounded single-line payload.
         /// </summary>
         /// <param name="statusMessage">Raw status text supplied by the caller.</param>
         /// <returns>Normalized single-line status text, truncated to the configured maximum length.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="statusMessage"/> is <see langword="null"/>.</exception>
         private static string NormalizeSystemdStatus(string statusMessage)
         {
             ArgumentNullException.ThrowIfNull(statusMessage);
@@ -210,6 +203,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         /// <remarks>
         /// <para>Checks for the <c>NOTIFY_SOCKET</c> environment variable set by systemd when the service
         /// runs under <c>Type=notify</c>. Returns <see langword="false"/> on non-Linux platforms or when not running under systemd.</para>
+        /// <para>This helper does not verify that <c>libsystemd.so.0</c> or the <c>sd_notify</c> symbol are actually available; that result is cached in <see cref="_systemdLibraryState"/> by <see cref="NotifySystemd(string, string, ILogger)"/>.</para>
         /// </remarks>
         private static bool IsSystemdNotifyAvailable()
         {
@@ -219,12 +213,16 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Sends a notification to systemd via sd_notify().
+        /// Sends one raw state payload to systemd and caches permanent native-library failures.
         /// </summary>
         /// <param name="state">Notification state string (e.g., "READY=1", "STOPPING=1", "STATUS=...").</param>
         /// <param name="notificationType">Diagnostic label for the notification type (e.g., "readiness", "status").</param>
         /// <param name="logger">Logger used for diagnostics related to notify delivery.</param>
         /// <returns><see langword="true"/> if the notification was sent successfully; otherwise <see langword="false"/>.</returns>
+        /// <remarks>
+        /// <para>When the native library or entry point is permanently unavailable, the cached state suppresses future native calls for the remainder of the process lifetime.</para>
+        /// <para>Other exceptions are treated as transient and are not cached.</para>
+        /// </remarks>
         private static bool NotifySystemd(string state, string notificationType, ILogger logger)
         {
             if (!IsSystemdNotifyAvailable())
@@ -279,7 +277,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         #region Testing Helpers
 
         /// <summary>
-        /// Normalizes systemd status message for validation/testing (exposes internal normalization logic).
+        /// Exposes production STATUS normalization for tests without sending a notification.
         /// </summary>
         /// <param name="status">Raw status string.</param>
         /// <returns>Normalized status message.</returns>
@@ -289,7 +287,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Checks whether a STATUS notification would be allowed at the given time (for testing).
+        /// Exposes the STATUS throttle decision for tests at an arbitrary tick count.
         /// </summary>
         /// <param name="nowTickCount">Current tick count to check against.</param>
         /// <returns><see langword="true"/> if notification would be allowed; otherwise <see langword="false"/> (throttled).</returns>
@@ -303,7 +301,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Updates the last notification timestamp for testing (simulates successful notification).
+        /// Records a simulated successful STATUS send for tests so subsequent throttle decisions observe it.
         /// </summary>
         /// <param name="tickCount">Timestamp to record as last successful notification.</param>
         internal static void RecordStatusNotificationForTesting(long tickCount)
@@ -315,7 +313,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Resets systemd status notification state for testing.
+        /// Resets STATUS throttling state for tests.
         /// </summary>
         internal static void ResetSystemdStatusNotificationStateForTesting()
         {
@@ -326,7 +324,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         }
 
         /// <summary>
-        /// Determines if the sd_notify result indicates success.
+        /// Determines whether an <c>sd_notify</c> return value represents a successful send.
         /// </summary>
         /// <param name="result">sd_notify return value.</param>
         /// <returns><see langword="true"/> if the result indicates success; otherwise <see langword="false"/>.</returns>
@@ -343,7 +341,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         #region Native Interop
 
         /// <summary>
-        /// Source-generated interop for sd_notify() from libsystemd.so.
+        /// Source-generated native interop for <c>sd_notify</c> in <c>libsystemd.so.0</c>.
         /// </summary>
         /// <param name="unsetEnvironment">If non-zero, unsets the NOTIFY_SOCKET environment variable after notification.</param>
         /// <param name="state">Notification state string (e.g., "READY=1").</param>
@@ -372,25 +370,25 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         private static partial void LogSystemdStatusNotified(ILogger logger, string status);
 
         /// <summary>
-        /// Emits the systemd notification failed result log event for systemd notifier.
+        /// Emits the failed-notification result log at debug level with structured <c>NotificationType</c> and <c>Result</c>.
         /// </summary>
         [LoggerMessage(EventId = 1303, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification failed with result {Result}")]
         private static partial void LogSystemdNotificationFailedResult(ILogger logger, string notificationType, int result);
 
         /// <summary>
-        /// Emits the systemd library not found log event for systemd notifier.
+        /// Emits the missing-<c>libsystemd</c> log at debug level for the affected notification type.
         /// </summary>
         [LoggerMessage(EventId = 1304, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: libsystemd.so.0 not found")]
         private static partial void LogSystemdLibraryNotFound(ILogger logger, string notificationType);
 
         /// <summary>
-        /// Emits the systemd entry point not found log event for systemd notifier.
+        /// Emits the missing-<c>sd_notify</c>-entry-point log at debug level for the affected notification type.
         /// </summary>
         [LoggerMessage(EventId = 1305, Level = LogLevel.Debug, Message = "systemd {NotificationType} notification skipped: sd_notify entry point not found")]
         private static partial void LogSystemdEntryPointNotFound(ILogger logger, string notificationType);
 
         /// <summary>
-        /// Emits the systemd notification exception log event for systemd notifier.
+        /// Emits the unexpected systemd-notification exception log at debug level with the caught exception attached.
         /// </summary>
         [LoggerMessage(EventId = 1306, Level = LogLevel.Debug, Message = "Exception during systemd {NotificationType} notification")]
         private static partial void LogSystemdNotificationException(ILogger logger, Exception exception, string notificationType);

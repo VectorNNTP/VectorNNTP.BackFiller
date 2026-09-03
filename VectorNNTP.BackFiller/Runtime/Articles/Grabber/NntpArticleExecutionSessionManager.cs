@@ -49,13 +49,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
     }
 
     /// <summary>
-    /// Owns reusable authenticated NNTP acquisition sessions and enforces one active ARTICLE operation per session lease.
+    /// Owns the pool of reusable authenticated acquisition sessions for one runtime account set and leases them one work item at a time.
     /// </summary>
     /// <remarks>
-    /// <para>This manager is the ownership boundary for session lifetime, authentication state retention,
-    /// reconnect decisions, and lease-based concurrency.</para>
-    /// <para>Work dispatchers acquire a lease, execute one workflow operation, report acquisition outcome,
-    /// and release the lease. The manager then decides whether to reuse or recycle/reconnect the session.</para>
+    /// <para>This manager is the ownership boundary for session lifetime, authentication state retention, reconnect decisions, and lease-based concurrency.</para>
+    /// <para>Callers acquire a lease, perform one article workflow, report the acquisition outcome, and dispose the lease. The manager then decides whether to requeue, retire, or reconnect the underlying session.</para>
     /// </remarks>
     internal sealed partial class NntpArticleExecutionSessionManager : IAsyncDisposable
     {
@@ -168,8 +166,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Returns the total configured session-slot count.
+        /// Gets the total number of session slots currently owned by the manager.
         /// </summary>
+        /// <value>The slot count, including connected and disconnected slots that remain part of the manager state.</value>
         internal int TotalSessionCount
         {
             get
@@ -182,13 +181,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Connects and authenticates acquisition sessions for all configured account slots.
+        /// Connects and authenticates acquisition sessions for every configured account slot in the supplied snapshot.
         /// </summary>
-        /// <param name="accounts">Runtime account snapshot entries defining endpoints, credentials, and connection counts.</param>
+        /// <param name="accounts">Runtime account snapshot entries defining endpoints, credentials, keepalive settings, and connection counts.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task that completes when at least one ready session is available.</returns>
+        /// <returns>A task that completes after initialization has attempted all requested connections and at least one slot is ready.</returns>
+        /// <remarks>
+        /// Connection attempts are launched concurrently across all requested slots. Partial failures are tolerated as long as at least one slot becomes ready; otherwise the manager throws.
+        /// </remarks>
         /// <exception cref="InvalidOperationException">Thrown when initialization is attempted more than once or no sessions become ready.</exception>
-        /// <typeparam name="NntpAccountSnapshot">The NntpAccountSnapshot type parameter.</typeparam>
         internal async Task InitializeAsync(IReadOnlyList<NntpAccountSnapshot> accounts, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(accounts);
@@ -233,8 +234,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Returns the number of currently connected sessions owned by this manager.
+        /// Gets the number of slots that currently own a connected acquisition session.
         /// </summary>
+        /// <value>The count of non-null session instances currently attached to owned slots.</value>
         internal int ActiveSessionCount
         {
             get
@@ -247,13 +249,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Reconciles the owned persistent session state for this account to the latest desired snapshot.
+        /// Reconciles the sessions belonging to one account with the latest desired account snapshot.
         /// </summary>
         /// <param name="desiredAccount">Authoritative desired account configuration.</param>
         /// <param name="cancellationToken">Cancellation token for shutdown-aware reconciliation work.</param>
-        /// <returns>Deterministic reconciliation summary for control-plane diagnostics.</returns>
+        /// <returns>A deterministic summary of added, retired, and updated sessions for control-plane diagnostics.</returns>
+        /// <remarks>
+        /// Keepalive-only changes update existing slot metadata in place. Host, port, SSL, or credential changes trigger retirement and replacement of the affected sessions.
+        /// </remarks>
         /// <exception cref="InvalidOperationException">Thrown when called before manager initialization.</exception>
-        /// <typeparam name="NntpAccountSessionReconcileResult">The NntpAccountSessionReconcileResult type parameter.</typeparam>
         internal async Task<NntpAccountSessionReconcileResult> ReconcileAccountAsync(
             NntpAccountSnapshot desiredAccount,
             CancellationToken cancellationToken)
@@ -378,12 +382,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Acquires one available session lease for processing a single work item.
+        /// Waits for one available session slot and returns an exclusive lease for a single work item.
         /// </summary>
         /// <param name="messageId">Canonical Message-ID used for correlation logging.</param>
         /// <param name="cancellationToken">Cancellation token for backpressure waiting.</param>
         /// <returns>A lease that owns one active session assignment until disposed.</returns>
-        /// <typeparam name="NntpArticleSessionLease">The NntpArticleSessionLease type parameter.</typeparam>
+        /// <remarks>
+        /// The lease queue provides backpressure when all reusable sessions are busy. The manager will not issue the same slot concurrently to multiple callers.
+        /// </remarks>
         internal async ValueTask<NntpArticleSessionLease> AcquireAsync(string messageId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
@@ -449,11 +455,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Releases one session lease and applies deterministic session-health policy.
+        /// Releases a previously leased slot and applies the deterministic reuse, retirement, or reconnect policy.
         /// </summary>
         /// <param name="slotIndex">Slot index that was leased.</param>
-        /// <param name="failureCode">Terminal acquisition outcome for the completed work item.</param>
-        /// <returns>A task that completes once release/reconnect handling has finished.</returns>
+        /// <param name="failureCode">Terminal acquisition outcome reported for the completed work item.</param>
+        /// <returns>A task that completes once release and any required reconnect handling has finished.</returns>
         internal async ValueTask ReleaseAsync(int slotIndex, NntpArticleAcquisitionFailureCode failureCode)
         {
             SessionSlot slot;
@@ -554,9 +560,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Disposes all owned sessions after waiting for active leases to return.
+        /// Stops keepalive maintenance, waits for active leases to finish, and disposes every owned session.
         /// </summary>
-        /// <returns>A task that completes when all sessions are disposed.</returns>
+        /// <returns>A task that completes when all owned sessions and maintenance resources have been disposed.</returns>
         public async ValueTask DisposeAsync()
         {
             Task waitForLeases;
@@ -612,7 +618,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Creates one session slot for the specified account and enqueues it when ready.
+        /// Connects one account slot, registers it in manager state, and enqueues it for leasing when ready.
         /// </summary>
         /// <param name="account">Source account snapshot entry.</param>
         /// <param name="connectionIndex">0-based connection index for this account.</param>
@@ -678,7 +684,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Runs background keepalive maintenance for idle authenticated sessions.
+        /// Runs the background maintenance loop that probes idle sessions with DATE keepalives.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token controlling maintenance shutdown.</param>
         /// <returns>A task that completes when maintenance stops.</returns>
@@ -693,10 +699,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Probes idle slots with DATE keepalive while preserving one-session/one-active-ARTICLE semantics.
+        /// Probes eligible idle slots with <c>DATE</c> while preserving the manager's one-active-operation-per-session rule.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token controlling shutdown.</param>
         /// <returns>A task that completes after one maintenance pass.</returns>
+        /// <remarks>
+        /// Maintenance is skipped entirely while disposal is in progress or while callers are blocked waiting to acquire a work lease.
+        /// </remarks>
         private async Task ServiceIdleKeepAlivesAsync(CancellationToken cancellationToken)
         {
             DateTimeOffset nowUtc = _timeProvider.GetUtcNow();
@@ -751,11 +760,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Sends DATE to one idle slot and applies deterministic reuse/reconnect handling.
+        /// Sends <c>DATE</c> to one idle slot and applies deterministic reuse or reconnect handling to the result.
         /// </summary>
         /// <param name="slotIndex">Slot index being probed.</param>
         /// <param name="slot">Slot state snapshot captured under lock.</param>
-        /// <param name="probeUtc">UTC timestamp when probe pass began.</param>
+        /// <param name="probeUtc">UTC timestamp when the probe pass began.</param>
         /// <param name="cancellationToken">Cancellation token controlling shutdown.</param>
         /// <returns>A task that completes after keepalive handling for the slot.</returns>
         private async Task ProbeSlotKeepAliveAsync(int slotIndex, SessionSlot slot, DateTimeOffset probeUtc, CancellationToken cancellationToken)
@@ -839,13 +848,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Applies deterministic recycle/reconnect behavior after a keepalive failure.
+        /// Retires a slot after keepalive failure and attempts to reconnect it using the current endpoint settings.
         /// </summary>
         /// <param name="slotIndex">Slot index that failed keepalive.</param>
         /// <param name="slot">Slot state to recycle.</param>
         /// <param name="failureCode">Typed keepalive failure code.</param>
         /// <param name="detail">Failure detail text for diagnostics.</param>
-        /// <returns>A task that completes after recycle/reconnect handling.</returns>
+        /// <returns>A task that completes after recycle and reconnect handling.</returns>
         private async Task ReleaseKeepAliveFailureAsync(int slotIndex, SessionSlot slot, NntpArticleAcquisitionFailureCode failureCode, string detail)
         {
             NntpArticleAcquisitionSession? retiredSession;
@@ -913,12 +922,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Requests graceful retirement for sessions belonging to one account.
+        /// Marks sessions belonging to one account for graceful retirement.
         /// </summary>
         /// <param name="accountEntryId">Stable account identifier.</param>
         /// <param name="retireCount">Maximum number of sessions to retire.</param>
-        /// <param name="reconnectOnRetire">When <see langword="true"/>, sessions reconnect after retirement using current endpoint settings.</param>
-        /// <returns>Retirement request summary containing requested count and immediately-retirable idle sessions.</returns>
+        /// <param name="reconnectOnRetire">When <see langword="true"/>, retired sessions should be replaced using current endpoint settings.</param>
+        /// <returns>A summary containing the requested retirement count and the idle slots that can be retired immediately.</returns>
         private (int Requested, List<SessionSlot> ImmediateRetirements) RequestRetirement(
             Guid accountEntryId,
             int retireCount,
@@ -980,10 +989,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Builds immutable connection endpoint settings from one account snapshot.
+        /// Projects one account snapshot into the immutable endpoint settings used for acquisition-session connects.
         /// </summary>
         /// <param name="account">Account snapshot.</param>
-        /// <returns>Endpoint settings used for NNTP session connects.</returns>
+        /// <returns>Endpoint settings used for future NNTP session connects.</returns>
         private static NntpArticleAcquisitionEndpoint BuildEndpoint(NntpAccountSnapshot account)
         {
             return new NntpArticleAcquisitionEndpoint(
@@ -995,12 +1004,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Creates a connection-scoped logging context for one account slot when human-readable identity is available.
+        /// Creates connection-scoped logging metadata for one account slot when human-readable identity is available.
         /// </summary>
         /// <param name="account">Owning account snapshot.</param>
         /// <param name="endpoint">Endpoint associated with the slot.</param>
         /// <param name="connectionNumber">One-based connection number within the account.</param>
-        /// <returns>A connection-scoped log context, or <see langword="null"/> when the account has no usable human-readable identity.</returns>
+        /// <returns>A connection-scoped log context, or <see langword="null"/> when the account lacks the identity fields needed to build one.</returns>
         private static NntpConnectionLogContext? CreateConnectionLogContext(NntpAccountSnapshot account, NntpArticleAcquisitionEndpoint endpoint, int connectionNumber)
         {
             return string.IsNullOrWhiteSpace(account.Backbone) || string.IsNullOrWhiteSpace(account.Username)
@@ -1033,10 +1042,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Calculates the proactive keepalive threshold from configured remote idle timeout seconds.
+        /// Calculates the proactive DATE threshold from the configured remote idle timeout.
         /// </summary>
         /// <param name="keepAliveSeconds">Configured account keepalive timeout in seconds.</param>
-        /// <returns>Threshold used to trigger DATE before expected remote idle close.</returns>
+        /// <returns>The threshold used to trigger DATE before an expected remote idle close.</returns>
+        /// <remarks>
+        /// The manager reserves a safety margin of roughly ten percent of the configured timeout, with a minimum of one second.
+        /// </remarks>
         private static TimeSpan CalculateKeepAliveThreshold(byte keepAliveSeconds)
         {
             if (keepAliveSeconds == 0)
@@ -1061,7 +1073,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Mutable slot state containing one account association and optional connected session.
+        /// Mutable state for one manager-owned slot, including account metadata, queue state, and the currently attached session.
         /// </summary>
         private sealed class SessionSlot
         {
@@ -1091,8 +1103,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             }
 
             /// <summary>
-            /// Returns the stable slot index.
+            /// Gets the stable slot identifier used by the owning session manager.
             /// </summary>
+            /// <value>The slot identifier used in manager diagnostics and reconnect bookkeeping.</value>
             internal int SlotId { get; }
 
             /// <summary>
@@ -1329,7 +1342,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
     }
 
     /// <summary>
-    /// Represents deterministic reconciliation results for one account session-manager pass.
+    /// Summarizes one reconciliation pass for a single account's session slots.
     /// </summary>
     /// <param name="AccountEntryId">Stable account identifier reconciled by this pass.</param>
     /// <param name="DesiredSessionCount">Desired persistent session count from the authoritative account snapshot.</param>
@@ -1350,8 +1363,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         bool ConnectionSettingsReplaced);
 
     /// <summary>
-    /// Represents one exclusive assignment of an acquisition session from the manager.
+    /// Represents one exclusive assignment of a manager-owned acquisition session.
     /// </summary>
+    /// <remarks>
+    /// The lease carries the session and the account/endpoint metadata used for downstream correlation. Callers should report the terminal acquisition outcome before disposing the lease so the manager can classify session health correctly.
+    /// </remarks>
     internal sealed class NntpArticleSessionLease : IAsyncDisposable
     {
         /// <summary>
@@ -1410,8 +1426,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Returns the leased session that may execute exactly one active ARTICLE operation at a time.
+        /// Gets the leased acquisition session.
         /// </summary>
+        /// <value>The session currently assigned to this lease. Manager usage expects callers to execute one active workflow at a time against it.</value>
         internal NntpArticleAcquisitionSession Session { get; }
 
         /// <summary>
@@ -1420,53 +1437,60 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         internal int SlotId { get; }
 
         /// <summary>
-        /// Returns the owning account identifier for this lease.
+        /// Gets the owning account identifier for this lease.
         /// </summary>
+        /// <value>The stable provider-account identifier associated with the leased session.</value>
         internal Guid AccountId => _account.EntryId;
 
         /// <summary>
-        /// Returns the owning backbone namespace for this lease.
+        /// Gets the owning backbone namespace for this lease.
         /// </summary>
+        /// <value>The backbone name associated with the leased session.</value>
         internal string Backbone => _account.Backbone;
 
         /// <summary>
-        /// Returns the account username associated with this lease.
+        /// Gets the account username associated with this lease.
         /// </summary>
+        /// <value>The username currently configured for the leased provider account.</value>
         internal string AccountUsername => _account.Username;
 
         /// <summary>
-        /// Returns the configured account connection limit associated with this lease.
+        /// Gets the configured per-account connection limit associated with this lease.
         /// </summary>
+        /// <value>The maximum connection count from the account snapshot used to create the lease.</value>
         internal int ConnectionLimit => _account.MaxConnections;
 
         /// <summary>
-        /// Returns the provider endpoint host associated with this lease.
+        /// Gets the provider endpoint host associated with this lease.
         /// </summary>
+        /// <value>The host name or address used by the leased session.</value>
         internal string Host => _endpoint.Host;
 
         /// <summary>
-        /// Returns the provider endpoint port associated with this lease.
+        /// Gets the provider endpoint port associated with this lease.
         /// </summary>
+        /// <value>The port used by the leased session.</value>
         internal int Port => _endpoint.Port;
 
         /// <summary>
         /// Gets a value indicating whether this lease endpoint uses SSL/TLS.
         /// </summary>
+        /// <value><see langword="true"/> when the leased session was created with implicit TLS enabled.</value>
         internal bool UseSsl => _endpoint.UseSsl;
 
         /// <summary>
-        /// Reports the terminal acquisition outcome for this lease operation.
+        /// Reports the terminal acquisition outcome for the work executed under this lease.
         /// </summary>
-        /// <param name="failureCode">Terminal acquisition outcome.</param>
+        /// <param name="failureCode">Terminal acquisition outcome used for session-health classification.</param>
         internal void ReportAcquisitionOutcome(NntpArticleAcquisitionFailureCode failureCode)
         {
             _completionCode = failureCode;
         }
 
         /// <summary>
-        /// Releases this lease back to the manager.
+        /// Releases this lease back to the manager exactly once.
         /// </summary>
-        /// <returns>A task that completes when manager release/reconnect handling is finished.</returns>
+        /// <returns>A task that completes when manager release and any required reconnect handling have finished.</returns>
         public ValueTask DisposeAsync()
         {
             return Interlocked.Exchange(ref _released, 1) != 0 ? ValueTask.CompletedTask : _owner.ReleaseAsync(_slotIndex, _completionCode);

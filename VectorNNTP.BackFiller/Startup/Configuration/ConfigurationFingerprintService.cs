@@ -124,7 +124,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// </returns>
         /// <remarks>
         /// Parsing/sanitization failures are intentionally downgraded to a <see langword="null"/> result so callers
-        /// can exclude the value and emit a warning instead of failing startup.
+        /// can exclude the value and emit a warning instead of failing startup. Secret-bearing fields such as
+        /// passwords are omitted rather than masked because the returned value becomes fingerprint input.
         /// </remarks>
         internal static string? SanitizeConnectionString(string connectionString)
         {
