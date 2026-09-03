@@ -512,40 +512,26 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             {
                 bool isAuthInfoUser = command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase);
                 bool isAuthInfoPass = command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase);
-                bool shouldRedact = redactCredentials || isAuthInfoUser || isAuthInfoPass;
-
+    
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    if (shouldRedact)
+                    if (isAuthInfoUser)
                     {
-                        string redactedCommand = isAuthInfoUser
-                            ? "AUTHINFO USER ***"
-                            : isAuthInfoPass
-                                ? "AUTHINFO PASS ***"
-                                : "REDACTED";
-
-                        if (string.IsNullOrWhiteSpace(context.MessageId))
-                        {
-                            _logger.LogDebug("TX: {Command}", redactedCommand);
-                        }
-                        else
-                        {
-                            _logger.LogDebug(
-                                "TX: {Command} MessageId={MessageId}",
-                                redactedCommand,
-                                context.MessageId);
-                        }
+                        _logger.LogDebug("TX: AUTHINFO USER ***");
                     }
-                    else if (string.IsNullOrWhiteSpace(context.MessageId))
+                    else if (isAuthInfoPass)
                     {
-                        _logger.LogDebug("TX: {Command}", command);
+                        _logger.LogDebug("TX: AUTHINFO PASS ***");
                     }
                     else
                     {
+                        // Normal NNTP commands remain fully visible in debug logging.
                         _logger.LogDebug(
-                            "TX: {Command} MessageId={MessageId}",
+                            "TX: {Command}{MessageId}",
                             command,
-                            context.MessageId);
+                            string.IsNullOrWhiteSpace(context.MessageId)
+                                ? string.Empty
+                                : $" MessageId={context.MessageId}");
                     }
                 }
 
