@@ -124,7 +124,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for database name
         /// <summary>
-        /// Stores database aliases used by my sql connection string utilities.
+        /// Canonical alias keys accepted for MySQL database-name resolution.
         /// </summary>
         private static readonly HashSet<string> DatabaseAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -135,7 +135,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for username
         /// <summary>
-        /// Stores username aliases used by my sql connection string utilities.
+        /// Canonical alias keys accepted for MySQL username resolution.
         /// </summary>
         private static readonly HashSet<string> UsernameAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -149,7 +149,7 @@ namespace VectorNNTP.Backfiller.Configuration
 
         // MySqlConnector aliases for password
         /// <summary>
-        /// Stores password aliases used by my sql connection string utilities.
+        /// Canonical alias keys accepted for MySQL password resolution.
         /// </summary>
         private static readonly HashSet<string> PasswordAliases = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -251,8 +251,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="server">The server/host value if found.</param>
         /// <returns><c>true</c> if server/host was found and non-ambiguous; otherwise <c>false</c>.</returns>
         /// <remarks>
-        /// <para>Uses Path 1 (raw alias inspection) via <see cref="DbConnectionStringBuilder"/> for ambiguity detection.</para>
-        /// <para>Returns <c>false</c> if conflicting server aliases are detected (e.g., Server=db01;Host=db02).</para>
+        /// Uses Path 1 raw key/value parsing via <see cref="ParseRawKeyValuePairs(string)"/> so duplicate keys and
+        /// conflicting aliases are detected before provider last-write-wins canonicalization would hide them.
+        /// Returns <see langword="false"/> when the property is absent, blank, malformed, or ambiguous.
         /// </remarks>
         public static bool TryGetServer(string? connectionString, out string? server)
         {
@@ -266,8 +267,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="database">The database name if found.</param>
         /// <returns><c>true</c> if database name was found and non-ambiguous; otherwise <c>false</c>.</returns>
         /// <remarks>
-        /// <para>Uses Path 1 (raw alias inspection) via <see cref="DbConnectionStringBuilder"/> for ambiguity detection.</para>
-        /// <para>Returns <c>false</c> if conflicting database aliases are detected (e.g., Database=foo;Initial Catalog=bar).</para>
+        /// Uses Path 1 raw key/value parsing via <see cref="ParseRawKeyValuePairs(string)"/> so duplicate keys and
+        /// conflicting aliases are detected before provider canonicalization.
+        /// Returns <see langword="false"/> when the property is absent, blank, malformed, or ambiguous.
         /// </remarks>
         public static bool TryGetDatabase(string? connectionString, out string? database)
         {
@@ -281,8 +283,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="username">The username/user ID if found.</param>
         /// <returns><c>true</c> if username was found and non-ambiguous; otherwise <c>false</c>.</returns>
         /// <remarks>
-        /// <para>Uses Path 1 (raw alias inspection) via <see cref="DbConnectionStringBuilder"/> for ambiguity detection.</para>
-        /// <para>Returns <c>false</c> if conflicting username aliases are detected (e.g., User ID=alice;Username=bob).</para>
+        /// Uses Path 1 raw key/value parsing via <see cref="ParseRawKeyValuePairs(string)"/> so duplicate keys and
+        /// conflicting aliases are detected before provider canonicalization.
+        /// Returns <see langword="false"/> when the property is absent, blank, malformed, or ambiguous.
         /// </remarks>
         public static bool TryGetUsername(string? connectionString, out string? username)
         {
@@ -296,14 +299,11 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="password">The password if found.</param>
         /// <returns><c>true</c> if password was found and non-ambiguous; otherwise <c>false</c>.</returns>
         /// <remarks>
-        /// <para>Uses Path 1 (raw alias inspection) via <see cref="DbConnectionStringBuilder"/> for ambiguity detection.</para>
-        /// <para><b>SECURITY WARNING:</b> This method returns sensitive credential information.</para>
-        /// <para><b>NEVER</b> use this for configuration fingerprinting or logging.</para>
-        /// <para>Valid use cases: runtime validation (checking for ambiguous aliases),
-        /// ambiguity detection (via <see cref="HasAmbiguousAliases"/>).</para>
-        /// <para>Password is optional and may be provided programmatically via ProvidePasswordCallback.</para>
-        /// <para>Returns <c>false</c> if conflicting password aliases are detected (e.g., Password=secret1;Pwd=secret2).</para>
-        /// <para>Returns <c>false</c> if password is empty or whitespace-only.</para>
+        /// <para>Uses Path 1 raw key/value parsing via <see cref="ParseRawKeyValuePairs(string)"/> so duplicate keys and
+        /// conflicting aliases are detected before provider canonicalization.</para>
+        /// <para><b>Security:</b> this member exposes sensitive credential material and must not be used for logging or configuration fingerprinting.</para>
+        /// <para>Returns <see langword="false"/> when the password property is absent, empty, malformed, or ambiguous.</para>
+        /// <para>Password remains optional because callers may supply credentials programmatically via <c>ProvidePasswordCallback</c>.</para>
         /// </remarks>
         public static bool TryGetPassword(string? connectionString, out string? password)
         {
@@ -317,18 +317,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="minPoolSize">The parsed minimum pool size if found and valid.</param>
         /// <returns><c>true</c> if a valid minimum pool size was found and non-ambiguous; otherwise <c>false</c>.</returns>
         /// <remarks>
-        /// <para>Uses dual-path architecture:</para>
-        /// <list type="bullet">
-        /// <item><description>Path 1: Raw alias inspection for ambiguity detection (via <see cref="DbConnectionStringBuilder"/>)</description></item>
-        /// <item><description>Path 2: Provider typed validation (via <see cref="MySqlConnectionStringBuilder"/>) to enforce uint semantics</description></item>
-        /// </list>
-        /// <para>Returns <c>false</c> if:</para>
-        /// <list type="bullet">
-        /// <item><description>No min pool size property found</description></item>
-        /// <item><description>Value is not a valid non-negative integer</description></item>
-        /// <item><description>Value exceeds <see cref="int.MaxValue"/> (would cause integer overflow)</description></item>
-        /// <item><description>Multiple conflicting min pool size aliases present</description></item>
-        /// </list>
+        /// Uses raw key/value parsing first to reject conflicting aliases, then validates the surviving value through
+        /// <see cref="MySqlConnectionStringBuilder"/> so provider numeric semantics remain authoritative.
+        /// Returns <see langword="false"/> when the property is missing, malformed, ambiguous, or exceeds <see cref="int.MaxValue"/>.
         /// </remarks>
         public static bool TryGetMinPoolSize(string? connectionString, out int minPoolSize)
         {
@@ -382,18 +373,9 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <param name="maxPoolSize">The parsed maximum pool size if found and valid.</param>
         /// <returns><c>true</c> if a valid maximum pool size was found and non-ambiguous; otherwise <c>false</c>.</returns>
         /// <remarks>
-        /// <para>Uses dual-path architecture:</para>
-        /// <list type="bullet">
-        /// <item><description>Path 1: Raw alias inspection for ambiguity detection (via <see cref="DbConnectionStringBuilder"/>)</description></item>
-        /// <item><description>Path 2: Provider typed validation (via <see cref="MySqlConnectionStringBuilder"/>) to enforce uint semantics</description></item>
-        /// </list>
-        /// <para>Returns <c>false</c> if:</para>
-        /// <list type="bullet">
-        /// <item><description>No max pool size property found</description></item>
-        /// <item><description>Value is not a valid non-negative integer</description></item>
-        /// <item><description>Value exceeds <see cref="int.MaxValue"/> (would cause integer overflow)</description></item>
-        /// <item><description>Multiple conflicting max pool size aliases present</description></item>
-        /// </list>
+        /// Uses raw key/value parsing first to reject conflicting aliases, then validates the surviving value through
+        /// <see cref="MySqlConnectionStringBuilder"/> so provider numeric semantics remain authoritative.
+        /// Returns <see langword="false"/> when the property is missing, malformed, ambiguous, or exceeds <see cref="int.MaxValue"/>.
         /// </remarks>
         public static bool TryGetMaxPoolSize(string? connectionString, out int maxPoolSize)
         {

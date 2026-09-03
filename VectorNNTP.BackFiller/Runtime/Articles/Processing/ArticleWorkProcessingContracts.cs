@@ -94,8 +94,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
-    /// Represents one explicit article-work processing result used by RabbitMQ disposition and RPC stages.
+    /// Captures the deterministic result of parsing and processing one RabbitMQ article-work delivery.
     /// </summary>
+    /// <remarks>
+    /// The result keeps the original delivery envelope for transport metadata and may own a successful grabber payload through <paramref name="GrabberResult"/>. Callers must eventually dispose the result to release that ownership.
+    /// </remarks>
     /// <param name="Request">Parsed application JSON request payload.</param>
     /// <param name="Delivery">RabbitMQ delivery envelope carrying AMQP RPC and transport metadata.</param>
     /// <param name="Outcome">Deterministic processing outcome classification.</param>
@@ -117,13 +120,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         Exception? UnexpectedException) : IDisposable
     {
         /// <summary>
-        /// Returns the AMQP correlation identifier from the authoritative delivery metadata.
+        /// Gets the authoritative AMQP correlation identifier from the delivery envelope.
         /// </summary>
+        /// <value>The broker correlation identifier used for RPC response publication, or <see langword="null"/> when the delivery was malformed.</value>
         internal string? CorrelationId => Delivery.CorrelationId;
 
         /// <summary>
-        /// Returns the AMQP reply destination from the authoritative delivery metadata.
+        /// Gets the authoritative AMQP reply destination from the delivery envelope.
         /// </summary>
+        /// <value>The reply-to routing target used for RPC response publication, or <see langword="null"/> when the delivery was malformed.</value>
         internal string? ReplyTo => Delivery.ReplyTo;
 
         /// <summary>
@@ -144,9 +149,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// Parses one delivery into a structured request, or returns an invalid-request processing result.
         /// </summary>
         /// <param name="delivery">Source RabbitMQ delivery envelope.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Parse result containing either request payload or parse-failure classification.</returns>
-        /// <typeparam name="RabbitMqArticleWorkParseResult">The RabbitMqArticleWorkParseResult type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token for parser work.</param>
+        /// <returns>A parse result containing either the validated request payload or an already-classified invalid-request failure result.</returns>
         public ValueTask<RabbitMqArticleWorkParseResult> ParseAsync(RabbitMqArticleDelivery delivery, CancellationToken cancellationToken);
     }
 
@@ -162,6 +166,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <summary>
         /// Gets a value indicating whether parsing produced a valid request payload.
         /// </summary>
+        /// <value><see langword="true"/> when <see cref="Request"/> is present and <see cref="Failure"/> is <see langword="null"/>.</value>
         internal bool IsSuccess => Request is not null;
     }
 
@@ -175,9 +180,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <param name="request">Parsed application article-work request.</param>
         /// <param name="delivery">Authoritative RabbitMQ delivery envelope for transport/RPC metadata.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Processing classification and deferred disposition recommendation.</returns>
-        /// <typeparam name="ArticleWorkProcessingResult">The ArticleWorkProcessingResult type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token for retrieval and classification work.</param>
+        /// <returns>A processing result containing the terminal outcome, disposition recommendation, and any owned workflow payload.</returns>
         public ValueTask<ArticleWorkProcessingResult> ProcessAsync(RabbitMqArticleWorkRequest request, RabbitMqArticleDelivery delivery, CancellationToken cancellationToken);
     }
 
@@ -198,8 +202,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
-    /// Defines a deterministic RabbitMQ disposition plan for one processed delivery.
+    /// Defines the Phase 4 action plan for one processed delivery.
     /// </summary>
+    /// <remarks>
+    /// Response publication, when requested, must complete successfully before <paramref name="Action"/> is applied to the broker delivery.
+    /// </remarks>
     /// <param name="Action">RabbitMQ disposition action to apply.</param>
     /// <param name="Requeue">Whether RabbitMQ should requeue the message when <paramref name="Action"/> is <see cref="RabbitMqDispositionAction.Nack"/>.</param>
     /// <param name="PublishResponse">Whether an RPC response must be published before disposition.</param>
@@ -209,8 +216,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         bool PublishResponse);
 
     /// <summary>
-    /// Represents one terminal RabbitMQ RPC response payload.
+    /// Represents the application-level JSON payload published to the caller's RabbitMQ reply queue.
     /// </summary>
+    /// <remarks>
+    /// Transport fields such as AMQP <c>CorrelationId</c> and <c>ReplyTo</c> remain on the delivery envelope and are intentionally excluded from this body contract.
+    /// </remarks>
     /// <param name="Version">Application-level response protocol version.</param>
     /// <param name="RequestId">Application request identifier from JSON request payload.</param>
     /// <param name="MessageId">Canonical Message-ID from JSON request payload.</param>
@@ -249,11 +259,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
-    /// Represents one response publication attempt result.
+    /// Describes the outcome of one RPC response publication attempt.
     /// </summary>
     /// <param name="Status">Publication completion status.</param>
     /// <param name="ConnectionGeneration">Connection generation used for the publish attempt.</param>
-    /// <param name="Exception">Optional failure exception when publication failed.</param>
+    /// <param name="Exception">Optional captured failure exception when publication failed before confirmation. This value is reported, not rethrown by the result object.</param>
     internal sealed record RabbitMqResponsePublishResult(
         RabbitMqResponsePublishStatus Status,
         long ConnectionGeneration,
@@ -282,9 +292,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <param name="result">Processed source result holding authoritative AMQP metadata.</param>
         /// <param name="response">Response payload to publish.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Publish/confirm attempt result.</returns>
-        /// <typeparam name="RabbitMqResponsePublishResult">The RabbitMqResponsePublishResult type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token for channel acquisition, publish, and confirm waiting.</param>
+        /// <returns>A result describing whether publish confirm succeeded, timed out, or failed before confirmation.</returns>
         public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
             ArticleWorkProcessingResult result,
             RabbitMqArticleWorkResponse response,
@@ -306,7 +315,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
-    /// Receives completed processing results and executes RPC response + RabbitMQ disposition policy.
+    /// Receives completed processing results and applies the implementation's final publication and settlement policy.
     /// </summary>
     internal interface IArticleWorkResultSink
     {
@@ -314,31 +323,39 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// Accepts one completed processing result.
         /// </summary>
         /// <param name="result">Completed processing result.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="cancellationToken">Cancellation token for the sink's asynchronous work.</param>
         /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask OnProcessedAsync(ArticleWorkProcessingResult result, CancellationToken cancellationToken);
     }
 
     /// <summary>
-    /// Default bounded-channel result sink for intra-process processing-result handoff.
+    /// Writes completed processing results into a bounded channel for later consumption.
     /// </summary>
+    /// <remarks>
+    /// The sink forwards the original result instance without cloning it. After a successful write, downstream channel consumers assume responsibility for eventual disposal.
+    /// </remarks>
     internal sealed class ArticleWorkResultChannelSink : IArticleWorkResultSink
     {
         /// <summary>
-        /// Stores writer used by article work processing contracts.
+        /// Channel writer that accepts completed processing results for downstream handling.
         /// </summary>
         private readonly ChannelWriter<ArticleWorkProcessingResult> _writer;
 
         /// <summary>
         /// Initializes a channel-backed result sink.
         /// </summary>
-        /// <param name="writer">Bounded result writer.</param>
+        /// <param name="writer">Bounded channel writer that accepts completed processing results for another phase.</param>
         internal ArticleWorkResultChannelSink(ChannelWriter<ArticleWorkProcessingResult> writer)
         {
             _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Enqueues the completed result into the configured channel.
+        /// </summary>
+        /// <param name="result">Completed processing result to hand off.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts the channel write if the consumer side is shutting down.</param>
+        /// <returns>A value task that completes when the result has been accepted by the channel.</returns>
         public ValueTask OnProcessedAsync(ArticleWorkProcessingResult result, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(result);

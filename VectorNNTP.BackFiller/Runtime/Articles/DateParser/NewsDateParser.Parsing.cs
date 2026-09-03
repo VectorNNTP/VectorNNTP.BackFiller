@@ -11,16 +11,16 @@ using System.Text;
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Parsing-helper partial for <see cref="NewsDateParser"/>.
+    /// Supplies the quick-parse, exact-parse, and whitespace-normalization helpers used by <see cref="NewsDateParser"/>.
     /// </summary>
     internal static partial class NewsDateParser
     {
         /// <summary>
-        /// Attempts a fast culture-invariant parse using DateTimeOffset.TryParse.
+        /// Attempts the fast culture-invariant parse path before additional normalization work is allocated.
         /// </summary>
         /// <param name="input">Trimmed input span.</param>
-        /// <param name="result">Parsed UTC date when successful.</param>
-        /// <returns><see langword="true"/> when parse succeeds.</returns>
+        /// <param name="result">Parsed UTC instant when the quick parse succeeds.</param>
+        /// <returns><see langword="true"/> when <see cref="DateTimeOffset.TryParse(ReadOnlySpan{char}, IFormatProvider?, DateTimeStyles, out DateTimeOffset)"/> accepted the value.</returns>
         private static bool TryQuickParse(ReadOnlySpan<char> input, out DateTime result)
         {
             if (DateTimeOffset.TryParse(input, CultureInfo.InvariantCulture, ParseStyles, out DateTimeOffset dto))
@@ -34,11 +34,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         }
 
         /// <summary>
-        /// Attempts exact-format parsing using known NNTP date patterns.
+        /// Attempts exact-format parsing after the caller has applied cleanup and timezone normalization.
         /// </summary>
         /// <param name="input">Normalized date string.</param>
-        /// <param name="result">Parsed UTC date when successful.</param>
-        /// <returns><see langword="true"/> when parse succeeds.</returns>
+        /// <param name="result">Parsed UTC instant when an exact format matches.</param>
+        /// <returns><see langword="true"/> when one of <see cref="DateFormats"/> matched <paramref name="input"/>.</returns>
         private static bool TryExactParse(string input, out DateTime result)
         {
             if (DateTimeOffset.TryParseExact(input, DateFormats, CultureInfo.InvariantCulture, ParseStyles, out DateTimeOffset dto))
@@ -52,10 +52,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         }
 
         /// <summary>
-        /// Returns a value indicating whether the span contains adjacent ASCII spaces.
+        /// Determines whether the normalized string still contains repeated interior ASCII spaces.
         /// </summary>
         /// <param name="s">Span to inspect.</param>
-        /// <returns><see langword="true"/> when interior collapse is needed.</returns>
+        /// <returns><see langword="true"/> when a later collapse pass would remove at least one extra space.</returns>
         private static bool NeedsInteriorWhitespaceCollapse(ReadOnlySpan<char> s)
         {
             for (int i = 1; i < s.Length; i++)
@@ -70,10 +70,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         }
 
         /// <summary>
-        /// Collapses runs of ASCII spaces to one space.
+        /// Collapses runs of interior ASCII spaces to a single space.
         /// </summary>
-        /// <param name="s">Input string.</param>
-        /// <returns>Original string when unchanged; otherwise collapsed string.</returns>
+        /// <param name="s">Normalized date string.</param>
+        /// <returns>The original string when no collapse is needed; otherwise a new collapsed string.</returns>
+        /// <remarks>
+        /// Returning the original reference on the already-normalized path avoids an allocation on successful fast-follow exact parses.
+        /// </remarks>
         private static string CollapseInteriorWhitespace(string s)
         {
             if (!NeedsInteriorWhitespaceCollapse(s.AsSpan()))

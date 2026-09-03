@@ -19,12 +19,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal interface IAuthoritativeDnsTxtPropagationVerifier
     {
         /// <summary>
-        /// Waits until authoritative DNS nameserver responses satisfy configured TXT visibility quorum.
+        /// Waits until authoritative DNS nameserver responses satisfy the configured TXT visibility quorum.
         /// </summary>
-        /// <param name="fqdn">Challenge FQDN.</param>
-        /// <param name="expectedTxtValue">Expected TXT content value.</param>
-        /// <param name="options">Validated ACME runtime options.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="fqdn">Fully qualified ACME TXT host name to query.</param>
+        /// <param name="expectedTxtValue">TXT value that must become visible at the authoritative nameservers.</param>
+        /// <param name="options">Validated ACME runtime options that define propagation timing and quorum policy.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts propagation waiting.</param>
         /// <returns>A task that completes when propagation criteria are met.</returns>
         public Task WaitForPropagationAsync(
             string fqdn,

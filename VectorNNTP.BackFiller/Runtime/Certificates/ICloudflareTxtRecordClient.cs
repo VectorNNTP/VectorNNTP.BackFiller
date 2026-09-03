@@ -21,19 +21,18 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>
         /// <param name="recordName">TXT record host name.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operation.</param>
         /// <returns>The current TXT records for the queried name.</returns>
         public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Creates one TXT record and returns the created record identifier.
+        /// Creates one TXT record and returns its Cloudflare identifier.
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>
         /// <param name="recordName">TXT record host name.</param>
         /// <param name="recordValue">TXT record content value.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Created record identifier.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operation.</param>
+        /// <returns>The Cloudflare identifier of the created or reused TXT record.</returns>
         public Task<string> CreateTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken);
 
         /// <summary>
@@ -41,7 +40,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>
         /// <param name="recordId">Record identifier to delete.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operation.</param>
         /// <returns>A task that completes when deletion has finished.</returns>
         public Task DeleteRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
     }

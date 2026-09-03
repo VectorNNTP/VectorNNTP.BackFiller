@@ -12,8 +12,11 @@ using System.Text.Json;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Defines the canonical JSON wire protocol contract for RabbitMQ article-work responses.
+    /// Defines the canonical JSON body contract for RabbitMQ article-work responses.
     /// </summary>
+    /// <remarks>
+    /// Success responses always emit an explicit <c>uri</c> property, which is currently <see langword="null"/> in this runtime, while failure responses omit <c>uri</c> and include <c>error</c> only when text is available.
+    /// </remarks>
     internal static class RabbitMqArticleWorkResponseWireProtocol
     {
         /// <summary>
@@ -27,10 +30,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         internal const int CurrentVersion = 1;
 
         /// <summary>
-        /// Creates a deterministic compact JSON payload for the canonical version-1 response object.
+        /// Serializes a version-1 response payload into its compact canonical JSON form.
         /// </summary>
         /// <param name="response">Structured response to serialize.</param>
-        /// <returns>UTF-8 encoded compact JSON payload.</returns>
+        /// <returns>UTF-8 encoded compact JSON body for RabbitMQ RPC publication.</returns>
         internal static byte[] SerializeV1(RabbitMqArticleWorkResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
@@ -74,11 +77,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Parses a canonical response payload for test/integration contract validation.
+        /// Parses a version-1 response payload for tests and integration contract verification.
         /// </summary>
         /// <param name="payload">UTF-8 JSON response payload.</param>
         /// <returns>Parsed response instance.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="payload"/> is empty.</exception>
+        /// <exception cref="JsonException">Thrown when <paramref name="payload"/> is not valid JSON.</exception>
+        /// <exception cref="KeyNotFoundException">Thrown when a required property is missing.</exception>
+        /// <exception cref="FormatException">Thrown when a required property has an invalid GUID or numeric representation.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when the payload is not a JSON object, uses an unsupported version, or a required string property is JSON <see langword="null"/>.
+        /// </exception>
         internal static RabbitMqArticleWorkResponse ParseV1(ReadOnlySpan<byte> payload)
         {
             if (payload.IsEmpty)

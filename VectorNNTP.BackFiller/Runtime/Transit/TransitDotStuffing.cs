@@ -8,25 +8,39 @@
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// Defines transit dot stuffing algorithm and its transit dot stuffing contract.
+    /// Selects the dot-stuffing implementation used to escape article lines that begin with a dot.
     /// </summary>
     internal enum TransitDotStuffingAlgorithm
     {
+        /// <summary>
+        /// Processes the payload one byte at a time while tracking line starts.
+        /// </summary>
         BaselineByteLoop = 0,
+
+        /// <summary>
+        /// Processes the payload one line at a time in a single pass.
+        /// </summary>
         BulkLineOrientedSinglePass = 1,
+
+        /// <summary>
+        /// Computes the required output length first, then performs a second pass to write the transformed payload.
+        /// </summary>
         BulkLineOrientedTwoPass = 2,
     }
 
     /// <summary>
-    /// Defines struct and its transit dot stuffing contract.
+    /// Describes the output of a dot-stuffing transform.
     /// </summary>
+    /// <param name="BytesWritten">Number of bytes written to the destination span.</param>
+    /// <param name="StuffedDotCount">Number of leading dots duplicated to preserve NNTP transparency rules.</param>
+    /// <param name="AppendedTrailingCrlf">Indicates whether the transform appended a trailing CRLF because the source did not end in LF.</param>
     internal readonly record struct TransitDotStuffTransformResult(
         int BytesWritten,
         int StuffedDotCount,
         bool AppendedTrailingCrlf);
 
     /// <summary>
-    /// Defines transit dot stuffing and its transit dot stuffing contract.
+    /// Provides allocation-free NNTP dot-stuffing helpers for staging article payloads into outbound buffers.
     /// </summary>
     internal static class TransitDotStuffing
     {
@@ -34,10 +48,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Calculates the destination size required after dot-stuffing and optional trailing-CRLF insertion.
         /// </summary>
         /// <param name="source">Source article bytes.</param>
-        /// <param name="appendTrailingCrlfWhenMissingLf">Whether a final CRLF is added when the source does not end in LF.</param>
-        /// <param name="stuffedDotCount">Receives the number of leading line dots that require escaping.</param>
-        /// <returns>The required destination length in bytes.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <param name="appendTrailingCrlfWhenMissingLf"><see langword="true"/> to append CRLF when the source does not end in LF.</param>
+        /// <param name="stuffedDotCount">Receives the number of line-leading dots that must be duplicated.</param>
+        /// <returns>The number of bytes required in the destination span.</returns>
         internal static int GetRequiredDestinationLength(ReadOnlySpan<byte> source, bool appendTrailingCrlfWhenMissingLf, out int stuffedDotCount)
         {
             stuffedDotCount = 0;
@@ -76,15 +89,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try dot stuff for transit dot stuffing.
+        /// Transforms the source payload into a dot-stuffed destination using the selected algorithm.
         /// </summary>
-        /// <param name="source">The source value.</param>
-        /// <param name="destination">The destination value.</param>
-        /// <param name="result">The result value.</param>
-        /// <param name="algorithm">The algorithm value.</param>
-        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <param name="source">Original article payload.</param>
+        /// <param name="destination">Destination span that receives the transformed payload.</param>
+        /// <param name="result">Receives transform metrics when the operation succeeds.</param>
+        /// <param name="algorithm">Dot-stuffing strategy to execute.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf"><see langword="true"/> to append CRLF when the source does not end in LF.</param>
+        /// <returns><see langword="true"/> when the destination span was large enough; otherwise <see langword="false"/>.</returns>
         internal static bool TryDotStuff(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -102,14 +114,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try dot stuff baseline byte loop for transit dot stuffing.
+        /// Dot-stuffs the payload with a byte-at-a-time baseline implementation.
         /// </summary>
-        /// <param name="source">The source value.</param>
-        /// <param name="destination">The destination value.</param>
-        /// <param name="result">The result value.</param>
-        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <param name="source">Original article payload.</param>
+        /// <param name="destination">Destination span that receives the transformed payload.</param>
+        /// <param name="result">Receives transform metrics when the operation succeeds.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf"><see langword="true"/> to append CRLF when the source does not end in LF.</param>
+        /// <returns><see langword="true"/> when the destination span was large enough; otherwise <see langword="false"/>.</returns>
         internal static bool TryDotStuffBaselineByteLoop(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -165,14 +176,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try dot stuff bulk line oriented single pass for transit dot stuffing.
+        /// Dot-stuffs the payload by copying one logical line at a time in a single pass.
         /// </summary>
-        /// <param name="source">The source value.</param>
-        /// <param name="destination">The destination value.</param>
-        /// <param name="result">The result value.</param>
-        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <param name="source">Original article payload.</param>
+        /// <param name="destination">Destination span that receives the transformed payload.</param>
+        /// <param name="result">Receives transform metrics when the operation succeeds.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf"><see langword="true"/> to append CRLF when the source does not end in LF.</param>
+        /// <returns><see langword="true"/> when the destination span was large enough; otherwise <see langword="false"/>.</returns>
         internal static bool TryDotStuffBulkLineOrientedSinglePass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,
@@ -229,14 +239,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try dot stuff bulk line oriented two pass for transit dot stuffing.
+        /// Dot-stuffs the payload with a two-pass implementation that validates capacity before writing.
         /// </summary>
-        /// <param name="source">The source value.</param>
-        /// <param name="destination">The destination value.</param>
-        /// <param name="result">The result value.</param>
-        /// <param name="appendTrailingCrlfWhenMissingLf">The appendTrailingCrlfWhenMissingLf value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
-        /// <typeparam name="byte">The byte type parameter.</typeparam>
+        /// <param name="source">Original article payload.</param>
+        /// <param name="destination">Destination span that receives the transformed payload.</param>
+        /// <param name="result">Receives transform metrics when the operation succeeds.</param>
+        /// <param name="appendTrailingCrlfWhenMissingLf"><see langword="true"/> to append CRLF when the source does not end in LF.</param>
+        /// <returns><see langword="true"/> when the destination span was large enough; otherwise <see langword="false"/>.</returns>
         internal static bool TryDotStuffBulkLineOrientedTwoPass(
             ReadOnlySpan<byte> source,
             Span<byte> destination,

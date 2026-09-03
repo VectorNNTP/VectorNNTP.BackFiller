@@ -25,11 +25,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <summary>
         /// Evaluates whether an existing persisted listener certificate is usable and whether renewal is required.
         /// </summary>
-        /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
-        /// <param name="timeProvider">Unified time provider.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <remarks>
+        /// When evaluation loads a certificate that later fails a validation step, the certificate is disposed before the
+        /// method returns an unusable result. A successful result transfers bundle ownership to the caller.
+        /// </remarks>
+        /// <param name="letsEncryptOptions">Validated ACME runtime options that identify the persisted certificate paths and FQDN.</param>
+        /// <param name="timeProvider">Unified time provider used for validity and renewal-window checks.</param>
+        /// <param name="cancellationToken">Cancellation token observed before loading certificate artifacts.</param>
         /// <returns>Certificate usability and renewal classification.</returns>
-        /// <typeparam name="CertificateEvaluationResult">The CertificateEvaluationResult type parameter.</typeparam>
         public static async Task<CertificateEvaluationResult> EvaluateExistingCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             TimeProvider timeProvider,
@@ -149,12 +152,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <summary>
         /// Loads the persisted listener certificate bundle.
         /// </summary>
-        /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
-        /// <param name="timeProvider">Unified time provider.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="letsEncryptOptions">Validated ACME runtime options that identify the listener PFX path and password.</param>
+        /// <param name="timeProvider">Unified time provider used to timestamp the loaded bundle.</param>
+        /// <param name="cancellationToken">Cancellation token observed while reading the PFX file.</param>
         /// <param name="logger">Optional logger used to record certificate loading diagnostics.</param>
-        /// <returns>Loaded listener certificate bundle.</returns>
-        /// <typeparam name="BackFillerCertificateBundle">The BackFillerCertificateBundle type parameter.</typeparam>
+        /// <returns>A loaded certificate bundle whose <see cref="BackFillerCertificateBundle.Certificate"/> is owned by the caller.</returns>
         public static async Task<BackFillerCertificateBundle> LoadCertificateBundleAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             TimeProvider timeProvider,
@@ -200,9 +202,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <summary>
         /// Persists newly issued certificate artifacts using atomic replacement semantics.
         /// </summary>
-        /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
-        /// <param name="issueResult">Issued ACME certificate artifacts.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <remarks>
+        /// The private key PEM is written first, followed by the PFX bundle, with both artifacts staged through unique
+        /// same-directory temporary files so readers never observe partially written content at the final paths.
+        /// </remarks>
+        /// <param name="letsEncryptOptions">Validated ACME runtime options that identify the destination paths and PFX password.</param>
+        /// <param name="issueResult">Issued ACME certificate artifacts to persist.</param>
+        /// <param name="cancellationToken">Cancellation token observed while writing the temporary artifacts.</param>
         /// <param name="logger">Optional logger used to record certificate persistence diagnostics.</param>
         /// <returns>A task that completes after atomic persistence succeeds.</returns>
         public static async Task PersistIssuedCertificateAsync(
@@ -247,8 +253,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles certificate contains dns name for back filler certificate store.
+        /// Determines whether a certificate identifies the generated BackFiller FQDN in either CN or SAN form.
         /// </summary>
+        /// <param name="certificate">Certificate to inspect.</param>
+        /// <param name="expectedDnsName">Generated BackFiller FQDN that must appear in the certificate.</param>
+        /// <returns><see langword="true"/> when the expected DNS name appears in the subject or SAN extension.</returns>
         private static bool CertificateContainsDnsName(X509Certificate2 certificate, string expectedDnsName)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -293,8 +302,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles has server authentication usage for back filler certificate store.
+        /// Determines whether the certificate permits TLS server authentication.
         /// </summary>
+        /// <param name="certificate">Certificate whose EKU extensions are being evaluated.</param>
+        /// <returns>
+        /// <see langword="true"/> when the certificate has no EKU restriction or explicitly contains the TLS server
+        /// authentication OID.
+        /// </returns>
         private static bool HasServerAuthenticationUsage(X509Certificate2 certificate)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -311,8 +325,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build certificate chain for back filler certificate store.
+        /// Attempts to build the certificate chain and returns a human-readable failure reason when it cannot.
         /// </summary>
+        /// <remarks>
+        /// An otherwise valid chain that fails only with <see cref="X509ChainStatusFlags.UntrustedRoot"/> is accepted so
+        /// self-contained test material and environments with incomplete trust stores do not incorrectly block activation.
+        /// </remarks>
+        /// <param name="certificate">Certificate whose chain should be validated.</param>
+        /// <param name="failureReason">Receives a human-readable reason when validation fails.</param>
+        /// <returns><see langword="true"/> when the chain is acceptable for listener activation.</returns>
         private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
         {
             ArgumentNullException.ThrowIfNull(certificate);
@@ -353,8 +374,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build pfx bundle for back filler certificate store.
+        /// Builds a PFX bundle from issued ACME artifacts and the matching locally held private key.
         /// </summary>
+        /// <param name="issueResult">Issued ACME artifacts containing the leaf certificate, chain, and private key PEM.</param>
+        /// <param name="pfxPassword">Password used to protect the exported PFX bundle.</param>
+        /// <returns>PFX bytes ready for persistence.</returns>
+        /// <exception cref="CryptographicException">Thrown when the certificate collection cannot be exported as a PFX bundle.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the private key PEM does not represent a supported key algorithm.</exception>
         private static byte[] BuildPfxBundle(AcmeOrderIssueResult issueResult, string pfxPassword)
         {
             ArgumentNullException.ThrowIfNull(issueResult);
@@ -395,8 +421,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles import certificate private key for back filler certificate store.
+        /// Imports a PEM-encoded certificate private key as the first supported .NET asymmetric algorithm.
         /// </summary>
+        /// <param name="pem">PEM-encoded private key text.</param>
+        /// <returns>An asymmetric algorithm instance that owns the imported key material.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the PEM text is not a supported RSA or ECDSA private key.</exception>
         private static AsymmetricAlgorithm ImportCertificatePrivateKey(string pem)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(pem);
@@ -425,8 +454,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles write file atomically async for back filler certificate store.
+        /// Encodes text certificate content as UTF-8 and writes it with the atomic file-replacement helper.
         /// </summary>
+        /// <param name="tempPath">Temporary same-directory path used for staging the write.</param>
+        /// <param name="targetPath">Final certificate artifact path.</param>
+        /// <param name="content">Text payload to encode as UTF-8.</param>
+        /// <param name="cancellationToken">Cancellation token observed while writing.</param>
+        /// <param name="logger">Optional logger used to record staging and move diagnostics.</param>
+        /// <returns>A task that completes after the encoded payload has been written and moved into place.</returns>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, string content, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -438,8 +473,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles write file atomically async for back filler certificate store.
+        /// Writes one certificate artifact to a temporary file and atomically moves it into place.
         /// </summary>
+        /// <param name="tempPath">Temporary same-directory path used for staging the write.</param>
+        /// <param name="targetPath">Final certificate artifact path.</param>
+        /// <param name="payload">Binary payload to persist.</param>
+        /// <param name="cancellationToken">Cancellation token observed while writing and flushing the temporary file.</param>
+        /// <param name="logger">Optional logger used to record staging and move diagnostics.</param>
+        /// <returns>A task that completes after the payload has been written and moved into place.</returns>
         private static async Task WriteFileAtomicallyAsync(string tempPath, string targetPath, byte[] payload, CancellationToken cancellationToken, ILogger? logger = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(tempPath);
@@ -494,8 +535,10 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles try delete temp file for back filler certificate store.
+        /// Best-effort cleanup for temporary certificate artifacts left behind after persistence attempts.
         /// </summary>
+        /// <param name="tempPath">Temporary artifact path to remove.</param>
+        /// <param name="logger">Optional logger used to record cleanup success or failure.</param>
         private static void TryDeleteTempFile(string tempPath, ILogger? logger = null)
         {
             if (string.IsNullOrWhiteSpace(tempPath))

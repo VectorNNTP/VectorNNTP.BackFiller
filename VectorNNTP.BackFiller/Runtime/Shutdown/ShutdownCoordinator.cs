@@ -35,7 +35,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace VectorNNTP.Backfiller.Runtime.Shutdown
 {
     /// <summary>
-    /// Handles shutdown state transitions and cancellation signaling for graceful and forced termination.
+    /// Coordinates application-level graceful and forced shutdown signaling with explicit state transitions and cancellation tokens.
     /// </summary>
     /// <remarks>
     /// <para>State transitions are monotonic.</para>
@@ -119,57 +119,57 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         // Technical upper bound for CancellationTokenSource.CancelAfter(TimeSpan) on current runtime.
         // This is distinct from operational shutdown limits, which are enforced by ShutdownOptions validation.
         /// <summary>
-        /// Limits maximum grace period for shutdown coordinator.
+        /// Largest delay that can be scheduled safely through <see cref="CancellationTokenSource.CancelAfter(TimeSpan)"/>.
         /// </summary>
         private static readonly TimeSpan MaximumGracePeriod = TimeSpan.FromMilliseconds(int.MaxValue);
 
         /// <summary>
-        /// Stores gate used by shutdown coordinator.
+        /// Serializes shutdown state transitions and associated timestamp/reason bookkeeping.
         /// </summary>
         private readonly object _gate = new();
         /// <summary>
-        /// Stores graceful shutdown started cts used by shutdown coordinator.
+        /// Cancellation source that notifies consumers when cooperative shutdown should begin.
         /// </summary>
         private readonly CancellationTokenSource _gracefulShutdownStartedCts = new();
         /// <summary>
-        /// Stores forced shutdown cts used by shutdown coordinator.
+        /// Cancellation source that notifies consumers when forced shutdown escalation has been reached.
         /// </summary>
         private readonly CancellationTokenSource _forcedShutdownCts = new();
         /// <summary>
-        /// Supplies the logger used by shutdown coordinator.
+        /// Logger receiving callback and disposal race diagnostics during shutdown signaling.
         /// </summary>
         private readonly ILogger<ShutdownCoordinator> _logger;
 
         /// <summary>
-        /// Stores grace period cts used by shutdown coordinator.
+        /// Timer-backed cancellation source that escalates graceful shutdown to forced shutdown when it fires.
         /// </summary>
         private CancellationTokenSource? _gracePeriodCts;
         /// <summary>
-        /// Stores state used by shutdown coordinator.
+        /// Current shutdown coordination state guarded by <see cref="_gate"/>.
         /// </summary>
         private ShutdownState _state = ShutdownState.Running;
         /// <summary>
-        /// Stores graceful shutdown started at utc used by shutdown coordinator.
+        /// UTC timestamp recorded when graceful shutdown first began.
         /// </summary>
         private DateTimeOffset? _gracefulShutdownStartedAtUtc;
         /// <summary>
-        /// Stores forced shutdown at utc used by shutdown coordinator.
+        /// UTC timestamp recorded when forced shutdown was signaled.
         /// </summary>
         private DateTimeOffset? _forcedShutdownAtUtc;
         /// <summary>
-        /// Stores graceful shutdown started timestamp used by shutdown coordinator.
+        /// Monotonic timestamp recorded when graceful shutdown first began.
         /// </summary>
         private long? _gracefulShutdownStartedTimestamp;
         /// <summary>
-        /// Stores forced shutdown timestamp used by shutdown coordinator.
+        /// Monotonic timestamp recorded when forced shutdown was signaled.
         /// </summary>
         private long? _forcedShutdownTimestamp;
         /// <summary>
-        /// Stores graceful shutdown reason used by shutdown coordinator.
+        /// Reason captured for the transition that first initiated graceful shutdown.
         /// </summary>
         private ShutdownReason _gracefulShutdownReason = ShutdownReason.Unknown;
         /// <summary>
-        /// Stores forced shutdown reason used by shutdown coordinator.
+        /// Reason captured for the transition that placed the coordinator into forced shutdown.
         /// </summary>
         private ShutdownReason _forcedShutdownReason = ShutdownReason.Unknown;
 
@@ -384,9 +384,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
                 _gracePeriodCts = timeoutCts;
 
                 _ = timeoutCts.Token.Register(
-                    // <summary>
-                    // Stores state used by shutdown coordinator.
-                    // </summary>
+                    // Escalate to forced shutdown when the grace-period timer fires.
                     static state =>
                     {
                         ((ShutdownCoordinator)state!).SignalForcedShutdownFromGracePeriodTimer();
@@ -541,7 +539,7 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Handles throw if disposed for shutdown coordinator.
+        /// Throws when the coordinator has already completed disposal and can no longer accept graceful-shutdown requests.
         /// </summary>
         private void ThrowIfDisposed()
         {
@@ -549,8 +547,9 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Handles cancel grace period timer safely for shutdown coordinator.
+        /// Cancels the grace-period escalation timer while tolerating timer and disposal races.
         /// </summary>
+        /// <param name="gracePeriodCts">Timer cancellation source to cancel.</param>
         private static void CancelGracePeriodTimerSafely(CancellationTokenSource gracePeriodCts)
         {
             try
@@ -564,8 +563,12 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Handles cancel token source safely for shutdown coordinator.
+        /// Cancels one coordinator-owned token source and records callback or disposal races for diagnostics.
         /// </summary>
+        /// <param name="logger">Logger receiving callback or disposal race diagnostics.</param>
+        /// <param name="cancellationTokenSource">Cancellation source to cancel.</param>
+        /// <param name="name">Logical name of the source used in diagnostics.</param>
+        /// <param name="state">Coordinator state associated with the cancellation attempt.</param>
         private static void CancelTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name, ShutdownState state)
         {
             try
@@ -583,8 +586,11 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         }
 
         /// <summary>
-        /// Handles dispose cancellation token source safely for shutdown coordinator.
+        /// Disposes one coordinator-owned token source while tolerating duplicate-disposal races.
         /// </summary>
+        /// <param name="logger">Logger receiving disposal-race diagnostics.</param>
+        /// <param name="cancellationTokenSource">Cancellation source to dispose.</param>
+        /// <param name="name">Logical name of the source used in diagnostics.</param>
         private static void DisposeCancellationTokenSourceSafely(ILogger logger, CancellationTokenSource cancellationTokenSource, string name)
         {
             try
@@ -597,39 +603,50 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             }
         }
 
+        /// <summary>
+        /// Logs that one cancellation callback threw while a coordinator token source was being canceled.
+        /// </summary>
+        /// <param name="logger">Logger receiving the callback-failure event.</param>
+        /// <param name="exception">Exception recorded from the callback aggregate.</param>
+        /// <param name="cancellationTokenSourceName">Logical name of the token source being canceled.</param>
+        /// <param name="shutdownState">Coordinator state associated with the cancellation attempt.</param>
         [LoggerMessage(
             EventId = 1200,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
-        // <summary>
-        // Emits the cancellation callback failed log event for shutdown coordinator.
-        // </summary>
         private static partial void LogCancellationCallbackFailed(
             ILogger logger,
             Exception exception,
             string cancellationTokenSourceName,
             ShutdownState shutdownState);
 
+        /// <summary>
+        /// Logs that cancellation raced with disposal and was skipped because the target token source was already disposed.
+        /// </summary>
+        /// <param name="logger">Logger receiving the skipped-cancellation event.</param>
+        /// <param name="exception">Disposed-object exception recorded for diagnostics.</param>
+        /// <param name="cancellationTokenSourceName">Logical name of the token source that had already been disposed.</param>
+        /// <param name="shutdownState">Coordinator state associated with the skipped cancellation.</param>
         [LoggerMessage(
             EventId = 1201,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
-        // <summary>
-        // Emits the cancellation skipped already disposed log event for shutdown coordinator.
-        // </summary>
         private static partial void LogCancellationSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,
             string cancellationTokenSourceName,
             ShutdownState shutdownState);
 
+        /// <summary>
+        /// Logs that token-source disposal was attempted after another path had already disposed the same instance.
+        /// </summary>
+        /// <param name="logger">Logger receiving the duplicate-disposal event.</param>
+        /// <param name="exception">Disposed-object exception recorded for diagnostics.</param>
+        /// <param name="cancellationTokenSourceName">Logical name of the token source involved in the race.</param>
         [LoggerMessage(
             EventId = 1202,
             Level = LogLevel.Debug,
             Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
-        // <summary>
-        // Emits the disposal skipped already disposed log event for shutdown coordinator.
-        // </summary>
         private static partial void LogDisposalSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,

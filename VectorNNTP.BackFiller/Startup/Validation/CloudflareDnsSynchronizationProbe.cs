@@ -184,6 +184,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="addressKey">Address key identifying record type and content.</param>
         /// <param name="recordTemplates">Per-type record templates used to preserve relevant record properties.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <remarks>
+        /// When an existing record of the same type is present, its proxied and TTL settings are reused for the new record.
+        /// </remarks>
         private static async Task AddDnsRecordAsync(
             ICloudflareDnsFacade dnsFacade,
             string zoneId,
@@ -248,10 +251,10 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Builds a deduplicated desired DNS-address key set from canonical bind addresses.
+        /// Builds the deduplicated desired A/AAAA record set from canonical bind addresses.
         /// </summary>
         /// <param name="bindAddresses">Canonical runtime bind-address set.</param>
-        /// <returns>Desired DNS-address key set.</returns>
+        /// <returns>Desired DNS-address key set keyed by record type plus parsed IP-address semantics.</returns>
         private static HashSet<DnsAddressKey> BuildDesiredAddressKeys(IReadOnlyList<IPAddress> bindAddresses)
         {
             ArgumentNullException.ThrowIfNull(bindAddresses);
@@ -276,7 +279,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// Builds a map of existing records keyed by parsed address semantics.
         /// </summary>
         /// <param name="existingAddressRecords">Existing Cloudflare A/AAAA records for the synchronized FQDN.</param>
-        /// <returns>Map of address key to record list.</returns>
+        /// <returns>Map of address key to all existing records that resolve to that key.</returns>
+        /// <remarks>
+        /// Records whose content cannot be parsed into the expected address family are ignored because they cannot
+        /// participate safely in semantic reconciliation.
+        /// </remarks>
         private static Dictionary<DnsAddressKey, List<CloudflareDnsRecordInfo>> BuildExistingRecordMap(
             IReadOnlyList<CloudflareDnsRecordInfo> existingAddressRecords)
         {
@@ -304,10 +311,13 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Builds a per-type template map from existing records to preserve TTL/proxy behavior on added records.
+        /// Builds a per-type template map from existing records to preserve TTL and proxy behavior on added records.
         /// </summary>
         /// <param name="existingAddressRecords">Existing Cloudflare A/AAAA records for the synchronized FQDN.</param>
         /// <returns>Per-type template map.</returns>
+        /// <remarks>
+        /// The first existing record encountered for each type becomes the template for later additions of that type.
+        /// </remarks>
         private static Dictionary<DnsRecordType, CloudflareDnsRecordTemplate> BuildRecordTemplates(
             IReadOnlyList<CloudflareDnsRecordInfo> existingAddressRecords)
         {
@@ -331,6 +341,10 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="existingRecordsByAddress">Existing records keyed by address semantics.</param>
         /// <param name="desiredAddresses">Desired canonical address keys.</param>
         /// <returns>Record deletion list.</returns>
+        /// <remarks>
+        /// When duplicates exist for one desired address, the lexicographically smallest record identifier is retained
+        /// and the remaining duplicates are deleted.
+        /// </remarks>
         private static List<CloudflareDnsRecordInfo> BuildDeletionList(
             IReadOnlyDictionary<DnsAddressKey, List<CloudflareDnsRecordInfo>> existingRecordsByAddress,
             IReadOnlySet<DnsAddressKey> desiredAddresses)
@@ -371,6 +385,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="existingRecordsByAddress">Existing records keyed by address semantics.</param>
         /// <param name="desiredAddresses">Desired canonical address keys.</param>
         /// <returns>Address keys requiring record creation.</returns>
+        /// <remarks>
+        /// Desired addresses that already have at least one semantically equivalent record are not re-created.
+        /// </remarks>
         private static List<DnsAddressKey> BuildAdditionList(
             IReadOnlyDictionary<DnsAddressKey, List<CloudflareDnsRecordInfo>> existingRecordsByAddress,
             IReadOnlySet<DnsAddressKey> desiredAddresses)
@@ -397,6 +414,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="content">Cloudflare DNS content string.</param>
         /// <param name="key">Built key when parse succeeds.</param>
         /// <returns><see langword="true"/> when a valid A/AAAA key could be created.</returns>
+        /// <remarks>
+        /// The parsed IP address must match the supplied DNS record type's address family.
+        /// </remarks>
         private static bool TryBuildAddressKey(
             DnsRecordType recordType,
             string content,
@@ -458,7 +478,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Immutable DNS-address comparison key using record type plus parsed IP address semantics.
+        /// Immutable DNS-address comparison key using record type plus parsed IP-address semantics.
         /// </summary>
         /// <param name="RecordType">Cloudflare DNS record type.</param>
         /// <param name="Address">Parsed IP address value.</param>
@@ -502,6 +522,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </summary>
     /// <remarks>
     /// Enables deterministic tests for reconciliation logic by decoupling API transport details from synchronization policy.
+    /// Implementations are expected to preserve Cloudflare API cancellation and to dispose any underlying transport resources.
     /// </remarks>
     internal interface ICloudflareDnsFacade : IAsyncDisposable
     {
@@ -557,6 +578,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     /// </summary>
     /// <remarks>
     /// Maps Cloudflare API responses to synchronization models and converts provider error payloads to sanitized failure text.
+    /// The underlying client is owned by the facade and released through <see cref="DisposeAsync"/>.
     /// </remarks>
     internal sealed class CloudflareDnsFacade : ICloudflareDnsFacade
     {
@@ -569,6 +591,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// Initializes the facade with one Cloudflare API token.
         /// </summary>
         /// <param name="apiToken">Cloudflare API token.</param>
+        /// <exception cref="ArgumentException"><paramref name="apiToken"/> is <see langword="null"/>, empty, or whitespace.</exception>
         public CloudflareDnsFacade(string apiToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(apiToken);
@@ -600,6 +623,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="fqdn">FQDN to query.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Retrieved Cloudflare records.</returns>
+        /// <exception cref="ArgumentException"><paramref name="zoneId"/> or <paramref name="fqdn"/> is <see langword="null"/>, empty, or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">Cloudflare returns an unsuccessful or structurally invalid DNS-record response.</exception>
         public async Task<IReadOnlyList<CloudflareDnsRecordInfo>> GetDnsRecordsAsync(string zoneId, string fqdn, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
@@ -642,6 +667,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="ttl">Optional DNS TTL.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentException"><paramref name="zoneId"/> or <paramref name="fqdn"/> is <see langword="null"/>, empty, or whitespace.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="address"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Cloudflare reports that record creation was unsuccessful.</exception>
         public async Task AddDnsRecordAsync(
             string zoneId,
             string fqdn,
@@ -681,6 +709,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="recordId">Record identifier.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentException"><paramref name="zoneId"/> or <paramref name="recordId"/> is <see langword="null"/>, empty, or whitespace.</exception>
+        /// <exception cref="InvalidOperationException">Cloudflare reports that record deletion was unsuccessful.</exception>
         public async Task DeleteDnsRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
@@ -697,9 +727,9 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         }
 
         /// <summary>
-        /// Disposes underlying Cloudflare client resources.
+        /// Disposes the owned Cloudflare client.
         /// </summary>
-        /// <returns>A completed asynchronous dispose operation.</returns>
+        /// <returns>A completed asynchronous dispose operation wrapping synchronous client disposal.</returns>
         public ValueTask DisposeAsync()
         {
             _client.Dispose();

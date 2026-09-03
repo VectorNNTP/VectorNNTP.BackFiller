@@ -18,23 +18,23 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal sealed partial class RabbitMqConnectionManager : IAsyncDisposable
     {
         /// <summary>
-        /// Stores options used by rabbit mq connection manager.
+        /// Validated RabbitMQ runtime options that drive connection and recovery behavior.
         /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
         /// <summary>
-        /// Stores connection name used by rabbit mq connection manager.
+        /// Client-provided connection name exposed in broker diagnostics.
         /// </summary>
         private readonly string _connectionName;
         /// <summary>
-        /// Stores connector used by rabbit mq connection manager.
+        /// Connector abstraction responsible for opening new broker connections.
         /// </summary>
         private readonly IRabbitMqBrokerConnector _connector;
         /// <summary>
-        /// Stores shutdown coordinator used by rabbit mq connection manager.
+        /// Application shutdown coordinator that requests graceful or forced stop.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
         /// <summary>
-        /// Stores time provider used by rabbit mq connection manager.
+        /// Unified time provider used for connection timestamps.
         /// </summary>
         private readonly TimeProvider _timeProvider;
         /// <summary>
@@ -42,65 +42,65 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private readonly ILogger<RabbitMqConnectionManager> _logger;
         /// <summary>
-        /// Stores state gate used by rabbit mq connection manager.
+        /// Gate that serializes connect, recover, and dispose transitions.
         /// </summary>
         private readonly SemaphoreSlim _stateGate = new(1, 1);
         /// <summary>
-        /// Stores recovery signal used by rabbit mq connection manager.
+        /// Signal used to wake the background recovery loop when reconnect work is queued.
         /// </summary>
         private readonly SemaphoreSlim _recoverySignal = new(0, int.MaxValue);
         /// <summary>
-        /// Stores shutdown cts used by rabbit mq connection manager.
+        /// Session-wide cancellation source for recovery-loop and shutdown coordination.
         /// </summary>
         private readonly CancellationTokenSource _shutdownCts = new();
 
         /// <summary>
-        /// Stores connection used by rabbit mq connection manager.
+        /// Current live broker connection, if one has been established.
         /// </summary>
         private IRabbitMqBrokerConnection? _connection;
         /// <summary>
-        /// Stores recovery task used by rabbit mq connection manager.
+        /// Background recovery loop task started after the initial connect.
         /// </summary>
         private Task? _recoveryTask;
         /// <summary>
-        /// Stores graceful shutdown registration used by rabbit mq connection manager.
+        /// Registration for graceful-shutdown notifications.
         /// </summary>
         private IDisposable? _gracefulShutdownRegistration;
         /// <summary>
-        /// Stores forced shutdown registration used by rabbit mq connection manager.
+        /// Registration for forced-shutdown notifications.
         /// </summary>
         private IDisposable? _forcedShutdownRegistration;
 
         /// <summary>
-        /// Stores state used by rabbit mq connection manager.
+        /// Observable RabbitMQ infrastructure state reported to other startup and runtime components.
         /// </summary>
         private volatile RabbitMqInfrastructureState _state = RabbitMqInfrastructureState.NotInitialized;
         /// <summary>
-        /// Stores dispose requested used by rabbit mq connection manager.
+        /// Indicates that shutdown has started and no new connect work should begin.
         /// </summary>
         private volatile bool _disposeRequested;
         /// <summary>
-        /// Stores recovery queued used by rabbit mq connection manager.
+        /// Single-bit flag that coalesces concurrent recovery requests.
         /// </summary>
         private int _recoveryQueued;
         /// <summary>
-        /// Stores recovery attempt used by rabbit mq connection manager.
+        /// Number of the current application-managed recovery attempt sequence.
         /// </summary>
         private int _recoveryAttempt;
         /// <summary>
-        /// Stores consecutive client recovery errors used by rabbit mq connection manager.
+        /// Count of consecutive automatic-recovery errors reported by RabbitMQ.Client.
         /// </summary>
         private int _consecutiveClientRecoveryErrors;
         /// <summary>
-        /// Stores connection generation used by rabbit mq connection manager.
+        /// Monotonic generation number incremented each time a new live connection is installed.
         /// </summary>
         private long _connectionGeneration;
         /// <summary>
-        /// Stores topology initialized used by rabbit mq connection manager.
+        /// Indicates whether topology declaration has completed for the current connection lifecycle.
         /// </summary>
         private volatile bool _topologyInitialized;
         /// <summary>
-        /// Stores last connected at utc used by rabbit mq connection manager.
+        /// UTC timestamp of the most recent successful connection establishment.
         /// </summary>
         private DateTimeOffset? _lastConnectedAtUtc;
 
@@ -136,7 +136,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Returns the current RabbitMQ lifecycle state.
+        /// Gets the current RabbitMQ lifecycle state.
         /// </summary>
         internal RabbitMqInfrastructureState State => _state;
 
@@ -146,15 +146,18 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         internal bool IsReady => _state is RabbitMqInfrastructureState.TopologyReady or RabbitMqInfrastructureState.Connected;
 
         /// <summary>
-        /// Returns the current monotonic RabbitMQ connection generation.
+        /// Gets the current monotonic RabbitMQ connection generation.
         /// </summary>
-        /// <param name="_connectionGeneration">The _connectionGeneration value.</param>
-        /// <returns>The operation result.</returns>
+        /// <value>The generation assigned to the current live connection, or zero before the first connect.</value>
         internal long ConnectionGeneration => Interlocked.Read(ref _connectionGeneration);
 
         /// <summary>
-        /// Raised after a RabbitMQ connection is established or replaced.
+        /// Raised after a new broker connection generation becomes active.
         /// </summary>
+        /// <remarks>
+        /// The first successful connect also raises this event with <c>IsReplacement</c> set to <see langword="false"/>.
+        /// Later generations set <c>IsReplacement</c> to <see langword="true"/> so consumers can recreate stale channels.
+        /// </remarks>
         internal event EventHandler<RabbitMqConnectionReplacedEventArgs>? ConnectionReplaced;
 
         /// <summary>
@@ -191,7 +194,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Marks the connection as topology-ready after topology declaration completes.
+        /// Marks the current connection generation as ready for topology-dependent operations.
         /// </summary>
         internal void MarkTopologyReady()
         {
@@ -204,13 +207,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Creates a dedicated owned channel lease for one logical owner.
+        /// Creates a dedicated channel lease bound to the current connection generation.
         /// </summary>
-        /// <param name="owner">Logical owner name for diagnostics.</param>
-        /// <param name="cancellationToken">Channel-creation cancellation token.</param>
-        /// <param name="enablePublisherConfirmations">Whether publisher confirmations should be enabled on the created channel.</param>
-        /// <returns>Independently owned channel lease.</returns>
-        /// <typeparam name="RabbitMqOwnedChannel">The RabbitMqOwnedChannel type parameter.</typeparam>
+        /// <param name="owner">Logical owner name used for diagnostics.</param>
+        /// <param name="cancellationToken">Cancellation token for channel creation.</param>
+        /// <param name="enablePublisherConfirmations"><see langword="true"/> to enable publisher confirmations on the new channel.</param>
+        /// <returns>An independently owned channel lease.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no open connection is currently available.</exception>
         internal async Task<RabbitMqOwnedChannel> CreateOwnedChannelAsync(string owner, CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(owner);
@@ -230,9 +233,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Returns the current connection for topology operations.
+        /// Returns the current open connection for topology operations.
         /// </summary>
-        /// <returns>The current connection when connected.</returns>
+        /// <returns>The current broker connection.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no open connection is available.</exception>
         internal IRabbitMqBrokerConnection GetRequiredConnection()
         {
             IRabbitMqBrokerConnection connection = _connection
@@ -284,7 +288,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles connect core async for rabbit mq connection manager.
+        /// Opens a new broker connection, installs it as the active generation, and notifies listeners.
         /// </summary>
         private async Task ConnectCoreAsync(CancellationToken cancellationToken)
         {
@@ -329,7 +333,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles recovery loop async for rabbit mq connection manager.
+        /// Background loop that performs application-managed reconnect attempts after failures.
         /// </summary>
         private async Task RecoveryLoopAsync()
         {
@@ -403,7 +407,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles queue recovery for rabbit mq connection manager.
+        /// Coalesces and signals a request for application-managed recovery.
         /// </summary>
         private void QueueRecovery(string reason)
         {
@@ -420,7 +424,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles dispose connection async for rabbit mq connection manager.
+        /// Detaches events and disposes the currently installed broker connection, if any.
         /// </summary>
         private async Task DisposeConnectionAsync()
         {
@@ -443,7 +447,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles compute recovery backoff for rabbit mq connection manager.
+        /// Computes the bounded exponential backoff used between reconnect attempts.
         /// </summary>
         private TimeSpan ComputeRecoveryBackoff(int attempt)
         {
@@ -455,7 +459,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles attach connection events for rabbit mq connection manager.
+        /// Attaches connection lifecycle event handlers to a newly installed broker connection.
         /// </summary>
         private void AttachConnectionEvents(IRabbitMqBrokerConnection connection)
         {
@@ -468,7 +472,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles detach connection events for rabbit mq connection manager.
+        /// Detaches lifecycle event handlers from a broker connection before disposal.
         /// </summary>
         private void DetachConnectionEvents(IRabbitMqBrokerConnection connection)
         {
@@ -481,7 +485,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on connection shutdown for rabbit mq connection manager.
+        /// Reacts to broker shutdown notifications by transitioning into reconnecting state and queueing recovery.
         /// </summary>
         private void OnConnectionShutdown(object? sender, ShutdownEventArgs eventArgs)
         {
@@ -497,7 +501,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on callback exception for rabbit mq connection manager.
+        /// Logs callback exceptions surfaced by RabbitMQ.Client without changing ownership state.
         /// </summary>
         private void OnCallbackException(object? sender, CallbackExceptionEventArgs eventArgs)
         {
@@ -505,7 +509,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on connection blocked for rabbit mq connection manager.
+        /// Logs broker-side connection blocking notifications.
         /// </summary>
         private void OnConnectionBlocked(object? sender, ConnectionBlockedEventArgs eventArgs)
         {
@@ -513,7 +517,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on connection unblocked for rabbit mq connection manager.
+        /// Logs broker-side connection unblock notifications.
         /// </summary>
         private void OnConnectionUnblocked(object? sender, AsyncEventArgs eventArgs)
         {
@@ -521,7 +525,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on connection recovery error for rabbit mq connection manager.
+        /// Tracks RabbitMQ.Client automatic-recovery errors and escalates persistent failure back to the application loop.
         /// </summary>
         private void OnConnectionRecoveryError(object? sender, ConnectionRecoveryErrorEventArgs eventArgs)
         {
@@ -536,7 +540,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on recovery succeeded for rabbit mq connection manager.
+        /// Restores the observable state after RabbitMQ.Client automatic recovery succeeds.
         /// </summary>
         private void OnRecoverySucceeded(object? sender, AsyncEventArgs eventArgs)
         {
@@ -548,7 +552,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles on shutdown signaled for rabbit mq connection manager.
+        /// Converts shutdown-coordinator notifications into connection-manager stop state.
         /// </summary>
         private void OnShutdownSignaled(string shutdownType)
         {
@@ -565,7 +569,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles throw if stopping for rabbit mq connection manager.
+        /// Throws when the manager is already stopping and can no longer start new work.
         /// </summary>
         private void ThrowIfStopping()
         {

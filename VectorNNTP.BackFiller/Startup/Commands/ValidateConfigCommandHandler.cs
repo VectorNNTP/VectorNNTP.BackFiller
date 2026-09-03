@@ -90,7 +90,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// </returns>
         /// <remarks>
         /// This method runs structural configuration validators and, when no errors are present, attempts runtime
-        /// snapshot construction to surface canonicalization failures as configuration errors in the same result.
+        /// snapshot construction to surface canonicalization and operational-directory validation failures as
+        /// configuration errors in the same result.
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="configuration"/> is <see langword="null"/>.</exception>
         internal static ConfigurationValidationResult BuildValidateConfigCommandResult(IConfiguration configuration)

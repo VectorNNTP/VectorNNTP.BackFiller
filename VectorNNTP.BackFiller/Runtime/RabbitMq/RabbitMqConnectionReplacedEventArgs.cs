@@ -8,10 +8,10 @@
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Event payload raised when the RabbitMQ connection is established or replaced.
+    /// Event payload published after the connection manager establishes a RabbitMQ connection generation.
     /// </summary>
-    /// <param name="ConnectionGeneration">Monotonic connection generation; increments on every successful connection establishment.</param>
-    /// <param name="IsReplacement">Whether the connection is a replacement for a previously established connection.</param>
+    /// <param name="ConnectionGeneration">Monotonic application-managed generation number assigned to the newly active connection.</param>
+    /// <param name="IsReplacement"><see langword="true"/> when a prior generation existed and consumers may need to recreate stale channels.</param>
     internal sealed record RabbitMqConnectionReplacedEventArgs(
         long ConnectionGeneration,
         bool IsReplacement);

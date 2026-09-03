@@ -21,7 +21,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
     internal sealed partial class MySqlNntpAccountSnapshotProvider
     {
         /// <summary>
-        /// Limits accounts table name for my sql nntp account snapshot provider.
+        /// Authoritative MySQL table name used for BackFiller account snapshot storage and provisioning.
         /// </summary>
         internal const string AccountsTableName = "nntpbackfilleraccounts";
 
@@ -44,7 +44,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;";
 
         /// <summary>
-        /// Limits accounts query for my sql nntp account snapshot provider.
+        /// Parameterized query that loads all account rows assigned to the configured BackFiller server identifier.
         /// </summary>
         private const string AccountsQuery =
             "SELECT " +
@@ -62,36 +62,36 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             "WHERE serverid = @ServerId;";
 
         /// <summary>
-        /// Stores connection string used by my sql nntp account snapshot provider.
+        /// GrabberDB connection string used for production snapshot loading and startup provisioning.
         /// </summary>
         private readonly string _connectionString;
         /// <summary>
-        /// Stores database name used by my sql nntp account snapshot provider.
+        /// Database name extracted from <see cref="_connectionString"/> for startup provisioning.
         /// </summary>
         private readonly string _databaseName;
         /// <summary>
-        /// Stores server id used by my sql nntp account snapshot provider.
+        /// Authoritative BackFiller server identifier used to filter published account rows.
         /// </summary>
         private readonly byte _serverId;
         /// <summary>
-        /// Supplies the logger used by my sql nntp account snapshot provider.
+        /// Logger receiving provisioning, startup-load, and periodic-refresh diagnostics.
         /// </summary>
         private readonly ILogger<MySqlNntpAccountSnapshotProvider> _logger;
         /// <summary>
-        /// Limits query accounts for my sql nntp account snapshot provider.
+        /// Injected account-query delegate so tests can substitute deterministic snapshot sources.
         /// </summary>
         private readonly Func<CancellationToken, Task<List<NntpAccountSnapshot>>> _queryAccounts;
         /// <summary>
-        /// Stores startup provisioning store used by my sql nntp account snapshot provider.
+        /// Startup provisioning boundary that ensures the required database artifacts exist before first load.
         /// </summary>
         private readonly IStartupProvisioningStore _startupProvisioningStore;
 
         /// <summary>
-        /// Stores refresh in progress used by my sql nntp account snapshot provider.
+        /// Interlocked gate preventing overlapping refresh publications.
         /// </summary>
         private int _refreshInProgress;
         /// <summary>
-        /// Stores current snapshot used by my sql nntp account snapshot provider.
+        /// Volatile reference to the most recently published immutable account snapshot for this process.
         /// </summary>
         private volatile NntpAccountSnapshotState _currentSnapshot;
 
@@ -397,7 +397,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         internal sealed class NoOpStartupProvisioningStore : IStartupProvisioningStore
         {
             /// <summary>
-            /// Stores instance used by my sql nntp account snapshot provider.
+            /// Singleton no-op provisioning store used when startup artifact provisioning is intentionally bypassed.
             /// </summary>
             internal static readonly NoOpStartupProvisioningStore Instance = new();
 
@@ -428,11 +428,11 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         private sealed class MySqlStartupProvisioningStore : IStartupProvisioningStore
         {
             /// <summary>
-            /// Stores connection string used by my sql nntp account snapshot provider.
+            /// Production connection string reused for server-level and database-level provisioning operations.
             /// </summary>
             private readonly string _connectionString;
             /// <summary>
-            /// Supplies the logger used by my sql nntp account snapshot provider.
+            /// Logger receiving provisioning failures before initial snapshot loading can proceed.
             /// </summary>
             private readonly ILogger<MySqlNntpAccountSnapshotProvider> _logger;
 
@@ -567,18 +567,18 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         }
 
         /// <summary>
-        /// Emits the startup account-load begin marker for one server identifier.
+        /// Logs that startup provisioning completed far enough for the initial account snapshot load to begin.
         /// </summary>
         /// <param name="logger">Logger receiving the startup load marker.</param>
-        /// <param name="serverId">Server identifier associated with the load attempt.</param>
+        /// <param name="serverId">Server identifier whose accounts are about to be loaded.</param>
         [LoggerMessage(EventId = 2000, Level = LogLevel.Information, Message = "Initial NNTP account load starting for ServerId={ServerId}")]
         private static partial void LogInitialAccountLoadStarting(ILogger logger, byte serverId);
 
         /// <summary>
-        /// Emits the startup account-load completion marker with loaded account count.
+        /// Logs that the initial account snapshot was loaded and published successfully.
         /// </summary>
         /// <param name="logger">Logger receiving the completion marker.</param>
-        /// <param name="serverId">Server identifier associated with the snapshot load.</param>
+        /// <param name="serverId">Server identifier associated with the published snapshot.</param>
         /// <param name="accountCount">Number of account rows loaded into the published snapshot.</param>
         [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Initial NNTP account load succeeded for ServerId={ServerId}; AccountsLoaded={AccountCount}")]
         private static partial void LogInitialAccountLoadSucceeded(ILogger logger, byte serverId, int accountCount);
@@ -624,15 +624,15 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         private static partial void LogProvisioningCreateTableFailed(ILogger logger, string serverTarget, string databaseName, string tableName, Exception exception);
 
         /// <summary>
-        /// Emits the periodic refresh begin marker for one server identifier.
+        /// Logs that one periodic reload cycle has begun for the authoritative account snapshot.
         /// </summary>
         /// <param name="logger">Logger receiving the periodic refresh marker.</param>
-        /// <param name="serverId">Server identifier associated with the refresh operation.</param>
+        /// <param name="serverId">Server identifier whose accounts are being reloaded.</param>
         [LoggerMessage(EventId = 2100, Level = LogLevel.Debug, Message = "Periodic NNTP account refresh starting for ServerId={ServerId}")]
         private static partial void LogPeriodicRefreshStarting(ILogger logger, byte serverId);
 
         /// <summary>
-        /// Emits the periodic refresh completion marker with loaded-account and duration diagnostics.
+        /// Logs that one periodic reload cycle completed and replaced the published account snapshot.
         /// </summary>
         /// <param name="logger">Logger receiving the refresh completion marker.</param>
         /// <param name="serverId">Server identifier associated with the completed refresh.</param>

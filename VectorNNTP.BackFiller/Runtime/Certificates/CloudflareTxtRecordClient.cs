@@ -25,7 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class CloudflareTxtRecordClient : ICloudflareTxtRecordClient, IAsyncDisposable
     {
         /// <summary>
-        /// Stores client used by cloudflare txt record client.
+        /// Underlying Cloudflare client used for TXT-record list, create, and delete operations.
         /// </summary>
         private readonly CloudFlareClient _client;
 
@@ -88,14 +88,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles create txt record async for cloudflare txt record client.
+        /// Creates a TXT record for ACME validation, or reuses an existing record with the same value.
         /// </summary>
-        /// <param name="zoneId">The zoneId value.</param>
-        /// <param name="recordName">The recordName value.</param>
-        /// <param name="recordValue">The recordValue value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
-        /// <typeparam name="string">The string type parameter.</typeparam>
+        /// <param name="zoneId">Cloudflare zone identifier.</param>
+        /// <param name="recordName">Fully qualified TXT record host name.</param>
+        /// <param name="recordValue">TXT value required by the ACME challenge.</param>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operations.</param>
+        /// <returns>The Cloudflare identifier of the created or reused TXT record.</returns>
         public async Task<string> CreateTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneId);
@@ -183,7 +182,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build create failure message for cloudflare txt record client.
+        /// Builds the failure text used when Cloudflare rejects or does not confirm TXT-record creation.
         /// </summary>
         private static string BuildCreateFailureMessage(
             string recordName,
@@ -200,7 +199,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build query failure message for cloudflare txt record client.
+        /// Builds the failure text used when TXT-record reconciliation cannot list the current Cloudflare records.
         /// </summary>
         private static string BuildQueryFailureMessage(
             string zoneId,
@@ -219,7 +218,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build delete failure message for cloudflare txt record client.
+        /// Builds the failure text used when ACME challenge cleanup cannot delete a Cloudflare TXT record.
         /// </summary>
         private static string BuildDeleteFailureMessage(
             string recordId,
@@ -243,7 +242,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles append cloudflare details for cloudflare txt record client.
+        /// Appends common Cloudflare operation metadata to a provider-failure message.
         /// </summary>
         private static void AppendCloudflareDetails(
             StringBuilder message,
@@ -268,7 +267,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles append cloudflare collections for cloudflare txt record client.
+        /// Appends Cloudflare message, error-chain, and timing collections to a provider-failure message.
         /// </summary>
         private static void AppendCloudflareCollections(
             StringBuilder message,

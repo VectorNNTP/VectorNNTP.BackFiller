@@ -10,14 +10,14 @@ using System.Collections.Frozen;
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Default-timezone mapping partial for <see cref="NewsDateParser"/>.
+    /// Supplies the built-in trailing timezone-abbreviation table used during date canonicalization.
     /// </summary>
     internal static partial class NewsDateParser
     {
         /// <summary>
-        /// Builds the default timezone abbreviation mapping table.
+        /// Builds the parser's default case-insensitive timezone-abbreviation map.
         /// </summary>
-        /// <returns>Case-insensitive frozen map from abbreviation to numeric UTC offset.</returns>
+        /// <returns>A frozen dictionary mapping recognized trailing abbreviations to canonical numeric UTC offsets.</returns>
         private static FrozenDictionary<string, string> CreateDefaultTimezoneMappings()
         {
             Dictionary<string, string> d = new(StringComparer.OrdinalIgnoreCase)

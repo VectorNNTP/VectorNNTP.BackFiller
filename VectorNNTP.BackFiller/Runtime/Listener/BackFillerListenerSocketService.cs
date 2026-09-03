@@ -32,37 +32,37 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         ILogger<BackFillerListenerSocketService> logger) : BackgroundService
     {
         /// <summary>
-        /// Stores listen backlog used by back filler listener socket service.
+        /// Pending connection backlog requested for each bound listener socket.
         /// </summary>
         private const int ListenBacklog = 512;
 
         /// <summary>
-        /// Stores runtime options used by back filler listener socket service.
+        /// Validated runtime snapshot that defines listener enablement, bind addresses, and port selection.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
-        /// Stores certificate state used by back filler listener socket service.
+        /// Certificate state that supplies disposable clones of the currently active listener certificate.
         /// </summary>
         private readonly BackFillerCertificateState _certificateState = certificateState ?? throw new ArgumentNullException(nameof(certificateState));
         /// <summary>
-        /// Stores shutdown coordinator used by back filler listener socket service.
+        /// Shutdown coordinator whose tokens stop accept loops and active connection handling.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator = shutdownCoordinator ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
         /// <summary>
-        /// Supplies the logger used by back filler listener socket service.
+        /// Logger receiving listener lifecycle, bind, handshake, and shutdown diagnostics.
         /// </summary>
         private readonly ILogger<BackFillerListenerSocketService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         /// <summary>
-        /// Stores connections gate used by back filler listener socket service.
+        /// Serializes mutations of the active client set during connection open and shutdown.
         /// </summary>
         private readonly object _connectionsGate = new();
         /// <summary>
-        /// Stores active clients used by back filler listener socket service.
+        /// Tracks accepted clients so shutdown can dispose every live connection.
         /// </summary>
         private readonly HashSet<TcpClient> _activeClients = [];
         /// <summary>
-        /// Stores listen sockets used by back filler listener socket service.
+        /// Owns the bound listener sockets created for the configured endpoint set.
         /// </summary>
         private readonly List<Socket> _listenSockets = [];
 
@@ -109,8 +109,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles run accept loop async for back filler listener socket service.
+        /// Accepts inbound TCP connections on one bound listener until shutdown or socket disposal stops the loop.
         /// </summary>
+        /// <param name="listenSocket">Bound listener socket owned by this service.</param>
+        /// <param name="cancellationToken">Token that stops accepting and converts expected socket shutdown into a quiet exit.</param>
+        /// <returns>A task that completes when the accept loop exits for this listener.</returns>
+        /// <remarks>
+        /// Each accepted socket is handed to <see cref="ProcessAcceptedSocketAsync(Socket, CancellationToken)"/> without awaiting it.
+        /// That per-client routine contains its own exception handling so detached tasks do not fault the host.
+        /// </remarks>
         private async Task RunAcceptLoopAsync(Socket listenSocket, CancellationToken cancellationToken)
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -142,8 +149,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles process accepted socket async for back filler listener socket service.
+        /// Wraps one accepted socket in <see cref="TcpClient"/>, performs the TLS handshake, and then idles until disconnect or shutdown.
         /// </summary>
+        /// <param name="acceptedSocket">Freshly accepted socket whose ownership transfers to this routine.</param>
+        /// <param name="cancellationToken">Shutdown-aware token that aborts handshake or idle waiting.</param>
+        /// <returns>A task that completes after the connection has been closed and unregistered.</returns>
         private async Task ProcessAcceptedSocketAsync(Socket acceptedSocket, CancellationToken cancellationToken)
         {
             TcpClient? client = null;
@@ -204,8 +214,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles bind all endpoints for back filler listener socket service.
+        /// Creates, binds, and tracks one listening socket for each resolved endpoint.
         /// </summary>
+        /// <param name="endpoints">Validated endpoint set to bind for inbound listener startup.</param>
         private void BindAllEndpoints(IReadOnlyList<IPEndPoint> endpoints)
         {
             foreach (IPEndPoint endpoint in endpoints)
@@ -219,8 +230,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles build listen endpoints for back filler listener socket service.
+        /// Expands configured bind-address semantics into the concrete endpoint set the listener should bind.
         /// </summary>
+        /// <param name="runtimeOptions">Validated runtime options supplying port and preserved bind-address tokens.</param>
+        /// <returns>Deduplicated endpoint set for listener startup.</returns>
+        /// <remarks>
+        /// An empty configured token set maps to separate IPv4 and IPv6 wildcard endpoints. Explicit wildcard tokens
+        /// (<c>*</c>, <c>Any</c>, <c>0.0.0.0</c>, and <c>::</c>) preserve those same listener semantics while
+        /// non-wildcard tokens bind only their parsed address family.
+        /// </remarks>
         private static IReadOnlyList<IPEndPoint> BuildListenEndpoints(BackFillerRuntimeOptions runtimeOptions)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -281,8 +299,14 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles create bound listen socket for back filler listener socket service.
+        /// Creates one TCP listening socket, applies address-family-specific options, and binds it to the requested endpoint.
         /// </summary>
+        /// <param name="endpoint">Endpoint to bind and start listening on.</param>
+        /// <returns>Bound listening socket whose ownership transfers to the caller.</returns>
+        /// <remarks>
+        /// IPv6 listeners are forced to IPv6-only mode so an explicit IPv4 wildcard listener remains independent.
+        /// If binding or <see cref="Socket.Listen(int)"/> fails, the created socket is disposed before the exception escapes.
+        /// </remarks>
         private static Socket CreateBoundListenSocket(IPEndPoint endpoint)
         {
             ArgumentNullException.ThrowIfNull(endpoint);
@@ -311,8 +335,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles get current server certificate or throw for back filler listener socket service.
+        /// Retrieves a disposable clone of the current listener certificate and verifies that it can perform server authentication.
         /// </summary>
+        /// <returns>Certificate clone that the caller must dispose after completing the handshake.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no active certificate exists or the active certificate lacks a private key.</exception>
         private X509Certificate2 GetCurrentServerCertificateOrThrow()
         {
             X509Certificate2? certificate = _certificateState.GetCurrentCertificateClone() ?? throw new InvalidOperationException("BackFiller listener cannot accept TLS connections because no active certificate is available.");
@@ -326,8 +352,14 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles wait for client disconnect async for back filler listener socket service.
+        /// Reads and discards post-handshake traffic until the peer disconnects or shutdown cancellation is observed.
         /// </summary>
+        /// <param name="sslStream">Authenticated TLS stream for one client connection.</param>
+        /// <param name="cancellationToken">Token that aborts the idle wait during shutdown.</param>
+        /// <returns>A task that completes when the stream reaches EOF or cancellation is requested.</returns>
+        /// <remarks>
+        /// The BackFiller inbound application protocol is not yet defined, so payload bytes are intentionally ignored.
+        /// </remarks>
         private static async Task WaitForClientDisconnectAsync(SslStream sslStream, CancellationToken cancellationToken)
         {
             byte[] buffer = GC.AllocateUninitializedArray<byte>(512);
@@ -343,8 +375,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles register client for back filler listener socket service.
+        /// Adds one accepted client to the active-connection set so coordinated shutdown can dispose it later.
         /// </summary>
+        /// <param name="client">Accepted client now owned by the listener.</param>
         private void RegisterClient(TcpClient client)
         {
             lock (_connectionsGate)
@@ -354,8 +387,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles unregister client for back filler listener socket service.
+        /// Removes one client from the active-connection set after its connection handling has completed.
         /// </summary>
+        /// <param name="client">Client to remove from shutdown tracking.</param>
         private void UnregisterClient(TcpClient client)
         {
             lock (_connectionsGate)
@@ -365,8 +399,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles close listen sockets for back filler listener socket service.
+        /// Disposes every bound listener socket and clears the owned listener collection.
         /// </summary>
+        /// <remarks>
+        /// Individual disposal failures are intentionally suppressed because shutdown should continue closing the remaining sockets.
+        /// </remarks>
         private void CloseListenSockets()
         {
             for (int i = 0; i < _listenSockets.Count; i++)
@@ -384,8 +421,12 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles close active clients for back filler listener socket service.
+        /// Snapshots and disposes every active client connection still tracked by the listener.
         /// </summary>
+        /// <remarks>
+        /// The active set is cleared under the connection gate before disposals run so shutdown does not race repeated cleanup.
+        /// Individual disposal failures are intentionally suppressed.
+        /// </remarks>
         private void CloseActiveClients()
         {
             List<TcpClient> clients;
@@ -408,34 +449,37 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Handles is expected stopping socket error for back filler listener socket service.
+        /// Classifies socket errors that are expected when shutdown interrupts a blocked accept call.
         /// </summary>
+        /// <param name="socketError">Socket error observed from the failed accept operation.</param>
+        /// <param name="cancellationToken">Cancellation token that indicates the listener is stopping.</param>
+        /// <returns><see langword="true"/> when the error is a shutdown side effect that should quietly terminate the loop.</returns>
         private static bool IsExpectedStoppingSocketError(SocketError socketError, CancellationToken cancellationToken)
         {
             return cancellationToken.IsCancellationRequested && socketError is SocketError.OperationAborted or SocketError.Interrupted or SocketError.NotSocket or SocketError.InvalidArgument;
         }
 
         /// <summary>
-        /// Defines ipend point comparer and its back filler listener socket service contract.
+        /// Compares endpoints by address and port so listen-endpoint construction can deduplicate equivalent bindings.
         /// </summary>
         private sealed class IPEndPointComparer : IEqualityComparer<IPEndPoint>
         {
             /// <summary>
-            /// Handles equals for back filler listener socket service.
+            /// Determines whether two endpoints bind the same address and port pair.
             /// </summary>
-            /// <param name="x">The x value.</param>
-            /// <param name="y">The y value.</param>
-            /// <returns>true when the operation succeeds; otherwise false.</returns>
+            /// <param name="x">First endpoint to compare.</param>
+            /// <param name="y">Second endpoint to compare.</param>
+            /// <returns><see langword="true"/> when both endpoints are null or share the same address and port.</returns>
             public bool Equals(IPEndPoint? x, IPEndPoint? y)
             {
                 return ReferenceEquals(x, y) || (x is not null && y is not null && x.Port == y.Port && x.Address.Equals(y.Address));
             }
 
             /// <summary>
-            /// Handles get hash code for back filler listener socket service.
+            /// Produces a hash code compatible with <see cref="Equals(IPEndPoint?, IPEndPoint?)"/>.
             /// </summary>
-            /// <param name="obj">The obj value.</param>
-            /// <returns>The operation result.</returns>
+            /// <param name="obj">Endpoint whose address and port identify one binding target.</param>
+            /// <returns>Hash code derived from the endpoint address and port.</returns>
             public int GetHashCode(IPEndPoint obj)
             {
                 return HashCode.Combine(obj.Address, obj.Port);
@@ -443,62 +487,82 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Emits the listener started log event for back filler listener socket service.
+        /// Logs that listener startup completed and records how many socket bindings were created for the configured port.
         /// </summary>
+        /// <param name="logger">Logger receiving the startup event.</param>
+        /// <param name="listenerCount">Number of distinct listen sockets activated for the current configuration.</param>
+        /// <param name="port">TCP port shared by every activated listener.</param>
         [LoggerMessage(EventId = 2700, Level = LogLevel.Information, Message = "Inbound BackFiller listener started; ListenerCount={ListenerCount}; Port={Port}")]
         private static partial void LogListenerStarted(ILogger logger, int listenerCount, int port);
 
         /// <summary>
-        /// Emits the endpoint bound log event for back filler listener socket service.
+        /// Logs one concrete endpoint binding created during listener startup.
         /// </summary>
+        /// <param name="logger">Logger receiving the bound-endpoint event.</param>
+        /// <param name="endpoint">Local endpoint string accepted by the socket bind.</param>
+        /// <param name="addressFamily">Address family of the bound socket.</param>
         [LoggerMessage(EventId = 2701, Level = LogLevel.Information, Message = "Inbound BackFiller listener bound endpoint {Endpoint} ({AddressFamily})")]
         private static partial void LogEndpointBound(ILogger logger, string endpoint, string addressFamily);
 
         /// <summary>
-        /// Emits the client accepted log event for back filler listener socket service.
+        /// Logs that the accept loop admitted one inbound TCP client for TLS processing.
         /// </summary>
+        /// <param name="logger">Logger receiving the accepted-client event.</param>
+        /// <param name="remoteEndpoint">Remote endpoint reported by the accepted client socket.</param>
         [LoggerMessage(EventId = 2702, Level = LogLevel.Debug, Message = "Inbound BackFiller listener accepted connection from {RemoteEndpoint}")]
         private static partial void LogClientAccepted(ILogger logger, string remoteEndpoint);
 
         /// <summary>
-        /// Emits the tls handshake succeeded log event for back filler listener socket service.
+        /// Logs that one accepted client completed the inbound TLS handshake successfully.
         /// </summary>
+        /// <param name="logger">Logger receiving the handshake-success event.</param>
+        /// <param name="remoteEndpoint">Remote endpoint associated with the negotiated TLS session.</param>
+        /// <param name="thumbprint">Thumbprint of the certificate presented by the listener.</param>
         [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Inbound BackFiller TLS handshake succeeded for {RemoteEndpoint}; Thumbprint={Thumbprint}")]
         private static partial void LogTlsHandshakeSucceeded(ILogger logger, string remoteEndpoint, string thumbprint);
 
         /// <summary>
-        /// Emits the tls handshake failed log event for back filler listener socket service.
+        /// Logs that one accepted client failed the inbound TLS handshake and will be disconnected.
         /// </summary>
+        /// <param name="logger">Logger receiving the handshake-failure event.</param>
+        /// <param name="exception">Handshake exception captured for diagnostics.</param>
         [LoggerMessage(EventId = 2704, Level = LogLevel.Warning, Message = "Inbound BackFiller TLS handshake failed")]
         private static partial void LogTlsHandshakeFailed(ILogger logger, Exception exception);
 
         /// <summary>
-        /// Emits the client processing fault log event for back filler listener socket service.
+        /// Logs that post-accept client processing failed outside the expected shutdown path.
         /// </summary>
+        /// <param name="logger">Logger receiving the client-processing fault event.</param>
+        /// <param name="exception">Unhandled processing exception captured from the client task.</param>
         [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
         private static partial void LogClientProcessingFault(ILogger logger, Exception exception);
 
         /// <summary>
-        /// Emits the connection closed during shutdown log event for back filler listener socket service.
+        /// Logs that a client connection closed while shutdown cancellation was already in progress.
         /// </summary>
+        /// <param name="logger">Logger receiving the shutdown-close event.</param>
+        /// <param name="exception">I/O exception observed while waiting for the connection to close.</param>
         [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
         private static partial void LogConnectionClosedDuringShutdown(ILogger logger, Exception exception);
 
         /// <summary>
-        /// Emits the listener stopping by cancellation log event for back filler listener socket service.
+        /// Logs that the accept loop is stopping because host or shutdown cancellation was signaled.
         /// </summary>
+        /// <param name="logger">Logger receiving the cancellation-stop event.</param>
         [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
         private static partial void LogListenerStoppingByCancellation(ILogger logger);
 
         /// <summary>
-        /// Emits the listener stopped log event for back filler listener socket service.
+        /// Logs that listener shutdown completed after sockets and tracked clients were closed.
         /// </summary>
+        /// <param name="logger">Logger receiving the stop-complete event.</param>
         [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
         /// <summary>
-        /// Emits the listener disabled log event for back filler listener socket service.
+        /// Logs that the inbound listener remains disabled because certificate provisioning is not enabled.
         /// </summary>
+        /// <param name="logger">Logger receiving the disabled-listener event.</param>
         [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
         private static partial void LogListenerDisabled(ILogger logger);
     }

@@ -10,7 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Stores the currently active listener certificate bundle used by runtime consumers.
+    /// Owns the currently active listener certificate bundle published to runtime consumers.
     /// </summary>
     /// <remarks>
     /// Replacing the active bundle disposes the previously published certificate. Callers that need a reusable copy
@@ -19,17 +19,19 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class BackFillerCertificateState : IDisposable
     {
         /// <summary>
-        /// Stores gate used by back filler certificate state.
+        /// Synchronizes publication, cloning, and disposal of the active certificate bundle.
         /// </summary>
         private readonly object _gate = new();
+
         /// <summary>
-        /// Stores current used by back filler certificate state.
+        /// Currently published listener certificate bundle, or <see langword="null"/> when no certificate is active.
         /// </summary>
         private BackFillerCertificateBundle? _current;
 
         /// <summary>
-        /// Gets a value indicating whether a certificate is currently available.
+        /// Gets a value indicating whether a listener certificate is currently published.
         /// </summary>
+        /// <value><see langword="true"/> when <see cref="Publish"/> has installed a bundle that has not yet been cleared.</value>
         internal bool HasCertificate
         {
             get
@@ -42,9 +44,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Publishes a new active certificate bundle and disposes any previously active bundle.
+        /// Publishes a new active certificate bundle and disposes the certificate from any previously active bundle.
         /// </summary>
-        /// <param name="bundle">New certificate bundle.</param>
+        /// <param name="bundle">New listener certificate bundle whose ownership transfers into this state container.</param>
         public void Publish(BackFillerCertificateBundle bundle)
         {
             ArgumentNullException.ThrowIfNull(bundle);
@@ -60,9 +62,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Gets a cloned copy of the currently active certificate, or <see langword="null"/> if unavailable.
+        /// Creates an independent clone of the currently active listener certificate.
         /// </summary>
-        /// <returns>Cloned active certificate.</returns>
+        /// <returns>
+        /// A new <see cref="X509Certificate2"/> instance that the caller owns and must dispose, or
+        /// <see langword="null"/> when no active certificate is available.
+        /// </returns>
         internal X509Certificate2? GetCurrentCertificateClone()
         {
             lock (_gate)
@@ -81,7 +86,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Clears the active bundle and disposes its certificate.
+        /// </summary>
         public void Dispose()
         {
             BackFillerCertificateBundle? previous;
