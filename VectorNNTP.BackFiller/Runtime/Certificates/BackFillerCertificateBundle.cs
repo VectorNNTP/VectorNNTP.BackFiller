@@ -17,7 +17,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// boundaries. Consumers that publish a bundle into shared runtime state must clone the certificate if they need to
     /// keep it beyond the current ownership boundary.
     /// </remarks>
-    /// <param name="Certificate">Loaded listener certificate; private-key presence is validated separately by certificate evaluation.</param>
+    /// <param name="Certificate">Loaded listener certificate, including the private key when loading succeeded.</param>
     /// <param name="SourcePath">PFX path from which <paramref name="Certificate"/> was loaded.</param>
     /// <param name="LoadedAtUtc">UTC timestamp captured after the certificate was loaded into memory.</param>
     internal sealed record BackFillerCertificateBundle(

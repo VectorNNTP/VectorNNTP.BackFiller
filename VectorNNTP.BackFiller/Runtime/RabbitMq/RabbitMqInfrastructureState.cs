@@ -38,7 +38,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         Reconnecting,
 
         /// <summary>
-        /// Connection establishment failed, or recovery failed beyond the configured tolerance.
+        /// Connection establishment or recovery failed beyond the configured tolerance.
         /// </summary>
         Failed,
 

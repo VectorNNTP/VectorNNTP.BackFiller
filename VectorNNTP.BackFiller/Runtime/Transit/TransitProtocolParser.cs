@@ -23,7 +23,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private const int CapabilitiesResponseCode = 101;
 
         /// <summary>
-        /// Maximum unterminated protocol line length checked while the parser is waiting for a line terminator.
+        /// Maximum protocol line length accepted before the parser treats the response as malformed.
         /// </summary>
         private const int MaximumNntpLineLengthBytes = 16 * 1024;
 
@@ -34,7 +34,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="cancellationToken">Cancellation token for the read loop.</param>
         /// <returns>The decoded NNTP line without trailing CRLF.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is <see langword="null"/>.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the stream completes before a full line is available, or an unterminated line exceeds <see cref="MaximumNntpLineLengthBytes"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the stream completes before a full line is available.</exception>
         internal static async ValueTask<string> ReadNntpLineAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, _, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -48,7 +48,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="cancellationToken">Cancellation token for the read loop.</param>
         /// <returns>The decoded NNTP line without trailing CRLF together with the number of consumed bytes.</returns>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="reader"/> is <see langword="null"/>.</exception>
-        /// <exception cref="InvalidOperationException">Thrown when the stream completes before a full line is available, or an unterminated line exceeds <see cref="MaximumNntpLineLengthBytes"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the stream completes before a full line is available.</exception>
         internal static async ValueTask<(string Line, int BytesRead)> ReadNntpLineWithByteCountAsync(PipeReader reader, CancellationToken cancellationToken)
         {
             (string? line, int bytesRead, bool completedWithoutLine) = await ReadNntpLineWithByteCountAndCompletionAsync(reader, cancellationToken).ConfigureAwait(false);
@@ -122,7 +122,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <param name="line">NNTP status line to parse.</param>
         /// <returns>The parsed status code and trailing response text.</returns>
-        /// <exception cref="InvalidOperationException">Thrown when the line is empty, does not begin with a valid NNTP status code, or has a malformed separator after the three-digit code.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the line is empty or does not begin with a valid NNTP status code.</exception>
         internal static (int Code, string ResponseText) ParseStatusCodeAndText(string line)
         {
             if (string.IsNullOrWhiteSpace(line))

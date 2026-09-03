@@ -38,7 +38,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         /// <param name="headers">Parsed header entries in original wire order.</param>
         /// <param name="canonicalValue">Canonical UTC date string when a candidate parses successfully.</param>
         /// <param name="originalValue">Slice of the original winning header value when resolution succeeds.</param>
-        /// <param name="failure">Failure reason reported when no candidate succeeds; the implementation reports <see cref="DateParseFailureReason.ParseFailed"/> after all candidates fail.</param>
+        /// <param name="failure">Failure reason returned by the last candidate parser attempt, or <see cref="DateParseFailureReason.ParseFailed"/> when no candidate succeeds.</param>
         /// <returns><see langword="true"/> when a candidate header produced a canonical value.</returns>
         internal static bool TryGetCanonicalArticleDate(
             ReadOnlyMemory<byte> articleBytes,
