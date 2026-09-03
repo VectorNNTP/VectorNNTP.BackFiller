@@ -1,8 +1,7 @@
 ---
-
 name: documentation
 description: Add and improve accurate XML documentation in the VectorNNTP.BackFiller C# codebase without changing behavior.
----------------------------------------------------------------------------------------------------------------------------
+---
 
 # Documentation Skill
 
@@ -38,11 +37,11 @@ Do not document a symbol merely because it is technically documentable or becaus
 
 The goal is useful engineering-contract documentation, not XML tag counting or warning suppression.
 
-Use concise `<summary>` text and accurate `<param>`, `<returns>`, `<value>`, and `<typeparam>` elements.
+Use concise <summary> text and accurate <param>, <returns>, <value>, and <typeparam> elements.
 
-Use `<remarks>` for substantive context such as architectural intent, lifecycle, invariants, concurrency, cancellation, resource ownership, validation rules, failure behavior, or other information that materially helps maintainers.
+Use <remarks> for substantive context such as architectural intent, lifecycle, invariants, concurrency, cancellation, resource ownership, validation rules, failure behavior, or other information that materially helps maintainers.
 
-Use `<exception>` only when the documented member establishes a meaningful thrown-exception contract.
+Use <exception> only when the documented member establishes a meaningful thrown-exception contract.
 
 Distinguish carefully between:
 
@@ -52,7 +51,7 @@ Distinguish carefully between:
 * exceptions logged or otherwise recorded;
 * failures represented through return values or result objects.
 
-Use `<see cref>`, `<seealso>`, and `<c>` when references genuinely clarify the contract. Do not add references merely for decoration.
+Use <see cref>, <seealso>, and <c> when references genuinely clarify the contract. Do not add references merely for decoration.
 
 For generated logging or other source-generated/framework declarations:
 
@@ -87,7 +86,7 @@ Documentation passes are documentation-only and scope-limited:
 * do not alter analyzer settings;
 * do not modify tests or related source files.
 
-Never add boilerplate, warning suppressions, `NoWarn`, exclusions, or placeholder text.
+Never add boilerplate, warning suppressions, NoWarn, exclusions, or placeholder text.
 
 If a code, architecture, logging, performance, or design issue is discovered, leave it untouched and report it separately.
 
@@ -95,14 +94,14 @@ If a code, architecture, logging, performance, or design issue is discovered, le
 
 Ensure:
 
-* `<summary>` is used for primary descriptions;
-* `<param>` refers only to actual parameters;
-* `<returns>` is used only for methods/functions that return values;
-* `<value>` is used for properties/indexers;
-* `<typeparam>` refers only to actual generic parameters;
-* `<exception>` describes actual documented exception contracts;
-* `<remarks>` contains substantive additional context;
-* `<seealso>` is used only where genuinely useful;
+* <summary> is used for primary descriptions;
+* <param> refers only to actual parameters;
+* <returns> is used only for methods/functions that return values;
+* <value> is used for properties/indexers;
+* <typeparam> refers only to actual generic parameters;
+* <exception> describes actual documented exception contracts;
+* <remarks> contains substantive additional context;
+* <seealso> is used only where genuinely useful;
 * XML is well-formed;
 * tags are not duplicated;
 * references point to real members/types/parameters;
@@ -132,14 +131,13 @@ Report:
 * members newly documented;
 * existing members whose documentation was meaningfully improved;
 * documentation changes by tag:
-
-  * `<summary>`
-  * `<param>`
-  * `<returns>`
-  * `<exception>`
-  * `<remarks>`
-  * `<value>`
-  * `<seealso>`
+  * <summary>
+  * <param>
+  * <returns>
+  * <exception>
+  * <remarks>
+  * <value>
+  * <seealso>
 * documentation intentionally left unchanged and why;
 * pre-existing code/design/logging/performance concerns discovered but intentionally left untouched;
 * build result;
