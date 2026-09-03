@@ -513,47 +513,38 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 bool isAuthInfoUser = command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase);
                 bool isAuthInfoPass = command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase);
                 bool shouldRedact = redactCredentials || isAuthInfoUser || isAuthInfoPass;
-                string commandForLog = isAuthInfoUser ? "AUTHINFO USER ***"
-                    : isAuthInfoPass ? "AUTHINFO PASS ***"
-                    : command;
 
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    if (shouldRedact && isAuthInfoUser)
+                    if (shouldRedact)
                     {
+                        string redactedCommand = isAuthInfoUser
+                            ? "AUTHINFO USER ***"
+                            : isAuthInfoPass
+                                ? "AUTHINFO PASS ***"
+                                : "REDACTED";
+
                         if (string.IsNullOrWhiteSpace(context.MessageId))
                         {
-                            _logger.LogDebug("TX: AUTHINFO USER ***");
+                            _logger.LogDebug("TX: {Command}", redactedCommand);
                         }
                         else
                         {
                             _logger.LogDebug(
-                                "TX: AUTHINFO USER *** MessageId={MessageId}",
-                                context.MessageId);
-                        }
-                    }
-                    else if (shouldRedact && isAuthInfoPass)
-                    {
-                        if (string.IsNullOrWhiteSpace(context.MessageId))
-                        {
-                            _logger.LogDebug("TX: AUTHINFO PASS ***");
-                        }
-                        else
-                        {
-                            _logger.LogDebug(
-                                "TX: AUTHINFO PASS *** MessageId={MessageId}",
+                                "TX: {Command} MessageId={MessageId}",
+                                redactedCommand,
                                 context.MessageId);
                         }
                     }
                     else if (string.IsNullOrWhiteSpace(context.MessageId))
                     {
-                        _logger.LogDebug("TX: {Command}", commandForLog);
+                        _logger.LogDebug("TX: {Command}", command);
                     }
                     else
                     {
                         _logger.LogDebug(
                             "TX: {Command} MessageId={MessageId}",
-                            commandForLog,
+                            command,
                             context.MessageId);
                     }
                 }
