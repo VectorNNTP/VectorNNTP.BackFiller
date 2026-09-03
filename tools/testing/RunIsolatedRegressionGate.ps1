@@ -3,9 +3,9 @@ param(
 	[string]$ProjectPath = 'VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj',
 	[string]$WatchdogPath = 'tools/testing/TransitPublisherSuiteWatchdog.v2.ps1',
 	[string[]]$RequestedClasses = @(
-		'VectorNNTP.BackFiller.Tests.TransitConnectionTests',
-		'VectorNNTP.BackFiller.Tests.TransitPublisherTests',
-		'VectorNNTP.BackFiller.Tests.TransitConnectionDisposalDiagnosticsTests'
+		'VectorNNTP.BackFiller.Tests.Runtime.Transit.TransitConnectionNegotiationTests',
+		'VectorNNTP.BackFiller.Tests.Runtime.Transit.TransitPublisherTests',
+		'VectorNNTP.BackFiller.Tests.Runtime.Transit.TransitConnectionDisposalDiagnosticsTests'
 	),
 	[string[]]$RequestedTests = @(),
 	[int]$InactivitySeconds = 45,
