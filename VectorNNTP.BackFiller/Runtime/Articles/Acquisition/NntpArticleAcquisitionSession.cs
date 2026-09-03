@@ -510,10 +510,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             await _commandWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                bool isAuthInfoUser = command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase);
+                bool isAuthInfoPass = command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase);
+                bool shouldRedact = redactCredentials || isAuthInfoUser || isAuthInfoPass;
+                string commandForLog = isAuthInfoUser ? "AUTHINFO USER ***"
+                    : isAuthInfoPass ? "AUTHINFO PASS ***"
+                    : command;
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    if (redactCredentials &&
-                        command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
+                    if (shouldRedact && isAuthInfoUser)
                     {
                         if (string.IsNullOrWhiteSpace(context.MessageId))
                         {
@@ -526,8 +532,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                                 context.MessageId);
                         }
                     }
-                    else if (redactCredentials &&
-                             command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
+                    else if (shouldRedact && isAuthInfoPass)
                     {
                         if (string.IsNullOrWhiteSpace(context.MessageId))
                         {
@@ -542,13 +547,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     }
                     else if (string.IsNullOrWhiteSpace(context.MessageId))
                     {
-                        _logger.LogDebug("TX: {Command}", command);
+                        _logger.LogDebug("TX: {Command}", commandForLog);
                     }
                     else
                     {
                         _logger.LogDebug(
                             "TX: {Command} MessageId={MessageId}",
-                            command,
+                            commandForLog,
                             context.MessageId);
                     }
                 }
