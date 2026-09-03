@@ -336,8 +336,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             _ = await authInfoUserObserved.Task.ConfigureAwait(false);
             shutdownCancellation.Cancel();
 
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await initializeTask.ConfigureAwait(false)).ConfigureAwait(false);
-            _ = allowServerCleanup.TrySetResult(true);
+            try
+            {
+                _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await initializeTask.ConfigureAwait(false)).ConfigureAwait(false);
+            }
+            finally
+            {
+                _ = allowServerCleanup.TrySetResult(true);
+            }
 
             Assert.DoesNotContain(
                 loggerProvider.Entries,
