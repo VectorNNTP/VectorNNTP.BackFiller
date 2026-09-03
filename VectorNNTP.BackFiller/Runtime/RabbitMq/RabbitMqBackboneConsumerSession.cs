@@ -91,7 +91,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private bool _settlementAdmissionAbandoned;
         /// <summary>
-        /// Stores disposed used by rabbit mq backbone consumer session.
+        /// Indicates that disposal has started and the session must reject further lifecycle work.
         /// </summary>
         private bool _disposed;
         /// <summary>
