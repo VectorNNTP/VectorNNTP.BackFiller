@@ -510,28 +510,42 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             await _commandWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                bool isAuthInfoUser = command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase);
+                bool isAuthInfoPass = command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase);
+                bool shouldRedact = redactCredentials || isAuthInfoUser || isAuthInfoPass;
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    string safeCommand = command;
-                    if (redactCredentials)
+                    if (shouldRedact)
                     {
-                        if (command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
+                        string redactedCommand = isAuthInfoUser
+                            ? "AUTHINFO USER ***"
+                            : isAuthInfoPass
+                                ? "AUTHINFO PASS ***"
+                                : "REDACTED";
+
+                        if (string.IsNullOrWhiteSpace(context.MessageId))
                         {
-                            safeCommand = "AUTHINFO USER ***";
+                            _logger.LogDebug("TX: {Command}", redactedCommand);
                         }
-                        else if (command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
+                        else
                         {
-                            safeCommand = "AUTHINFO PASS ***";
+                            _logger.LogDebug(
+                                "TX: {Command} MessageId={MessageId}",
+                                redactedCommand,
+                                context.MessageId);
                         }
                     }
-
-                    if (string.IsNullOrWhiteSpace(context.MessageId))
+                    else if (string.IsNullOrWhiteSpace(context.MessageId))
                     {
-                        _logger.LogDebug("TX: {Command}", safeCommand);
+                        _logger.LogDebug("TX: {Command}", command);
                     }
                     else
                     {
-                        _logger.LogDebug("TX: {Command} MessageId={MessageId}", safeCommand, context.MessageId);
+                        _logger.LogDebug(
+                            "TX: {Command} MessageId={MessageId}",
+                            command,
+                            context.MessageId);
                     }
                 }
 
