@@ -786,7 +786,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             string messageId = "<msg-response-wins@example.com>";
             byte[] payload = [(byte)'R', (byte)'\n'];
 
-            TaskCompletionSource responseCorrelated = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource disposeStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
@@ -804,7 +803,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
 
                 await FakeTakethisServer.WriteLineAsync(stream, $"239 {messageId} transferred");
-                _ = responseCorrelated.TrySetResult();
                 await disposeStarted.Task.WaitAsync(cancellationToken);
 
                 string quit = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
@@ -821,15 +819,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             Task<TransitPublishResult> publishTask = connection.SubmitTakethisAsync(messageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
 
-            using CancellationTokenSource responseTimeout = new(TimeSpan.FromSeconds(5));
-            await responseCorrelated.Task.WaitAsync(responseTimeout.Token);
+            using CancellationTokenSource publishTimeout = new(TimeSpan.FromSeconds(5));
+            TransitPublishResult result = await publishTask.WaitAsync(publishTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
 
             Task disposeTask = connection.DisposeAsync().AsTask();
             _ = disposeStarted.TrySetResult();
-
-            TransitPublishResult result = await publishTask;
-            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
-            Assert.Equal(239, result.ResponseCode);
 
             using CancellationTokenSource disposeTimeout = new(TimeSpan.FromSeconds(5));
             await disposeTask.WaitAsync(disposeTimeout.Token);
