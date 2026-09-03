@@ -1,95 +1,51 @@
-# Copilot Instructions
+# VectorNNTP.BackFiller Copilot Instructions
 
-## Project Guidelines
-- User/project coding standard: every documentable C# symbol (regardless of accessibility) must have meaningful XML documentation comments; enforce this especially in Program.Validation.cs.
-- Preferred startup architecture: no expensive, irreversible, or externally visible operations before configuration and startup validation pass; flow should be bind -> validate -> canonicalize runtime snapshot -> directory validation -> dependency validation -> DI/service startup.
-- Runtime listener creation must explicitly map null/empty BackFiller:BindAddress to independent wildcard endpoints (0.0.0.0 and ::) rather than relying on implicit framework behavior or dual-stack defaults. BindAddress DNS derivation must mirror listener wildcard semantics: '*', 'Any', '0.0.0.0', and '::' are wildcard indicators (never published directly); derive DNS addresses by enumerating local interfaces with family-aware rules and exclude loopback/unspecified/link-local/multicast. For wildcard BindAddress semantics, '*' and 'Any' must be treated as wildcard tokens (not parsed as IPs); wildcard DNS desired addresses must be derived from local network interfaces directly (no hostname DNS resolution), include eligible private/public IPv4 and global/unicast IPv6 addresses, and exclude loopback/unspecified/wildcard/link-local addresses.
-- For dual-stack wildcard binds, runtime listener implementation should explicitly configure IPv6-only behavior (IPV6_V6ONLY) to enforce the intended independent IPv4 and IPv6 endpoint model, rather than relying on OS defaults.
-- Networking runtime should explicitly configure IPv6 dual-stack behavior (IPv6Only/DualMode) so IPv4 and IPv6 listener semantics are deterministic and match documented independent endpoints.
-- Cloudflare validation is mandatory even when BackFiller:LetsEncrypt:Enabled is false, because DNS/FQDN registration/testing depends on Cloudflare independently of ACME issuance. Keep explicit regression coverage for LetsEncrypt Enabled=false conditional behavior: ACME-specific settings are ignored while Cloudflare settings remain required.
-- Prefer a single immutable startup configuration object produced by bind->validate->normalize/derive, containing validated options plus canonical derived values (e.g., FQDN and directories), to prevent divergence between validator and runtime calculations.
-- Avoid new DI abstractions solely to make startup-validation tests mockable when the implementation is still simple; treat that as potential over-engineering.
-- When DomainNames is not authoritative for certificate identity, tests must clearly reflect that they cover syntax/validation contract only, not identity selection behavior.
-- When adding validator tests, only add cross-setting/coherence tests for constraints explicitly defined by production contracts; do not invent new relationships in tests.
-- For validator tests, prefer asserting absence of error-severity diagnostics (Assert.DoesNotContain with Severity==Error) over Assert.Empty when warnings may be legitimate and should remain distinguishable from invalid states.
-- Be cautious with shared global state in tests; avoid per-test mutation of static Program state where possible and prefer a dedicated test setup/reset mechanism when initialization mutates global state.
-- Expect immediate implementation execution with concrete code changes, not planning-only responses. Execute plans fully without permission prompts between investigation/implementation steps, stopping only at explicitly defined failure or stop gates.
-- Validate configuration once, canonicalize once, and use the validated runtime snapshot instead of rebinding/revalidating raw IConfiguration later.
-- When a user reports a validation false negative, improve diagnostics and probe logic instead of assuming environment mismatch.
-- For shutdown documentation, describe layered deadlines as application drain deadline, Generic Host cancellation deadline, and systemd handles process termination deadline. Document that cancellation is signaled, services should stop promptly, non-cooperative work may continue, and external supervisor is final hard boundary. Additionally, document shutdown architecture as layered and non-overlapping: ShutdownCoordinator is domain-specific graceful/forced worker escalation inside Generic Host lifecycle, with HostOptions.ShutdownTimeout as a slightly larger framework-level safety boundary rather than an equal shared budget. Prefer keeping GracePeriodSeconds as a single shared shutdown budget (coordinator and HostOptions.ShutdownTimeout aligned) rather than adding a hidden offset, accepting concurrent deadline signals for a clean configuration model. Keep Dispose non-throwing but log a warning if called before shutdown is signaled to surface contract misuse. 
-- For internal configuration application methods, keep invariants explicit: options should be pre-validated by startup validation, but still add defensive argument-range guards when callable independently.
-- Do not claim runtime initialization ordering from IServiceCollection registration order; document that readiness dependencies must be enforced via explicit service dependencies/orchestration.
-- Prefer simpler DI/configuration when settings are immutable at runtime: favor plain singleton snapshot objects like ShutdownOptions over custom IOptionsSnapshot/IOptionsMonitor wrappers unless the options abstractions are truly needed.
-- Distinguish primary/global validation from local defensive re-validation; avoid comments that imply a helper method is the main validation phase when it is actually rebinding and defensively validating a local snapshot.
-- Prefer ServiceLifecycle.Ready and systemd READY=1 to represent the same operational milestone unless there is a strong reason to delay external readiness beyond actual work acceptance.
-- Prefer cleaner shutdown APIs that pass the validated runtime policy (or a dedicated immutable shutdown policy object) directly, instead of threading a separately derived gracefulShutdownTimeout TimeSpan through lifecycle/shutdown callbacks.
-- Prefer immutable process identity/runtime snapshot types like BuildInfo to be registered and injected directly rather than also being exposed through IOptions<T>, unless there is a concrete consumer that requires the options abstraction.
-- Use TimeProvider instead of DateTimeOffset.UtcNow in ControlPlaneService to keep Program as the single authority for Initializing -> Ready, and to avoid 1-second Information-level heartbeat logs in production because high-frequency telemetry should be metrics or lower log levels.
-- When executing an approved plan, continue executing it fully instead of stopping after step announcements; repeated reminders indicate this is a required workflow preference.
-- Benchmark execution policy: never use --no-build; always clean, build, verify output identity, then run with matching Debug/x64/net8.0/win-x64 settings and enforce runtime identity guard before warmup.
-- For regression-validation phases, require fully autonomous execution with one isolated test/method per process, stale test process cleanup, 45-second no-progress watchdog monitoring of testhost, automatic forensic capture/analysis on hangs, no manual user intervention, and no speculative code changes. Do not rely on Visual Studio/DevHub test runner; use watchdog + CLI infrastructure for potentially blocking/concurrency/lifecycle tests and capture forensics before termination.
-- Phase 2 workflow for this repo is benchmark-first: no production code changes before readiness assessment approval, use CLI + watchdog (not Visual Studio runner), and evaluate one optimization at a time with before/after evidence artifacts.
-- For transit transport performance work, require staged workflow: static investigation first, then minimal event-driven completion signaling change preserving ownership/recovery semantics, focused bounded tests only, depth-1 benchmark only (3 runs), no depth-2/full-suite, and explicit artifact documentation.
-- User prefers a static audit-only pass (no code changes, builds, or tests) before any further implementation when validating major architecture work.
-- For this repository's xUnit1030 cleanup, prefer carefully batched SAFE-only removals (target ~3-10 per pass) with full method-level safety inspection and strict build/test/diagnostic delta gates; avoid blanket replacements/suppressions and preserve working tree.
-- For this repository's xUnit1030 cleanup, diagnostic accounting should treat unique source locations as primary; each unique location currently emits twice, so -1 unique corresponds to -2 emitted and -2 unique corresponds to -4 emitted.
+## Project
 
-## Engineering Quality and Documentation Standards (Repository-Wide)
-- Scope and permanence: these standards apply to all future repository coding tasks unless a future task explicitly overrides a specific rule.
-- Zero-warning completion requirement: a task is incomplete while warnings remain in the affected scope. Completion requires zero compiler errors, zero compiler warnings, zero analyzer/style/documentation/naming/nullable warnings, and zero IDE/analyzer diagnostics attributable to changed code.
-- No warning hiding: never use pragma suppression, `NoWarn`, analyzer/ruleset/editorconfig severity suppression, `SuppressMessage`, file exclusion, or equivalent warning-hiding mechanisms to mark work complete.
-- Warning remediation policy: warnings are considered fixed only when underlying source/design issues are corrected. If a warning cannot be resolved without changing behavior, stop and report the blocker explicitly.
-- Completion validation gate: before reporting completion, build affected projects, inspect full output, fix warnings attributable to changed code, run relevant tests, and rebuild to confirm warning-free affected scope.
-- Documentation coverage rule: if a C# symbol can legally have XML documentation, it must be documented regardless of accessibility (`public`, `internal`, `protected`, `private`, and combinations).
-- Documentation scope includes types and members: classes, structs, records, enums and enum members, interfaces, delegates, constructors, methods, properties, fields, constants, events, operators, indexers, nested types, helper symbols, and test symbols.
-- Documentation quality rule: XML docs must describe real engineering intent and contracts (purpose, invariants, failure semantics, assumptions, ownership/lifetime/threading where relevant, and verified performance/protocol behaviors) and must not be filler.
-- Private-code documentation rule: private/internal helpers must document why they exist, what contract they implement, and non-obvious behavior/performance assumptions.
-- Test documentation rule: test classes, test methods, and test helpers must document scenario, expected behavior, and protected contract; do not remove tests or weaken assertions to satisfy warnings.
-- File header rule: every `.cs` file must start with a file header before namespace declarations that includes copyright, attribution, file purpose, and primary engineering responsibility.
-- Required attribution text for repository file headers: `Copyright © Chris Knipe cknipe@opticnetworks.net`.
-- Header specificity rule: file-header descriptions must be file-specific and technically meaningful; do not use generic copy/paste descriptions.
-- Source style enforcement: follow established repository conventions (including namespace style, naming, collection initialization, formatting, modifier/accessibility ordering, and nullable annotations) by fixing source, not suppressing diagnostics.
-- Performance documentation rule: document intentional performance properties (for example allocation behavior, span/byte processing, bounded memory, lock-free characteristics) only when those properties are verified by implementation/evidence.
-- Scope discipline: remain within requested subsystem/task scope; do not perform unrelated cleanup/refactoring/configuration/benchmark changes unless explicitly requested. Still fix warnings caused by changed code.
-- Do-not-manufacture-work rule: prefer the smallest correct change that satisfies the task; avoid speculative redesigns, abstractions, diagnostics, benchmarks, or micro-optimizations without request/evidence.
-- Performance-work method: use evidence-driven workflow (correctness first, baseline where applicable, measure bottlenecks, optimize, re-measure) and avoid purely theoretical micro-optimizations.
-- Validation requirement: run appropriate build/analyzer/tests for the changed scope and do not claim performance improvements without measurement.
-- Final self-audit requirement before completion reporting:
-  - Code: requested behavior implemented, no unintended behavior changes, no unrelated file changes.
-  - Warnings: zero errors/warnings attributable to changed code, and no warning suppressions added.
-  - Documentation: changed `.cs` files include headers + required attribution, all documentable symbols are documented, and docs remain accurate.
-  - Tests: relevant tests pass and coverage/contracts are preserved.
-  - Scope: no accidental benchmark/configuration/architectural expansion.
-- Diagnostics standard clarity: clean completion means clean build + clean analyzers/style diagnostics + complete documentation + passing relevant tests.
-- Continuous execution rule: execute approved implementation plans end-to-end without per-step permission prompts; stop only for explicit stop conditions, genuine blockers, or failures requiring user input.
-- Instruction-file maintenance rule: when adding standards, integrate and consolidate with existing instructions; avoid duplicating equivalent rules with conflicting wording.
+VectorNNTP.BackFiller is a .NET 8, C# 13 worker service that retrieves unavailable Usenet articles from external NNTP providers, validates them, and returns recovered work through the VectorNNTP pipeline. It is high-throughput, highly concurrent networking infrastructure; correctness, bounded resources, and graceful shutdown are essential.
 
-## Diagnostics Guidelines
-- Keep --diagnostics lightweight and non-invasive: it should only emit runtime/build information and must not initialize DI, hosted services, external dependencies, listeners, or certificate flows.
+The solution is `VectorNNTP.BackFiller.slnx` and contains:
 
-## Archaeology, Recovery, and Performance Governance
-- Classification requirement: every planned/code change must be explicitly categorized as production, test, benchmark, or documentation/governance. Do not hide production behavior changes inside test fixes.
-- Continuous execution requirement: when an implementation plan is approved, execute end-to-end without pausing for per-step confirmation. Stop only for explicit stop conditions, genuine blockers, compile failures requiring user input, test failures requiring user input, or correctness-critical ambiguity.
-- Read-before-change requirement: inspect relevant implementation, tests, and applicable history before editing. Do not make speculative fixes based only on a failing test outcome.
-- Test-failure classification requirement: classify failing tests as A (production regression), B (production bug exposed by test), C (intentional architecture change requiring test update), D (stale/invalid test contract), E (environment/build/tooling), F (test infrastructure), or UNKNOWN before deciding changes.
-- Archaeology method: establish historical invariants, identify first divergence commit, determine intentional vs accidental divergence, recover the smallest correct behavior, and validate with targeted evidence.
-- No timing hacks: do not add arbitrary Task.Delay, sleeps, polling loops, or arbitrary timeouts to force concurrency/lifecycle tests to pass; prefer deterministic synchronization and explicit lifecycle signaling.
-- Performance method: baseline first, then one meaningful optimization at a time with before/after measurements; keep benchmark configuration stable and record throughput, CPU, allocations, GC, and latency.
-- Benchmark integrity: treat benchmark harness as an instrument and keep production pipeline behavior distinct from harness behavior. Do not optimize the benchmark in ways that misrepresent production pipeline performance.
-- Topology attribution: keep FakeServer behavior attribution separate from TransitServer; do not generalize FakeServer benchmark outcomes as TransitServer behavior.
-- Change-history discipline: record significant recoveries, architectural decisions, test-contract repairs, benchmark changes, reversions, and measured performance results in project changelog/context artifacts.
-- Persistent backlog discipline: use root `TODO.md` for significant outstanding future work (architecture, technical debt, benchmark/tooling infrastructure, investigations); include what/why context; do not silently delete items; mark completed/deferred/cancelled explicitly; do not treat TODO entries as authorization to start implementation.
-- Documentation role separation: `CHANGELOG.md` is historical completed work, `TODO.md` is outstanding backlog, `.copilot/PERFORMANCE-CONTEXT.md` is current performance evidence/state.
-- Working-tree evidence protection: do not execute destructive or state-reverting Git/working-tree operations without explicit user authorization in the current task (including `git checkout -- <files>`, `git restore`, `git reset --hard`, `git clean`, destructive stash/drop, deleting/overwriting working-tree files, or reverting experimental edits because they appear temporary/obsolete). If a revert is desired, stop, enumerate changes, explain, request authorization, and report any state-changing Git operation with command, scope, reason, authorization, and resulting repo state.
-- Revert-authorization protocol: if a revert/destructive action seems necessary, stop first; identify exact files/changes; explain why revert is suggested; request explicit authorization; execute only after approval. Non-destructive inspection (`git status`, `git diff`, `git log`, `git show`, file reads) is always allowed.
-- Git state-change reporting: every intentional Git state-changing operation (checkout/restore/reset/clean/stash/commit/rebase/cherry-pick/merge/revert) must be reported in task output with exact command, affected files/commits, reason, whether authorization was explicit, and resulting repository state.
-- Evidence hierarchy for conflict resolution (highest to lowest): (1) current source code, (2) git history/commits, (3) tests and test results, (4) benchmark artifacts, (5) project documentation, (6) persistent Copilot context, (7) conversational memory. If lower-tier context conflicts with higher-tier evidence, stop and report the conflict.
-- Article-correlation logging standard (repository-wide): for any log event tied to an article, include the canonical structured property `MessageId` and preserve the exact canonical identifier representation end-to-end (no arbitrary bracket/casing/normalization changes between components).
-- Protocol debug logging standard (repository-wide): NNTP protocol command transmit and status-line receive events must be logged at Debug as structured events (`TX: ...`, `RX: ...`) without logging article payload bytes; authentication credentials must always be masked/redacted in logs.
-- Article outcome logging standard (repository-wide): each article acquisition/processing outcome must emit an Information-level structured event containing `MessageId`, `Outcome`, and elapsed `Duration`, with optional structured context (`FailureReason`, `ArticleSize`, provider/session identity) when available.
-- Culture-invariant formatting standard (repository-wide): machine-facing runtime/protocol/logging formatting and parsing must be deterministic and culture-invariant unless a culture-sensitive representation is explicitly required.
-- UTC timestamp standard (repository-wide): application log timestamps must be UTC across all sinks; do not emit local-time timestamps in application logs.
-- Duration measurement standard (repository-wide): elapsed operation durations must be measured with monotonic timers (for example `Stopwatch`) rather than wall-clock subtraction.
+- `VectorNNTP.BackFiller/`: production worker, startup/configuration validation, certificates, RabbitMQ, NNTP transit/listener, article parsing and processing.
+- `VectorNNTP.BackFiller.Tests/`: xUnit unit, integration-style, lifecycle, protocol, validation, and regression tests.
+- `VectorNNTP.BackFiller.Benchmarks/`: BenchmarkDotNet and controlled transit performance harnesses.
+- `VectorNNTP.BackFiller.Benchmarks.Tests/`: benchmark contract and infrastructure tests.
+- `tools/testing/`: isolated regression and watchdog tooling.
+- `.github/workflows/`: build, coverage, dependency, and CodeQL validation.
+- `.copilot/PERFORMANCE-CONTEXT.md`: existing performance checkpoint; preserve it and treat source, history, tests, and artifacts as stronger evidence.
 
-## XML Documentation Guidelines
-- For XML documentation audits, perform additive-only changes: preserve existing valid XML docs verbatim; only add missing documentation elements or minimally fix demonstrably incorrect/invalid XML; no namespace or behavior changes; no tests/benchmarks.
+## Runtime and architecture
+
+- Target `net8.0`, x64 only, nullable enabled, implicit usings enabled, and C# 13. Release publishing is self-contained/single-file with ReadyToRun, tiered PGO, and server GC.
+- Startup must be ordered: bind configuration, validate it, create one immutable canonical runtime snapshot, validate directories, validate dependencies, then construct/start DI and hosted services. Do not perform expensive, irreversible, externally visible work before validation.
+- Do not infer readiness from service-registration order. Enforce readiness through explicit dependencies/orchestration; `ServiceLifecycle.Ready` and systemd `READY=1` represent the same operational milestone.
+- Every admitted unit of work must be settled exactly once on success, failure, cancellation, timeout, and shutdown. Preserve ownership, ACK/NACK, retry, backpressure, and drain invariants.
+- Treat external NNTP, RabbitMQ, DNS, Cloudflare, ACME, and database input as untrusted or failure-prone. Preserve cancellation and disposal ownership across asynchronous boundaries.
+- Cloudflare validation is required independently of the optional Let's Encrypt issuance flow. ACME-only settings are ignored when issuance is disabled.
+- Listener wildcard semantics are explicit: empty address maps to independent `0.0.0.0` and `::` endpoints; `*`, `Any`, `0.0.0.0`, and `::` are wildcard tokens, not published DNS addresses. Configure IPv6-only behavior explicitly and derive wildcard DNS addresses from eligible local interfaces.
+- Use UTC and culture-invariant machine-facing formatting. Article logs include structured `MessageId`; protocol TX/RX debug logs exclude payloads and credentials; article outcomes include `MessageId`, `Outcome`, and monotonic elapsed `Duration`.
+
+## Build and test
+
+From the repository root:
+
+```text
+dotnet restore VectorNNTP.BackFiller.slnx
+dotnet build VectorNNTP.BackFiller.slnx --configuration Release -p:Platform=x64
+dotnet test VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj --configuration Release -p:Platform=x64
+dotnet test VectorNNTP.BackFiller.Benchmarks.Tests/VectorNNTP.BackFiller.Benchmarks.Tests.csproj --configuration Release -p:Platform=x64
+```
+
+Use the repository's isolated regression/watchdog tooling for potentially blocking lifecycle or concurrency tests. Do not use `--no-build` for benchmark validation: clean, build, verify runtime identity, then run matching Debug/x64/net8.0/win-x64 settings. Preserve CI diagnostics and existing baselines.
+
+Builds enable .NET analyzers, code style, and generated documentation. Completion requires zero errors and warnings attributable to the change; fix source/design issues rather than suppressing diagnostics. Do not weaken, skip, or remove tests.
+
+## Engineering conventions
+
+- Follow `CONTRIBUTING.md` and `.editorconfig`: explicit access modifiers, `_camelCase` private fields, PascalCase public members/constants, camelCase locals/parameters, x64 platform, and a 160-character practical line limit.
+- Prefer simple designs and existing abstractions. Do not add DI seams solely to mock straightforward startup logic.
+- Prefer async I/O, `ConfigureAwait(false)` where appropriate, deterministic coordination over sleeps, and explicit cancellation. Avoid blocking waits, fire-and-forget work with unobserved failures, unnecessary LINQ/allocations/copies/boxing, and contention in hot paths.
+- Performance changes require a baseline, one measurable change at a time, stable configuration, and evidence covering throughput, latency/tails, CPU, allocations/GC, memory, queues, and connections. Do not optimize speculative theory.
+- Use structured source-generated logging where the existing project pattern applies; guard expensive disabled-level work and never log secrets.
+- Document every documentable C# symbol, including meaningful private/internal helpers and tests. Preserve valid XML documentation verbatim during additive documentation passes. Every `.cs` file needs the repository header and required attribution: `Copyright © Chris Knipe cknipe@opticnetworks.net`.
+- Keep behavior/API changes narrowly scoped, add regression coverage for behavior changes, and update related documentation/history when an architectural decision or measured result changes.
