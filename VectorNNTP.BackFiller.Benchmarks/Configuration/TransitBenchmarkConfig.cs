@@ -59,7 +59,7 @@ internal readonly record struct TransitBenchmarkConfig(
     private const int DefaultWarmupSeconds = 10;
 
     /// <summary>
-    /// Runs the load benchmark scenario.
+    /// Loads and validates the benchmark configuration for the current appsettings file and any optional endpoint overrides.
     /// </summary>
     internal static TransitBenchmarkConfig Load(
             TimeSpan measurementDuration,
@@ -71,6 +71,89 @@ internal readonly record struct TransitBenchmarkConfig(
             string endpointType = "TRANSITSERVER",
             string endpointIdentity = "appsettings:BackFiller:TransitServer")
     {
+        string appSettingsPath = FindBackFillerAppSettingsPath();
+
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
+            .Build();
+
+        return LoadFromConfiguration(
+            measurementDuration,
+            mode,
+            cliOptions,
+            configuration,
+            appSettingsPath,
+            endpointHostOverride,
+            endpointPortOverride,
+            endpointUseSslOverride,
+            endpointType,
+            endpointIdentity);
+    }
+
+    /// <summary>
+    /// Builds and validates a transit benchmark configuration snapshot from an existing application configuration and optional overrides.
+    /// </summary>
+    /// <param name="measurementDuration">
+    /// The duration to reserve for the benchmark measurement window. This value must be positive and is validated against the benchmark runtime constraints.
+    /// </param>
+    /// <param name="mode">
+    /// The benchmark execution mode used to select the intended validation or load profile.
+    /// </param>
+    /// <param name="cliOptions">
+    /// The CLI options that supply user-selected benchmark parameters and overrides.
+    /// </param>
+    /// <param name="configuration">
+    /// The backing application configuration to read the configured TransitServer endpoint and benchmark defaults from.
+    /// </param>
+    /// <param name="appSettingsPath">
+    /// The source appsettings path used to identify the configuration file and to preserve the original config source identity in the resulting snapshot.
+    /// </param>
+    /// <param name="endpointHostOverride">
+    /// An optional host override for the endpoint used by the benchmark; when omitted, the host from configuration is used.
+    /// </param>
+    /// <param name="endpointPortOverride">
+    /// An optional port override for the endpoint used by the benchmark; when omitted, the configured port is preserved.
+    /// </param>
+    /// <param name="endpointUseSslOverride">
+    /// An optional SSL override for the endpoint used by the benchmark; when omitted, the configured SSL setting is preserved.
+    /// </param>
+    /// <param name="endpointType">
+    /// The endpoint type identifier recorded in the benchmark snapshot.
+    /// </param>
+    /// <param name="endpointIdentity">
+    /// The endpoint identity value recorded in the benchmark snapshot and used to disambiguate the reporting target.
+    /// </param>
+    /// <returns>
+    /// A validated transit benchmark configuration snapshot containing the normalized benchmark parameters and the resolved endpoint identity.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="configuration"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="appSettingsPath"/>, <paramref name="endpointType"/>, or <paramref name="endpointIdentity"/> is empty or whitespace.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the appsettings file is missing required TransitServer settings, the resolved values fail validation, or the combined CLI and configuration settings exceed the supported benchmark bounds.
+    /// </exception>
+    internal static TransitBenchmarkConfig LoadFromConfiguration(
+            TimeSpan measurementDuration,
+            BenchmarkMode mode,
+            TransitBenchmarkCliOptions cliOptions,
+            IConfiguration configuration,
+            string appSettingsPath,
+            string? endpointHostOverride = null,
+            int? endpointPortOverride = null,
+            bool? endpointUseSslOverride = null,
+            string endpointType = "TRANSITSERVER",
+            string endpointIdentity = "appsettings:BackFiller:TransitServer")
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(appSettingsPath))
+        {
+            throw new ArgumentException("App settings path must be provided.", nameof(appSettingsPath));
+        }
+
         if (cliOptions.ArticleCount is not null && cliOptions.DurationSeconds is not null)
         {
             throw new InvalidOperationException("Options '--article-count' and '--duration-seconds' are mutually exclusive for measurement execution.");
@@ -85,12 +168,6 @@ internal readonly record struct TransitBenchmarkConfig(
         {
             throw new ArgumentException("Endpoint identity must be provided.", nameof(endpointIdentity));
         }
-
-        string appSettingsPath = FindBackFillerAppSettingsPath();
-
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-            .AddJsonFile(appSettingsPath, optional: false, reloadOnChange: false)
-            .Build();
 
         string configuredHost = configuration["BackFiller:TransitServer:Host"]
             ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is missing in existing application configuration.");

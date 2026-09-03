@@ -6,6 +6,7 @@
 // Focused tests for benchmark artifact contract, covering benchmark measurement and runtime identity contracts.
 // Primary responsibility: documents the executable contracts covered by the benchmark artifact contract test suite.
 
+using System.Text;
 using System.Text.Json;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -185,11 +186,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Assert.EndsWith(Environment.NewLine, csv, StringComparison.Ordinal);
 
-            string[] lines = csv.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-            Assert.Equal(2, lines.Length);
+            string[] records = SplitCsvRecords(csv);
+            Assert.Equal(2, records.Length);
 
-            string header = lines[0];
-            string row = lines[1];
+            string header = records[0];
+            string row = records[1];
 
             Assert.Contains("benchmark_build_version,runtime_assembly_version,runtime_assembly_path", header, StringComparison.Ordinal);
             Assert.Contains(",generated_articles,generated_gbps,admitted_articles,admitted_gbps,accepted_articles,accepted_gbps,rejected_articles,ambiguous_articles,", header, StringComparison.Ordinal);
@@ -198,6 +199,74 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Assert.Contains("\"Depth 1-4: \"\"quoted\"\",value\"", row, StringComparison.Ordinal);
             Assert.Contains("\"LineA\nLineB\"", row, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Splits a CSV payload into records while preserving embedded quotes and escaped CSV content.
+        /// </summary>
+        /// <param name="csv">
+        /// The serialized CSV content to parse into individual records for contract validation.
+        /// </param>
+        /// <returns>
+        /// An array of CSV records with quoted fields preserved as written by the artifact serializer.
+        /// </returns>
+        private static string[] SplitCsvRecords(string csv)
+        {
+            List<string> records = [];
+            StringBuilder current = new();
+            bool inQuotes = false;
+
+            for (int i = 0; i < csv.Length; i++)
+            {
+                char ch = csv[i];
+
+                if (ch == '"')
+                {
+                    if (inQuotes && i + 1 < csv.Length && csv[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        current.Append('"');
+                        i++;
+                        continue;
+                    }
+
+                    inQuotes = !inQuotes;
+                    current.Append(ch);
+                    continue;
+                }
+
+                if (!inQuotes && ch == '\r' && i + 1 < csv.Length && csv[i + 1] == '\n')
+                {
+                    if (current.Length > 0)
+                    {
+                        records.Add(current.ToString());
+                        current.Clear();
+                    }
+
+                    i++;
+                    continue;
+                }
+
+                if (!inQuotes && ch == '\n')
+                {
+                    if (current.Length > 0)
+                    {
+                        records.Add(current.ToString());
+                        current.Clear();
+                    }
+
+                    continue;
+                }
+
+                current.Append(ch);
+            }
+
+            if (current.Length > 0)
+            {
+                records.Add(current.ToString());
+            }
+
+            return [.. records];
         }
     }
 }

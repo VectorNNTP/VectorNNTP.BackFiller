@@ -6,7 +6,7 @@
 // Focused tests for transit benchmark config article count validation, covering configuration and validation contracts; NNTP article and transport behavior; benchmark measurement and runtime identity contracts.
 // Primary responsibility: documents the executable contracts covered by the transit benchmark config article count validation test suite.
 
-using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
 
@@ -36,26 +36,24 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 WriteBatchCoalesceMicroseconds: 250,
                 ArticleCount: 200);
 
-            MethodInfo loadMethod = typeof(TransitBenchmarkConfig)
-                .GetMethod("Load", BindingFlags.NonPublic | BindingFlags.Static)
-                ?? throw new InvalidOperationException("TransitBenchmarkConfig.Load was not found.");
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["BackFiller:TransitServer:Host"] = "incoming.usenet.ninja",
+                    ["BackFiller:TransitServer:Port"] = "563",
+                    ["BackFiller:TransitServer:UseSsl"] = "true",
+                })
+                .Build();
 
-            TargetInvocationException ex = Assert.Throws<TargetInvocationException>(() =>
-                loadMethod.Invoke(
-                    null,
-                    [
-                        TimeSpan.FromSeconds(10),
-                        BenchmarkMode.Validation,
-                        options,
-                        Type.Missing,
-                        Type.Missing,
-                        Type.Missing,
-                        Type.Missing,
-                        Type.Missing,
-                    ]));
+            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+                TransitBenchmarkConfig.LoadFromConfiguration(
+                    TimeSpan.FromSeconds(10),
+                    BenchmarkMode.Validation,
+                    options,
+                    configuration,
+                    appSettingsPath: "in-memory:test"));
 
-            _ = Assert.IsType<InvalidOperationException>(ex.InnerException);
-            Assert.Contains("mutually exclusive", ex.InnerException!.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("mutually exclusive", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
