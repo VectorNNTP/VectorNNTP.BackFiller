@@ -34,15 +34,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal sealed partial class TransitConnection : IAsyncDisposable
     {
         /// <summary>
-        /// Stores cr lf bytes for transit connection.
+        /// CRLF bytes appended to NNTP protocol lines.
         /// </summary>
         private static readonly byte[] CrLfBytes = "\r\n"u8.ToArray();
         /// <summary>
-        /// Stores dot terminator bytes for transit connection.
+        /// NNTP dot-terminator sequence appended after staged article bodies.
         /// </summary>
         private static readonly byte[] DotTerminatorBytes = ".\r\n"u8.ToArray();
         /// <summary>
-        /// Stores takethis prefix bytes for transit connection.
+        /// ASCII prefix written before each TAKETHIS Message-ID token.
         /// </summary>
         private static readonly byte[] TakethisPrefixBytes = "TAKETHIS "u8.ToArray();
         /// <summary>
@@ -55,15 +55,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private static readonly TimeSpan DefaultResponseProgressCheckInterval = TimeSpan.FromMilliseconds(250);
 
         /// <summary>
-        /// Stores host used by transit connection.
+        /// Remote transit server host name or IP address.
         /// </summary>
         private readonly string _host;
         /// <summary>
-        /// Stores port used by transit connection.
+        /// Remote transit server TCP port.
         /// </summary>
         private readonly int _port;
         /// <summary>
-        /// Stores use ssl used by transit connection.
+        /// Indicates whether the connection starts with TLS already enabled.
         /// </summary>
         private readonly bool _useSsl;
         /// <summary>
@@ -71,7 +71,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private readonly ILogger _logger;
         /// <summary>
-        /// Stores server certificate validation callback used by transit connection.
+        /// Optional TLS certificate validation callback used when STARTTLS or implicit TLS is negotiated.
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
         /// <summary>
@@ -83,79 +83,79 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private readonly TimeSpan _responseProgressCheckInterval;
         /// <summary>
-        /// Stores timing collector used by transit connection.
+        /// Optional collector for staging, flush, read, and response-correlation timing metrics.
         /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
 
         /// <summary>
-        /// Stores write gate used by transit connection.
+        /// Gate that serializes staging and flushing on the shared transport writer.
         /// </summary>
         private readonly SemaphoreSlim _writeGate = new(1, 1);
         /// <summary>
-        /// Stores tokenless correlation gate used by transit connection.
+        /// Gate that serializes the narrow tokenless-correlation fallback path.
         /// </summary>
         private readonly SemaphoreSlim _tokenlessCorrelationGate = new(1, 1);
 
         /// <summary>
-        /// Stores tcp client used by transit connection.
+        /// Owned TCP client for the live transport session.
         /// </summary>
         private TcpClient? _tcpClient;
         /// <summary>
-        /// Stores transport stream used by transit connection.
+        /// Currently active base transport stream, either raw network or negotiated TLS.
         /// </summary>
         private Stream? _transportStream;
         /// <summary>
-        /// Stores read stream used by transit connection.
+        /// Stream used by the pipe reader for protocol response consumption.
         /// </summary>
         private Stream? _readStream;
         /// <summary>
-        /// Stores write stream used by transit connection.
+        /// Stream used by the pipe writer for TAKETHIS submissions.
         /// </summary>
         private Stream? _writeStream;
         /// <summary>
-        /// Stores reader used by transit connection.
+        /// Pipe reader that frames protocol response lines.
         /// </summary>
         private PipeReader? _reader;
         /// <summary>
-        /// Stores writer used by transit connection.
+        /// Pipe writer that stages TAKETHIS payloads before flush.
         /// </summary>
         private PipeWriter? _writer;
 
         /// <summary>
-        /// Stores response loop cancellation used by transit connection.
+        /// Cancellation source for the background response loop.
         /// </summary>
         private CancellationTokenSource? _responseLoopCancellation;
         /// <summary>
-        /// Stores response loop task used by transit connection.
+        /// Background task that reads and correlates response lines.
         /// </summary>
         private Task? _responseLoopTask;
         /// <summary>
-        /// Stores response progress watchdog cancellation used by transit connection.
+        /// Cancellation source for the definitive-response progress watchdog.
         /// </summary>
         private CancellationTokenSource? _responseProgressWatchdogCancellation;
         /// <summary>
-        /// Stores response progress watchdog task used by transit connection.
+        /// Background watchdog task that faults stalled response progress.
         /// </summary>
         private Task? _responseProgressWatchdogTask;
         /// <summary>
-        /// Stores response loop fault used by transit connection.
+        /// Captured response-loop fault rethrown to later callers when needed.
         /// </summary>
         private ExceptionDispatchInfo? _responseLoopFault;
         /// <summary>
-        /// Stores response loop faulted used by transit connection.
+        /// Single-bit guard indicating that the response loop has faulted.
         /// </summary>
         private int _responseLoopFaulted;
 
         /// <summary>
-        /// Stores pending by message id used by transit connection.
+        /// Pending connection-owned work keyed by Message-ID for normal response correlation.
         /// </summary>
         private readonly ConcurrentDictionary<string, PendingOwnedWork> _pendingByMessageId = new(StringComparer.Ordinal);
         /// <summary>
-        /// Stores pending by send order used by transit connection.
+        /// FIFO send-order queue used by the narrow tokenless success fallback.
         /// </summary>
         private readonly ConcurrentQueue<string> _pendingBySendOrder = new();
         /// <summary>
-        /// Stores completed queue used by transit connection.
+        /// Internal completion queue consumed by the connection worker after responses are correlated.
         /// </summary>
         private readonly Channel<CompletedWork> _completedQueue = Channel.CreateUnbounded<CompletedWork>(new UnboundedChannelOptions
         {
@@ -164,89 +164,89 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             AllowSynchronousContinuations = false,
         });
         /// <summary>
-        /// Stores direct submit completions used by transit connection.
+        /// Completion sources used by direct submit helpers keyed by work-item identifier.
         /// </summary>
         private readonly ConcurrentDictionary<long, TaskCompletionSource<TransitPublishResult>> _directSubmitCompletions = new();
         /// <summary>
-        /// Stores completion enqueued ticks used by transit connection.
+        /// Stopwatch ticks captured when completions are enqueued for downstream observation.
         /// </summary>
         private readonly ConcurrentDictionary<long, long> _completionEnqueuedTicks = new();
 
         /// <summary>
-        /// Stores streaming mode negotiated used by transit connection.
+        /// Indicates whether MODE STREAM negotiation completed successfully.
         /// </summary>
         private bool _streamingModeNegotiated;
 
         /// <summary>
-        /// Stores shutdown requested used by transit connection.
+        /// Single-bit guard indicating that shutdown or disposal has started.
         /// </summary>
         private int _shutdownRequested;
         /// <summary>
-        /// Stores tokenless success mode enabled used by transit connection.
+        /// Indicates that tokenless <c>239 Article transferred OK</c> correlation may be attempted.
         /// </summary>
         private int _tokenlessSuccessModeEnabled;
         /// <summary>
-        /// Stores bytes transmitted for transit connection.
+        /// Total bytes written to the remote server by this connection.
         /// </summary>
         private long _bytesTransmitted;
         /// <summary>
-        /// Stores bytes received for transit connection.
+        /// Total bytes read from the remote server by this connection.
         /// </summary>
         private long _bytesReceived;
         /// <summary>
-        /// Limits socket open count for transit connection.
+        /// Count of successful socket-open transitions observed for this connection instance.
         /// </summary>
         private long _socketOpenCount;
         /// <summary>
-        /// Limits ready transition count for transit connection.
+        /// Count of times the connection reached ready state.
         /// </summary>
         private long _readyTransitionCount;
         /// <summary>
-        /// Stores submissions started used by transit connection.
+        /// Count of submissions whose TAKETHIS send path has started on this connection.
         /// </summary>
         private long _submissionsStarted;
         /// <summary>
-        /// Stores submissions accepted used by transit connection.
+        /// Count of submissions accepted by definitive server response.
         /// </summary>
         private long _submissionsAccepted;
         /// <summary>
-        /// Stores submissions rejected used by transit connection.
+        /// Count of submissions rejected by definitive server response.
         /// </summary>
         private long _submissionsRejected;
         /// <summary>
-        /// Stores submissions failed used by transit connection.
+        /// Count of submissions that failed locally before a definitive accept or reject.
         /// </summary>
         private long _submissionsFailed;
         /// <summary>
-        /// Stores submissions ambiguous used by transit connection.
+        /// Count of submissions settled as ambiguous because transmission certainty could not be resolved.
         /// </summary>
         private long _submissionsAmbiguous;
         /// <summary>
-        /// Stores submissions unavailable used by transit connection.
+        /// Count of submissions rejected as unavailable due to remote capability or lifecycle state.
         /// </summary>
         private long _submissionsUnavailable;
         /// <summary>
-        /// Limits max concurrent submissions for transit connection.
+        /// Highest concurrent submission depth observed on this connection.
         /// </summary>
         private int _maxConcurrentSubmissions;
         /// <summary>
-        /// Stores send sequence used by transit connection.
+        /// Monotonic send-order sequence used for diagnostics and tokenless fallback ordering.
         /// </summary>
         private long _sendSequence;
         /// <summary>
-        /// Limits batch count for transit connection.
+        /// Number of processed submission batches.
         /// </summary>
         private long _batchCount;
         /// <summary>
-        /// Limits batch size total for transit connection.
+        /// Aggregate count of work items processed across all batches.
         /// </summary>
         private long _batchSizeTotal;
         /// <summary>
-        /// Limits max writer batch size for transit connection.
+        /// Largest batch size written by this connection.
         /// </summary>
         private int _maxWriterBatchSize;
         /// <summary>
-        /// Stores last definitive response progress tick used by transit connection.
+        /// Stopwatch tick of the last definitive response progress observed by the connection.
         /// </summary>
         private long _lastDefinitiveResponseProgressTick;
 

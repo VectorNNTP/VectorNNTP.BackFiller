@@ -13,28 +13,28 @@ using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 {
     /// <summary>
-    /// Represents one logical article request accepted by the grabber orchestration flow.
+    /// Identifies one logical grabber work item by the canonical Message-ID that should be acquired and parsed.
     /// </summary>
     /// <param name="MessageId">Canonical Message-ID correlation identifier passed through acquisition and parsing unchanged.</param>
     internal readonly record struct NntpArticleGrabberWorkItem(string MessageId);
 
     /// <summary>
-    /// Represents deterministic terminal classifications returned by the grabber article workflow.
+    /// Classifies deterministic terminal outcomes of the grabber workflow after acquisition, parsing, and yEnc validation are reconciled.
     /// </summary>
     internal enum NntpArticleGrabberFailureCode
     {
         /// <summary>
-        /// Workflow completed successfully.
+        /// Acquisition and parsing completed successfully.
         /// </summary>
         None = 0,
 
         /// <summary>
-        /// Message-ID argument is invalid.
+        /// The requested Message-ID was invalid before or during acquisition.
         /// </summary>
         InvalidMessageId = 1,
 
         /// <summary>
-        /// Provider reported article not found.
+        /// The provider reported that the article does not exist.
         /// </summary>
         ArticleNotFound = 2,
 
@@ -44,69 +44,72 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         AuthenticationFailure = 3,
 
         /// <summary>
-        /// Acquisition transport/session establishment or I/O failed.
+        /// Acquisition transport setup or I/O failed.
         /// </summary>
         ConnectionFailure = 4,
 
         /// <summary>
-        /// Acquisition operation timed out.
+        /// Acquisition timed out.
         /// </summary>
         Timeout = 5,
 
         /// <summary>
-        /// Remote protocol or framing was malformed.
+        /// The NNTP protocol exchange was malformed or command-unexpected.
         /// </summary>
         ProtocolFailure = 6,
 
         /// <summary>
-        /// Article framing or size constraints were violated.
+        /// ARTICLE framing terminated early or exceeded configured size limits.
         /// </summary>
         ArticleFramingFailure = 7,
 
         /// <summary>
-        /// Parser rejected article due to malformed syntax/headers/content.
+        /// The parser rejected the article as malformed.
         /// </summary>
         MalformedArticle = 8,
 
         /// <summary>
-        /// Parser rejected article due to missing/invalid date semantics.
+        /// The parser rejected the article because no usable date could be resolved.
         /// </summary>
         InvalidDate = 9,
 
         /// <summary>
-        /// Parser rejected article due to invalid header semantics unrelated to date.
+        /// The parser rejected the article because one or more required headers were missing, duplicated, or semantically invalid.
         /// </summary>
         InvalidHeaders = 10,
 
         /// <summary>
-        /// yEnc validation failed, including decode or CRC/size integrity failures.
+        /// yEnc validation failed, including decode, CRC, or size-integrity failures.
         /// </summary>
         YEncValidationFailure = 11,
 
         /// <summary>
-        /// Operation was cancelled by caller.
+        /// The caller cancelled the workflow.
         /// </summary>
         Cancelled = 12,
 
         /// <summary>
-        /// Other explicit acquisition failure propagated from acquisition contracts.
+        /// Another explicit acquisition failure was propagated without a more specific workflow mapping.
         /// </summary>
         AcquisitionFailure = 13,
     }
 
     /// <summary>
-    /// Represents one successful article workflow outcome that includes acquisition and parse metadata.
+    /// Carries a successful workflow payload together with the acquisition and parser state that produced it.
     /// </summary>
     /// <param name="MessageId">Canonical Message-ID correlation identifier.</param>
-    /// <param name="Acquisition">Successful acquisition result containing raw article bytes.</param>
-    /// <param name="Parse">Accepted parse result including header/body slices and yEnc validation metadata.</param>
+    /// <param name="Acquisition">Successful acquisition result that owns the raw article bytes.</param>
+    /// <param name="Parse">Accepted parse result describing the downloaded article.</param>
+    /// <remarks>
+    /// Disposal returns the pooled acquisition buffer once downstream processing no longer needs the raw article bytes.
+    /// </remarks>
     internal sealed record NntpArticleGrabberSuccess(
         string MessageId,
         NntpArticleAcquisitionResult Acquisition,
         NntpArticleParseResult Parse) : IDisposable
     {
         /// <summary>
-        /// Disposes acquisition-owned buffers after downstream processing is complete.
+        /// Disposes the acquisition-owned buffer after downstream processing is complete.
         /// </summary>
         public void Dispose()
         {
@@ -115,17 +118,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
     }
 
     /// <summary>
-    /// Represents one terminal workflow result for a grabber article operation.
+    /// Represents one terminal outcome of the grabber workflow.
     /// </summary>
     /// <param name="MessageId">Canonical Message-ID correlation identifier.</param>
-    /// <param name="IsSuccess">Indicates whether acquisition and parse completed successfully.</param>
-    /// <param name="FailureCode">Deterministic failure classification when unsuccessful.</param>
-    /// <param name="AcquisitionFailureCode">Source acquisition failure classification when applicable.</param>
-    /// <param name="ParseFailureCode">Source parser failure classification when applicable.</param>
+    /// <param name="IsSuccess">Whether acquisition and parsing completed successfully.</param>
+    /// <param name="FailureCode">Workflow-level deterministic failure classification when unsuccessful.</param>
+    /// <param name="AcquisitionFailureCode">Underlying acquisition classification when one exists.</param>
+    /// <param name="ParseFailureCode">Underlying parser classification when one exists.</param>
     /// <param name="YEncStatus">yEnc validation status when parsing reached yEnc validation.</param>
-    /// <param name="ResponseCode">NNTP response code from acquisition when available.</param>
-    /// <param name="ResponseText">Protocol/local detail text from acquisition when available.</param>
-    /// <param name="Success">Successful workflow payload when <paramref name="IsSuccess"/> is true.</param>
+    /// <param name="ResponseCode">NNTP response code preserved from acquisition when available.</param>
+    /// <param name="ResponseText">Protocol or local detail preserved from acquisition when available.</param>
+    /// <param name="Success">Successful workflow payload when <paramref name="IsSuccess"/> is <see langword="true"/>.</param>
+    /// <remarks>
+    /// Failed results never own acquisition buffers. Successful results transfer buffer ownership into <paramref name="Success"/>, which callers should dispose after processing.
+    /// </remarks>
     internal sealed record NntpArticleGrabberResult(
         string MessageId,
         bool IsSuccess,
@@ -138,12 +144,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         NntpArticleGrabberSuccess? Success) : IDisposable
     {
         /// <summary>
-        /// Creates a successful grabber result.
+        /// Creates a successful grabber result that transfers ownership of the acquired article buffer.
         /// </summary>
-        /// <param name="messageId">Canonical message identifier.</param>
-        /// <param name="acquisition">Successful acquisition result.</param>
-        /// <param name="parse">Accepted parse result.</param>
-        /// <returns>Successful grabber result with owned success payload.</returns>
+        /// <param name="messageId">Canonical Message-ID.</param>
+        /// <param name="acquisition">Successful acquisition result owning the raw article bytes.</param>
+        /// <param name="parse">Accepted parse result for the acquired bytes.</param>
+        /// <returns>A successful workflow result whose <see cref="Success"/> payload must eventually be disposed.</returns>
         internal static NntpArticleGrabberResult Successful(string messageId, NntpArticleAcquisitionResult acquisition, NntpArticleParseResult parse)
         {
             return new NntpArticleGrabberResult(
@@ -159,16 +165,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Creates a failed grabber result without owned success payload.
+        /// Creates a failed grabber result that preserves acquisition and parser diagnostics without owning payload buffers.
         /// </summary>
-        /// <param name="messageId">Canonical message identifier.</param>
-        /// <param name="failureCode">Deterministic workflow failure code.</param>
-        /// <param name="acquisitionFailureCode">Acquisition failure code when available.</param>
-        /// <param name="parseFailureCode">Parser failure code when available.</param>
-        /// <param name="yEncStatus">yEnc validation status when available.</param>
+        /// <param name="messageId">Canonical Message-ID.</param>
+        /// <param name="failureCode">Workflow-level failure classification.</param>
+        /// <param name="acquisitionFailureCode">Underlying acquisition failure code when available.</param>
+        /// <param name="parseFailureCode">Underlying parser failure code when available.</param>
+        /// <param name="yEncStatus">Underlying yEnc validation status when available.</param>
         /// <param name="responseCode">NNTP response code when available.</param>
-        /// <param name="responseText">Failure detail text.</param>
-        /// <returns>Failed workflow result.</returns>
+        /// <param name="responseText">Protocol or local detail text.</param>
+        /// <returns>A failed workflow result.</returns>
         internal static NntpArticleGrabberResult Failed(
             string messageId,
             NntpArticleGrabberFailureCode failureCode,
@@ -191,7 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Disposes successful payload ownership when present.
+        /// Disposes the successful payload, if this result currently owns one.
         /// </summary>
         public void Dispose()
         {

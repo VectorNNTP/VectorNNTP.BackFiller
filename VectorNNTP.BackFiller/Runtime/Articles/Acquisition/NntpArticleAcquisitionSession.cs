@@ -20,8 +20,12 @@ using VectorNNTP.Backfiller.Runtime.Transit;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 {
     /// <summary>
-    /// Reusable authenticated NNTP session that executes multiple sequential ARTICLE operations.
+    /// Owns one connected NNTP transport and executes sequential ARTICLE and DATE commands against it.
     /// </summary>
+    /// <remarks>
+    /// Repository usage routes this type through <see cref="VectorNNTP.Backfiller.Runtime.Articles.Grabber.NntpArticleExecutionSessionManager"/>, which ensures that one active article workflow or keepalive probe uses a session at a time.
+    /// The session serializes command writes to avoid QUIT racing active command emission during shutdown, but it is not a general-purpose concurrent NNTP command multiplexer.
+    /// </remarks>
     internal sealed class NntpArticleAcquisitionSession : IAsyncDisposable
     {
         /// <summary>
@@ -114,17 +118,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Connects and initializes a reusable acquisition session.
+        /// Connects, negotiates TLS when required, validates the greeting, and performs optional AUTHINFO setup for a reusable acquisition session.
         /// </summary>
         /// <param name="endpoint">Endpoint settings.</param>
-        /// <param name="options">Acquisition options.</param>
-        /// <param name="logger">Logger.</param>
+        /// <param name="options">Acquisition guardrails.</param>
+        /// <param name="logger">Session logger.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <param name="serverCertificateValidationCallback">Optional per-session TLS server-certificate validation callback. When <see langword="null"/>, platform default certificate validation semantics remain in effect.</param>
         /// <param name="connectionLoggingContext">Optional connection metadata used to enrich session logging.</param>
-        /// <returns>Connected session or deterministic failure result.</returns>
-        /// <param name="Session">The Session value.</param>
-        /// <param name="Result">The Result value.</param>
+        /// <returns>
+        /// A tuple whose <c>Session</c> element is non-null only when the reusable session is ready for later commands,
+        /// and whose <c>Result</c> element preserves the greeting or failure status for diagnostics.
+        /// </returns>
+        /// <remarks>
+        /// Successful connect results report <see cref="NntpArticleAcquisitionFailureCode.None"/> in the returned result, but they intentionally do not carry article bytes, so <see cref="NntpArticleAcquisitionResult.IsSuccess"/> remains reserved for successful ARTICLE payload acquisition.
+        /// </remarks>
         internal static async ValueTask<(NntpArticleAcquisitionSession? Session, NntpArticleAcquisitionResult Result)> ConnectAsync(
             NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionOptions options,
@@ -156,9 +164,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     options.ConnectTimeout,
                     cancellationToken,
-                    // <summary>
-                    // Stores token used by nntp article acquisition session.
-                    // </summary>
                     async token =>
                     {
                         await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
@@ -186,9 +191,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
                         cancellationToken,
-                        // <summary>
-                        // Stores token used by nntp article acquisition session.
-                        // </summary>
                         async token =>
                         {
                             await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
@@ -243,12 +245,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Downloads one article by Message-ID over existing session.
+        /// Issues <c>ARTICLE</c> for one validated Message-ID and, on success, returns the downloaded raw article bytes.
         /// </summary>
         /// <param name="messageId">Message-ID argument.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Deterministic acquisition result.</returns>
-        /// <typeparam name="NntpArticleAcquisitionResult">The NntpArticleAcquisitionResult type parameter.</typeparam>
+        /// <returns>A deterministic acquisition result whose payload buffer is present only when the ARTICLE command completed successfully.</returns>
+        /// <remarks>
+        /// Invalid Message-IDs are rejected before any protocol write. On payload-producing success the caller assumes ownership of the returned pooled buffer and should dispose the result after parsing.
+        /// </remarks>
         internal async ValueTask<NntpArticleAcquisitionResult> DownloadArticleAsync(string messageId, CancellationToken cancellationToken)
         {
             if (_disposed)
@@ -312,11 +316,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Sends a DATE keepalive command on the authenticated session without performing ARTICLE workflow.
+        /// Sends a <c>DATE</c> keepalive command on the existing session without performing article retrieval.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Deterministic result describing DATE keepalive health with command-specific status semantics.</returns>
-        /// <typeparam name="NntpArticleAcquisitionResult">The NntpArticleAcquisitionResult type parameter.</typeparam>
+        /// <returns>A deterministic result describing DATE keepalive health with command-specific status semantics.</returns>
+        /// <remarks>
+        /// A successful DATE response is reported through <see cref="NntpArticleAcquisitionFailureCode.None"/>, but no article buffer is produced.
+        /// </remarks>
         internal async ValueTask<NntpArticleAcquisitionResult> KeepAliveWithDateAsync(CancellationToken cancellationToken)
         {
             if (_disposed)
@@ -347,9 +353,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Disposes session transport resources.
+        /// Shuts down the session, attempting a bounded <c>QUIT</c> exchange when the protocol state still permits it.
         /// </summary>
-        /// <returns>Completion task.</returns>
+        /// <returns>A task that completes after reader, stream, socket, and logging-scope cleanup finish.</returns>
         public async ValueTask DisposeAsync()
         {
             if (_disposed)
@@ -384,10 +390,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Performs AUTHINFO USER/PASS flow when credentials are configured.
+        /// Performs the NNTP <c>AUTHINFO USER</c>/<c>AUTHINFO PASS</c> exchange when credentials are configured.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Failure result or null on success.</returns>
+        /// <returns>A failure result when authentication cannot complete; otherwise <see langword="null"/>.</returns>
+        /// <remarks>
+        /// The method requires username and password to be configured together; a half-configured credential set is rejected locally without sending protocol commands.
+        /// </remarks>
         private async Task<NntpArticleAcquisitionResult?> AuthenticateIfConfiguredAsync(CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(_endpoint.Username) && string.IsNullOrWhiteSpace(_endpoint.Password))
@@ -429,12 +438,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Reads one status line with timeout, length guardrails, and debug logging.
+        /// Reads one NNTP protocol line with timeout, byte-length guardrails, and debug logging.
         /// </summary>
         /// <param name="timeout">Operation timeout.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <param name="context">Trace context.</param>
-        /// <returns>Status line text.</returns>
+        /// <param name="context">Trace context describing the active protocol phase.</param>
+        /// <returns>The received status line text.</returns>
         private async ValueTask<string> ReadProtocolLineAsync(
             TimeSpan timeout,
             CancellationToken cancellationToken,
@@ -483,14 +492,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Writes one command line with timeout and optional credential redaction.
+        /// Writes one NNTP command line with timeout handling and optional credential redaction in debug logs.
         /// </summary>
         /// <param name="command">Command text.</param>
         /// <param name="timeout">Operation timeout.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <param name="context">Trace context.</param>
+        /// <param name="context">Trace context describing the active command phase.</param>
         /// <param name="redactCredentials">Whether authentication arguments should be redacted in logs.</param>
-        /// <returns>Completion task.</returns>
+        /// <returns>A task that completes when the command has been written and flushed.</returns>
         private async Task WriteCommandAsync(
             string command,
             TimeSpan timeout,
@@ -530,9 +539,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 _ = await ExecuteWithTimeoutAsync(
                     timeout,
                     cancellationToken,
-                    // <summary>
-                    // Stores token used by nntp article acquisition session.
-                    // </summary>
                     async token =>
                     {
                         await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
@@ -551,11 +557,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Reads multiline ARTICLE payload and removes one level of NNTP dot-stuffing.
+        /// Reads the multiline ARTICLE payload, removes one level of NNTP dot-stuffing, and transfers pooled ownership to the caller.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
-        /// <param name="context">Trace context.</param>
-        /// <returns>Owned downloaded article buffer.</returns>
+        /// <param name="context">Trace context describing the payload receive phase.</param>
+        /// <returns>An owned buffer containing the raw article bytes exactly as the parser should consume them.</returns>
+        /// <remarks>
+        /// The receive loop accepts payload fragmentation across pipe reads and terminates only on the NNTP terminator line. Any failure before <see cref="PooledArticleBuilder.Build"/> disposes the in-progress pooled buffer.
+        /// </remarks>
         private async ValueTask<DownloadedArticleBuffer> ReadArticlePayloadAsync(
             CancellationToken cancellationToken,
             NntpArticleAcquisitionTraceContext context)
@@ -760,11 +769,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Validates endpoint/options guardrails before connect.
+        /// Validates endpoint and option guardrails before any network work begins.
         /// </summary>
         /// <param name="endpoint">Endpoint settings.</param>
-        /// <param name="options">Options settings.</param>
-        /// <returns>Failure result when invalid, otherwise null.</returns>
+        /// <param name="options">Acquisition guardrails.</param>
+        /// <returns>A deterministic failure result when validation fails; otherwise <see langword="null"/>.</returns>
         private static NntpArticleAcquisitionResult? ValidateOptions(
             NntpArticleAcquisitionEndpoint endpoint,
             NntpArticleAcquisitionOptions options)
@@ -781,13 +790,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Executes operation with timeout and cancellation composition.
+        /// Executes an asynchronous operation with a linked timeout and caller-cancellation token.
         /// </summary>
         /// <typeparam name="T">Operation result type.</typeparam>
-        /// <param name="timeout">Timeout.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <param name="operation">Operation delegate.</param>
-        /// <returns>Operation result.</returns>
+        /// <param name="timeout">Timeout budget for the operation.</param>
+        /// <param name="cancellationToken">Caller cancellation token.</param>
+        /// <param name="operation">Operation delegate that receives the linked token.</param>
+        /// <returns>The delegate result.</returns>
+        /// <exception cref="TimeoutException">Thrown when the linked timeout fires before the caller token is cancelled.</exception>
         private static async ValueTask<T> ExecuteWithTimeoutAsync<T>(
             TimeSpan timeout,
             CancellationToken cancellationToken,
@@ -807,9 +817,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Attempts protocol-level QUIT during disposal when the session reached command-ready state and the transport remains usable.
+        /// Attempts a bounded protocol-level <c>QUIT</c> exchange during disposal when the session reached command-ready state and the transport still appears writable.
         /// </summary>
-        /// <returns>A task that completes after the bounded QUIT attempt path finishes.</returns>
+        /// <returns>A task that completes after the QUIT attempt path finishes.</returns>
         private async Task TrySendQuitBeforeTransportDisposeAsync()
         {
             if (!_protocolReadyForCommands || _transportFailed || !CanAttemptQuitTransportWrite())
@@ -845,11 +855,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Marks the session transport as failed when exceptions indicate the connection is no longer safely command-writable.
+        /// Marks the transport as failed when an observed exception means later command writes are no longer trustworthy.
         /// </summary>
-        /// <param name="exception">Exception observed by protocol read/write flow.</param>
+        /// <param name="exception">Exception observed by protocol read or write flow.</param>
         /// <param name="callerCancellation">Caller cancellation token used to distinguish cooperative cancellation from transport failure.</param>
-        /// <returns>Always <see langword="false"/> so the filter preserves original exception flow.</returns>
+        /// <returns>Always <see langword="false"/> so exception filters preserve the original control flow.</returns>
         private bool MarkTransportFailureForException(Exception exception, CancellationToken callerCancellation)
         {
             if (exception is TimeoutException
@@ -871,12 +881,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Maps runtime exceptions to deterministic acquisition failures.
+        /// Maps observed runtime exceptions into deterministic acquisition results.
         /// </summary>
         /// <param name="exception">Thrown exception.</param>
         /// <param name="callerCancellation">Caller cancellation token.</param>
-        /// <param name="failure">Mapped acquisition failure.</param>
-        /// <returns><see langword="true"/> when mapped.</returns>
+        /// <param name="failure">Mapped acquisition failure result.</param>
+        /// <returns><see langword="true"/> because every exception reaching this helper is translated into a deterministic result.</returns>
         private static bool TryMapFailure(
             Exception exception,
             CancellationToken callerCancellation,
@@ -1004,7 +1014,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Pooled byte accumulator for article payload receive path.
+        /// Accumulates received article bytes in a pooled buffer that can grow up to the configured article-size ceiling.
         /// </summary>
         private sealed class PooledArticleBuilder : IDisposable
         {
@@ -1034,10 +1044,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             private readonly NntpArticleAcquisitionTraceContext _context;
 
             /// <summary>
-            /// Initializes a new pooled builder.
+            /// Initializes a new pooled article builder.
             /// </summary>
-            /// <param name="maximumArticleBytes">Maximum allowed bytes.</param>
-            /// <param name="context">Operation context.</param>
+            /// <param name="maximumArticleBytes">Maximum allowed article size in bytes.</param>
+            /// <param name="context">Trace context used when guardrail failures are raised.</param>
             internal PooledArticleBuilder(int maximumArticleBytes, NntpArticleAcquisitionTraceContext context)
             {
                 _maximumArticleBytes = maximumArticleBytes;
@@ -1046,9 +1056,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             /// <summary>
-            /// Appends one byte.
+            /// Appends one received byte, growing the rented buffer as needed within the configured limit.
             /// </summary>
-            /// <param name="value">Byte value.</param>
+            /// <param name="value">Received byte value.</param>
             internal void WriteByte(byte value)
             {
                 if (_length >= _maximumArticleBytes)
@@ -1068,9 +1078,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             /// <summary>
-            /// Transfers pooled ownership to result buffer.
+            /// Transfers ownership of the rented buffer into a <see cref="DownloadedArticleBuffer"/> result wrapper.
             /// </summary>
-            /// <returns>Downloaded article buffer owner.</returns>
+            /// <returns>A buffer owner for the accumulated article bytes.</returns>
             internal DownloadedArticleBuffer Build()
             {
                 byte[] owned = Interlocked.Exchange(ref _buffer, []);
@@ -1078,7 +1088,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             /// <summary>
-            /// Returns owned pool buffer when not yet transferred.
+            /// Returns the rented buffer to the shared pool when ownership has not yet been transferred.
             /// </summary>
             public void Dispose()
             {
@@ -1090,7 +1100,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             /// <summary>
-            /// Grows rented buffer capacity up to configured maximum.
+            /// Grows the rented buffer toward the configured maximum while preserving the bytes already received.
             /// </summary>
             private void Grow()
             {

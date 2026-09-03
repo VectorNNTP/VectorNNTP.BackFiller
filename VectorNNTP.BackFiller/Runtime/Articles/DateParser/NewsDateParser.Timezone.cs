@@ -11,15 +11,15 @@ using System.Text.RegularExpressions;
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Timezone-normalization partial for <see cref="NewsDateParser"/>.
+    /// Supplies helpers that detect and normalize trailing timezone abbreviations in candidate date values.
     /// </summary>
     internal static partial class NewsDateParser
     {
         /// <summary>
-        /// Returns a value indicating whether a string ends in an ASCII letter.
+        /// Determines whether the last character of <paramref name="input"/> is an ASCII letter.
         /// </summary>
-        /// <param name="input">Non-empty input string.</param>
-        /// <returns><see langword="true"/> when final character is A-Z or a-z.</returns>
+        /// <param name="input">Non-empty normalized input string.</param>
+        /// <returns><see langword="true"/> when the final character is in the <c>A-Z</c> or <c>a-z</c> range.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool EndsWithAsciiLetter(string input)
         {
@@ -28,11 +28,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         }
 
         /// <summary>
-        /// Detects unknown trailing timezone abbreviations.
+        /// Detects an unrecognized trailing timezone abbreviation.
         /// </summary>
         /// <param name="cleaned">Trimmed normalized date string.</param>
-        /// <param name="abbreviation">Unknown abbreviation when detected.</param>
-        /// <returns><see langword="true"/> when an unknown abbreviation is present.</returns>
+        /// <param name="abbreviation">The trailing abbreviation when it was present but not recognized.</param>
+        /// <returns><see langword="true"/> when strict timezone validation should reject <paramref name="cleaned"/>.</returns>
         private static bool TryGetUnknownTrailingAbbreviation(string cleaned, out string abbreviation)
         {
             abbreviation = string.Empty;
@@ -58,10 +58,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         }
 
         /// <summary>
-        /// Replaces known trailing timezone abbreviations with numeric UTC offsets.
+        /// Replaces a recognized trailing timezone abbreviation with its numeric UTC offset.
         /// </summary>
         /// <param name="input">Normalized date string.</param>
-        /// <returns>Original string when no substitution applies; otherwise substituted string.</returns>
+        /// <returns>The original string when no recognized trailing abbreviation is present; otherwise a string with the abbreviation replaced by a numeric offset.</returns>
         private static string SubstituteTimezoneAbbreviation(string input)
         {
             if (input.Length == 0 || !EndsWithAsciiLetter(input))

@@ -13,13 +13,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// Represents the loaded BackFiller listener certificate bundle and its source on disk.
     /// </summary>
     /// <remarks>
-    /// The bundle is a disposable owning container for the loaded X509 certificate. Consumers that publish a bundle
-    /// into shared runtime state must clone the certificate if they need to keep it beyond the current ownership
-    /// boundary.
+    /// The bundle transfers ownership of the contained <see cref="X509Certificate2"/> across certificate-management
+    /// boundaries. Consumers that publish a bundle into shared runtime state must clone the certificate if they need to
+    /// keep it beyond the current ownership boundary.
     /// </remarks>
-    /// <param name="Certificate">Loaded certificate with private key.</param>
-    /// <param name="SourcePath">Source PFX path used to load the certificate.</param>
-    /// <param name="LoadedAtUtc">UTC timestamp when the bundle was loaded.</param>
+    /// <param name="Certificate">Loaded listener certificate, including the private key when loading succeeded.</param>
+    /// <param name="SourcePath">PFX path from which <paramref name="Certificate"/> was loaded.</param>
+    /// <param name="LoadedAtUtc">UTC timestamp captured after the certificate was loaded into memory.</param>
     internal sealed record BackFillerCertificateBundle(
         X509Certificate2 Certificate,
         string SourcePath,

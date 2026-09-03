@@ -13,16 +13,19 @@ using VectorNNTP.Backfiller.Runtime.RabbitMq;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// RabbitMQ response publisher using owned-channel isolation and publish confirms.
+    /// Publishes article-work RPC responses on RabbitMQ and waits for broker confirmation before Phase 4 can settle the source delivery.
     /// </summary>
+    /// <remarks>
+    /// A single owned publish channel is reused behind a semaphore so concurrent callers serialize confirm-sensitive work and stale channels can be discarded when the connection generation changes.
+    /// </remarks>
     internal sealed class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
     {
         /// <summary>
-        /// Stores connection manager used by rabbit mq article response publisher.
+        /// Connection manager that creates and recovers owned RabbitMQ channels.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager;
         /// <summary>
-        /// Stores options used by rabbit mq article response publisher.
+        /// Validated RabbitMQ runtime options, including publish-confirm timeout policy.
         /// </summary>
         private readonly RabbitMqRuntimeOptions _options;
         /// <summary>
@@ -30,20 +33,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly ILogger<RabbitMqArticleResponsePublisher> _logger;
         /// <summary>
-        /// Stores publish gate used by rabbit mq article response publisher.
+        /// Serializes access to the cached owned publish channel and its confirmation sequence.
         /// </summary>
         private readonly SemaphoreSlim _publishGate = new(1, 1);
         /// <summary>
-        /// Stores owned publish channel used by rabbit mq article response publisher.
+        /// Cached owned channel currently used for RPC response publication, when one is available.
         /// </summary>
         private RabbitMqOwnedChannel? _ownedPublishChannel;
 
         /// <summary>
-        /// Initializes a new response publisher instance.
+        /// Initializes a response publisher bound to the validated runtime snapshot and RabbitMQ connection manager.
         /// </summary>
-        /// <param name="runtimeOptions">Validated runtime options.</param>
-        /// <param name="connectionManager">RabbitMQ connection/channel owner.</param>
-        /// <param name="logger">Logger.</param>
+        /// <param name="runtimeOptions">Validated runtime options that supply RabbitMQ publish-confirm timeout configuration.</param>
+        /// <param name="connectionManager">RabbitMQ connection manager that creates owned publish channels.</param>
+        /// <param name="logger">Logger used for publish failure diagnostics.</param>
         public RabbitMqArticleResponsePublisher(
             BackFillerRuntimeOptions runtimeOptions,
             RabbitMqConnectionManager connectionManager,
@@ -55,7 +58,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Publishes one response payload to the delivery's reply queue and waits for broker confirmation.
+        /// </summary>
+        /// <param name="result">Processed result that supplies authoritative reply queue, correlation identifier, and source connection generation.</param>
+        /// <param name="response">Application-level response body to publish.</param>
+        /// <param name="cancellationToken">Cancellation token for gate acquisition, channel acquisition, publish, and confirm waiting.</param>
+        /// <returns>A publish result describing confirmed, timed-out, or failed publication.</returns>
         public async ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
             ArticleWorkProcessingResult result,
             RabbitMqArticleWorkResponse response,
@@ -170,7 +179,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Disposes the owned publish channel and the serialization gate.
+        /// </summary>
+        /// <returns>A value task that completes after any cached publish channel has been released.</returns>
         public async ValueTask DisposeAsync()
         {
             await _publishGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -186,8 +198,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles get or create publish channel async for rabbit mq article response publisher.
+        /// Returns the cached owned publish channel for the current connection generation, or creates a new one when needed.
         /// </summary>
+        /// <param name="backbone">Backbone name used only to label the owned channel lease in connection-manager diagnostics.</param>
+        /// <param name="cancellationToken">Cancellation token for channel creation.</param>
+        /// <returns>The owned publish channel for the current connection generation.</returns>
         private async Task<RabbitMqOwnedChannel?> GetOrCreatePublishChannelAsync(string backbone, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -216,7 +231,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Handles reset publish channel async for rabbit mq article response publisher.
+        /// Disposes the cached publish channel and clears the local reference.
         /// </summary>
         private async ValueTask ResetPublishChannelAsync()
         {

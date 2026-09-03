@@ -8,16 +8,25 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Default response factory for terminal article-work outcomes.
+    /// Builds the application-level RPC payload for outcomes that are terminal from the caller's perspective.
     /// </summary>
+    /// <remarks>
+    /// Transient provider failures, cancellation, and unexpected failures intentionally return <see langword="null"/> so the broker can requeue without emitting a misleading terminal response.
+    /// </remarks>
     internal sealed class ArticleWorkResponseFactory : IArticleWorkResponseFactory
     {
         /// <summary>
-        /// Stores response version used by article work response factory.
+        /// Canonical response schema version written into every emitted RPC payload.
         /// </summary>
         private const int ResponseVersion = 1;
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Creates the version-1 RPC response payload for a terminal processing result when one should be published.
+        /// </summary>
+        /// <param name="result">Completed processing result.</param>
+        /// <returns>
+        /// A compact response payload for success and terminal request/content failures, or <see langword="null"/> when the delivery should instead be retried.
+        /// </returns>
         public RabbitMqArticleWorkResponse? CreateResponse(ArticleWorkProcessingResult result)
         {
             ArgumentNullException.ThrowIfNull(result);

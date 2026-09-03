@@ -11,8 +11,11 @@ using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Resolves and canonicalizes NNTP article date values from parsed headers in deterministic candidate order.
+    /// Resolves the first usable article date header in the parser's deterministic candidate order.
     /// </summary>
+    /// <remarks>
+    /// The resolver keeps scanning later candidate headers when an earlier candidate is present but malformed, allowing fallback values such as <c>Injection-Date</c> to recover otherwise acceptable articles.
+    /// </remarks>
     internal static class ArticleDateHeaderResolver
     {
         /// <summary>
@@ -29,14 +32,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         ];
 
         /// <summary>
-        /// Tries to resolve the first canonical article date from known candidate headers.
+        /// Tries to resolve and canonicalize one article date from known candidate headers.
         /// </summary>
-        /// <param name="articleBytes">Original article buffer used by header slice offsets.</param>
-        /// <param name="headers">Parsed header entries in original order.</param>
-        /// <param name="canonicalValue">Canonical date when successful.</param>
-        /// <param name="originalValue">Original selected date value bytes when successful.</param>
-        /// <param name="failure">Failure reason when no candidate can be parsed.</param>
-        /// <returns><see langword="true"/> when a canonical date was produced.</returns>
+        /// <param name="articleBytes">Original article buffer that owns the header bytes referenced by <paramref name="headers"/>.</param>
+        /// <param name="headers">Parsed header entries in original wire order.</param>
+        /// <param name="canonicalValue">Canonical UTC date string when a candidate parses successfully.</param>
+        /// <param name="originalValue">Slice of the original winning header value when resolution succeeds.</param>
+        /// <param name="failure">Failure reason returned by the last candidate parser attempt, or <see cref="DateParseFailureReason.ParseFailed"/> when no candidate succeeds.</param>
+        /// <returns><see langword="true"/> when a candidate header produced a canonical value.</returns>
         internal static bool TryGetCanonicalArticleDate(
             ReadOnlyMemory<byte> articleBytes,
             IReadOnlyList<NntpArticleHeaderEntry> headers,

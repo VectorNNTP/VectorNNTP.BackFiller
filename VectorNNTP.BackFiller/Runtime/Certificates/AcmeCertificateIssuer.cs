@@ -89,7 +89,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <exception cref="InvalidOperationException">Thrown when the ACME account, order, challenge, or certificate material is invalid.</exception>
         /// <exception cref="TimeoutException">Thrown when DNS propagation or ACME state transitions do not complete in time.</exception>
         /// <exception cref="OperationCanceledException">Thrown when cancellation is requested before issuance completes.</exception>
-        /// <typeparam name="AcmeOrderIssueResult">The AcmeOrderIssueResult type parameter.</typeparam>
         public async Task<AcmeOrderIssueResult> IssueCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken)
@@ -604,25 +603,25 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Emits the acme order created log event for acme certificate issuer.
+        /// Defines the informational log emitted after a new ACME order is created for the generated BackFiller FQDN.
         /// </summary>
         [LoggerMessage(EventId = 2800, Level = LogLevel.Information, Message = "ACME order created for generated BackFiller FQDN {Fqdn}")]
         private static partial void LogAcmeOrderCreated(ILogger logger, string fqdn);
 
         /// <summary>
-        /// Emits the dns txt record created log event for acme certificate issuer.
+        /// Defines the informational log emitted after the ACME DNS-01 TXT challenge record is created.
         /// </summary>
         [LoggerMessage(EventId = 2801, Level = LogLevel.Information, Message = "ACME DNS-01 TXT record created for {RecordName}; RecordId={RecordId}")]
         private static partial void LogDnsTxtRecordCreated(ILogger logger, string recordName, string recordId);
 
         /// <summary>
-        /// Emits the dns txt record removed log event for acme certificate issuer.
+        /// Defines the informational log emitted after an ACME DNS-01 TXT challenge record owned by the current attempt is removed.
         /// </summary>
         [LoggerMessage(EventId = 2802, Level = LogLevel.Information, Message = "ACME DNS-01 TXT record removed for {RecordName}; RecordId={RecordId}")]
         private static partial void LogDnsTxtRecordRemoved(ILogger logger, string recordName, string recordId);
 
         /// <summary>
-        /// Emits the dns txt record cleanup failed log event for acme certificate issuer.
+        /// Defines the warning log emitted when ACME DNS-01 TXT cleanup fails after the main workflow has already finished or faulted.
         /// </summary>
         [LoggerMessage(EventId = 2803, Level = LogLevel.Warning, Message = "ACME DNS-01 TXT record cleanup failed for {RecordName}; RecordId={RecordId}")]
         private static partial void LogDnsTxtRecordCleanupFailed(ILogger logger, Exception exception, string recordName, string recordId);

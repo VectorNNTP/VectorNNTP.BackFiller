@@ -33,9 +33,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         /// Determines whether one Message-ID token is syntactically valid.
         /// </summary>
         /// <param name="messageId">Candidate Message-ID including angle brackets.</param>
-        /// <param name="stripSpaces">When true, leading/trailing whitespace is trimmed before validation.</param>
-        /// <returns><see langword="true"/> when valid.</returns>
-        /// <typeparam name="char">The char type parameter.</typeparam>
+        /// <param name="stripSpaces">When <see langword="true"/>, leading and trailing whitespace is trimmed before validating the token itself.</param>
+        /// <returns><see langword="true"/> when the value is ASCII, bracketed, and satisfies the validator's dot-atom or domain-literal grammar.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsValidMessageId(ReadOnlySpan<char> messageId, bool stripSpaces = false)
         {
@@ -93,14 +92,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Validates right-hand Message-ID domain component.
+        /// Validates the right-hand domain component after the local part and <c>@</c> separator have already been accepted.
         /// </summary>
         /// <param name="span">Source span.</param>
         /// <param name="startIndex">Inclusive domain start.</param>
         /// <param name="endIndex">Exclusive domain end.</param>
-        /// <param name="stripSpaces">Whether trailing spaces should be trimmed after parse.</param>
-        /// <param name="bracket">Whether closing &gt; token is required at parse end.</param>
-        /// <returns><see langword="true"/> when domain syntax is valid.</returns>
+        /// <param name="stripSpaces">Whether trailing whitespace after the parsed domain should be ignored before range completion is checked.</param>
+        /// <param name="bracket">Whether the parser must consume a closing <c>&gt;</c> after the domain.</param>
+        /// <returns><see langword="true"/> when the domain is a valid dot-atom or bracketed literal and the remaining range satisfies the requested end condition.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsValidRightPartMessageId(
             ReadOnlySpan<char> span,
@@ -146,14 +145,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Parses dot-atom sequence until stop character or range end.
+        /// Parses a dot-atom sequence made of one or more non-empty atoms separated by literal dots.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="startIndex">Inclusive start index.</param>
         /// <param name="endIndex">Exclusive end index.</param>
-        /// <param name="stopChar">Stop character (or '\0' for no stop token).</param>
-        /// <param name="stopIndex">Output stop index.</param>
-        /// <returns><see langword="true"/> when a valid sequence was parsed.</returns>
+        /// <param name="stopChar">Stop character that terminates the sequence, or <c>'\0'</c> when the sequence must consume the full range.</param>
+        /// <param name="stopIndex">Index of the terminating stop character, or the exclusive end index when the full range was consumed.</param>
+        /// <returns><see langword="true"/> when at least one atom was parsed and no empty or malformed atom segments were encountered.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool TryParseDotAtomSequence(
             ReadOnlySpan<char> span,
@@ -210,7 +209,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Validation
         }
 
         /// <summary>
-        /// Parses one bracketed domain literal token.
+        /// Parses a bracketed domain literal whose interior characters must satisfy the validator's domain-literal character class.
         /// </summary>
         /// <param name="span">Input span.</param>
         /// <param name="startIndex">Opening bracket index.</param>

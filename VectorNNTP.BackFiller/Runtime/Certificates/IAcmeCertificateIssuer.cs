@@ -20,12 +20,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal interface IAcmeCertificateIssuer
     {
         /// <summary>
-        /// Executes a full ACME order workflow and returns issued certificate artifacts.
+        /// Executes a full ACME order workflow and returns the certificate artifacts required for persistence.
         /// </summary>
-        /// <param name="letsEncryptOptions">Validated ACME runtime options.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Issued certificate artifacts.</returns>
-        /// <typeparam name="AcmeOrderIssueResult">The AcmeOrderIssueResult type parameter.</typeparam>
+        /// <param name="letsEncryptOptions">Validated ACME runtime options that identify certificate, DNS, and account inputs.</param>
+        /// <param name="cancellationToken">Cancellation token that aborts issuance before a result is returned.</param>
+        /// <returns>Issued certificate artifacts for the listener certificate bundle.</returns>
         public Task<AcmeOrderIssueResult> IssueCertificateAsync(
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions,
             CancellationToken cancellationToken);

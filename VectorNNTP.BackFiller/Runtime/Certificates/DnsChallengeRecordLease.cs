@@ -8,17 +8,17 @@
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Represents one created DNS-01 TXT record and its provider identifier for reliable ACME cleanup.
+    /// Represents one created or reused DNS-01 TXT record and the cleanup ownership associated with it.
     /// </summary>
     /// <remarks>
     /// This lease is scoped only to ACME challenge TXT records and is unrelated to the A/AAAA records that keep the
     /// generated BackFiller FQDN synchronized with BindAddress values.
     /// </remarks>
-    /// <param name="ZoneId">Cloudflare zone identifier.</param>
-    /// <param name="RecordId">Created Cloudflare DNS record identifier.</param>
-    /// <param name="RecordName">TXT host name.</param>
-    /// <param name="RecordValue">TXT content value.</param>
-    /// <param name="IsOwnedByCurrentAttempt">Whether this issuance created the record and therefore owns cleanup.</param>
+    /// <param name="ZoneId">Cloudflare zone identifier that owns the TXT record.</param>
+    /// <param name="RecordId">Cloudflare DNS record identifier.</param>
+    /// <param name="RecordName">Fully qualified ACME TXT host name.</param>
+    /// <param name="RecordValue">TXT content value expected by ACME validation.</param>
+    /// <param name="IsOwnedByCurrentAttempt">Whether the current issuance attempt created the record and therefore must delete it during cleanup.</param>
     internal sealed record DnsChallengeRecordLease(
         string ZoneId,
         string RecordId,

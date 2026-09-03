@@ -9,20 +9,23 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
-    /// Default Phase 4 result sink that enforces response-confirm-before-ACK ordering.
+    /// Executes Phase 4 RPC publication and broker settlement for processed article-work results.
     /// </summary>
+    /// <remarks>
+    /// When a terminal response is required, the sink waits for broker confirmation before acknowledging or dropping the delivery. The result object is always disposed when processing completes.
+    /// </remarks>
     internal sealed class RabbitMqArticleResultSink : IArticleWorkResultSink
     {
         /// <summary>
-        /// Stores planner used by rabbit mq article result sink.
+        /// Planner that maps processing results to broker settlement and response-publication requirements.
         /// </summary>
         private readonly IArticleWorkDispositionPlanner _planner;
         /// <summary>
-        /// Stores response factory used by rabbit mq article result sink.
+        /// Factory that produces terminal JSON response payloads for caller-visible outcomes.
         /// </summary>
         private readonly IArticleWorkResponseFactory _responseFactory;
         /// <summary>
-        /// Stores response publisher used by rabbit mq article result sink.
+        /// Publisher that emits response payloads to RabbitMQ and waits for broker confirmation.
         /// </summary>
         private readonly IRabbitMqArticleResponsePublisher _responsePublisher;
         /// <summary>
@@ -31,8 +34,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
 
         /// <summary>
-        /// Initializes a new result sink.
+        /// Initializes a sink that owns final response-publication and delivery-settlement orchestration.
         /// </summary>
+        /// <param name="planner">Planner that maps processing outcomes and cancellation into broker actions.</param>
+        /// <param name="responseFactory">Factory that builds terminal RPC response payloads when required.</param>
+        /// <param name="responsePublisher">Publisher that emits and confirms RPC responses on RabbitMQ.</param>
+        /// <param name="logger">Logger used for publication fallback and settlement diagnostics.</param>
         public RabbitMqArticleResultSink(
             IArticleWorkDispositionPlanner planner,
             IArticleWorkResponseFactory responseFactory,
@@ -45,7 +52,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Applies the Phase 4 publication and settlement policy for one completed processing result.
+        /// </summary>
+        /// <param name="result">Completed result whose response publication and broker settlement must now be finalized.</param>
+        /// <param name="cancellationToken">Cancellation token for response publication and settlement operations.</param>
+        /// <returns>A value task that completes after the result has been published or settled according to policy.</returns>
         public async ValueTask OnProcessedAsync(ArticleWorkProcessingResult result, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(result);

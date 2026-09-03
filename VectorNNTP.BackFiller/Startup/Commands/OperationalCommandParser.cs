@@ -44,6 +44,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         /// <para>Parses arguments left-to-right using a strict fail-closed contract.</para>
         /// <para>Unknown <c>--option</c> values, positional arguments, and multiple commands are rejected with exit code 2.</para>
         /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="args"/> is <see langword="null"/>.</exception>
         internal static bool TryParseCommandLine(string[] args, out OperationalCommand? command, out int? errorExitCode)
         {
             ArgumentNullException.ThrowIfNull(args);
@@ -89,7 +90,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Attempts to map a raw argument token to a known operational command token.
+        /// Attempts to map one exact command-line token to a known operational command.
         /// </summary>
         /// <param name="token">Raw argument token to classify.</param>
         /// <param name="command">When this method returns, contains the mapped command when mapping succeeds.</param>
@@ -169,7 +170,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
         }
 
         /// <summary>
-        /// Formats null/empty/whitespace argument values into explicit sentinel text for parse diagnostics.
+        /// Formats invalid raw argument values into explicit sentinel text for parse diagnostics.
         /// </summary>
         /// <param name="argument">Raw argument value to normalize for error output.</param>
         /// <returns>A printable sentinel token such as <c>&lt;null&gt;</c>, <c>&lt;empty&gt;</c>, or <c>&lt;whitespace&gt;</c>.</returns>

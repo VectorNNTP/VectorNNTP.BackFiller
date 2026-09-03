@@ -8,42 +8,45 @@
 namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
 {
     /// <summary>
-    /// Describes why a date header value could not be parsed or canonicalized.
+    /// Classifies why a candidate article date value could not be normalized into the parser's canonical UTC form.
     /// </summary>
     internal enum DateParseFailureReason
     {
         /// <summary>
-        /// Parsing succeeded.
+        /// Parsing and canonicalization succeeded.
         /// </summary>
         None = 0,
 
         /// <summary>
-        /// Input was empty or whitespace.
+        /// The candidate value was empty after trimming.
         /// </summary>
         Empty = 1,
 
         /// <summary>
-        /// Input exceeded configured maximum length.
+        /// The candidate exceeded the configured maximum input length.
         /// </summary>
         TooLong = 2,
 
         /// <summary>
-        /// Input contained non-printable ASCII characters.
+        /// The candidate contained bytes outside the parser's printable-ASCII acceptance range.
         /// </summary>
         NonPrintableAscii = 3,
 
         /// <summary>
-        /// Reserved for fixed-buffer normalization paths.
+        /// Reserved for normalization paths that would need more temporary storage than was available.
         /// </summary>
+        /// <remarks>
+        /// The current implementation does not emit this value.
+        /// </remarks>
         NormalizationBufferTooSmall = 4,
 
         /// <summary>
-        /// Input ended with an unknown timezone abbreviation while strict abbreviation mode was enabled.
+        /// A trailing timezone abbreviation was present but not recognized while strict abbreviation mode was enabled.
         /// </summary>
         UnknownTimezoneAbbreviation = 5,
 
         /// <summary>
-        /// No parsing strategy accepted the input value.
+        /// No supported parse strategy accepted the normalized value.
         /// </summary>
         ParseFailed = 6,
     }

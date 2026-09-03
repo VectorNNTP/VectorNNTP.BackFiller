@@ -20,29 +20,28 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Retrieves TXT records for one DNS name.
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>
-        /// <param name="recordName">DNS record name.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>The TXT records currently stored for the name.</returns>
+        /// <param name="recordName">Fully qualified TXT record name.</param>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operation.</param>
+        /// <returns>The TXT records currently stored for <paramref name="recordName"/>.</returns>
         public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Creates one TXT record.
+        /// Creates one TXT record for ACME challenge publication.
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>
-        /// <param name="recordName">DNS record name.</param>
-        /// <param name="recordValue">TXT value content.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Created TXT record information.</returns>
-        /// <typeparam name="CloudflareTxtRecordInfo">The CloudflareTxtRecordInfo type parameter.</typeparam>
+        /// <param name="recordName">Fully qualified TXT record name.</param>
+        /// <param name="recordValue">TXT value content to publish.</param>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operation.</param>
+        /// <returns>Metadata describing the created TXT record.</returns>
         public Task<CloudflareTxtRecordInfo> AddTxtRecordAsync(string zoneId, string recordName, string recordValue, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Deletes one TXT record by identifier.
+        /// Deletes one TXT record by provider identifier.
         /// </summary>
         /// <param name="zoneId">Cloudflare zone identifier.</param>
-        /// <param name="recordId">Record identifier.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <param name="recordId">Cloudflare record identifier to delete.</param>
+        /// <param name="cancellationToken">Cancellation token propagated to the provider operation.</param>
+        /// <returns>A task representing the asynchronous delete operation.</returns>
         public Task DeleteTxtRecordAsync(string zoneId, string recordId, CancellationToken cancellationToken);
     }
 }

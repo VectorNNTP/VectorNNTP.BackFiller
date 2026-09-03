@@ -10,8 +10,21 @@ using RabbitMQ.Client;
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// RabbitMQ topology declaration contract for one backbone namespace.
+    /// Immutable topology definition for one backbone-scoped RabbitMQ exchange, queue, and binding.
     /// </summary>
+    /// <param name="Backbone">Canonical backbone name represented by this topology definition.</param>
+    /// <param name="ExchangeName">Exchange name that receives article work for the backbone.</param>
+    /// <param name="ExchangeType">RabbitMQ exchange type used for the backbone exchange.</param>
+    /// <param name="ExchangeDurable">Indicates whether the exchange survives broker restarts.</param>
+    /// <param name="ExchangeAutoDelete">Indicates whether the exchange is auto-deleted when unused.</param>
+    /// <param name="QueueName">Queue name bound to the backbone exchange.</param>
+    /// <param name="QueueDurable">Indicates whether the queue survives broker restarts.</param>
+    /// <param name="QueueExclusive">Indicates whether the queue is exclusive to a single connection.</param>
+    /// <param name="QueueAutoDelete">Indicates whether the queue is auto-deleted when unused.</param>
+    /// <param name="RoutingKey">Routing key used when binding the queue to the exchange.</param>
+    /// <param name="QueueArguments">Optional queue arguments applied during declaration.</param>
+    /// <param name="ExchangeArguments">Optional exchange arguments applied during declaration.</param>
+    /// <param name="BindingArguments">Optional binding arguments applied during declaration.</param>
     internal sealed record RabbitMqBackboneTopologyDefinition(
         string Backbone,
         string ExchangeName,
@@ -28,20 +41,20 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         IReadOnlyDictionary<string, object?>? BindingArguments = null);
 
     /// <summary>
-    /// Builds backbone-isolated RabbitMQ topology definitions.
+    /// Builds the canonical RabbitMQ topology definitions used by BackFiller consumer infrastructure.
     /// </summary>
     internal static class RabbitMqTopologyBuilder
     {
         /// <summary>
-        /// Builds unique Backbone-scoped topology definitions.
+        /// Builds the distinct backbone topology definitions required for the supplied account backbones.
         /// </summary>
+        /// <param name="serverId">BackFiller server identifier retained for caller compatibility.</param>
+        /// <param name="backbones">Backbone names discovered from the authoritative account snapshot.</param>
+        /// <returns>Topology definitions ordered by backbone name with duplicates and blank entries removed.</returns>
         /// <remarks>
-        /// Legacy Grabber compatibility model: exchange and queue are both named grabbers.{backbone.ToLowerInvariant()}.
-        /// ServerId and BackFiller instance identity do not participate in article-work topology identity.
+        /// Topology identity is backbone-only. Existing compatibility rules require both the exchange and queue to use the
+        /// legacy name <c>grabbers.{backbone.ToLowerInvariant()}</c>, independent of server identifier.
         /// </remarks>
-        /// <param name="serverId">BackFiller server identifier (retained for call-site compatibility; topology identity is Backbone-only).</param>
-        /// <param name="backbones">Configured account backbones.</param>
-        /// <returns>Immutable topology definitions by backbone.</returns>
         internal static IReadOnlyList<RabbitMqBackboneTopologyDefinition> BuildDefinitions(
             int serverId,
             IEnumerable<string> backbones)
@@ -88,10 +101,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles build legacy backbone entity name for rabbit mq topology.
+        /// Builds the legacy queue and exchange name used for a backbone-scoped article-work topology.
         /// </summary>
-        /// <param name="backbone">The backbone name.</param>
-        /// <returns>The legacy backbone entity name.</returns>
+        /// <param name="backbone">Canonical backbone name.</param>
+        /// <returns>The lower-cased legacy entity name in the form <c>grabbers.{backbone}</c>.</returns>
         private static string BuildLegacyBackboneEntityName(string backbone)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(backbone);
@@ -100,44 +113,55 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     }
 
     /// <summary>
-    /// Declares RabbitMQ topology for configured backbones.
+    /// Declares RabbitMQ exchanges, queues, and bindings for the currently configured backbones.
     /// </summary>
+    /// <remarks>
+    /// Declaration is serialized so repeated initialization calls remain idempotent for the active connection
+    /// generation. When the connection generation changes, previously remembered declaration keys are discarded and the
+    /// topology is declared again on the replacement connection.
+    /// </remarks>
     internal sealed partial class RabbitMqTopologyInitializer(
         RabbitMqConnectionManager connectionManager,
         ILogger<RabbitMqTopologyInitializer> logger) : IDisposable
     {
         /// <summary>
-        /// Stores connection manager used by rabbit mq topology.
+        /// Connection manager that supplies ready connections and channel leases for topology work.
         /// </summary>
         private readonly RabbitMqConnectionManager _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+
         /// <summary>
-        /// Supplies the logger used by rabbit mq topology.
+        /// Logger for topology initialization events.
         /// </summary>
         private readonly ILogger<RabbitMqTopologyInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
         /// <summary>
-        /// Stores initialization gate used by rabbit mq topology.
+        /// Serializes topology declaration across concurrent callers.
         /// </summary>
         private readonly SemaphoreSlim _initializationGate = new(1, 1);
+
         /// <summary>
-        /// Stores declared topology keys used by rabbit mq topology.
+        /// Tracks queue-based declaration keys already applied for the active connection generation.
         /// </summary>
         private readonly HashSet<string> _declaredTopologyKeys = new(StringComparer.Ordinal);
+
         /// <summary>
-        /// Stores declared topology generation used by rabbit mq topology.
+        /// Connection generation against which <see cref="_declaredTopologyKeys"/> was recorded.
         /// </summary>
         private long _declaredTopologyGeneration;
+
         /// <summary>
-        /// Stores disposal state used by rabbit mq topology.
+        /// Ensures disposal of the initialization gate is idempotent.
         /// </summary>
         private int _disposeSignaled;
 
         /// <summary>
-        /// Declares all required RabbitMQ topology for configured backbones.
+        /// Declares RabbitMQ topology for the supplied backbone set on the current active connection generation.
         /// </summary>
-        /// <param name="serverId">BackFiller server identifier.</param>
-        /// <param name="backbones">Backbone names to isolate.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>A task that completes when all declarations succeed.</returns>
+        /// <param name="serverId">BackFiller server identifier forwarded to topology-definition construction.</param>
+        /// <param name="backbones">Backbone names whose topology must exist.</param>
+        /// <param name="cancellationToken">Cancellation token for the declaration workflow.</param>
+        /// <returns>A task that completes after the required declarations succeed and the connection manager is marked topology-ready.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no active connection generation is available for topology declaration.</exception>
         internal async Task InitializeAsync(
             int serverId,
             IReadOnlyList<string> backbones,
@@ -190,10 +214,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles build topology declaration key for rabbit mq topology.
+        /// Builds the idempotency key used to remember a declared topology entry within one connection generation.
         /// </summary>
-        /// <param name="queueName">The queue name.</param>
-        /// <returns>The topology declaration key.</returns>
+        /// <param name="queueName">Queue name that identifies the declared backbone topology.</param>
+        /// <returns>The declaration key stored in the per-generation declaration cache.</returns>
         private static string BuildTopologyDeclarationKey(string queueName)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
@@ -201,11 +225,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Handles declare backbone topology async for rabbit mq topology.
+        /// Declares one backbone exchange, queue, and binding on a dedicated channel lease.
         /// </summary>
-        /// <param name="definition">The backbone topology definition.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>A task that represents the asynchronous operation.</returns>
+        /// <param name="definition">Topology definition to declare.</param>
+        /// <param name="cancellationToken">Cancellation token for broker operations.</param>
+        /// <returns>A task that completes after the exchange, queue, and binding have been declared.</returns>
         private async Task DeclareBackboneTopologyAsync(
             RabbitMqBackboneTopologyDefinition definition,
             CancellationToken cancellationToken)
@@ -258,7 +282,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Disposes topology synchronization resources owned by rabbit mq topology.
+        /// Disposes synchronization resources owned by the topology initializer.
         /// </summary>
         void IDisposable.Dispose()
         {
@@ -271,25 +295,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Emits the topology initialization started log event for rabbit mq topology.
+        /// Declares the informational log emitted when topology initialization begins.
         /// </summary>
         [LoggerMessage(EventId = 4100, Level = LogLevel.Information, Message = "RabbitMQ topology initialization started. BackboneCount={BackboneCount}")]
         private static partial void LogTopologyInitializationStarted(ILogger logger, int backboneCount);
 
         /// <summary>
-        /// Emits the topology initialization completed log event for rabbit mq topology.
+        /// Declares the informational log emitted after topology initialization finishes.
         /// </summary>
         [LoggerMessage(EventId = 4101, Level = LogLevel.Information, Message = "RabbitMQ topology initialization completed. BackboneCount={BackboneCount}")]
         private static partial void LogTopologyInitializationCompleted(ILogger logger, int backboneCount);
 
         /// <summary>
-        /// Emits the backbone topology initialization started log event for rabbit mq topology.
+        /// Declares the informational log emitted before one backbone topology is declared.
         /// </summary>
         [LoggerMessage(EventId = 4102, Level = LogLevel.Information, Message = "RabbitMQ backbone topology initialization started. Backbone={Backbone} Exchange={Exchange} Queue={Queue} RoutingKey={RoutingKey}")]
         private static partial void LogBackboneTopologyInitializationStarted(ILogger logger, string backbone, string exchange, string queue, string routingKey);
 
         /// <summary>
-        /// Emits the backbone topology initialization completed log event for rabbit mq topology.
+        /// Declares the informational log emitted after one backbone topology is declared.
         /// </summary>
         [LoggerMessage(EventId = 4103, Level = LogLevel.Information, Message = "RabbitMQ backbone topology initialization completed. Backbone={Backbone} Exchange={Exchange} Queue={Queue} RoutingKey={RoutingKey}")]
         private static partial void LogBackboneTopologyInitializationCompleted(ILogger logger, string backbone, string exchange, string queue, string routingKey);

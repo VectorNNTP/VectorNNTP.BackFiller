@@ -8,17 +8,17 @@
 namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 {
     /// <summary>
-    /// Immutable logical identity for one RabbitMQ consumer session.
+    /// Immutable identity for one logical RabbitMQ consumer session created from the authoritative account snapshot.
     /// </summary>
-    /// <param name="Backbone">Backbone namespace consumed by this session.</param>
-    /// <param name="AccountId">Owning account identifier used by reconciliation.</param>
-    /// <param name="AccountUsername">Owning account username used for connection-scoped logging.</param>
-    /// <param name="ConnectionNumber">One-based account connection number represented by this consumer session.</param>
-    /// <param name="ConnectionLimit">Configured connection limit for the owning account.</param>
-    /// <param name="ServerId">Owning BackFiller server identifier for topology initializer compatibility.</param>
-    /// <param name="Host">Owning account NNTP host used for connection-scoped logging context.</param>
-    /// <param name="Port">Owning account NNTP port used for connection-scoped logging context.</param>
-    /// <param name="UseSsl">Owning account NNTP TLS mode used for connection-scoped logging context.</param>
+    /// <param name="Backbone">Backbone namespace consumed by the session.</param>
+    /// <param name="AccountId">Stable account identifier used by reconciliation and retirement logic.</param>
+    /// <param name="AccountUsername">Account username included in connection-scoped diagnostics.</param>
+    /// <param name="ConnectionNumber">One-based logical connection ordinal represented by the session.</param>
+    /// <param name="ConnectionLimit">Configured maximum connection count for the owning account.</param>
+    /// <param name="ServerId">BackFiller server identifier forwarded to topology initialization call sites.</param>
+    /// <param name="Host">Account NNTP host used for diagnostics.</param>
+    /// <param name="Port">Account NNTP port used for diagnostics.</param>
+    /// <param name="UseSsl">Account NNTP TLS mode used for diagnostics.</param>
     internal sealed record RabbitMqConsumerSessionIdentity(
         string Backbone,
         Guid AccountId,
@@ -31,12 +31,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         bool UseSsl)
     {
         /// <summary>
-        /// Returns the one-based session ordinal used by existing consumer/session diagnostics.
+        /// Gets the one-based logical session ordinal used by existing consumer-session diagnostics.
         /// </summary>
         internal int SessionOrdinal => ConnectionNumber;
 
         /// <summary>
-        /// Returns the stable logical session key used in diagnostics and reconciliation maps.
+        /// Gets the stable reconciliation key composed from account identifier and logical connection number.
         /// </summary>
         internal string SessionKey => $"{AccountId:N}:{ConnectionNumber}";
     }

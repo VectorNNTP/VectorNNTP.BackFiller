@@ -12,18 +12,28 @@ using Certes.Acme.Resource;
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
     /// <summary>
-    /// Defines acme certificate issuer and its acme certificate issuer.dns01 helpers contract.
+    /// DNS-01 record-reconciliation helpers used by <see cref="AcmeCertificateIssuer"/>.
     /// </summary>
     internal sealed partial class AcmeCertificateIssuer
     {
         /// <summary>
-        /// Reconciles existing TXT records for the current ACME challenge name before creating a new challenge.
+        /// Reconciles existing TXT records for the current ACME challenge name before creating a new challenge record.
         /// </summary>
         /// <remarks>
         /// Stale records from interrupted prior attempts may legitimately remain at the same ACME challenge name.
         /// This helper removes only records that are clearly owned by the current BackFiller ACME lifecycle and
         /// returns the identifier of an already-present matching challenge value when one exists.
         /// </remarks>
+        /// <param name="txtRecordClient">Cloudflare TXT-record API used to remove stale owned records.</param>
+        /// <param name="zoneId">Cloudflare zone that owns <paramref name="recordName"/>.</param>
+        /// <param name="recordName">Fully qualified ACME TXT host name being reconciled.</param>
+        /// <param name="recordValue">TXT value expected for the current ACME challenge.</param>
+        /// <param name="existingTxtRecords">Existing TXT records returned for the challenge host name.</param>
+        /// <param name="cancellationToken">Cancellation token observed before each provider delete operation.</param>
+        /// <returns>
+        /// The Cloudflare record identifier for an already-present matching TXT value when the current attempt can
+        /// reuse it; otherwise <see langword="null"/>.
+        /// </returns>
         private static async Task<string?> ReconcileExistingChallengeRecordsAsync(
             ICloudflareTxtRecordApi txtRecordClient,
             string zoneId,
@@ -71,12 +81,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Determines whether one TXT record is clearly owned by the BackFiller ACME workflow.
+        /// Determines whether one TXT record is safe to treat as BackFiller-owned ACME challenge state.
         /// </summary>
         /// <remarks>
         /// Ownership is inferred conservatively from metadata that the implementation itself can safely control.
         /// Unrelated TXT values are never deleted.
         /// </remarks>
+        /// <param name="record">TXT record candidate returned from Cloudflare.</param>
+        /// <param name="recordName">Fully qualified ACME TXT host name expected for the challenge.</param>
+        /// <returns><see langword="true"/> when the record name/type match and BackFiller ownership markers are present.</returns>
         private static bool IsOwnedAcmeChallengeRecord(CloudflareTxtRecordInfo record, string recordName)
         {
             ArgumentNullException.ThrowIfNull(record);

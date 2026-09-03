@@ -11,71 +11,86 @@ using System.Threading.Channels;
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// Single bounded global transit work queue with item-count and payload-byte admission limits.
+    /// Global bounded transit work queue that tracks queued, retry-pending, and in-flight ownership separately.
     /// </summary>
+    /// <remarks>
+    /// Admission is bounded by both item count and payload bytes. Work remains globally owned by the queue until a
+    /// connection claims it, and explicit accounting helpers enforce exactly-once transfer between queued,
+    /// retry-pending, in-flight, and terminal states.
+    /// </remarks>
     internal sealed class GlobalTransitWorkQueue
     {
         /// <summary>
-        /// Stores ready queue used by global transit work queue.
+        /// Ready queue from which connections claim immediately publishable work items.
         /// </summary>
         private readonly Channel<TransitWorkItem> _readyQueue;
+
         /// <summary>
-        /// Stores scheduled retries used by global transit work queue.
+        /// FIFO schedule of retries waiting for their eligibility time.
         /// </summary>
         private readonly ConcurrentQueue<ScheduledRetry> _scheduledRetries = new();
+
         /// <summary>
-        /// Stores retry scheduled signal used by global transit work queue.
+        /// Signal used to wake waiters when new retry work is scheduled.
         /// </summary>
         private readonly SemaphoreSlim _retryScheduledSignal = new(0);
+
         /// <summary>
-        /// Stores admission gate used by global transit work queue.
+        /// Lock that serializes admission-capacity reservation updates.
         /// </summary>
         private readonly object _admissionGate = new();
+
         /// <summary>
-        /// Stores claim gate used by global transit work queue.
+        /// Lock that serializes claim operations across competing connections.
         /// </summary>
         private readonly object _claimGate = new();
 
         /// <summary>
-        /// Limits max queued item count for global transit work queue.
+        /// Maximum number of work items allowed to remain queued at once.
         /// </summary>
         private readonly int _maxQueuedItemCount;
+
         /// <summary>
-        /// Limits max queued payload bytes for global transit work queue.
+        /// Maximum aggregate payload bytes allowed to remain queued at once.
         /// </summary>
         private readonly long _maxQueuedPayloadBytes;
 
         /// <summary>
-        /// Limits queued item count for global transit work queue.
+        /// Current count of work items still owned by the ready queue.
         /// </summary>
         private long _queuedItemCount;
+
         /// <summary>
-        /// Stores queued payload bytes for global transit work queue.
+        /// Current payload-byte total still owned by the ready queue.
         /// </summary>
         private long _queuedPayloadBytes;
+
         /// <summary>
-        /// Limits retry pending count for global transit work queue.
+        /// Current count of work items waiting for a retry eligibility deadline.
         /// </summary>
         private long _retryPendingCount;
+
         /// <summary>
-        /// Limits in flight count for global transit work queue.
+        /// Current count of work items claimed by connections and not yet terminally settled.
         /// </summary>
         private long _inFlightCount;
+
         /// <summary>
-        /// Limits admission wait count for global transit work queue.
+        /// Count of admission attempts that had to wait for capacity.
         /// </summary>
         private long _admissionWaitCount;
 
         /// <summary>
-        /// Stores admission frozen used by global transit work queue.
+        /// Indicates that no further queue admissions should be accepted.
         /// </summary>
         private volatile bool _admissionFrozen;
 
         /// <summary>
-        /// Handles global transit work queue for global transit work queue.
+        /// Initializes a global transit work queue with bounded item-count and payload-byte capacity.
         /// </summary>
-        /// <param name="maxQueuedItemCount">The maxQueuedItemCount value.</param>
-        /// <param name="maxQueuedPayloadBytes">The maxQueuedPayloadBytes value.</param>
+        /// <param name="maxQueuedItemCount">Maximum number of ready-queue items that may be buffered at once.</param>
+        /// <param name="maxQueuedPayloadBytes">Maximum aggregate payload bytes that may be buffered at once.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when either bound is zero or negative.</exception>
         internal GlobalTransitWorkQueue(int maxQueuedItemCount, long maxQueuedPayloadBytes)
         {
             if (maxQueuedItemCount <= 0)
@@ -99,51 +114,43 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Limits queued item count for global transit work queue.
+        /// Gets the number of work items still owned by the ready queue.
         /// </summary>
-        /// <param name="_queuedItemCount">The _queuedItemCount value.</param>
-        /// <returns>The operation result.</returns>
         internal long QueuedItemCount => Interlocked.Read(ref _queuedItemCount);
 
         /// <summary>
-        /// Stores queued payload bytes for global transit work queue.
+        /// Gets the number of payload bytes still owned by the ready queue.
         /// </summary>
-        /// <param name="_queuedPayloadBytes">The _queuedPayloadBytes value.</param>
-        /// <returns>The operation result.</returns>
         internal long QueuedPayloadBytes => Interlocked.Read(ref _queuedPayloadBytes);
 
         /// <summary>
-        /// Limits retry pending count for global transit work queue.
+        /// Gets the number of work items parked in retry-pending state.
         /// </summary>
-        /// <param name="_retryPendingCount">The _retryPendingCount value.</param>
-        /// <returns>The operation result.</returns>
         internal long RetryPendingCount => Interlocked.Read(ref _retryPendingCount);
 
         /// <summary>
-        /// Limits in flight count for global transit work queue.
+        /// Gets the number of work items currently owned by connections.
         /// </summary>
-        /// <param name="_inFlightCount">The _inFlightCount value.</param>
-        /// <returns>The operation result.</returns>
         internal long InFlightCount => Interlocked.Read(ref _inFlightCount);
 
         /// <summary>
-        /// Limits admission wait count for global transit work queue.
+        /// Gets the number of admission attempts that had to wait for queue capacity.
         /// </summary>
-        /// <param name="_admissionWaitCount">The _admissionWaitCount value.</param>
-        /// <returns>The operation result.</returns>
         internal long AdmissionWaitCount => Interlocked.Read(ref _admissionWaitCount);
 
         /// <summary>
-        /// Stores is admission frozen used by global transit work queue.
+        /// Gets whether queue admission has been frozen for shutdown or preemption.
         /// </summary>
         internal bool IsAdmissionFrozen => _admissionFrozen;
 
         /// <summary>
-        /// Handles enqueue async for global transit work queue.
+        /// Enqueues a work item once item-count and payload-byte capacity are both available.
         /// </summary>
-        /// <param name="item">The item value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="item">Work item to admit into the ready queue.</param>
+        /// <param name="cancellationToken">Cancellation token for blocked admission waits.</param>
+        /// <returns>A value task that completes after the item is admitted or the operation is canceled.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="item"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when admission has been frozen before the item can be admitted.</exception>
         internal async ValueTask EnqueueAsync(TransitWorkItem item, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -190,11 +197,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles try claim for global transit work queue.
+        /// Attempts to claim the next ready work item for a specific connection.
         /// </summary>
-        /// <param name="connectionId">The connectionId value.</param>
-        /// <param name="item">The item value.</param>
-        /// <returns>true when the operation succeeds; otherwise false.</returns>
+        /// <param name="connectionId">Stable connection identifier that will own the claimed work item.</param>
+        /// <param name="item">When successful, receives the claimed work item.</param>
+        /// <returns><see langword="true"/> when a ready item was claimed; otherwise <see langword="false"/>.</returns>
         internal bool TryClaim(string connectionId, out TransitWorkItem? item)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(connectionId);
@@ -226,11 +233,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles wait for work async for global transit work queue.
+        /// Waits until ready work becomes readable or a scheduled retry reaches eligibility.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
-        /// <typeparam name="bool">The bool type parameter.</typeparam>
+        /// <param name="cancellationToken">Cancellation token for the wait.</param>
+        /// <returns><see langword="true"/> when work is available to claim; otherwise <see langword="false"/> if the ready channel completes.</returns>
         internal async ValueTask<bool> WaitForWorkAsync(CancellationToken cancellationToken)
         {
             while (true)
@@ -266,16 +272,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles schedule retry async for global transit work queue.
+        /// Moves a claimed work item into retry-pending state when attempt budget remains.
         /// </summary>
-        /// <param name="item">The item value.</param>
-        /// <param name="failureClass">The failureClass value.</param>
-        /// <param name="uncertainty">The uncertainty value.</param>
-        /// <param name="retryDelay">The retryDelay value.</param>
-        /// <param name="transferOwnershipFromInFlight">The transferOwnershipFromInFlight value.</param>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
-        /// <typeparam name="bool">The bool type parameter.</typeparam>
+        /// <param name="item">Work item to schedule for retry.</param>
+        /// <param name="failureClass">Failure classification recorded on the work item.</param>
+        /// <param name="uncertainty">Transmission certainty classification recorded on the work item.</param>
+        /// <param name="retryDelay">Delay before the item becomes eligible for requeue.</param>
+        /// <param name="transferOwnershipFromInFlight"><see langword="true"/> when in-flight ownership should be released as part of scheduling the retry.</param>
+        /// <param name="cancellationToken">Cancellation token for immediate follow-up draining.</param>
+        /// <returns><see langword="true"/> when retry scheduling succeeded; otherwise <see langword="false"/> if the item should be terminalized instead.</returns>
         internal async ValueTask<bool> ScheduleRetryAsync(
             TransitWorkItem item,
             TransitWorkFailureClass failureClass,
@@ -315,10 +320,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles drain eligible retries async for global transit work queue.
+        /// Re-enqueues all retry-pending items whose <c>NotBeforeUtc</c> deadline has elapsed.
         /// </summary>
-        /// <param name="cancellationToken">The cancellationToken value.</param>
-        /// <returns>A value task representing the asynchronous operation.</returns>
+        /// <param name="cancellationToken">Cancellation token for requeue work.</param>
+        /// <returns>A value task that completes after currently eligible retries have been drained.</returns>
         internal async ValueTask DrainEligibleRetriesAsync(CancellationToken cancellationToken)
         {
             while (_scheduledRetries.TryPeek(out ScheduledRetry scheduled))
@@ -360,8 +365,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles mark in flight terminal for global transit work queue.
+        /// Releases one in-flight ownership slot after a claimed item reaches a terminal outcome.
         /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when in-flight accounting would underflow.</exception>
         internal void MarkInFlightTerminal()
         {
             while (true)
@@ -380,16 +386,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles mark queued terminal for global transit work queue.
+        /// Releases queued ownership for an item that is terminalized before being claimed.
         /// </summary>
-        /// <param name="payloadBytes">The payloadBytes value.</param>
+        /// <param name="payloadBytes">Payload-byte contribution previously counted for the queued item.</param>
         internal void MarkQueuedTerminal(int payloadBytes)
         {
             DecrementQueuedOwnership(payloadBytes);
         }
 
         /// <summary>
-        /// Handles mark retry pending terminal for global transit work queue.
+        /// Releases retry-pending ownership for an item that is terminalized before requeue.
         /// </summary>
         internal void MarkRetryPendingTerminal()
         {
@@ -397,7 +403,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles freeze admission for global transit work queue.
+        /// Prevents any future queue admissions.
         /// </summary>
         internal void FreezeAdmission()
         {
@@ -405,9 +411,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles capture snapshot for global transit work queue.
+        /// Captures a point-in-time queue-accounting snapshot.
         /// </summary>
-        /// <returns>The operation result.</returns>
+        /// <returns>Current queue limits and ownership counters.</returns>
         internal GlobalTransitWorkQueueSnapshot CaptureSnapshot()
         {
             return new GlobalTransitWorkQueueSnapshot(
@@ -422,8 +428,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles can admit for global transit work queue.
+        /// Determines whether a new item of the specified size can be admitted under current queue bounds.
         /// </summary>
+        /// <param name="payloadBytes">Payload-byte contribution of the candidate item.</param>
+        /// <returns><see langword="true"/> when both item-count and payload-byte limits allow admission.</returns>
         private bool CanAdmit(int payloadBytes)
         {
             long currentCount = Interlocked.Read(ref _queuedItemCount);
@@ -432,16 +440,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles wait for capacity async for global transit work queue.
+        /// Waits briefly before re-checking queue admission capacity.
         /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the delay.</param>
+        /// <returns>A task representing the capacity wait.</returns>
         private static Task WaitForCapacityAsync(CancellationToken cancellationToken)
         {
             return Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
         }
 
         /// <summary>
-        /// Handles decrement queued ownership for global transit work queue.
+        /// Releases queued ownership counters for one item.
         /// </summary>
+        /// <param name="payloadBytes">Payload-byte contribution previously counted for the item.</param>
+        /// <exception cref="InvalidOperationException">Thrown when queued-item or queued-byte accounting would underflow.</exception>
         private void DecrementQueuedOwnership(int payloadBytes)
         {
             while (true)
@@ -474,8 +486,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Handles decrement retry pending ownership for global transit work queue.
+        /// Releases retry-pending ownership for one item.
         /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when retry-pending accounting would underflow.</exception>
         private void DecrementRetryPendingOwnership()
         {
             while (true)
@@ -494,14 +507,24 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Defines struct and its global transit work queue contract.
+        /// Retry entry pairing a work item with the time it becomes eligible for requeue.
         /// </summary>
+        /// <param name="Item">Retry-pending work item.</param>
+        /// <param name="NotBeforeUtc">UTC time before which the item must not be re-enqueued.</param>
         private readonly record struct ScheduledRetry(TransitWorkItem Item, DateTimeOffset NotBeforeUtc);
     }
 
     /// <summary>
-    /// Defines global transit work queue snapshot and its global transit work queue contract.
+    /// Immutable point-in-time snapshot of global transit queue capacity and ownership counters.
     /// </summary>
+    /// <param name="MaxQueuedItemCount">Configured maximum ready-queue item count.</param>
+    /// <param name="MaxQueuedPayloadBytes">Configured maximum ready-queue payload bytes.</param>
+    /// <param name="QueuedItemCount">Current number of items in the ready queue.</param>
+    /// <param name="QueuedPayloadBytes">Current number of payload bytes in the ready queue.</param>
+    /// <param name="RetryPendingCount">Current number of retry-pending items.</param>
+    /// <param name="InFlightCount">Current number of items owned by connections.</param>
+    /// <param name="AdmissionWaitCount">Number of admissions that had to wait for capacity.</param>
+    /// <param name="IsAdmissionFrozen">Indicates whether new admissions are currently blocked.</param>
     internal sealed record GlobalTransitWorkQueueSnapshot(
         int MaxQueuedItemCount,
         long MaxQueuedPayloadBytes,

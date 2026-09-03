@@ -21,7 +21,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed class CloudflareTxtRecordApi : ICloudflareTxtRecordApi, IAsyncDisposable
     {
         /// <summary>
-        /// Stores client used by cloudflare txt record api.
+        /// Underlying Cloudflare client used for TXT-record list, create, and delete operations.
         /// </summary>
         private readonly CloudFlareClient _client;
 
@@ -147,7 +147,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build create failure message for cloudflare txt record api.
+        /// Builds the failure text used when Cloudflare rejects or does not confirm TXT-record creation.
         /// </summary>
         private static string BuildCreateFailureMessage(
             string recordName,
@@ -164,7 +164,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build query failure message for cloudflare txt record api.
+        /// Builds the failure text used when TXT-record reconciliation cannot list the current Cloudflare records.
         /// </summary>
         private static string BuildQueryFailureMessage(
             string zoneId,
@@ -183,7 +183,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles build delete failure message for cloudflare txt record api.
+        /// Builds the failure text used when ACME challenge cleanup cannot delete a Cloudflare TXT record.
         /// </summary>
         private static string BuildDeleteFailureMessage(
             string recordId,
@@ -207,7 +207,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles append cloudflare details for cloudflare txt record api.
+        /// Appends common Cloudflare operation metadata to a provider-failure message.
         /// </summary>
         private static void AppendCloudflareDetails(
             StringBuilder message,
@@ -232,7 +232,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Handles append cloudflare collections for cloudflare txt record api.
+        /// Appends Cloudflare message, error-chain, and timing collections to a provider-failure message.
         /// </summary>
         private static void AppendCloudflareCollections(
             StringBuilder message,

@@ -35,8 +35,11 @@ using System.Security.Cryptography;
 namespace VectorNNTP.Backfiller.Configuration
 {
     /// <summary>
-    /// Result of bind address validation.
+    /// One validation diagnostic emitted while checking BackFiller listener bind-address configuration.
     /// </summary>
+    /// <param name="Setting">Configuration key associated with the reported bind-address problem.</param>
+    /// <param name="Message">Human-readable validation message describing the detected condition.</param>
+    /// <param name="Severity">Severity that determines whether startup may continue.</param>
     internal record BindAddressValidationResult(
         string Setting,
         string Message,
@@ -564,11 +567,11 @@ namespace VectorNNTP.Backfiller.Configuration
     internal sealed class ShutdownOptions : IValidatableObject
     {
         /// <summary>
-        /// Stores minimum grace period seconds used by back filler options.
+        /// Lower bound, in seconds, accepted for the configured graceful-shutdown budget.
         /// </summary>
         internal const int MinimumGracePeriodSeconds = 5;
         /// <summary>
-        /// Limits maximum grace period seconds for back filler options.
+        /// Upper bound, in seconds, accepted for the configured graceful-shutdown budget.
         /// </summary>
         internal const int MaximumGracePeriodSeconds = 600;
 
@@ -613,8 +616,11 @@ namespace VectorNNTP.Backfiller.Configuration
     }
 
     /// <summary>
-    /// Result of TransitServer host validation.
+    /// One validation diagnostic emitted while checking TransitServer endpoint configuration.
     /// </summary>
+    /// <param name="Setting">Configuration key associated with the reported TransitServer problem.</param>
+    /// <param name="Message">Human-readable validation message describing the detected condition.</param>
+    /// <param name="Severity">Severity that determines whether startup may continue.</param>
     internal record TransitServerValidationResult(
         string Setting,
         string Message,
@@ -757,8 +763,11 @@ namespace VectorNNTP.Backfiller.Configuration
     }
 
     /// <summary>
-    /// Result of RabbitMQ lease-timeout validation.
+    /// One validation diagnostic emitted while checking RabbitMQ connectivity and policy settings.
     /// </summary>
+    /// <param name="Setting">Configuration key associated with the reported RabbitMQ problem.</param>
+    /// <param name="Message">Human-readable validation message describing the detected condition.</param>
+    /// <param name="Severity">Severity that determines whether startup may continue.</param>
     internal record RabbitMqValidationResult(
         string Setting,
         string Message,
@@ -1740,8 +1749,11 @@ namespace VectorNNTP.Backfiller.Configuration
     }
 
     /// <summary>
-    /// Result of BackFiller identity and DNS suffix validation.
+    /// One validation diagnostic emitted while checking BackFiller identity and generated DNS hostname inputs.
     /// </summary>
+    /// <param name="Setting">Configuration key associated with the reported identity problem.</param>
+    /// <param name="Message">Human-readable validation message describing the detected condition.</param>
+    /// <param name="Severity">Severity that determines whether startup may continue.</param>
     internal record BackFillerIdentityValidationResult(
         string Setting,
         string Message,
@@ -1995,8 +2007,11 @@ namespace VectorNNTP.Backfiller.Configuration
     }
 
     /// <summary>
-    /// Result of Let's Encrypt ACME configuration validation.
+    /// One validation diagnostic emitted while checking BackFiller ACME and Cloudflare DNS settings.
     /// </summary>
+    /// <param name="Setting">Configuration key associated with the reported ACME or Cloudflare problem.</param>
+    /// <param name="Message">Human-readable validation message describing the detected condition.</param>
+    /// <param name="Severity">Severity that determines whether startup may continue.</param>
     internal record LetsEncryptValidationResult(
         string Setting,
         string Message,
@@ -2008,7 +2023,7 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class LetsEncryptValidator
     {
         /// <summary>
-        /// Stores email validator used by back filler options.
+        /// Shared data-annotations email validator reused by ACME account-email validation.
         /// </summary>
         private static readonly EmailAddressAttribute EmailValidator = new();
 
