@@ -495,7 +495,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Verifies that direct settlement with an uncanceled caller token can still enter broker ACK during the release-reacquire window after cancelAdmittedWork true.
+        /// Verifies that direct settlement with an uncanceled caller token is rejected before broker ACK after cancelAdmittedWork abandons settlement admission.
         /// </summary>
         [Fact]
         public async Task StopAsync_WhenCancelAdmittedWorkTrue_DirectSettlementIsRejectedAfterAbandonment()
