@@ -526,12 +526,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     else
                     {
                         // Normal NNTP commands remain fully visible in debug logging.
-                        _logger.LogDebug(
-                            "TX: {Command}{MessageId}",
-                            command,
-                            string.IsNullOrWhiteSpace(context.MessageId)
-                                ? string.Empty
-                                : $" MessageId={context.MessageId}");
+                        if (string.IsNullOrWhiteSpace(context.MessageId))
+                        {
+                            _logger.LogDebug("TX: {Command}", command);
+                        }
+                        else
+                        {
+                            _logger.LogDebug("TX: {Command} MessageId={MessageId}", command, context.MessageId);
+                        }
                     }
                 }
 
