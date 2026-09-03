@@ -177,7 +177,7 @@ function Invoke-WatchedRun {
 					$analysisLines = Get-Content $analysisPath -ErrorAction SilentlyContinue
 					foreach ($ln in $analysisLines) {
 						if ($ln -match 'TransitPublisherTests\.<([^>]+)>d__') {
-							$activeTest = "VectorNNTP.Backfiller.Tests.TransitPublisherTests.$($Matches[1])"
+							$activeTest = "VectorNNTP.BackFiller.Tests.TransitPublisherTests.$($Matches[1])"
 							break
 						}
 					}

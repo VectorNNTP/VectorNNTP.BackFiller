@@ -16,7 +16,7 @@ Generated corpus lives under:
 
 The generation entry point is test method:
 
-- `VectorNNTP.Backfiller.Tests.NntpArticleAcquisitionCorpusGenerationTests.GenerateLocalCorpus_WhenEnabled_DownloadsAndCorruptsConfiguredSamples`
+- `VectorNNTP.BackFiller.Tests.NntpArticleAcquisitionCorpusGenerationTests.GenerateLocalCorpus_WhenEnabled_DownloadsAndCorruptsConfiguredSamples`
 
 By default this method is inert. It executes only when explicitly enabled.
 

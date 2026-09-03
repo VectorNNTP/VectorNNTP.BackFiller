@@ -10,7 +10,7 @@ using System.Text;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
 
-namespace VectorNNTP.Backfiller.Tests
+namespace VectorNNTP.BackFiller.Tests
 {
     /// <summary>
     /// Confirms the transit benchmark core tests behavior.

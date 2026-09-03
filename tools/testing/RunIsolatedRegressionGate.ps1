@@ -3,9 +3,9 @@ param(
 	[string]$ProjectPath = 'VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj',
 	[string]$WatchdogPath = 'tools/testing/TransitPublisherSuiteWatchdog.v2.ps1',
 	[string[]]$RequestedClasses = @(
-		'VectorNNTP.Backfiller.Tests.TransitConnectionTests',
-		'VectorNNTP.Backfiller.Tests.TransitPublisherTests',
-		'VectorNNTP.Backfiller.Tests.TransitConnectionDisposalDiagnosticsTests'
+		'VectorNNTP.BackFiller.Tests.TransitConnectionTests',
+		'VectorNNTP.BackFiller.Tests.TransitPublisherTests',
+		'VectorNNTP.BackFiller.Tests.TransitConnectionDisposalDiagnosticsTests'
 	),
 	[string[]]$RequestedTests = @(),
 	[int]$InactivitySeconds = 45,
@@ -70,7 +70,7 @@ function Parse-ListTestsInventory {
 			continue
 		}
 
-		if ($trimmed -match '^VectorNNTP\.Backfiller\.Tests\.') {
+		if ($trimmed -match '^VectorNNTP\.BackFiller\.Tests\.') {
 			$inventory.Add((New-DiscoveryCase -FullyQualifiedName $trimmed))
 		}
 	}
