@@ -510,39 +510,48 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             await _commandWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-            // TODO: Fix Formatting.
-if (_logger.IsEnabled(LogLevel.Debug))
-{
-    if (redactCredential &&
-        command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
-    {
-        _logger.LogDebug(
-            "TX: AUTHINFO USER ***{MessageId}",
-            string.IsNullOrWhiteSpace(context.MessageId)
-                ? string.Empty
-                : $" MessageId={context.MessageId}");
-    }
-    else if (redactCredential &&
-             command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
-    {
-        _logger.LogDebug(
-            "TX: AUTHINFO PASS ***{MessageId}",
-            string.IsNullOrWhiteSpace(context.MessageId)
-                ? string.Empty
-                : $" MessageId={context.MessageId}");
-    }
-    else if (string.IsNullOrWhiteSpace(context.MessageId))
-    {
-        _logger.LogDebug("TX: {Command}", command);
-    }
-    else
-    {
-        _logger.LogDebug(
-            "TX: {Command} MessageId={MessageId}",
-            command,
-            context.MessageId);
-    }
-}
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    if (redactCredentials &&
+                        command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (string.IsNullOrWhiteSpace(context.MessageId))
+                        {
+                            _logger.LogDebug("TX: AUTHINFO USER ***");
+                        }
+                        else
+                        {
+                            _logger.LogDebug(
+                                "TX: AUTHINFO USER *** MessageId={MessageId}",
+                                context.MessageId);
+                        }
+                    }
+                    else if (redactCredentials &&
+                             command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (string.IsNullOrWhiteSpace(context.MessageId))
+                        {
+                            _logger.LogDebug("TX: AUTHINFO PASS ***");
+                        }
+                        else
+                        {
+                            _logger.LogDebug(
+                                "TX: AUTHINFO PASS *** MessageId={MessageId}",
+                                context.MessageId);
+                        }
+                    }
+                    else if (string.IsNullOrWhiteSpace(context.MessageId))
+                    {
+                        _logger.LogDebug("TX: {Command}", command);
+                    }
+                    else
+                    {
+                        _logger.LogDebug(
+                            "TX: {Command} MessageId={MessageId}",
+                            command,
+                            context.MessageId);
+                    }
+                }
 
                 byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
                 _ = await ExecuteWithTimeoutAsync(
