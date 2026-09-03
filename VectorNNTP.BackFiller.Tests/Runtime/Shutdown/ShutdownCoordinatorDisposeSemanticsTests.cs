@@ -49,13 +49,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Shutdown
         [Fact]
         public async Task Dispose_DuringGracefulShutdown_PreventsLaterTimerDrivenForcedEscalation()
         {
+            TimeSpan gracePeriod = TimeSpan.FromSeconds(1);
             ShutdownCoordinator coordinator = new();
 
-            coordinator.SignalGracefulShutdown(TimeSpan.FromMilliseconds(50), ShutdownCoordinator.ShutdownReason.HostStopping);
+            coordinator.SignalGracefulShutdown(gracePeriod, ShutdownCoordinator.ShutdownReason.HostStopping);
             Assert.Equal(ShutdownCoordinator.ShutdownState.GracefulShutdown, coordinator.State);
 
             coordinator.Dispose();
-            await Task.Delay(TimeSpan.FromMilliseconds(150));
+            await Task.Delay(gracePeriod + TimeSpan.FromMilliseconds(250));
 
             Assert.Equal(ShutdownCoordinator.ShutdownState.Completed, coordinator.State);
             Assert.Equal(ShutdownCoordinator.ShutdownReason.Unknown, coordinator.ForcedShutdownReason);

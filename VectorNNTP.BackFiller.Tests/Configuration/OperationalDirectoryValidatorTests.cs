@@ -13,8 +13,13 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Configuration
 {
     /// <summary>
-    /// Tests for startup validation of operational directories.
+    /// Verifies operational-directory validation contracts for log and certificate path resolution during startup.
     /// </summary>
+    /// <remarks>
+    /// These tests assert that configured directory settings are normalized to canonical absolute paths, validated for
+    /// required file-system capabilities, and rejected with setting-specific diagnostics when configuration is missing,
+    /// invalid, or points to non-directory resources.
+    /// </remarks>
     public class OperationalDirectoryValidatorTests
     {
         /// <summary>
@@ -180,6 +185,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the resolve and validate log directory when configured path is whitespace throws invalid operation exception behavior.
         /// </summary>
+        /// <param name="configuredPath">Configured log-directory value expected to be rejected after whitespace normalization.</param>
         [Theory]
         [InlineData("")]
         [InlineData(" ")]

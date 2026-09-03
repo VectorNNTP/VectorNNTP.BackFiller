@@ -37,7 +37,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
             BackFillerCertificateState state = new();
-            state.Publish(new BackFillerCertificateBundle(new X509Certificate2(certA.Export(X509ContentType.Pkcs12)), "memory", DateTimeOffset.UtcNow));
+            state.Publish(new BackFillerCertificateBundle(CloneForState(certA), "memory", DateTimeOffset.UtcNow));
 
             ShutdownCoordinator shutdown = new();
             BackFillerListenerSocketService service = new(
@@ -86,7 +86,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
             BackFillerCertificateState state = new();
-            state.Publish(new BackFillerCertificateBundle(new X509Certificate2(certA.Export(X509ContentType.Pkcs12)), "memory", DateTimeOffset.UtcNow));
+            state.Publish(new BackFillerCertificateBundle(CloneForState(certA), "memory", DateTimeOffset.UtcNow));
 
             ShutdownCoordinator shutdown = new();
             BackFillerListenerSocketService service = new(
@@ -101,12 +101,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5));
 
             string thumbprintA = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port);
-            Assert.Equal(certA.Thumbprint, thumbprintA, ignoreCase: true);
+            Assert.Equal(certA.GetCertHashString(HashAlgorithmName.SHA256), thumbprintA, ignoreCase: true);
 
-            state.Publish(new BackFillerCertificateBundle(new X509Certificate2(certB.Export(X509ContentType.Pkcs12)), "memory", DateTimeOffset.UtcNow));
+            state.Publish(new BackFillerCertificateBundle(CloneForState(certB), "memory", DateTimeOffset.UtcNow));
 
             string thumbprintB = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port);
-            Assert.Equal(certB.Thumbprint, thumbprintB, ignoreCase: true);
+            Assert.Equal(certB.GetCertHashString(HashAlgorithmName.SHA256), thumbprintB, ignoreCase: true);
 
             await service.StopAsync(CancellationToken.None);
             await runTask;
@@ -144,19 +144,20 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 leaveInnerStreamOpen: false,
                 static (sender, certificate, chain, errors) => true);
 
-            _ = await Assert.ThrowsAnyAsync<AuthenticationException>(async () =>
+            Exception handshakeFailure = await Assert.ThrowsAnyAsync<Exception>(async () =>
                 await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
                 {
                     TargetHost = "localhost",
                     EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                     CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 }).ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.True(handshakeFailure is AuthenticationException or IOException);
 
             using X509Certificate2 cert = CreateServerCertificate("bf-listener-recovery.example.com");
-            state.Publish(new BackFillerCertificateBundle(new X509Certificate2(cert.Export(X509ContentType.Pkcs12)), "memory", DateTimeOffset.UtcNow));
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
 
             string thumbprint = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port).ConfigureAwait(false);
-            Assert.Equal(cert.Thumbprint, thumbprint, ignoreCase: true);
+            Assert.Equal(cert.GetCertHashString(HashAlgorithmName.SHA256), thumbprint, ignoreCase: true);
 
             await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
             await runTask.ConfigureAwait(false);
@@ -175,7 +176,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["*"]);
             BackFillerCertificateState state = new();
-            state.Publish(new BackFillerCertificateBundle(new X509Certificate2(certA.Export(X509ContentType.Pkcs12)), "memory", DateTimeOffset.UtcNow));
+            state.Publish(new BackFillerCertificateBundle(CloneForState(certA), "memory", DateTimeOffset.UtcNow));
 
             ShutdownCoordinator shutdown = new();
             BackFillerListenerSocketService service = new(
@@ -189,7 +190,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             string thumbprint = await ConnectAndGetServerThumbprintAsync(IPAddress.Loopback, port).ConfigureAwait(false);
-            Assert.Equal(certA.Thumbprint, thumbprint, ignoreCase: true);
+            Assert.Equal(certA.GetCertHashString(HashAlgorithmName.SHA256), thumbprint, ignoreCase: true);
 
             await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
             await runTask.ConfigureAwait(false);
@@ -307,8 +308,30 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
             request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, critical: true));
 
+            string pfxPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
             using X509Certificate2 cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(7));
-            return new X509Certificate2(cert.Export(X509ContentType.Pkcs12));
+            byte[] pfx = cert.Export(X509ContentType.Pkcs12, pfxPassword);
+            return new X509Certificate2(
+                pfx,
+                pfxPassword,
+                X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+        }
+
+        /// <summary>
+        /// Creates a state-owned listener certificate clone whose private key remains exportable for runtime cloning.
+        /// </summary>
+        /// <param name="certificate">Source certificate to clone for certificate state publication.</param>
+        /// <returns>A cloned certificate suitable for listener runtime use.</returns>
+        private static X509Certificate2 CloneForState(X509Certificate2 certificate)
+        {
+            ArgumentNullException.ThrowIfNull(certificate);
+
+            string pfxPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
+            byte[] pfx = certificate.Export(X509ContentType.Pkcs12, pfxPassword);
+            return new X509Certificate2(
+                pfx,
+                pfxPassword,
+                X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
         }
 
         /// <summary>

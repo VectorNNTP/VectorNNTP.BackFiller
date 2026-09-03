@@ -9,6 +9,7 @@
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup;
 using VectorNNTP.Backfiller.Startup.Commands;
+using VectorNNTP.BackFiller.Tests.TestInfrastructure;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Startup.Commands
@@ -155,23 +156,12 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Commands
                 })
                 .Build();
 
-            StringWriter captured = new();
-            TextWriter synchronizedOut = TextWriter.Synchronized(captured);
-            TextWriter originalOut = Console.Out;
+            using ConsoleOutputScope outputScope = ConsoleOutputScope.Capture();
 
-            try
-            {
-                Console.SetOut(synchronizedOut);
+            int? exitCode = ParseAndMaybeExecute(["--dump-config"], configuration);
 
-                int? exitCode = ParseAndMaybeExecute(["--dump-config"], configuration);
-
-                Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
-                Assert.Contains("BackFiller:LetsEncrypt:UseStagingDirectory: true", captured.ToString(), StringComparison.OrdinalIgnoreCase);
-            }
-            finally
-            {
-                Console.SetOut(originalOut);
-            }
+            Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
+            Assert.Contains("BackFiller:LetsEncrypt:UseStagingDirectory: true", outputScope.GetCapturedOutput(), StringComparison.OrdinalIgnoreCase);
         }
         /// <summary>
         /// Confirms the try handle command when multiple commands and unknown option are present returns configuration failure behavior.

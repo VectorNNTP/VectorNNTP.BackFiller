@@ -14,14 +14,22 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Configuration
 {
     /// <summary>
-    /// Confirms the my sql connection string utilities tests behavior.
+    /// Verifies MySQL connection-string utility contracts for alias extraction, ambiguity detection, and effective parsing behavior.
     /// </summary>
+    /// <remarks>
+    /// This suite defines deterministic expectations for startup-time configuration normalization and validation inputs by
+    /// asserting alias equivalence, malformed-input rejection, quoted-value handling, pool-size parsing boundaries, and
+    /// ambiguity semantics that protect control-plane configuration fingerprinting from conflicting key aliases.
+    /// </remarks>
     public class MySqlConnectionStringUtilitiesTests
     {
         #region Basic Extraction Tests
         /// <summary>
         /// Confirms the try get server accepts all my sql connector aliases behavior.
         /// </summary>
+        /// <param name="scenario">Scenario label used to identify the alias variant under test.</param>
+        /// <param name="connectionString">Input connection string containing the server alias representation.</param>
+        /// <param name="expectedServer">Expected canonical server value extracted from the input.</param>
         [Theory]
         [InlineData("server alias: Server", "Server=localhost;Database=test;User ID=admin", "localhost")]
         [InlineData("server alias: Host", "Host=myhost;Database=test;User ID=admin", "myhost")]
@@ -42,6 +50,9 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the try get database accepts all my sql connector aliases behavior.
         /// </summary>
+        /// <param name="scenario">Scenario label used to identify the alias variant under test.</param>
+        /// <param name="connectionString">Input connection string containing the database alias representation.</param>
+        /// <param name="expectedDatabase">Expected canonical database value extracted from the input.</param>
         [Theory]
         [InlineData("database alias: Database", "Server=localhost;Database=mydb;User ID=admin", "mydb")]
         [InlineData("database alias: Initial Catalog", "Server=localhost;Initial Catalog=catalog01;User ID=admin", "catalog01")]
@@ -58,6 +69,9 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the try get username accepts all my sql connector aliases behavior.
         /// </summary>
+        /// <param name="scenario">Scenario label used to identify the alias variant under test.</param>
+        /// <param name="connectionString">Input connection string containing the username alias representation.</param>
+        /// <param name="expectedUsername">Expected canonical username value extracted from the input.</param>
         [Theory]
         [InlineData("username alias: User ID", "Server=localhost;Database=test;User ID=user1", "user1")]
         [InlineData("username alias: UserID", "Server=localhost;Database=test;UserID=user2", "user2")]
@@ -77,6 +91,9 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the try get password accepts all my sql connector aliases behavior.
         /// </summary>
+        /// <param name="scenario">Scenario label used to identify the alias variant under test.</param>
+        /// <param name="connectionString">Input connection string containing the password alias representation.</param>
+        /// <param name="expectedPassword">Expected canonical password value extracted from the input.</param>
         [Theory]
         [InlineData("password alias: Password", "Server=localhost;Database=test;User ID=admin;Password=secret", "secret")]
         [InlineData("password alias: Password with quoted value", "Server=localhost;Database=test;User ID=admin;Password='pass123'", "pass123")]
@@ -92,6 +109,9 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the try get min pool size accepts all my sql connector aliases behavior.
         /// </summary>
+        /// <param name="scenario">Scenario label used to identify the alias variant under test.</param>
+        /// <param name="connectionString">Input connection string containing the minimum-pool-size alias representation.</param>
+        /// <param name="expectedMinPoolSize">Expected parsed minimum pool size value.</param>
         [Theory]
         [InlineData("min pool size alias: Min Pool Size", "Server=localhost;Database=test;User ID=admin;Min Pool Size=5", 5)]
         [InlineData("min pool size alias: MinPoolSize", "Server=localhost;Database=test;User ID=admin;MinPoolSize=10", 10)]
@@ -109,6 +129,9 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the try get max pool size accepts all my sql connector aliases behavior.
         /// </summary>
+        /// <param name="scenario">Scenario label used to identify the alias variant under test.</param>
+        /// <param name="connectionString">Input connection string containing the maximum-pool-size alias representation.</param>
+        /// <param name="expectedMaxPoolSize">Expected parsed maximum pool size value.</param>
         [Theory]
         [InlineData("max pool size alias: Max Pool Size", "Server=localhost;Database=test;User ID=admin;Max Pool Size=100", 100)]
         [InlineData("max pool size alias: MaxPoolSize", "Server=localhost;Database=test;User ID=admin;MaxPoolSize=50", 50)]
@@ -1139,6 +1162,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the has ambiguous aliases when no conflicts returns false behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string expected to contain no conflicting alias values.</param>
         [Theory]
         [InlineData("Server=db01;Database=GrabberDB;User ID=admin;Password=secret")]
         [InlineData("Server=db01;Database=GrabberDB;User ID=admin")]
@@ -1155,10 +1179,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenServerConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting server aliases
-            const string connectionString = "Server=db01;Host=db02;Database=GrabberDB;User ID=admin";
+            const string ConnectionString = "Server=db01;Host=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when database conflicts returns true behavior.
@@ -1167,10 +1191,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenDatabaseConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting database aliases
-            const string connectionString = "Server=localhost;Database=dbA;Initial Catalog=dbB;User ID=admin";
+            const string ConnectionString = "Server=localhost;Database=dbA;Initial Catalog=dbB;User ID=admin";
 
             // Act & Assert - This IS ambiguous
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when username conflicts returns true behavior.
@@ -1179,10 +1203,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenUsernameConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting username aliases
-            const string connectionString = "Server=localhost;Database=test;User ID=alice;Username=bob";
+            const string ConnectionString = "Server=localhost;Database=test;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when password conflicts returns true behavior.
@@ -1191,10 +1215,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenPasswordConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting password aliases
-            const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Pwd=secret2";
+            const string ConnectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Pwd=secret2";
 
             // Act & Assert - This IS ambiguous
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when min pool size conflicts returns true behavior.
@@ -1203,10 +1227,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenMinPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting min pool size aliases
-            const string connectionString = "Server=localhost;Database=test;User ID=admin;Min Pool Size=5;MinimumPoolSize=10";
+            const string ConnectionString = "Server=localhost;Database=test;User ID=admin;Min Pool Size=5;MinimumPoolSize=10";
 
             // Act & Assert - This IS ambiguous
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when max pool size conflicts returns true behavior.
@@ -1215,10 +1239,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenMaxPoolSizeConflicts_ReturnsTrue()
         {
             // Arrange - Conflicting max pool size aliases
-            const string connectionString = "Server=localhost;Database=test;User ID=admin;Max Pool Size=50;MaximumPoolSize=100";
+            const string ConnectionString = "Server=localhost;Database=test;User ID=admin;Max Pool Size=50;MaximumPoolSize=100";
 
             // Act & Assert - This IS ambiguous
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when multiple conflicting groups returns true behavior.
@@ -1227,10 +1251,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenMultipleConflictingGroups_ReturnsTrue()
         {
             // Arrange - Multiple conflicting alias groups at once
-            const string connectionString = "Server=db01;Host=db02;Database=dbA;Initial Catalog=dbB;User ID=alice;Username=bob";
+            const string ConnectionString = "Server=db01;Host=db02;Database=dbA;Initial Catalog=dbB;User ID=alice;Username=bob";
 
             // Act & Assert - This IS ambiguous (multiple conflicts should still return true)
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when same key repeated with different server values returns true behavior.
@@ -1241,10 +1265,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
             // Arrange - CRITICAL: Server=db01;Server=db02 (same key repeated)
             // DbConnectionStringBuilder would canonicalize this to just the last value,
             // but our raw parser must detect it BEFORE canonicalization
-            const string connectionString = "Server=db01;Server=db02;Database=GrabberDB;User ID=admin";
+            const string ConnectionString = "Server=db01;Server=db02;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - This IS ambiguous and MUST be detected
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when same key repeated with different password values returns true behavior.
@@ -1254,10 +1278,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         {
             // Arrange - CRITICAL: Password=secret1;Password=secret2 (same key repeated)
             // This is a SECURITY issue if not detected
-            const string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Password=secret2";
+            const string ConnectionString = "Server=localhost;Database=test;User ID=admin;Password=secret1;Password=secret2";
 
             // Act & Assert - This IS ambiguous and MUST be detected
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when same key repeated with different username values returns true behavior.
@@ -1266,10 +1290,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithDifferentUsernameValues_ReturnsTrue()
         {
             // Arrange - CRITICAL: User ID=alice;User ID=bob (same key repeated)
-            const string connectionString = "Server=localhost;Database=test;User ID=alice;User ID=bob";
+            const string ConnectionString = "Server=localhost;Database=test;User ID=alice;User ID=bob";
 
             // Act & Assert - This IS ambiguous and MUST be detected
-            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.True(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when same key repeated with identical values returns false behavior.
@@ -1278,10 +1302,10 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         public void HasAmbiguousAliases_WhenSameKeyRepeatedWithIdenticalValues_ReturnsFalse()
         {
             // Arrange - Server=db01;Server=db01 (same key, same value - redundant but not ambiguous)
-            const string connectionString = "Server=db01;Server=db01;Database=GrabberDB;User ID=admin";
+            const string ConnectionString = "Server=db01;Server=db01;Database=GrabberDB;User ID=admin";
 
             // Act & Assert - Redundant but consistent should NOT be ambiguous
-            Assert.False(MySqlConnectionStringUtilities.HasAmbiguousAliases(connectionString));
+            Assert.False(MySqlConnectionStringUtilities.HasAmbiguousAliases(ConnectionString));
         }
         /// <summary>
         /// Confirms the has ambiguous aliases when redundant but identical returns false behavior.
@@ -1456,7 +1480,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
             string connectionString = "Server=localhost;Database=test;User ID=admin;Password=secret";
 
             // Act
-            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out var builder);
+            bool result = MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder? builder);
 
             // Assert
             Assert.True(result);

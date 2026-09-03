@@ -260,10 +260,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Contains(configResult.Warnings, static w => w.Setting == "BackFiller:LetsEncrypt:Enabled");
         }
         /// <summary>
-        /// Confirms the validate configuration and dependencies async when rabbit mq endpoint unreachable does not return rabbit mq dependency failure behavior.
+        /// Confirms the validate configuration and dependencies async when rabbit mq endpoint unreachable returns rabbit mq dependency failure behavior.
         /// </summary>
         [Fact]
-        public async Task ValidateConfigurationAndDependenciesAsync_WhenRabbitMqEndpointUnreachable_DoesNotReturnRabbitMqDependencyFailure()
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenRabbitMqEndpointUnreachable_ReturnsRabbitMqDependencyFailure()
         {
             IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
@@ -293,7 +293,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                     TimeSpan.FromMilliseconds(500),
                     CancellationToken.None);
 
-            Assert.DoesNotContain(dependencyResult.FailedDependencies, static d => d.Dependency == "RabbitMQ");
+            Assert.Contains(dependencyResult.FailedDependencies, static d =>
+                d.Dependency == "RabbitMQ"
+                && d.Reason.Contains("203.0.113.1:5672", StringComparison.Ordinal));
         }
         /// <summary>
         /// Confirms the validate configuration and dependencies async when transit server endpoint unreachable returns transit server dependency failure behavior.

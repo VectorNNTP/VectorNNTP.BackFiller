@@ -87,6 +87,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private RabbitMqConsumerLifecycleState _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
         /// <summary>
+        /// Indicates whether cancel-admitted-work shutdown has abandoned new settlement admission for the current session lifecycle.
+        /// </summary>
+        private bool _settlementAdmissionAbandoned;
+        /// <summary>
         /// Indicates that disposal has started and the session must reject further lifecycle work.
         /// </summary>
         private bool _disposed;
@@ -310,6 +314,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                 _consumerTag = consumerTag;
                 _lifecycleState = RabbitMqConsumerLifecycleState.Running;
+                _settlementAdmissionAbandoned = false;
                 _drainCompletion = CreateCompletedDrainSource();
                 _admittedDeliveryCount = 0;
                 LogConsumerStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _queueName, ActiveConnectionGeneration, consumerTag);
@@ -333,6 +338,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                 _consumerTag = null;
                 _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+                _settlementAdmissionAbandoned = false;
                 _admittedDeliveryCount = 0;
                 _drainCompletion = CreateCompletedDrainSource();
                 _connectionScope?.Dispose();
@@ -384,6 +390,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             if (cancelAdmittedWork)
             {
                 _sessionCancellation?.Cancel();
+                _settlementAdmissionAbandoned = true;
+                AbandonAdmittedDeliveriesForDrainAccountingNoLock();
             }
 
             Task drainTask = _drainCompletion.Task;
@@ -436,6 +444,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _consumerTag = null;
             _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
             _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+            _settlementAdmissionAbandoned = false;
             _admittedDeliveryCount = 0;
             _drainCompletion = CreateCompletedDrainSource();
 
@@ -679,7 +688,25 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Creates a drain-completion source that is already satisfied for the zero-admitted-work case.
+        /// Abandons admitted-delivery drain accounting after cooperative cancellation has been signaled.
+        /// </summary>
+        /// <remarks>
+        /// This helper releases StopAsync waiters without forcing broker settlement. Late ACK/NACK attempts remain invalid because
+        /// settlement still requires an active owning channel generation, preserving broker-side ownership semantics after disposal.
+        /// </remarks>
+        private void AbandonAdmittedDeliveriesForDrainAccountingNoLock()
+        {
+            if (_admittedDeliveryCount <= 0)
+            {
+                return;
+            }
+
+            _admittedDeliveryCount = 0;
+            _ = _drainCompletion.TrySetResult(true);
+        }
+
+        /// <summary>
+        /// Handles create completed drain source for rabbit mq backbone consumer session.
         /// </summary>
         private static TaskCompletionSource<bool> CreateCompletedDrainSource()
         {
@@ -803,6 +830,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     if (_owner._ownedChannel is null || _owner._lifecycleState is RabbitMqConsumerLifecycleState.Stopped)
                     {
                         throw new InvalidOperationException("RabbitMQ consumer session channel is not available for settlement.");
+                    }
+
+                    if (_owner._settlementAdmissionAbandoned)
+                    {
+                        throw new InvalidOperationException("RabbitMQ delivery settlement was abandoned during consumer shutdown.");
                     }
 
                     long activeGeneration = _owner.ActiveConnectionGeneration;

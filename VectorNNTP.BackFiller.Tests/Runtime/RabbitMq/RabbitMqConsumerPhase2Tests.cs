@@ -8,12 +8,14 @@
 
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 using Xunit;
@@ -136,7 +138,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
             TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
             byte[] sourcePayload = [0x7B, 0x22, 0x61, 0x22, 0x3A, 0x31, 0x7D];
-            byte[] expectedPayload = sourcePayload.ToArray();
+            byte[] expectedPayload = [.. sourcePayload];
             string expectedSha256 = Convert.ToHexString(SHA256.HashData(expectedPayload));
 
             await consumerChannel.DeliverAsync(
@@ -196,9 +198,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await first.StartAsync(CancellationToken.None).ConfigureAwait(false);
             await second.StartAsync(CancellationToken.None).ConfigureAwait(false);
 
-            IReadOnlyList<TrackingChannel> consumerChannels = connector.RequireLastConnection().Channels
-                .Where(static channel => channel.ConsumeCallCount == 1)
-                .ToArray();
+            IReadOnlyList<TrackingChannel> consumerChannels = [.. connector.RequireLastConnection().Channels.Where(static channel => channel.ConsumeCallCount == 1)];
 
             Assert.Equal(2, consumerChannels.Count);
             Assert.All(consumerChannels, static channel => Assert.Equal("grabbers.giganews", channel.LastConsumeQueue));
@@ -428,17 +428,127 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.True(cancelIndex >= 0);
             Assert.True(disposeIndex > cancelIndex);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => admitted.Settlement.AckAsync(CancellationToken.None).AsTask()).ConfigureAwait(false);
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(() => admitted.Settlement.AckAsync(CancellationToken.None).AsTask()).ConfigureAwait(false);
             Assert.Equal(0, channel.AckCallCount);
 
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// Verifies that the normal production settlement path never reaches broker ACK after cancelAdmittedWork true cancels delivery processing and the session abandons new settlement admission.
+        /// </summary>
         [Fact]
+        public async Task StopAsync_WhenCancelAdmittedWorkTrue_ProductionSettlementPathDoesNotReachAckAfterCancellationOrAbandonment()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink deliverySink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 10, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                deliverySink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: null);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            TrackingChannel channel = connector.RequireLastConnection().Channels.Single(static c => c.ConsumeCallCount == 1);
+            channel.EnableDeterministicShutdownRaceHooks();
+
+            await channel.DeliverAsync(602UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x21 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleDelivery admitted = Assert.Single(deliverySink.Deliveries);
+
+            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            await channel.CancelEntered.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+
+            RabbitMqArticleResultSink resultSink = CreateArticleResultSinkForSessionRace();
+            ArticleWorkProcessingResult result = CreateArticleProcessingResultForSessionRace(admitted, ArticleWorkProcessingOutcome.Success);
+            Task settlementTask = resultSink.OnProcessedAsync(result, admitted.CancellationToken).AsTask();
+
+            channel.ReleaseCancel();
+
+            Exception exception = await Record.ExceptionAsync(() => settlementTask).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Expected settlement to fail after cancellation or abandonment.");
+            if (exception is InvalidOperationException invalidOperationException)
+            {
+                Assert.Equal("RabbitMQ delivery settlement was abandoned during consumer shutdown.", invalidOperationException.Message);
+            }
+            else
+            {
+                _ = Assert.IsType<OperationCanceledException>(exception);
+            }
+
+            await stopTask.ConfigureAwait(false);
+
+            Assert.Equal(0, channel.AckCallCount);
+            Assert.Equal(0, channel.NackCallCount);
+            Assert.False(channel.AckEntered.IsCompleted);
+            Assert.True(channel.Disposed);
+
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Verifies that direct settlement with an uncanceled caller token is rejected before broker ACK after cancelAdmittedWork abandons settlement admission.
+        /// </summary>
+        [Fact]
+        public async Task StopAsync_WhenCancelAdmittedWorkTrue_DirectSettlementIsRejectedAfterAbandonment()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink deliverySink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 11, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                deliverySink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: null);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            TrackingChannel channel = connector.RequireLastConnection().Channels.Single(static c => c.ConsumeCallCount == 1);
+            channel.EnableDeterministicShutdownRaceHooks();
+            channel.BlockAckUntilReleased();
+
+            await channel.DeliverAsync(603UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x22 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleDelivery admitted = Assert.Single(deliverySink.Deliveries);
+
+            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            await channel.CancelEntered.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Task settlementTask = admitted.Settlement.AckAsync(CancellationToken.None).AsTask();
+            channel.ReleaseCancel();
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => settlementTask).ConfigureAwait(false);
+            await stopTask.ConfigureAwait(false);
+
+            Assert.Equal("RabbitMQ delivery settlement was abandoned during consumer shutdown.", exception.Message);
+            Assert.True(channel.Disposed);
+            Assert.Equal(1, channel.CancelCallCount);
+            Assert.Equal(0, channel.AckCallCount);
+            Assert.Equal(0, channel.NackCallCount);
+            Assert.False(channel.AckEntered.IsCompleted);
+            Assert.True(channel.OperationLog.IndexOf("cancel") >= 0);
+            Assert.True(channel.OperationLog.IndexOf("dispose") > channel.OperationLog.IndexOf("cancel"));
+
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Verifies that StopAsync retirement mode prevents admission of deliveries arriving after consumer cancellation.
         /// </summary>
+        [Fact]
         public async Task StopAsync_WhenRetiring_RejectsNewDeliveryAdmission()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
@@ -467,7 +577,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.True(retiring);
 
             await channel.DeliverAsync(602UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x12 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
-            Assert.Single(sink.Deliveries);
+            _ = Assert.Single(sink.Deliveries);
 
             await first.Settlement.AckAsync(CancellationToken.None).ConfigureAwait(false);
             await stopTask.ConfigureAwait(false);
@@ -865,7 +975,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqArticleDelivery admitted = await sessionFactory.WaitForDeliveryAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
 
             Assert.Equal(sessionKey2, admitted.ConsumerIdentity);
-            Assert.Single(sessionFactory.GetDeliveriesForSession(sessionKey2));
+            _ = Assert.Single(sessionFactory.GetDeliveriesForSession(sessionKey2));
 
             Task retirementTask = service.RetireCapacityAsync(accountId, retainConnectionCount: 1, timeoutToken);
             await secondChannel.CancelObserved.WaitAsync(timeoutToken).ConfigureAwait(false);
@@ -873,7 +983,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.False(retirementTask.IsCompleted);
 
             await secondChannel.DeliverAsync(1102UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x42 }, cancellationToken: timeoutToken).ConfigureAwait(false);
-            Assert.Single(sessionFactory.GetDeliveriesForSession(sessionKey2));
+            _ = Assert.Single(sessionFactory.GetDeliveriesForSession(sessionKey2));
             Assert.False(retirementTask.IsCompleted);
 
             await admitted.Settlement.AckAsync(timeoutToken).ConfigureAwait(false);
@@ -1049,7 +1159,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             using CancellationTokenSource cts = new();
             cts.Cancel();
 
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
                 async () => await service.RetireCapacityAsync(accountId, retainConnectionCount: 1, cts.Token).ConfigureAwait(false)).ConfigureAwait(false);
 
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 2)).ConfigureAwait(false);
@@ -1083,7 +1193,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
             await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
                 async () => await service.RetireCapacityAsync(accountId, retainConnectionCount: 2, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
 
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
@@ -1116,7 +1226,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
             await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(
                 async () => await service.RetireCapacityAsync(accountId, retainConnectionCount: 2, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
 
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
@@ -1155,7 +1265,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             cts.Cancel();
             sessionFactory.ReleaseStop(sessionKey2);
 
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await retireTask.ConfigureAwait(false)).ConfigureAwait(false);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await retireTask.ConfigureAwait(false)).ConfigureAwait(false);
 
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 2)).ConfigureAwait(false);
             await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
@@ -1267,7 +1377,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             controlPlane.SetBackboneCapacity("Giganews", hasCapacity: false);
             await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.Equal(0, service.ActiveSessionCount);
-            Assert.Throws<InvalidOperationException>(() => sessionFactory.RequireSession(sessionKey1));
+            _ = Assert.Throws<InvalidOperationException>(() => sessionFactory.RequireSession(sessionKey1));
 
             controlPlane.SetBackboneCapacity("Giganews", hasCapacity: true);
             await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
@@ -1320,9 +1430,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.False(firstRuntime.LastCancelAdmittedWork ?? true);
             Assert.True(firstChannel.CancelCallCount >= 1);
             Assert.False(firstChannel.IsConsumerCurrentlyActive);
-            Assert.Single(firstRuntime.Deliveries);
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await firstChannel.DeliverAsync(3002UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x02 }, cancellationToken: CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
-            Assert.Single(firstRuntime.Deliveries);
+            _ = Assert.Single(firstRuntime.Deliveries);
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await firstChannel.DeliverAsync(3002UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x02 }, cancellationToken: CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
+            _ = Assert.Single(firstRuntime.Deliveries);
 
             capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: true);
             await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
@@ -1331,7 +1441,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             ObservedSessionRuntime recoveredRuntime = sessionFactory.RequireLatestSession(sessionKey1);
             Assert.True(recoveredRuntime.IsRunning);
 
-            TrackingChannel secondChannel = connector.RequireLastConnection().Channels.Where(static channel => channel.ConsumeCallCount == 1).Last();
+            TrackingChannel secondChannel = connector.RequireLastConnection().Channels.Last(static channel => channel.ConsumeCallCount == 1);
             await secondChannel.DeliverAsync(3003UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x03 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             RabbitMqArticleDelivery resumed = await recoveredRuntime.WaitForDeliveryAsync(CancellationToken.None).ConfigureAwait(false);
             Assert.Equal(3003UL, resumed.DeliveryTag);
@@ -1459,6 +1569,41 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Creates a production-equivalent article result sink used by the deterministic settlement race tests.
+        /// </summary>
+        /// <returns>The configured result sink.</returns>
+        private static RabbitMqArticleResultSink CreateArticleResultSinkForSessionRace()
+        {
+            return new RabbitMqArticleResultSink(
+                planner: new ArticleWorkDispositionPlanner(),
+                responseFactory: new ArticleWorkResponseFactory(),
+                responsePublisher: new TrackingRaceResponsePublisher(),
+                logger: NullLogger<RabbitMqArticleResultSink>.Instance);
+        }
+
+        /// <summary>
+        /// Creates a minimal processing result that routes the production result sink into delivery settlement.
+        /// </summary>
+        /// <param name="delivery">Delivery whose settlement should be exercised.</param>
+        /// <param name="outcome">Processing outcome to map through the disposition planner.</param>
+        /// <returns>The processing result.</returns>
+        private static ArticleWorkProcessingResult CreateArticleProcessingResultForSessionRace(RabbitMqArticleDelivery delivery, ArticleWorkProcessingOutcome outcome)
+        {
+            ArgumentNullException.ThrowIfNull(delivery);
+            RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<race@example.com>", delivery.Backbone);
+            return new ArticleWorkProcessingResult(
+                Request: request,
+                Delivery: delivery,
+                Outcome: outcome,
+                Disposition: ArticleWorkDispositionRecommendation.None,
+                GrabberResult: null,
+                ProviderFailureCode: null,
+                ResponseCode: null,
+                ResponseText: null,
+                UnexpectedException: null);
         }
 
         /// <summary>
@@ -1712,12 +1857,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 lock (_gate)
                 {
-                    if (!_sessionsByKey.TryGetValue(sessionKey, out List<BlockingStopTrackingSession>? sessions) || sessions.Count == 0)
-                    {
-                        throw new InvalidOperationException($"Expected tracked RabbitMQ session '{sessionKey}'.");
-                    }
-
-                    return sessions[^1];
+                    return !_sessionsByKey.TryGetValue(sessionKey, out List<BlockingStopTrackingSession>? sessions) || sessions.Count == 0
+                        ? throw new InvalidOperationException($"Expected tracked RabbitMQ session '{sessionKey}'.")
+                        : sessions[^1];
                 }
             }
 
@@ -1751,12 +1893,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 lock (_gate)
                 {
-                    if (!_sessionsByKey.TryGetValue(sessionKey, out List<BlockingStopTrackingSession>? sessions))
-                    {
-                        return 0;
-                    }
-
-                    return sessions.Count(static session => session.IsRunning);
+                    return !_sessionsByKey.TryGetValue(sessionKey, out List<BlockingStopTrackingSession>? sessions)
+                        ? 0
+                        : sessions.Count(static session => session.IsRunning);
                 }
             }
 
@@ -1829,14 +1968,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
                 lock (_gate)
                 {
-                    _stopStarted.TryGetValue(sessionKey, out startedSignal);
+                    _ = _stopStarted.TryGetValue(sessionKey, out startedSignal);
                     if (_stopBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         gateTask = source.Task;
                     }
                 }
 
-                startedSignal?.TrySetResult(true);
+                _ = startedSignal?.TrySetResult(true);
 
                 if (gateTask is not null)
                 {
@@ -2082,12 +2221,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 lock (_gate)
                 {
-                    if (!_sessionsByKey.TryGetValue(sessionKey, out List<ObservedSessionRuntime>? sessions) || sessions.Count == 0)
-                    {
-                        throw new InvalidOperationException($"Expected observed session '{sessionKey}'.");
-                    }
-
-                    return sessions[^1];
+                    return !_sessionsByKey.TryGetValue(sessionKey, out List<ObservedSessionRuntime>? sessions) || sessions.Count == 0
+                        ? throw new InvalidOperationException($"Expected observed session '{sessionKey}'.")
+                        : sessions[^1];
                 }
             }
 
@@ -3059,6 +3195,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// Confirms  disposed observed behavior.
             /// </summary>
             private readonly TaskCompletionSource<bool> _disposedObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            /// <summary>
+            /// Signals deterministic entry into BasicCancelAsync while the session lifecycle gate is still held.
+            /// </summary>
+            private TaskCompletionSource<bool>? _cancelEntered;
+            /// <summary>
+            /// Blocks BasicCancelAsync until the test explicitly allows shutdown to proceed.
+            /// </summary>
+            private TaskCompletionSource<bool>? _cancelRelease;
+            /// <summary>
+            /// Signals deterministic entry into BasicAckAsync or BasicNackAsync after SettleAsync has admitted settlement.
+            /// </summary>
+            private TaskCompletionSource<bool>? _ackEntered;
+            /// <summary>
+            /// Blocks BasicAckAsync or BasicNackAsync until the test explicitly allows completion.
+            /// </summary>
+            private TaskCompletionSource<bool>? _ackRelease;
 
             /// <summary>
             /// Supplies underlying channel for the fixture or scenario under test.
@@ -3124,6 +3276,50 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// Supplies disposed observed for the fixture or scenario under test.
             /// </summary>
             public Task DisposedObserved => _disposedObserved.Task;
+
+            /// <summary>
+            /// Supplies cancel entered for the fixture or scenario under test.
+            /// </summary>
+            public Task CancelEntered => _cancelEntered?.Task ?? Task.CompletedTask;
+
+            /// <summary>
+            /// Supplies ack entered for the fixture or scenario under test.
+            /// </summary>
+            public Task AckEntered => _ackEntered?.Task ?? Task.CompletedTask;
+
+            /// <summary>
+            /// Enables deterministic shutdown-race hooks for this channel instance.
+            /// </summary>
+            public void EnableDeterministicShutdownRaceHooks()
+            {
+                _cancelEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _cancelRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _ackEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            /// <summary>
+            /// Blocks ACK/NACK completion until explicitly released by the test.
+            /// </summary>
+            public void BlockAckUntilReleased()
+            {
+                _ackRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            /// <summary>
+            /// Releases the deterministic shutdown cancel gate.
+            /// </summary>
+            public void ReleaseCancel()
+            {
+                _ = _cancelRelease?.TrySetResult(true);
+            }
+
+            /// <summary>
+            /// Releases the deterministic ACK/NACK completion gate.
+            /// </summary>
+            public void ReleaseAck()
+            {
+                _ = _ackRelease?.TrySetResult(true);
+            }
 
             /// <summary>
             /// Confirms the exchange declare async behavior.
@@ -3239,7 +3435,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="consumerTag">The consumer tag used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the basic cancel async helper.</returns>
-            public Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
+            public async Task BasicCancelAsync(string consumerTag, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (string.Equals(_consumerTag, consumerTag, StringComparison.Ordinal))
@@ -3248,9 +3444,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     _consumerTag = null;
                     OperationLog.Add("cancel");
                     _ = _cancelObserved.TrySetResult(true);
+                    _ = _cancelEntered?.TrySetResult(true);
+                    if (_cancelRelease is not null)
+                    {
+                        await _cancelRelease.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
-
-                return Task.CompletedTask;
             }
 
             /// <summary>
@@ -3264,14 +3463,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="multiple">The multiple used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the basic ack async helper.</returns>
-            public ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
+            public async ValueTask BasicAckAsync(ulong deliveryTag, bool multiple, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 _ = deliveryTag;
                 _ = multiple;
                 AckCallCount++;
                 OperationLog.Add("ack");
-                return ValueTask.CompletedTask;
+                _ = _ackEntered?.TrySetResult(true);
+                if (_ackRelease is not null)
+                {
+                    await _ackRelease.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
             /// <summary>
@@ -3286,7 +3489,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="requeue">The requeue used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the basic nack async helper.</returns>
-            public ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
+            public async ValueTask BasicNackAsync(ulong deliveryTag, bool multiple, bool requeue, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 _ = deliveryTag;
@@ -3294,7 +3497,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 _ = requeue;
                 NackCallCount++;
                 OperationLog.Add("nack");
-                return ValueTask.CompletedTask;
+                _ = _ackEntered?.TrySetResult(true);
+                if (_ackRelease is not null)
+                {
+                    await _ackRelease.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
 
             /// <summary>
@@ -3378,6 +3585,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         /// <summary>
         /// Dynamic no-op proxy for RabbitMQ.Client.IChannel needed by AsyncEventingBasicConsumer construction in tests.
         /// </summary>
+        /// <summary>
+        /// Response publisher used by deterministic settlement race tests to keep publication out of the interleaving.
+        /// </summary>
+        private sealed class TrackingRaceResponsePublisher : IRabbitMqArticleResponsePublisher
+        {
+            /// <summary>
+            /// Publishes a confirmed response without introducing additional synchronization or failure behavior.
+            /// </summary>
+            /// <param name="result">Processed result holding authoritative AMQP metadata.</param>
+            /// <param name="response">Response payload to publish.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            /// <returns>A confirmed publication result.</returns>
+            public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(ArticleWorkProcessingResult result, RabbitMqArticleWorkResponse response, CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(result);
+                ArgumentNullException.ThrowIfNull(response);
+                cancellationToken.ThrowIfCancellationRequested();
+                return ValueTask.FromResult(new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Confirmed, result.Delivery.ConnectionGeneration, null));
+            }
+        }
+
         private class NoOpChannelProxy : DispatchProxy
         {
             /// <summary>
@@ -3442,12 +3670,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <returns>The value returned by the create default value helper.</returns>
             private static object? CreateDefaultValue(Type type)
             {
-                if (!type.IsValueType)
-                {
-                    return null;
-                }
-
-                return Activator.CreateInstance(type);
+                return !type.IsValueType ? null : Activator.CreateInstance(type);
             }
         }
     }

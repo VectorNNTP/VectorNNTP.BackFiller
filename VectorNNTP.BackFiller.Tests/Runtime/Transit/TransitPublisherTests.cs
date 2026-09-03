@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
+using VectorNNTP.BackFiller.Tests.TestInfrastructure;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
@@ -2886,10 +2887,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             string traceFile = string.IsNullOrWhiteSpace(configuredTraceFile)
                 ? Path.Combine(AppContext.BaseDirectory, $"ri-forensic-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.log")
                 : configuredTraceFile;
-            TextWriter originalOut = Console.Out;
             await using StreamWriter fileWriter = new(traceFile, append: false, Encoding.UTF8) { AutoFlush = true };
-            TextWriter synchronized = TextWriter.Synchronized(fileWriter);
-            Console.SetOut(synchronized);
+            await using ConsoleOutputScope outputScope = await ConsoleOutputScope.CaptureToAsync(TextWriter.Synchronized(fileWriter)).ConfigureAwait(false);
 
             try
             {
@@ -2972,9 +2971,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             finally
             {
                 Console.Out.Flush();
-                Console.SetOut(originalOut);
-                Console.WriteLine($"[TRACE-RI-99] Trace file written: {traceFile}");
             }
+
+            Console.WriteLine($"[TRACE-RI-99] Trace file written: {traceFile}");
         }
 
         /// <summary>
@@ -4335,7 +4334,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
-        /// Sets a transit connection's private state through reflection for targeted state-machine tests.
+        /// Sets a transit connection's current lifecycle state through the compiled property backing storage for targeted state-machine tests.
         /// </summary>
         /// <param name="connection">The connection whose state is changed.</param>
         /// <param name="state">The state to assign.</param>
@@ -4346,9 +4345,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             ArgumentNullException.ThrowIfNull(connection);
 
-            FieldInfo? stateField = typeof(TransitConnection).GetField("_state", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(stateField);
-            stateField.SetValue(connection, state);
+            PropertyInfo? currentStateProperty = typeof(TransitConnection).GetProperty(nameof(TransitConnection.CurrentState), BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(currentStateProperty);
+
+            MethodInfo? setter = currentStateProperty.SetMethod;
+            Assert.NotNull(setter);
+            setter.Invoke(connection, [state]);
         }
 
         /// <summary>
