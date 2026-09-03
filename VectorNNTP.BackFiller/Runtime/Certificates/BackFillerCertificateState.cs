@@ -67,7 +67,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             lock (_gate)
             {
-                return _current is null ? null : new X509Certificate2(_current.Certificate.Export(X509ContentType.Pkcs12));
+                if (_current is null)
+                {
+                    return null;
+                }
+
+                const string ClonePassword = "BackFiller-CertificateState-Clone";
+                byte[] pfx = _current.Certificate.Export(X509ContentType.Pkcs12, ClonePassword);
+                return new X509Certificate2(
+                    pfx,
+                    ClonePassword,
+                    X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
             }
         }
 

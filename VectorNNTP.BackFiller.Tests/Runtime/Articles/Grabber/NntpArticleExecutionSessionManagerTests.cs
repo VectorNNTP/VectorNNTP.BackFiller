@@ -129,13 +129,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleNotFound, missing.FailureCode);
             }
 
-            await using (NntpArticleSessionLease successLease = await manager.AcquireAsync("<exists@test>", CancellationToken.None).ConfigureAwait(false))
-            {
-                using NntpArticleAcquisitionResult success = await successLease.Session.DownloadArticleAsync("<exists@test>", CancellationToken.None).ConfigureAwait(false);
-                successLease.ReportAcquisitionOutcome(success.FailureCode);
-                Assert.True(success.IsSuccess);
-                Assert.Equal(existingArticle.Length, success.ArticleLength);
-            }
+            await using NntpArticleSessionLease successLease = await manager.AcquireAsync("<exists@test>", CancellationToken.None).ConfigureAwait(false);
+            using NntpArticleAcquisitionResult success = await successLease.Session.DownloadArticleAsync("<exists@test>", CancellationToken.None).ConfigureAwait(false);
+            successLease.ReportAcquisitionOutcome(success.FailureCode);
+            Assert.True(success.IsSuccess);
+            Assert.Equal(existingArticle.Length, success.ArticleLength);
         }
 
         /// <summary>
@@ -307,7 +305,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             Assert.Equal(0, manager.ActiveSessionCount);
 
             using CancellationTokenSource acquireTimeout = new(TimeSpan.FromMilliseconds(200));
-            await Assert.ThrowsAsync<OperationCanceledException>(
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(
                 async () => await manager.AcquireAsync("<reconnect-auth@test>", acquireTimeout.Token).ConfigureAwait(false)).ConfigureAwait(false);
         }
 
@@ -318,13 +316,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         public async Task InitializeAsync_WhenShutdownCancellationOccurs_DoesNotLogSlotInitializationFailedWarningAsync()
         {
             TaskCompletionSource<bool> authInfoUserObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowServerCleanup = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "AUTHINFO USER user").ConfigureAwait(false);
                 _ = authInfoUserObserved.TrySetResult(true);
-                await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                _ = await allowServerCleanup.Task.ConfigureAwait(false);
             }).ConfigureAwait(false);
 
             NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: "user", password: "pass");
@@ -334,10 +333,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             using CancellationTokenSource shutdownCancellation = new();
             Task initializeTask = manager.InitializeAsync([account], shutdownCancellation.Token);
 
-            await authInfoUserObserved.Task.ConfigureAwait(false);
+            _ = await authInfoUserObserved.Task.ConfigureAwait(false);
             shutdownCancellation.Cancel();
 
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await initializeTask.ConfigureAwait(false)).ConfigureAwait(false);
+            _ = allowServerCleanup.TrySetResult(true);
 
             Assert.DoesNotContain(
                 loggerProvider.Entries,
@@ -645,7 +645,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <dispose-active@test>").ConfigureAwait(false);
-                articleCommandObserved.TrySetResult();
+                _ = articleCommandObserved.TrySetResult();
                 await allowArticleResponse.Task.ConfigureAwait(false);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <dispose-active@test> article follows").ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
@@ -679,7 +679,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             string logsBeforeArticleCompletion = string.Join("\n", loggerProvider.Entries.Select(static entry => entry.Message));
             Assert.DoesNotContain("TX: QUIT", logsBeforeArticleCompletion, StringComparison.Ordinal);
 
-            allowArticleResponse.TrySetResult();
+            _ = allowArticleResponse.TrySetResult();
             using NntpArticleAcquisitionResult result = await downloadTask.ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(result.FailureCode);
             await lease.DisposeAsync().ConfigureAwait(false);
@@ -945,25 +945,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                 ServerId: 1,
                 Username: username ?? string.Empty,
                 UseSsl: false);
-        }
-
-        /// <summary>
-        /// Executes one acquire-download-release lease cycle and returns acquired article length.
-        /// </summary>
-        /// <param name="manager">Session manager under test.</param>
-        /// <param name="messageId">Message-ID to request.</param>
-        /// <returns>Downloaded article length.</returns>
-        /// <summary>
-        /// Confirms the run one lease async behavior.
-        /// </summary>
-        /// <returns>The value returned by the run one lease async helper.</returns>
-        private static async Task<int> RunOneLeaseAsync(NntpArticleExecutionSessionManager manager, string messageId)
-        {
-            await using NntpArticleSessionLease lease = await manager.AcquireAsync(messageId, CancellationToken.None).ConfigureAwait(false);
-            using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync(messageId, CancellationToken.None).ConfigureAwait(false);
-            lease.ReportAcquisitionOutcome(result.FailureCode);
-            Assert.True(result.IsSuccess);
-            return result.ArticleLength;
         }
 
         /// <summary>

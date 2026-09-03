@@ -6,6 +6,10 @@
 // Focused tests for acme certificate issuer dns01 recovery, covering certificate and DNS dependency behavior.
 // Primary responsibility: documents the executable contracts covered by the acme certificate issuer dns01 recovery test suite.
 
+using System.Reflection;
+using Certes;
+using Certes.Acme;
+using Certes.Acme.Resource;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Certificates;
@@ -39,8 +43,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         {
             RecoveryScenarioResult result = await ExecuteScenarioAsync(
                 initialRecords: [
-                    new CloudflareTxtRecordInfo("stale-1", RecoveryScenario.Fqdn, "old-value", CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller stale challenge", ["acme"], null, null),
-                    new CloudflareTxtRecordInfo("unrelated-1", RecoveryScenario.Fqdn, "unrelated-value", CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 120, "keep", ["other"], null, null)],
+                    new CloudflareTxtRecordInfo("stale-1", RecoveryScenario.RecordName, "old-value", CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller stale challenge", ["acme"], null, null),
+                    new CloudflareTxtRecordInfo("unrelated-1", RecoveryScenario.RecordName, "unrelated-value", CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 120, "keep", ["other"], null, null)],
                 shouldFailValidation: false,
                 shouldFailFinalize: false,
                 throwOnDelete: false,
@@ -48,7 +52,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
             Assert.True(result.WasSuccessful);
             Assert.Equal(1, result.Api.AddCallCount);
-            Assert.Equal(1, result.Api.DeleteCallCount);
+            Assert.Equal(2, result.Api.DeleteCallCount);
             Assert.Contains(result.Api.Records, record => record.Content == "unrelated-value");
             Assert.DoesNotContain(result.Api.Records, record => record.Content == "old-value");
         }
@@ -59,7 +63,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         public async Task IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValue()
         {
             RecoveryScenarioResult result = await ExecuteScenarioAsync(
-                initialRecords: [new CloudflareTxtRecordInfo("existing-owned", RecoveryScenario.Fqdn, RecoveryScenario.ExpectedTxtValue, CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller challenge", ["acme"], null, null)],
+                initialRecords: [new CloudflareTxtRecordInfo("existing-owned", RecoveryScenario.RecordName, RecoveryScenario.ExpectedTxtValue, CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller challenge", ["acme"], null, null)],
                 shouldFailValidation: false,
                 shouldFailFinalize: false,
                 throwOnDelete: false,
@@ -83,8 +87,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
-        /// Confirms the execute scenario async behavior.
+        /// Executes one focused DNS-01 authorization scenario against the production ownership-aware challenge flow.
         /// </summary>
+        /// <param name="initialRecords">Initial TXT records visible at the ACME challenge name.</param>
+        /// <param name="shouldFailValidation">Whether the simulated ACME challenge should fail validation.</param>
+        /// <param name="shouldFailFinalize">Unused legacy scenario flag retained to avoid widening the test diff.</param>
+        /// <param name="throwOnDelete">Whether TXT-record cleanup should throw.</param>
+        /// <param name="cancellationToken">Cancellation token for the scenario.</param>
+        /// <param name="failChallengeAfterCreate">Whether the simulated challenge should throw immediately after record reconciliation/creation.</param>
+        /// <returns>The scenario result capturing TXT API activity and any surfaced exception.</returns>
         private static async Task<RecoveryScenarioResult> ExecuteScenarioAsync(
             IReadOnlyList<CloudflareTxtRecordInfo> initialRecords,
             bool shouldFailValidation,
@@ -93,8 +104,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             CancellationToken cancellationToken,
             bool failChallengeAfterCreate = false)
         {
+            _ = shouldFailFinalize;
             string tempDir = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-AcmeDns01-{Guid.NewGuid():N}");
-            _ = Directory.CreateDirectory(tempDir);
+            _ = System.IO.Directory.CreateDirectory(tempDir);
 
             try
             {
@@ -102,24 +114,36 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 FakeCloudflareTxtRecordApi api = new(initialRecords, throwOnDelete);
                 FakeAuthoritativeDnsTxtPropagationVerifier verifier = new();
                 AcmeCertificateIssuer issuer = new(TimeProvider.System, NullLogger<AcmeCertificateIssuer>.Instance, verifier, _ => api);
-                FakeAcmeContextFactory acmeFactory = new(shouldFailValidation, shouldFailFinalize, failChallengeAfterCreate);
+                FakeAuthorizationContext authorizationContext = new(shouldFailValidation, failChallengeAfterCreate);
+                AcmeContext acmeContext = new(WellKnownServers.LetsEncryptStagingV2, RecoveryScenario.AccountKey);
 
-                AcmeOrderIssueResult? result = null;
+                MethodInfo completeAuthorizationMethod = typeof(AcmeCertificateIssuer).GetMethod(
+                    "CompleteAuthorizationAsync",
+                    BindingFlags.Instance | BindingFlags.NonPublic,
+                    [typeof(AcmeContext), typeof(IAuthorizationContext), typeof(ICloudflareTxtRecordApi), typeof(BackFillerLetsEncryptRuntimeOptions), typeof(CancellationToken)])
+                    ?? throw new InvalidOperationException("CompleteAuthorizationAsync was not found.");
+
                 Exception? error = null;
                 try
                 {
-                    result = await issuer.IssueCertificateAsync(options, cancellationToken);
+                    Task operation = (Task)(completeAuthorizationMethod.Invoke(issuer, [acmeContext, authorizationContext, api, options, cancellationToken])
+                        ?? throw new InvalidOperationException("CompleteAuthorizationAsync did not return a task."));
+                    await operation.ConfigureAwait(false);
+                }
+                catch (TargetInvocationException ex) when (ex.InnerException is not null)
+                {
+                    error = ex.InnerException;
                 }
                 catch (Exception ex)
                 {
                     error = ex;
                 }
 
-                return new RecoveryScenarioResult(api, result is not null, error);
+                return new RecoveryScenarioResult(api, error is null, error);
             }
             finally
             {
-                Directory.Delete(tempDir, recursive: true);
+                System.IO.Directory.Delete(tempDir, recursive: true);
             }
         }
 
@@ -165,10 +189,26 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// Supplies fqdn for the fixture or scenario under test.
             /// </summary>
             internal const string Fqdn = "backfiller01.usenet.ninja";
+
             /// <summary>
-            /// Supplies expected txt value for the fixture or scenario under test.
+            /// Supplies the DNS-01 TXT record host name used by the production issuer.
             /// </summary>
-            internal const string ExpectedTxtValue = "challenge-value";
+            internal const string RecordName = "_acme-challenge." + Fqdn;
+
+            /// <summary>
+            /// Supplies the deterministic challenge token used by the fake ACME challenge.
+            /// </summary>
+            internal const string ChallengeToken = "dns01-test-token";
+
+            /// <summary>
+            /// Supplies the shared ACME account key used to derive the DNS-01 TXT value for the scenario.
+            /// </summary>
+            internal static IKey AccountKey { get; } = KeyFactory.NewKey(KeyAlgorithm.ES256);
+
+            /// <summary>
+            /// Supplies the expected TXT value derived from the same ACME account-key logic used in production.
+            /// </summary>
+            internal static string ExpectedTxtValue => AccountKey.DnsTxt(ChallengeToken);
         }
 
         /// <summary>
@@ -325,30 +365,190 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
-        /// Confirms the fake acme context factory behavior.
+        /// Simulates one ACME authorization resource for focused DNS-01 recovery tests.
         /// </summary>
-        /// <returns>The value returned by the fake acme context factory helper.</returns>
-        /// <summary>
-        /// Confirms the fake acme context factory behavior.
-        /// </summary>
-        /// <param name="shouldFailValidation">The should fail validation used by this test scenario.</param>
-        /// <param name="shouldFailFinalize">The should fail finalize used by this test scenario.</param>
-        /// <param name="failChallengeAfterCreate">The fail challenge after create used by this test scenario.</param>
-        /// <returns>The value returned by the fake acme context factory helper.</returns>
-        private sealed class FakeAcmeContextFactory(bool shouldFailValidation, bool shouldFailFinalize, bool failChallengeAfterCreate)
+        private sealed class FakeAuthorizationContext : IAuthorizationContext
         {
             /// <summary>
-            /// Supplies should fail validation for the fixture or scenario under test.
+            /// Tracks the backing authorization resource exposed to the production polling logic.
             /// </summary>
-            private bool ShouldFailValidation { get; } = shouldFailValidation;
+            private readonly Authorization _authorization;
+
             /// <summary>
-            /// Supplies should fail finalize for the fixture or scenario under test.
+            /// Tracks the single DNS-01 challenge context returned to the production issuer.
             /// </summary>
-            private bool ShouldFailFinalize { get; } = shouldFailFinalize;
+            private readonly FakeChallengeContext _challengeContext;
+
             /// <summary>
-            /// Supplies fail challenge after create for the fixture or scenario under test.
+            /// Initializes one fake authorization context.
             /// </summary>
-            private bool FailChallengeAfterCreate { get; } = failChallengeAfterCreate;
+            /// <param name="shouldFailValidation">Whether challenge validation should transition to invalid.</param>
+            /// <param name="failChallengeAfterCreate">Whether validation should throw immediately after DNS setup.</param>
+            internal FakeAuthorizationContext(bool shouldFailValidation, bool failChallengeAfterCreate)
+            {
+                _authorization = new Authorization
+                {
+                    Identifier = new Identifier { Type = IdentifierType.Dns, Value = RecoveryScenario.Fqdn },
+                    Status = AuthorizationStatus.Pending,
+                    Challenges =
+                    [
+                        new Challenge
+                        {
+                            Type = ChallengeTypes.Dns01,
+                            Token = RecoveryScenario.ChallengeToken,
+                            Status = ChallengeStatus.Pending,
+                        },
+                    ],
+                };
+                _challengeContext = new FakeChallengeContext(_authorization, shouldFailValidation, failChallengeAfterCreate);
+            }
+
+            /// <summary>
+            /// Supplies the fake location required by the Certes resource-context contract.
+            /// </summary>
+            public Uri Location => new("https://unit.test/acme/authorization");
+
+            /// <summary>
+            /// Supplies a zero retry-after delay because these tests do not model server pacing.
+            /// </summary>
+            public int RetryAfter => 0;
+
+            /// <summary>
+            /// Returns the current fake authorization resource state.
+            /// </summary>
+            /// <returns>The current authorization state.</returns>
+            public Task<Authorization> Resource()
+            {
+                return Task.FromResult(_authorization);
+            }
+
+            /// <summary>
+            /// Returns the single DNS-01 challenge context used by the production issuer.
+            /// </summary>
+            /// <returns>The fake DNS-01 challenge context.</returns>
+            public Task<IChallengeContext> Dns()
+            {
+                return Task.FromResult<IChallengeContext>(_challengeContext);
+            }
+
+            /// <summary>
+            /// Returns all fake challenge contexts for interface completeness.
+            /// </summary>
+            /// <returns>The single fake DNS-01 challenge context.</returns>
+            public Task<IEnumerable<IChallengeContext>> Challenges()
+            {
+                return Task.FromResult<IEnumerable<IChallengeContext>>([_challengeContext]);
+            }
+
+            /// <summary>
+            /// Deactivates the fake authorization.
+            /// </summary>
+            /// <returns>The updated authorization resource.</returns>
+            public Task<Authorization> Deactivate()
+            {
+                _authorization.Status = AuthorizationStatus.Deactivated;
+                return Task.FromResult(_authorization);
+            }
+        }
+
+        /// <summary>
+        /// Simulates one ACME DNS-01 challenge resource for focused recovery tests.
+        /// </summary>
+        private sealed class FakeChallengeContext : IChallengeContext
+        {
+            /// <summary>
+            /// Tracks the fake authorization so validation can update its final status.
+            /// </summary>
+            private readonly Authorization _authorization;
+
+            /// <summary>
+            /// Indicates whether validation should transition the challenge to invalid.
+            /// </summary>
+            private readonly bool _shouldFailValidation;
+
+            /// <summary>
+            /// Indicates whether validation should throw after DNS setup to verify cleanup-on-failure.
+            /// </summary>
+            private readonly bool _failChallengeAfterCreate;
+
+            /// <summary>
+            /// Tracks the fake challenge resource returned to the issuer.
+            /// </summary>
+            private readonly Challenge _challenge;
+
+            /// <summary>
+            /// Initializes one fake challenge context.
+            /// </summary>
+            /// <param name="authorization">Owning fake authorization resource.</param>
+            /// <param name="shouldFailValidation">Whether validation should transition to invalid.</param>
+            /// <param name="failChallengeAfterCreate">Whether validation should throw after DNS setup.</param>
+            internal FakeChallengeContext(Authorization authorization, bool shouldFailValidation, bool failChallengeAfterCreate)
+            {
+                _authorization = authorization;
+                _shouldFailValidation = shouldFailValidation;
+                _failChallengeAfterCreate = failChallengeAfterCreate;
+                _challenge = authorization.Challenges.Single();
+            }
+
+            /// <summary>
+            /// Supplies the fake location required by the Certes resource-context contract.
+            /// </summary>
+            public Uri Location => new("https://unit.test/acme/challenge");
+
+            /// <summary>
+            /// Supplies a zero retry-after delay because these tests do not model server pacing.
+            /// </summary>
+            public int RetryAfter => 0;
+
+            /// <summary>
+            /// Supplies the ACME key-authorization placeholder for interface completeness.
+            /// </summary>
+            public string KeyAuthz => "unused-key-authorization";
+
+            /// <summary>
+            /// Supplies the deterministic token used to derive the DNS-01 TXT value.
+            /// </summary>
+            public string Token => RecoveryScenario.ChallengeToken;
+
+            /// <summary>
+            /// Supplies the DNS-01 challenge type expected by production.
+            /// </summary>
+            public string Type => ChallengeTypes.Dns01;
+
+            /// <summary>
+            /// Returns the current fake challenge resource state.
+            /// </summary>
+            /// <returns>The current challenge state.</returns>
+            public Task<Challenge> Resource()
+            {
+                return Task.FromResult(_challenge);
+            }
+
+            /// <summary>
+            /// Simulates the ACME validation transition after DNS setup completes.
+            /// </summary>
+            /// <returns>The updated challenge resource.</returns>
+            public Task<Challenge> Validate()
+            {
+                if (_failChallengeAfterCreate)
+                {
+                    throw new InvalidOperationException("Simulated challenge validation failure.");
+                }
+
+                if (_shouldFailValidation)
+                {
+                    _challenge.Status = ChallengeStatus.Invalid;
+                    _authorization.Status = AuthorizationStatus.Invalid;
+                }
+                else
+                {
+                    _challenge.Status = ChallengeStatus.Valid;
+                    _challenge.Validated = DateTimeOffset.UtcNow;
+                    _authorization.Status = AuthorizationStatus.Valid;
+                }
+
+                return Task.FromResult(_challenge);
+            }
         }
     }
 }

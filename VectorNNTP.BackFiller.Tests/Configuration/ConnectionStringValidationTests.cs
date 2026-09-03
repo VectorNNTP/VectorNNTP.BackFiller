@@ -12,8 +12,13 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Configuration
 {
     /// <summary>
-    /// Confirms the connection string validation tests behavior.
+    /// Verifies connection-string validation contracts for required fields, alias semantics, and MySqlConnector-compatible options.
     /// </summary>
+    /// <remarks>
+    /// These tests define startup-time validation behavior for the GrabberDB control-plane connection string, including
+    /// required component detection, syntax handling, authentication requirements, pooling guidance, and alias conflict
+    /// safety checks used to prevent ambiguous configuration and fingerprint drift.
+    /// </remarks>
     public sealed class ConnectionStringValidationTests
     {
         #region Parameter Validation Tests
@@ -209,6 +214,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate valid server key variations accepts server value behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string using an accepted server-host alias representation.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass")]
         [InlineData("Host=localhost;Database=GrabberDB;User ID=admin;Password=pass")]
@@ -271,6 +277,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate valid database key variations accepts database value behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string using an accepted database-name alias representation.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass")]
         [InlineData("Server=localhost;Initial Catalog=GrabberDB;User ID=admin;Password=pass")]
@@ -309,6 +316,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate username password variations accepts authentication behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string that supplies supported username and password aliases.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=sa;Password=P@ssw0rd")]
         [InlineData("Server=localhost;Database=GrabberDB;UserID=sa;Password=P@ssw0rd")]
@@ -401,6 +409,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate appropriate pool size accepts configuration behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string containing pool-size values inside accepted advisory ranges.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;Min Pool Size=0")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;Min Pool Size=1")]
@@ -479,6 +488,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate excessive min pool size alternative aliases returns pooling warning behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string using alternative minimum-pool-size aliases with excessive values.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;MinimumPoolSize=5")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;MINIMUMPOOLSIZE=5")] // Case-insensitive
@@ -503,6 +513,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate excessive max pool size alternative aliases returns pooling warning behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string using alternative maximum-pool-size aliases with excessive values.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;MaximumPoolSize=100")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=pass;MAXIMUMPOOLSIZE=100")] // Case-insensitive
@@ -531,6 +542,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate my sql accepts syntactically valid custom port behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string containing a syntactically valid explicit port value.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Port=3306")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Port=33060")] // X Protocol port - syntactically valid, but operationally wrong for MySqlConnector
@@ -555,6 +567,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate my sql with ssl mode accepts configuration behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string containing a valid MySQL SSL-mode option variant.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;SslMode=Required")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;SslMode=Preferred")]
@@ -572,6 +585,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate my sql with char set accepts configuration behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string containing a valid MySQL character-set option variant.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;CharSet=utf8mb4")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Character Set=utf8")]
@@ -588,6 +602,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate my sql with timeouts accepts configuration behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string containing valid MySQL connection or command timeout options.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Connection Timeout=30")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;ConnectionTimeout=60")]
@@ -605,6 +620,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Confirms the validate my sql with allow user variables accepts configuration behavior.
         /// </summary>
+        /// <param name="connectionString">Connection string containing a valid AllowUserVariables option representation.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;Allow User Variables=true")]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;AllowUserVariables=True")]
@@ -648,6 +664,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// Tests well-formed MySQL connection strings using various MySqlConnector alias combinations.
         /// These demonstrate different but equivalent ways to specify the same required properties.
         /// </summary>
+        /// <param name="connectionString">Well-formed MySQL connection string expected to pass validation without errors.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=grabber;Password=secret")]
         [InlineData("Host=localhost;Port=3306;Database=GrabberDB;Username=grabber;Password=secret")]
@@ -670,6 +687,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// Tests that connection strings without passwords are accepted.
         /// Password can be supplied programmatically via ProvidePasswordCallback.
         /// </summary>
+        /// <param name="connectionString">Connection string that omits password while preserving other required fields.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;User ID=grabber")]
         [InlineData("Host=localhost;Port=3306;Database=GrabberDB;Username=grabber")]
@@ -689,6 +707,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// Tests that Windows authentication connection strings are rejected.
         /// MySqlConnector does NOT support Windows/Integrated authentication.
         /// </summary>
+        /// <param name="connectionString">Connection string using unsupported integrated-authentication options.</param>
         [Theory]
         [InlineData("Server=localhost;Database=GrabberDB;Integrated Security=true")]
         [InlineData("Server=localhost;Database=GrabberDB;IntegratedSecurity=true")]
@@ -711,6 +730,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// Tests that connection strings with conflicting/ambiguous aliases are rejected.
         /// This is CRITICAL for security and configuration fingerprinting.
         /// </summary>
+        /// <param name="connectionString">Connection string containing conflicting alias values for a logical property.</param>
         [Theory]
         [InlineData("Server=db01;Host=db02;Database=GrabberDB;User ID=admin")] // Conflicting server
         [InlineData("Server=localhost;Database=dbA;Initial Catalog=dbB;User ID=admin")] // Conflicting database
@@ -737,6 +757,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// Tests that connection strings with redundant but IDENTICAL aliases are accepted.
         /// While redundant, they don't create ambiguity.
         /// </summary>
+        /// <param name="connectionString">Connection string containing redundant aliases that all resolve to identical values.</param>
         [Theory]
         [InlineData("Server=db01;Host=db01;Database=GrabberDB;User ID=admin")] // Redundant but consistent server
         [InlineData("Server=localhost;Database=GrabberDB;Initial Catalog=GrabberDB;User ID=admin")] // Redundant but consistent database

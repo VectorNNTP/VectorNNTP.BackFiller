@@ -385,6 +385,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             if (cancelAdmittedWork)
             {
                 _sessionCancellation?.Cancel();
+                AbandonAdmittedDeliveriesForDrainAccountingNoLock();
             }
 
             Task drainTask = _drainCompletion.Task;
@@ -677,6 +678,24 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             {
                 _ = _lifecycleGate.Release();
             }
+        }
+
+        /// <summary>
+        /// Abandons admitted-delivery drain accounting after cooperative cancellation has been signaled.
+        /// </summary>
+        /// <remarks>
+        /// This helper releases StopAsync waiters without forcing broker settlement. Late ACK/NACK attempts remain invalid because
+        /// settlement still requires an active owning channel generation, preserving broker-side ownership semantics after disposal.
+        /// </remarks>
+        private void AbandonAdmittedDeliveriesForDrainAccountingNoLock()
+        {
+            if (_admittedDeliveryCount <= 0)
+            {
+                return;
+            }
+
+            _admittedDeliveryCount = 0;
+            _ = _drainCompletion.TrySetResult(true);
         }
 
         /// <summary>

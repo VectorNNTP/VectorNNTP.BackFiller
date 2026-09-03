@@ -13,10 +13,17 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Configuration
 {
     /// <summary>
-    /// Tests RabbitMQ configuration binding from IConfiguration into BackFiller options.
+    /// Verifies RabbitMQ configuration binding from <see cref="IConfiguration"/> into <see cref="BackFillerOptions"/>.
     /// </summary>
+    /// <remarks>
+    /// This test asserts the startup-time configuration contract for RabbitMQ option materialization, ensuring that
+    /// scalar values, host arrays, thresholds, timeouts, pooling knobs, and credentials all bind to their expected
+    /// <see cref="RabbitMqOptions"/> targets without alias drift or missing assignments.
+    /// </remarks>
     public sealed class RabbitMqConfigurationBindingTests
     {
+        private static readonly string[] ExpectedRabbitMqHosts = ["rabbit1", "rabbit2"];
+
         /// <summary>
         /// Confirms the back filler rabbit mq section binds all current settings behavior.
         /// </summary>
@@ -71,7 +78,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
             Assert.Equal(300, rabbitMq.ConnectionScaleDownIdleSeconds);
             Assert.Equal(0.75d, rabbitMq.DegradedThreshold);
             Assert.True(rabbitMq.EnableSsl);
-            Assert.Equal(new[] { "rabbit1", "rabbit2" }, rabbitMq.Hosts);
+            Assert.Equal(ExpectedRabbitMqHosts, rabbitMq.Hosts);
             Assert.Equal(16, rabbitMq.MaxConnections);
             Assert.Equal(5, rabbitMq.MaxConsecutiveRecoveryFailures);
             Assert.Equal(30, rabbitMq.MaximumShutdownDrainTimeoutSeconds);

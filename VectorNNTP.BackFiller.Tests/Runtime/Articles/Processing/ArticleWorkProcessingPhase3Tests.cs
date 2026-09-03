@@ -170,9 +170,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             List<CapturedLogEntry> entries = [];
             ILogger<RabbitMqArticleWorkRequestParser> logger = new CapturingLogger<RabbitMqArticleWorkRequestParser>(entries);
-            const string correlationId = "corr-diagnostic-preview";
+            const string CorrelationId = "corr-diagnostic-preview";
             RabbitMqArticleWorkRequestParser parser = new(
-                runtimeOptions: CreateRuntimeOptionsWithDiagnosticCorrelationId(correlationId),
+                runtimeOptions: CreateRuntimeOptionsWithDiagnosticCorrelationId(CorrelationId),
                 logger: logger);
 
             Guid requestId = Guid.NewGuid();
@@ -184,7 +184,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 backbone = "BackboneA",
                 extra = new string('x', 512),
             });
-            RabbitMqArticleDelivery delivery = CreateDelivery(payload, correlationId: correlationId, replyTo: "rpc.reply.queue");
+            RabbitMqArticleDelivery delivery = CreateDelivery(payload, correlationId: CorrelationId, replyTo: "rpc.reply.queue");
 
             RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None);
 
@@ -597,7 +597,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             TaskCompletionSource<bool> allowDownstream = new(TaskCreationOptions.RunContinuationsAsynchronously);
             Task downstreamTask = Task.Run(async () =>
             {
-                await allowDownstream.Task.ConfigureAwait(false);
+                _ = await allowDownstream.Task.ConfigureAwait(false);
                 result.Dispose();
             });
 
@@ -1108,7 +1108,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
                         try
                         {
-                            await Task.Delay(Timeout.Infinite, _shutdown.Token).ConfigureAwait(false);
+                            while (!_shutdown.IsCancellationRequested)
+                            {
+                                string command = await ReadAsciiLineAsync(stream, _shutdown.Token).ConfigureAwait(false);
+                                if (string.Equals(command, "QUIT", StringComparison.Ordinal))
+                                {
+                                    await WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
+                                    break;
+                                }
+                            }
+                        }
+                        catch (EndOfStreamException)
+                        {
                         }
                         catch (OperationCanceledException)
                         {
@@ -1124,6 +1135,39 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                         return;
                     }
                 }
+            }
+
+            /// <summary>
+            /// Confirms the read ascii line async behavior.
+            /// </summary>
+            /// <param name="stream">The stream used by this test scenario.</param>
+            /// <param name="cancellationToken">Cancellation token controlling socket shutdown.</param>
+            /// <returns>The value returned by the read ascii line async helper.</returns>
+            private static async Task<string> ReadAsciiLineAsync(Stream stream, CancellationToken cancellationToken)
+            {
+                List<byte> bytes = [];
+
+                while (true)
+                {
+                    byte[] single = new byte[1];
+                    int read = await stream.ReadAsync(single, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        throw new EndOfStreamException("Connection closed while awaiting line.");
+                    }
+
+                    if (single[0] == (byte)'\n')
+                    {
+                        break;
+                    }
+
+                    if (single[0] != (byte)'\r')
+                    {
+                        bytes.Add(single[0]);
+                    }
+                }
+
+                return Encoding.ASCII.GetString(bytes.ToArray());
             }
 
             /// <summary>

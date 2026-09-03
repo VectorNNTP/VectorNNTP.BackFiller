@@ -4335,7 +4335,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
-        /// Sets a transit connection's private state through reflection for targeted state-machine tests.
+        /// Sets a transit connection's current lifecycle state through the compiled property backing storage for targeted state-machine tests.
         /// </summary>
         /// <param name="connection">The connection whose state is changed.</param>
         /// <param name="state">The state to assign.</param>
@@ -4346,9 +4346,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             ArgumentNullException.ThrowIfNull(connection);
 
-            FieldInfo? stateField = typeof(TransitConnection).GetField("_state", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(stateField);
-            stateField.SetValue(connection, state);
+            PropertyInfo? currentStateProperty = typeof(TransitConnection).GetProperty(nameof(TransitConnection.CurrentState), BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(currentStateProperty);
+
+            MethodInfo? setter = currentStateProperty.SetMethod;
+            Assert.NotNull(setter);
+            setter.Invoke(connection, [state]);
         }
 
         /// <summary>

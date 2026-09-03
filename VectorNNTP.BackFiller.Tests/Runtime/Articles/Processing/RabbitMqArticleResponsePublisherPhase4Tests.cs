@@ -79,8 +79,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         public async Task PublishAndConfirmAsync_WhenPublishThrows_ReturnsFailedAsync()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
-            RecordingBrokerConnector connector = new();
-            connector.FailPublishWith = new InvalidOperationException("publish failed");
+            RecordingBrokerConnector connector = new()
+            {
+                FailPublishWith = new InvalidOperationException("publish failed")
+            };
 
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
             RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
@@ -109,8 +111,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         public async Task PublishAndConfirmAsync_WhenPublishCancellationTimeouts_ReturnsTimedOutAsync()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
-            RecordingBrokerConnector connector = new();
-            connector.BlockPublishUntilCancelled = true;
+            RecordingBrokerConnector connector = new()
+            {
+                BlockPublishUntilCancelled = true
+            };
 
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 1);
             RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
@@ -259,7 +263,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.All(results, static publishResult => Assert.Equal(RabbitMqResponsePublishStatus.Confirmed, publishResult.Status));
 
             RecordingBrokerConnection connection = connector.RequireLastConnection();
-            Assert.Single(connection.CreatedChannels);
+            _ = Assert.Single(connection.CreatedChannels);
 
             await connectionManager.DisposeAsync().ConfigureAwait(false);
             firstResult.Dispose();
@@ -482,7 +486,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// <returns>The value returned by the wait for first publish started async helper.</returns>
             internal async Task WaitForFirstPublishStartedAsync()
             {
-                await _publishStarted.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                _ = await _publishStarted.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             }
 
             /// <summary>

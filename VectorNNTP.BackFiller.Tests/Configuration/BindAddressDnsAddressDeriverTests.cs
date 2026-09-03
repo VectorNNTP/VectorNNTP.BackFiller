@@ -13,8 +13,14 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Configuration
 {
     /// <summary>
-    /// Tests canonical DNS-address derivation from explicit and wildcard BindAddress semantics.
+    /// Verifies canonical DNS-address derivation behavior for explicit, wildcard, and mixed bind-address inputs.
     /// </summary>
+    /// <remarks>
+    /// This suite documents the contract used by startup validation and runtime identity derivation when bind
+    /// addresses must be translated into externally advertisable DNS candidates. Tests intentionally exercise
+    /// wildcard-family expansion, explicit-address preservation, non-advertisable-address exclusion, and final
+    /// de-duplication semantics using deterministic interface-address providers.
+    /// </remarks>
     public sealed class BindAddressDnsAddressDeriverTests
     {
         /// <summary>
@@ -393,6 +399,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Verifies wildcard token detection recognizes '*' and 'Any' values without requiring IP parsing.
         /// </summary>
+        /// <param name="value">Candidate bind-address token supplied to wildcard-token detection.</param>
         [Theory]
         [InlineData("*")]
         [InlineData("Any")]
@@ -408,6 +415,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         /// <summary>
         /// Verifies non-wildcard values are not treated as wildcard bind-address tokens.
         /// </summary>
+        /// <param name="value">Candidate bind-address token expected not to match wildcard-token semantics.</param>
         [Theory]
         [InlineData(null)]
         [InlineData("")]

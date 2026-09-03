@@ -23,8 +23,13 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.ControlPlane
 {
     /// <summary>
-    /// Tests the control-plane startup contract and steady-state service semantics.
+    /// Verifies <see cref="ControlPlaneService"/> startup, reconciliation, and shutdown contracts under deterministic test harness conditions.
     /// </summary>
+    /// <remarks>
+    /// The suite validates lifecycle transitions, snapshot-driven account runtime convergence, session-capacity scaling,
+    /// TLS and authentication negotiation behavior, and cancellation semantics while asserting observable logging and
+    /// capacity-retirement side effects through in-memory collaborators.
+    /// </remarks>
     public sealed class ControlPlaneServiceTests
     {
         /// <summary>
@@ -398,7 +403,7 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             Assert.Equal(2, service.GetManagedAccountActiveSessionCount(accountId));
             await WaitForConditionAsync(() => server.ActiveConnectionCount == 2);
 
-            Assert.Single(rabbitCoordinator.Calls);
+            _ = Assert.Single(rabbitCoordinator.Calls);
             Assert.Equal(accountId, rabbitCoordinator.Calls[0].AccountId);
             Assert.Equal(2, rabbitCoordinator.Calls[0].RetainConnectionCount);
 
@@ -454,7 +459,7 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             desiredAccounts[0] = CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port);
             Task reconcileTask = service.RefreshAndReconcileOnceAsync(CancellationToken.None);
 
-            await rabbitCoordinator.Called.Task.ConfigureAwait(false);
+            _ = await rabbitCoordinator.Called.Task.ConfigureAwait(false);
             Assert.Equal(3, service.GetManagedAccountActiveSessionCount(accountId));
 
             rabbitCoordinator.Release();
@@ -652,7 +657,7 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
         }
 
         /// <summary>
-        /// Confirms partial persistent-session establishment failure preserves healthy capacity and later convergence.
+        /// Confirms partial persistent-session establishment failure preserves healthy capacity during explicit refresh and still shuts down cleanly after the hosted service lifecycle starts.
         /// </summary>
         [Fact]
         public async Task RefreshAndReconcileOnceAsync_WhenOneConnectionFails_KeepsHealthySessionsAndConvergesLater()
@@ -681,6 +686,7 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
                 snapshotProvider,
                 new TrackingRabbitMqCapacityRetirementCoordinator());
 
+            await service.StartAsync(CancellationToken.None);
             Assert.Equal(0, service.GetManagedAccountActiveSessionCount(accountId));
 
             desiredAccounts[0] = CreateAccountSnapshot(accountId, maxConnections: 3, port: server.Port);
@@ -880,8 +886,8 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                Called.TrySetResult(true);
-                await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                _ = Called.TrySetResult(true);
+                _ = await _release.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
@@ -963,10 +969,6 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
         /// </summary>
         /// <param name="condition">Condition to evaluate.</param>
         /// <returns>A task that completes when the condition becomes true.</returns>
-        /// <summary>
-        /// Confirms the wait for condition async behavior.
-        /// </summary>
-        /// <returns>The value returned by the wait for condition async helper.</returns>
         private static async Task WaitForConditionAsync(Func<bool> condition)
         {
             ArgumentNullException.ThrowIfNull(condition);
@@ -1021,20 +1023,10 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
         }
 
         /// <summary>
-        /// Minimal fake NNTP server that accepts configured persistent connections and performs deterministic protocol handling.
+        /// Captured control-plane log entry used for cancellation-path and reconciliation log assertions.
         /// </summary>
-        /// <remarks>
-        /// Keeps accepted sockets open for the test lifetime so control-plane managed persistent sessions remain connected.
-        /// </remarks>
-        /// <summary>
-        /// Captured control-plane log entry used for cancellation-path log assertions.
-        /// </summary>
-        /// <param name="Level">Log severity level.</param>
-        /// <param name="Message">Rendered log message.</param>
-        /// <summary>
-        /// Confirms the captured log entry behavior.
-        /// </summary>
-        /// <returns>The value returned by the captured log entry helper.</returns>
+        /// <param name="Level">Captured log severity level.</param>
+        /// <param name="Message">Rendered message text captured from the logger pipeline.</param>
         private sealed record CapturedLogEntry(LogLevel Level, string Message);
 
         /// <summary>
@@ -1053,26 +1045,19 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             internal List<CapturedLogEntry> Entries { get; } = [];
 
             /// <summary>
-            /// Creates a logger for the specified category.
+            /// Creates a category logger that appends rendered records to the shared capture list.
             /// </summary>
-            /// <param name="categoryName">Logger category.</param>
-            /// <returns>Capturing logger instance.</returns>
-            /// <summary>
-            /// Confirms the create logger behavior.
-            /// </summary>
-            /// <returns>The value returned by the create logger helper.</returns>
+            /// <param name="categoryName">Category name requested by the caller.</param>
+            /// <returns>Logger instance bound to the shared capture store.</returns>
             public ILogger CreateLogger(string categoryName)
             {
                 return new CapturingLogger(Entries, _gate);
             }
 
             /// <summary>
-            /// Adds a provider.
+            /// Accepts externally added providers for <see cref="ILoggerFactory"/> compatibility.
             /// </summary>
-            /// <param name="provider">Provider instance.</param>
-            /// <summary>
-            /// Confirms the add provider behavior.
-            /// </summary>
+            /// <param name="provider">Provider instance supplied by the caller.</param>
             public void AddProvider(ILoggerProvider provider)
             {
             }
@@ -1095,15 +1080,10 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             }
 
             /// <summary>
-            /// Non-generic capturing logger implementation.
+            /// Non-generic capturing logger implementation used by <see cref="ILoggerFactory.CreateLogger(string)"/>.
             /// </summary>
-            /// <returns>The value returned by the capturing logger helper.</returns>
-            /// <summary>
-            /// Confirms the capturing logger behavior.
-            /// </summary>
-            /// <param name="entries">The entries used by this test scenario.</param>
-            /// <param name="gate">The gate used by this test scenario.</param>
-            /// <returns>The value returned by the capturing logger helper.</returns>
+            /// <param name="entries">Shared in-memory sink for captured log records.</param>
+            /// <param name="gate">Synchronization gate protecting concurrent writes to <paramref name="entries"/>.</param>
             private sealed class CapturingLogger(List<CapturedLogEntry> entries, object gate) : ILogger
             {
                 /// <summary>
@@ -1128,14 +1108,10 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
                 }
 
                 /// <summary>
-                /// Gets a value indicating whether the log level is enabled.
+                /// Indicates whether a given level should be captured.
                 /// </summary>
-                /// <param name="logLevel">Log level.</param>
-                /// <returns>Always true for tests.</returns>
-                /// <summary>
-                /// Confirms the is enabled behavior.
-                /// </summary>
-                /// <returns>The value returned by the is enabled helper.</returns>
+                /// <param name="logLevel">Log level requested by the caller.</param>
+                /// <returns><see langword="true"/> so assertions can observe all emitted records.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return true;
@@ -1167,7 +1143,7 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries, object gate) : ILogger<T>
             {
                 /// <summary>
-                /// Confirms  inner behavior.
+                /// Shared non-generic logger implementation used to avoid duplicate capture logic.
                 /// </summary>
                 private readonly CapturingLogger _inner = new(entries, gate);
 
@@ -1184,14 +1160,10 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
                 }
 
                 /// <summary>
-                /// Gets a value indicating whether the level is enabled.
+                /// Indicates whether a given level should be captured.
                 /// </summary>
-                /// <param name="logLevel">Log level.</param>
-                /// <returns>Always true for tests.</returns>
-                /// <summary>
-                /// Confirms the is enabled behavior.
-                /// </summary>
-                /// <returns>The value returned by the is enabled helper.</returns>
+                /// <param name="logLevel">Log level requested by the caller.</param>
+                /// <returns><see langword="true"/> so all records are available for test assertions.</returns>
                 public bool IsEnabled(LogLevel logLevel)
                 {
                     return _inner.IsEnabled(logLevel);
@@ -1323,15 +1295,11 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             private int _authInfoPassCommandCount;
 
             /// <summary>
-            /// Initializes a new fake NNTP server instance.
+            /// Initializes a fake NNTP server with deterministic transport selection for accepted connections.
             /// </summary>
-            /// <param name="listener">Bound listener.</param>
-            /// <param name="acceptConnectionCount">Maximum number of accepted connections.</param>
-            /// <param name="transportSelector">Per-connection transport selector.</param>
-            /// <summary>
-            /// Confirms the r behavior.
-            /// </summary>
-            /// <returns>The value returned by the r helper.</returns>
+            /// <param name="listener">Bound listener used for loopback acceptance.</param>
+            /// <param name="acceptConnectionCount">Maximum number of accepted connections before the accept loop exits.</param>
+            /// <param name="transportSelector">Delegate that maps connection index to transport behavior.</param>
             private FakeNntpServer(TcpListener listener, int acceptConnectionCount, Func<int, ConnectionTransport> transportSelector)
             {
                 _listener = listener;
@@ -1344,28 +1312,20 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             }
 
             /// <summary>
-            /// Starts a fake NNTP server for control-plane reconciliation tests using plaintext transport for all accepted connections.
+            /// Starts a fake NNTP server that accepts a fixed number of plaintext connections.
             /// </summary>
             /// <param name="acceptConnectionCount">Maximum number of accepted connections.</param>
             /// <returns>Started fake server.</returns>
-            /// <summary>
-            /// Confirms the start async behavior.
-            /// </summary>
-            /// <returns>The value returned by the start async helper.</returns>
             internal static async Task<FakeNntpServer> StartAsync(int acceptConnectionCount)
             {
                 return await StartWithTransportPlanAsync([.. Enumerable.Repeat(ConnectionTransport.Plaintext, acceptConnectionCount)]).ConfigureAwait(false);
             }
 
             /// <summary>
-            /// Starts a fake NNTP server for control-plane tests using plaintext transport and invokes a connection callback for each accepted client.
+            /// Starts a fake NNTP server that invokes a caller-provided handler for each accepted plaintext connection.
             /// </summary>
-            /// <param name="connectionHandler">Callback invoked for each accepted plaintext client connection.</param>
+            /// <param name="connectionHandler">Callback executed for each accepted plaintext client connection.</param>
             /// <returns>Started fake server.</returns>
-            /// <summary>
-            /// Confirms the start async behavior.
-            /// </summary>
-            /// <returns>The value returned by the start async helper.</returns>
             internal static async Task<FakeNntpServer> StartAsync(Func<TcpClient, CancellationToken, Task> connectionHandler)
             {
                 ArgumentNullException.ThrowIfNull(connectionHandler);
@@ -1382,14 +1342,10 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             }
 
             /// <summary>
-            /// Starts a fake NNTP server for control-plane tests with deterministic per-connection transport modes.
+            /// Starts a fake NNTP server with deterministic per-connection transport modes.
             /// </summary>
             /// <param name="transportPlan">Transport mode per accepted connection index.</param>
             /// <returns>Started fake server.</returns>
-            /// <summary>
-            /// Confirms the start with transport plan async behavior.
-            /// </summary>
-            /// <returns>The value returned by the start with transport plan async helper.</returns>
             internal static async Task<FakeNntpServer> StartWithTransportPlanAsync(params ConnectionTransport[] transportPlan)
             {
                 ArgumentNullException.ThrowIfNull(transportPlan);
@@ -1519,10 +1475,6 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             /// <param name="client">Accepted client connection.</param>
             /// <param name="transport">Assigned transport mode for this connection.</param>
             /// <returns>A task that completes when the connection closes or shutdown is requested.</returns>
-            /// <summary>
-            /// Confirms the serve connection async behavior.
-            /// </summary>
-            /// <returns>The value returned by the serve connection async helper.</returns>
             private async Task ServeConnectionAsync(TcpClient client, ConnectionTransport transport)
             {
                 try
@@ -1618,10 +1570,6 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             /// <param name="acceptConnectionCount">Total accepted connection count.</param>
             /// <param name="transportSelector">Per-connection transport selector.</param>
             /// <returns><see langword="true"/> when at least one connection uses implicit TLS; otherwise <see langword="false"/>.</returns>
-            /// <summary>
-            /// Confirms the requires tls transport behavior.
-            /// </summary>
-            /// <returns>The value returned by the requires tls transport helper.</returns>
             private static bool RequiresTlsTransport(int acceptConnectionCount, Func<int, ConnectionTransport> transportSelector)
             {
                 for (int i = 0; i < acceptConnectionCount; i++)
@@ -1636,15 +1584,11 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             }
 
             /// <summary>
-            /// Reads one ASCII protocol line and returns null when the connection closes.
+            /// Reads one ASCII protocol line and returns <see langword="null"/> when the connection closes.
             /// </summary>
             /// <param name="stream">Protocol stream.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
-            /// <returns>ASCII line without CRLF, or null on EOF.</returns>
-            /// <summary>
-            /// Confirms the read ascii line or null async behavior.
-            /// </summary>
-            /// <returns>The value returned by the read ascii line or null async helper.</returns>
+            /// <returns>ASCII line without CRLF, or <see langword="null"/> on EOF.</returns>
             private static async Task<string?> ReadAsciiLineOrNullAsync(Stream stream, CancellationToken cancellationToken)
             {
                 List<byte> bytes = [];
@@ -1681,10 +1625,6 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             /// <param name="line">Line to write.</param>
             /// <param name="cancellationToken">Cancellation token.</param>
             /// <returns>A task that completes when write and flush finish.</returns>
-            /// <summary>
-            /// Confirms the write ascii line async behavior.
-            /// </summary>
-            /// <returns>The value returned by the write ascii line async helper.</returns>
             private static async Task WriteAsciiLineAsync(Stream stream, string line, CancellationToken cancellationToken)
             {
                 byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
@@ -1698,20 +1638,12 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
         /// Fixed UTC time provider for deterministic control-plane timestamp behavior in tests.
         /// </summary>
         /// <param name="utcNow">Deterministic UTC timestamp returned for all calls.</param>
-        /// <summary>
-        /// Confirms the fixed time provider behavior.
-        /// </summary>
-        /// <returns>The value returned by the fixed time provider helper.</returns>
         private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
         {
             /// <summary>
             /// Gets the fixed UTC timestamp configured for this provider instance.
             /// </summary>
             /// <returns>Fixed UTC timestamp.</returns>
-            /// <summary>
-            /// Confirms the get utc now behavior.
-            /// </summary>
-            /// <returns>The value returned by the get utc now helper.</returns>
             public override DateTimeOffset GetUtcNow()
             {
                 return utcNow;
