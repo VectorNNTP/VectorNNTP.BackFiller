@@ -4,22 +4,24 @@ description: Add and improve accurate XML documentation in the VectorNNTP.BackFi
 ---
 # Documentation skill
 
-## Inspect first
+## Inspect before writing
 
-Read the entire file, its partial siblings, interfaces/base types, callers, consumers, tests, and nearby protocol/configuration documentation. Identify lifecycle, ownership, cancellation, threading, error, and performance assumptions before writing prose.
+Read the complete target file, partial siblings, interfaces/base types, callers, consumers, tests, protocol/configuration documentation, and relevant history where needed. Search actual repository usage. Establish lifecycle, ownership, cancellation, threading, state, error, logging, I/O, buffering, allocation, and performance assumptions before writing prose. Do not infer semantics from names.
 
-## Find meaningful symbols
+## Identify meaningful symbols
 
-Cover documentable types and members at every accessibility level: constructors, methods, properties, fields, constants, events, operators, indexers, nested types, enum members, local helpers with non-obvious contracts, and test fixtures/helpers. Prioritize symbols whose behavior or invariant is not obvious from its name.
+Review types, constructors, methods, properties, fields, constants, events, operators, indexers, nested types, enum members, test fixtures, and helpers at every accessibility level. Document symbols whose contract, invariant, state transition, mapping, resource lifetime, concurrency rule, validation rule, failure behavior, framework integration, or verified performance characteristic would help an engineer. Do not manufacture comments for obvious private implementation details.
 
-## Write useful XML
+## Write accurate engineering-contract XML
 
-Use concise `<summary>` text and accurate `<param>`, `<returns>`, and `<exception>` elements. Add `<remarks>` for lifecycle, ownership/disposal, concurrency/thread safety, cancellation, side effects, protocol/configuration constraints, and only verified allocation or performance properties. Use `<see cref>` and `<c>` references where they clarify the contract. Describe what callers can rely on, not implementation trivia.
+Use concise `<summary>` text; accurate `<param>`, `<returns>`, `<value>`, and `<typeparam>` elements; and `<remarks>` for substantive context. Use `<exception>` only when the method establishes a meaningful thrown-exception contract. Distinguish thrown exceptions from exception arguments, caught/logged exceptions, and failures represented in results. Use `<see cref>`, `<seealso>`, and `<c>` when references genuinely clarify the contract.
 
-## Preserve behavior and existing quality
+For generated logging or other source-generated/framework declarations, document the semantic behavior established by the declaration, including applicable severity and structured properties. Do not document speculative generated internals or imply a log is always emitted when filtering can suppress it. Document concurrency, cancellation, disposal, side effects, protocol/configuration constraints, and performance only when supported by implementation or evidence.
 
-Keep valid existing XML unchanged and make additive-only edits. Do not rename symbols, reorder code, alter control flow, change public API design, modify tests, or introduce abstractions. Never use warning suppression, `NoWarn`, exclusions, or placeholder prose to conceal missing documentation.
+## Preserve scope and existing quality
 
-## Validate
+Preserve accurate existing documentation verbatim. Improve vague, incomplete, misleading, or incorrect prose rather than deleting it. Documentation passes are additive-only, change only the selected target file, and must not alter behavior, API design, signatures, source generation, logging, configuration, analyzers, tests, or related files. Never add boilerplate, warning suppressions, `NoWarn`, exclusions, or placeholder text.
 
-Review generated XML for correct cref/param names and escaped markup. Inspect the diff for accidental behavior changes, then run the existing relevant build with analyzers and focused tests followed by the normal warning-free rebuild. Treat new diagnostics as defects to fix at their source; distinguish unrelated pre-existing diagnostics explicitly.
+## Validate and report
+
+Check escaped XML, valid tags, unique tags, real cref/seealso/parameter/type references, property `<value>`, method-only `<returns>`, and grammatically complete prose. Inspect the final diff to prove no behavior or scope drift. Build only the target production project; do not run tests unless explicitly requested. Report reviewed/new/improved members, tag counts, intentionally unchanged documentation, pre-existing concerns, build result, no-test status, single-file scope, and no behavior change.
