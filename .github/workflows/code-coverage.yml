@@ -39,7 +39,7 @@ jobs:
       - name: Test with coverage
         timeout-minutes: 10
         run: >
-          dotnet test
+          dotnet test VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj
           --configuration Release
           --no-build
           --collect:"XPlat Code Coverage"
