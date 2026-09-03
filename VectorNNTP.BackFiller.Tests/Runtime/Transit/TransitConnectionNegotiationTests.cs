@@ -756,7 +756,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public async Task InitializeAsync_WhenCompressionAdvertised_PublishesOverUncompressedTransport()
         {
-            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, cancellationToken) =>
             {
                 await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
                 await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
@@ -767,13 +767,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 await FakeNntpServer.ExpectCommandAsync(stream, "MODE STREAM");
                 await FakeNntpServer.WriteLineAsync(stream, "203 Streaming permitted");
 
-                string takethis = await FakeNntpServer.ReadLineAsync(stream, CancellationToken.None);
+                string takethis = await FakeNntpServer.ReadLineAsync(stream, cancellationToken);
                 Assert.Equal("TAKETHIS <uncompressed@example.com>", takethis);
 
-                byte[] payload = await FakeNntpServer.ReadTakethisPayloadAsync(stream, CancellationToken.None);
+                byte[] payload = await FakeNntpServer.ReadTakethisPayloadAsync(stream, cancellationToken);
                 Assert.Equal([(byte)'Z', (byte)'\n'], payload);
 
                 await FakeNntpServer.WriteLineAsync(stream, "239 <uncompressed@example.com> transferred");
+                await ServeGracefulShutdownAsync(stream, cancellationToken);
             });
 
             await using TransitConnection connection = new(

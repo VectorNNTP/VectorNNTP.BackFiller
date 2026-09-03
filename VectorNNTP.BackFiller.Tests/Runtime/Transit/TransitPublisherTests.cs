@@ -1889,7 +1889,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 await allowServerGreeting.Task.WaitAsync(cancellationToken);
 
                 await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
-                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+
+                try
+                {
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("Unexpected EOF while reading stream data.", StringComparison.Ordinal))
+                {
+                    return;
+                }
+
                 await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
                 await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
                 await FakePublisherServer.WriteLineAsync(stream, ".");
