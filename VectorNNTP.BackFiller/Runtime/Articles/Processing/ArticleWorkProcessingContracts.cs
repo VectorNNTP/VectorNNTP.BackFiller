@@ -167,7 +167,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// Gets a value indicating whether parsing produced a valid request payload.
         /// </summary>
         /// <value><see langword="true"/> when <see cref="Request"/> is present and <see cref="Failure"/> is <see langword="null"/>.</value>
-        internal bool IsSuccess => Request is not null;
+        internal bool IsSuccess => Request is not null && Failure is null;
     }
 
     /// <summary>
@@ -263,7 +263,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     /// <param name="Status">Publication completion status.</param>
     /// <param name="ConnectionGeneration">Connection generation used for the publish attempt.</param>
-    /// <param name="Exception">Optional captured failure exception when publication failed before confirmation. This value is reported, not rethrown by the result object.</param>
+    /// <param name="Exception">Optional captured exception associated with the publication attempt, including failures before confirmation and failures detected while validating publication metadata or connection state. This value is reported, not rethrown by the result object.</param>
     internal sealed record RabbitMqResponsePublishResult(
         RabbitMqResponsePublishStatus Status,
         long ConnectionGeneration,

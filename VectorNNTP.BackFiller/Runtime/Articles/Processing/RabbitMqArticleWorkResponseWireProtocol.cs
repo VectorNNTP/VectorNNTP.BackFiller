@@ -83,8 +83,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <returns>Parsed response instance.</returns>
         /// <exception cref="ArgumentException">Thrown when <paramref name="payload"/> is empty.</exception>
         /// <exception cref="JsonException">Thrown when <paramref name="payload"/> is not valid JSON.</exception>
+        /// <exception cref="KeyNotFoundException">Thrown when a required property is missing.</exception>
+        /// <exception cref="FormatException">Thrown when a required property has an invalid GUID or numeric representation.</exception>
         /// <exception cref="InvalidOperationException">
-        /// Thrown when the payload is not a JSON object, uses an unsupported version, or omits a required canonical field.
+        /// Thrown when the payload is not a JSON object, uses an unsupported version, or a required string property is JSON <see langword="null"/>.
         /// </exception>
         internal static RabbitMqArticleWorkResponse ParseV1(ReadOnlySpan<byte> payload)
         {

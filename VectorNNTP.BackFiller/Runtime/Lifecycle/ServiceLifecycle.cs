@@ -568,36 +568,32 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             }
         }
 
-        [LoggerMessage(
-            EventId = 1100,
-            Level = LogLevel.Error,
-            Message = "TransitionTo({NewState}) cannot be called while observers are being notified. Observers MUST NOT call TransitionTo() from StateTransitioned handlers (reentrancy forbidden). Concurrent transitions from other threads are also blocked during notification.")]
         /// <summary>
         /// Logs a rejected transition attempt that occurred while observer callbacks for another transition were still running.
         /// </summary>
         /// <param name="logger">Logger receiving the rejection event.</param>
         /// <param name="newState">State that the rejected caller attempted to enter.</param>
+        [LoggerMessage(
+            EventId = 1100,
+            Level = LogLevel.Error,
+            Message = "TransitionTo({NewState}) cannot be called while observers are being notified. Observers MUST NOT call TransitionTo() from StateTransitioned handlers (reentrancy forbidden). Concurrent transitions from other threads are also blocked during notification.")]
         private static partial void LogTransitionDuringObserverNotificationRejected(
             ILogger logger,
             LifecycleState newState);
 
-        [LoggerMessage(
-            EventId = 1101,
-            Level = LogLevel.Warning,
-            Message = "State transition ignored: already in {State}")]
         /// <summary>
         /// Logs that a requested transition was ignored because the lifecycle was already in the requested state.
         /// </summary>
         /// <param name="logger">Logger receiving the no-op transition event.</param>
         /// <param name="state">State that was already active.</param>
+        [LoggerMessage(
+            EventId = 1101,
+            Level = LogLevel.Warning,
+            Message = "State transition ignored: already in {State}")]
         private static partial void LogStateTransitionIgnoredAlreadyInState(
             ILogger logger,
             LifecycleState state);
 
-        [LoggerMessage(
-            EventId = 1102,
-            Level = LogLevel.Error,
-            Message = "Invalid state transition: {CurrentState} -> {TargetState} (allowed: {AllowedTransitions})")]
         /// <summary>
         /// Logs an invalid state-machine edge together with the set of allowed next states.
         /// </summary>
@@ -605,16 +601,16 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// <param name="currentState">State active when the invalid request was made.</param>
         /// <param name="targetState">Rejected target state.</param>
         /// <param name="allowedTransitions">Human-readable description of the valid next states.</param>
+        [LoggerMessage(
+            EventId = 1102,
+            Level = LogLevel.Error,
+            Message = "Invalid state transition: {CurrentState} -> {TargetState} (allowed: {AllowedTransitions})")]
         private static partial void LogInvalidStateTransition(
             ILogger logger,
             LifecycleState currentState,
             LifecycleState targetState,
             string allowedTransitions);
 
-        [LoggerMessage(
-            EventId = 1103,
-            Level = LogLevel.Information,
-            Message = "State transition: {From} -> {To} (reason: {Reason}; elapsed={Elapsed:F2}s)")]
         /// <summary>
         /// Logs one committed lifecycle transition after the authoritative state has been updated.
         /// </summary>
@@ -623,6 +619,10 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// <param name="to">New lifecycle state.</param>
         /// <param name="reason">Reason recorded for the transition.</param>
         /// <param name="elapsed">Monotonic seconds spent in the previous state.</param>
+        [LoggerMessage(
+            EventId = 1103,
+            Level = LogLevel.Information,
+            Message = "State transition: {From} -> {To} (reason: {Reason}; elapsed={Elapsed:F2}s)")]
         private static partial void LogStateTransition(
             ILogger logger,
             LifecycleState from,
@@ -630,10 +630,6 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
             string reason,
             double elapsed);
 
-        [LoggerMessage(
-            EventId = 1104,
-            Level = LogLevel.Error,
-            Message = "Lifecycle transition subscriber failed for {From} -> {To} (transition completed successfully)")]
         /// <summary>
         /// Logs that one transition observer threw after the lifecycle transition had already completed successfully.
         /// </summary>
@@ -641,16 +637,16 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// <param name="exception">Exception recorded from the failing observer callback.</param>
         /// <param name="from">Previous lifecycle state of the committed transition.</param>
         /// <param name="to">New lifecycle state of the committed transition.</param>
+        [LoggerMessage(
+            EventId = 1104,
+            Level = LogLevel.Error,
+            Message = "Lifecycle transition subscriber failed for {From} -> {To} (transition completed successfully)")]
         private static partial void LogLifecycleTransitionSubscriberFailed(
             ILogger logger,
             Exception exception,
             LifecycleState from,
             LifecycleState to);
 
-        [LoggerMessage(
-            EventId = 1105,
-            Level = LogLevel.Warning,
-            Message = "Slow phase warning: {Phase} has taken {Elapsed:F2}s (threshold: {Threshold:F2}s)")]
         /// <summary>
         /// Logs the first warning that one lifecycle phase has exceeded its expected duration threshold.
         /// </summary>
@@ -658,6 +654,10 @@ namespace VectorNNTP.Backfiller.Runtime.Lifecycle
         /// <param name="phase">Human-readable phase label supplied by the caller.</param>
         /// <param name="elapsed">Observed monotonic elapsed seconds for the current phase.</param>
         /// <param name="threshold">Configured warning threshold in seconds.</param>
+        [LoggerMessage(
+            EventId = 1105,
+            Level = LogLevel.Warning,
+            Message = "Slow phase warning: {Phase} has taken {Elapsed:F2}s (threshold: {Threshold:F2}s)")]
         private static partial void LogSlowPhaseWarningExceeded(
             ILogger logger,
             string phase,

@@ -27,7 +27,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="targetPath">Final artifact path that will be replaced.</param>
         /// <returns>A unique temporary path in the same directory as <paramref name="targetPath"/>.</returns>
-        /// <exception cref="InvalidOperationException">Thrown when <paramref name="targetPath"/> does not include a directory component.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="targetPath"/> is blank.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when <paramref name="targetPath"/> has no directory component.</exception>
         internal static string BuildAtomicTempPath(string targetPath)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);

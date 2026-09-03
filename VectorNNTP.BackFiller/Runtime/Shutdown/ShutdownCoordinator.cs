@@ -603,10 +603,6 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
             }
         }
 
-        [LoggerMessage(
-            EventId = 1200,
-            Level = LogLevel.Debug,
-            Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
         /// <summary>
         /// Logs that one cancellation callback threw while a coordinator token source was being canceled.
         /// </summary>
@@ -614,16 +610,16 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         /// <param name="exception">Exception recorded from the callback aggregate.</param>
         /// <param name="cancellationTokenSourceName">Logical name of the token source being canceled.</param>
         /// <param name="shutdownState">Coordinator state associated with the cancellation attempt.</param>
+        [LoggerMessage(
+            EventId = 1200,
+            Level = LogLevel.Debug,
+            Message = "{CancellationTokenSourceName} cancellation callback threw during shutdown signaling (state={ShutdownState}).")]
         private static partial void LogCancellationCallbackFailed(
             ILogger logger,
             Exception exception,
             string cancellationTokenSourceName,
             ShutdownState shutdownState);
 
-        [LoggerMessage(
-            EventId = 1201,
-            Level = LogLevel.Debug,
-            Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
         /// <summary>
         /// Logs that cancellation raced with disposal and was skipped because the target token source was already disposed.
         /// </summary>
@@ -631,22 +627,26 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
         /// <param name="exception">Disposed-object exception recorded for diagnostics.</param>
         /// <param name="cancellationTokenSourceName">Logical name of the token source that had already been disposed.</param>
         /// <param name="shutdownState">Coordinator state associated with the skipped cancellation.</param>
+        [LoggerMessage(
+            EventId = 1201,
+            Level = LogLevel.Debug,
+            Message = "{CancellationTokenSourceName} cancellation skipped because the coordinator is already disposed (state={ShutdownState}).")]
         private static partial void LogCancellationSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,
             string cancellationTokenSourceName,
             ShutdownState shutdownState);
 
-        [LoggerMessage(
-            EventId = 1202,
-            Level = LogLevel.Debug,
-            Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
         /// <summary>
         /// Logs that token-source disposal was attempted after another path had already disposed the same instance.
         /// </summary>
         /// <param name="logger">Logger receiving the duplicate-disposal event.</param>
         /// <param name="exception">Disposed-object exception recorded for diagnostics.</param>
         /// <param name="cancellationTokenSourceName">Logical name of the token source involved in the race.</param>
+        [LoggerMessage(
+            EventId = 1202,
+            Level = LogLevel.Debug,
+            Message = "{CancellationTokenSourceName} disposal skipped because it was already disposed.")]
         private static partial void LogDisposalSkippedAlreadyDisposed(
             ILogger logger,
             Exception exception,

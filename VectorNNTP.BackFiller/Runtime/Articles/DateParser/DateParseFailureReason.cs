@@ -28,7 +28,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         TooLong = 2,
 
         /// <summary>
-        /// The candidate contained bytes outside the parser's printable-ASCII acceptance range.
+        /// The candidate contained UTF-16 characters outside the parser's printable-ASCII acceptance range.
         /// </summary>
         NonPrintableAscii = 3,
 
