@@ -352,26 +352,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         public async Task KeepAlive_WhenIdleBelowThreshold_DoesNotSendDate()
         {
             byte[] article = BuildArticleBytes("<below-threshold@test>", "body\r\n");
+            ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
+            TaskCompletionSource<bool> articleReceived = CreateSignal();
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <below-threshold@test>").ConfigureAwait(false);
+                _ = articleReceived.TrySetResult(true);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <below-threshold@test> article follows").ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
             }).ConfigureAwait(false);
 
             NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 30);
-            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance, timeProvider: timeProvider);
             await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
 
-            await Task.Delay(1500).ConfigureAwait(false);
+            timeProvider.Advance(TimeSpan.FromSeconds(5));
+            await FlushBackgroundContinuationsAsync().ConfigureAwait(false);
 
             await using NntpArticleSessionLease lease = await manager.AcquireAsync("<below-threshold@test>", CancellationToken.None).ConfigureAwait(false);
             using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<below-threshold@test>", CancellationToken.None).ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(result.FailureCode);
 
+            await articleReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             Assert.True(result.IsSuccess);
         }
 
@@ -382,28 +387,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         public async Task KeepAlive_WhenIdleThresholdReached_SendsDate()
         {
             byte[] article = BuildArticleBytes("<threshold@test>", "body\r\n");
+            ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
+            TaskCompletionSource<bool> dateReceived = CreateSignal();
+            TaskCompletionSource<bool> dateResponseSent = CreateSignal();
+            TaskCompletionSource<bool> articleReceived = CreateSignal();
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE").ConfigureAwait(false);
+                _ = dateReceived.TrySetResult(true);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101").ConfigureAwait(false);
+                _ = dateResponseSent.TrySetResult(true);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <threshold@test>").ConfigureAwait(false);
+                _ = articleReceived.TrySetResult(true);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <threshold@test> article follows").ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
             }).ConfigureAwait(false);
 
             NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 2);
-            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance, timeProvider: timeProvider);
             await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
 
-            await Task.Delay(1300).ConfigureAwait(false);
+            timeProvider.Advance(TimeSpan.FromSeconds(2));
+            await dateReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await dateResponseSent.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
             await using NntpArticleSessionLease lease = await manager.AcquireAsync("<threshold@test>", CancellationToken.None).ConfigureAwait(false);
             using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<threshold@test>", CancellationToken.None).ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(result.FailureCode);
 
+            await articleReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             Assert.True(result.IsSuccess);
         }
 
@@ -414,23 +429,44 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         public async Task KeepAlive_WhenArticleActive_DoesNotSendDate()
         {
             byte[] article = BuildArticleBytes("<active@test>", "body\r\n");
+            ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
+            TaskCompletionSource<bool> articleReceived = CreateSignal();
+            TaskCompletionSource<bool> releaseArticleResponse = CreateSignal();
+            TaskCompletionSource<bool> unexpectedDateObserved = CreateSignal();
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <active@test>").ConfigureAwait(false);
-                await Task.Delay(2200).ConfigureAwait(false);
+                _ = articleReceived.TrySetResult(true);
+
+                using CancellationTokenSource unexpectedDateCancellation = new();
+                Task unexpectedDateMonitor = MonitorUnexpectedDateWhileArticleActiveAsync(stream, unexpectedDateObserved, unexpectedDateCancellation.Token);
+
+                await releaseArticleResponse.Task.ConfigureAwait(false);
+                Assert.False(unexpectedDateObserved.Task.IsCompleted);
+                unexpectedDateCancellation.Cancel();
+                await unexpectedDateMonitor.ConfigureAwait(false);
+
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <active@test> article follows").ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
             }).ConfigureAwait(false);
 
             NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 2);
-            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance, timeProvider: timeProvider);
             await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
 
             await using NntpArticleSessionLease lease = await manager.AcquireAsync("<active@test>", CancellationToken.None).ConfigureAwait(false);
-            using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<active@test>", CancellationToken.None).ConfigureAwait(false);
+            Task<NntpArticleAcquisitionResult> downloadTask = lease.Session.DownloadArticleAsync("<active@test>", CancellationToken.None).AsTask();
+            await articleReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+            timeProvider.Advance(TimeSpan.FromSeconds(3));
+            await FlushBackgroundContinuationsAsync().ConfigureAwait(false);
+            Assert.False(unexpectedDateObserved.Task.IsCompleted);
+            _ = releaseArticleResponse.TrySetResult(true);
+
+            using NntpArticleAcquisitionResult result = await downloadTask.ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(result.FailureCode);
 
             Assert.True(result.IsSuccess);
@@ -444,6 +480,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         {
             byte[] article = BuildArticleBytes("<reconnect@test>", "body\r\n");
             int connectionCounter = 0;
+            ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
+            TaskCompletionSource<bool> dateReceived = CreateSignal();
+            TaskCompletionSource<bool> dateFailureResponseSent = CreateSignal();
+            TaskCompletionSource<bool> replacementConnectionReady = CreateSignal();
+            TaskCompletionSource<bool> replacementArticleReceived = CreateSignal();
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
@@ -453,27 +494,34 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                 if (connectionId == 1)
                 {
                     await FakeArticleServer.ExpectAsciiLineAsync(stream, "DATE").ConfigureAwait(false);
+                    _ = dateReceived.TrySetResult(true);
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "malformed-status-line").ConfigureAwait(false);
+                    _ = dateFailureResponseSent.TrySetResult(true);
                     return;
                 }
 
+                _ = replacementConnectionReady.TrySetResult(true);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <reconnect@test>").ConfigureAwait(false);
+                _ = replacementArticleReceived.TrySetResult(true);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <reconnect@test> article follows").ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
             }, acceptConnectionCount: 2).ConfigureAwait(false);
 
             NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 2);
-            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance, timeProvider: timeProvider);
             await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
 
-            await Task.Delay(1500).ConfigureAwait(false);
-            await Task.Delay(500).ConfigureAwait(false);
+            timeProvider.Advance(TimeSpan.FromSeconds(2));
+            await dateReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await dateFailureResponseSent.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await replacementConnectionReady.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
             await using NntpArticleSessionLease lease = await manager.AcquireAsync("<reconnect@test>", CancellationToken.None).ConfigureAwait(false);
             using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<reconnect@test>", CancellationToken.None).ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(result.FailureCode);
 
+            await replacementArticleReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             Assert.True(result.IsSuccess);
             Assert.Equal(2, Volatile.Read(ref connectionCounter));
         }
@@ -535,26 +583,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         public async Task KeepAlive_WhenConfiguredZero_DoesNotSendDate()
         {
             byte[] article = BuildArticleBytes("<disabled@test>", "body\r\n");
+            ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
+            TaskCompletionSource<bool> articleReceived = CreateSignal();
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <disabled@test>").ConfigureAwait(false);
+                _ = articleReceived.TrySetResult(true);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <disabled@test> article follows").ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
             }).ConfigureAwait(false);
 
             NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, keepAliveSeconds: 0);
-            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance, timeProvider: timeProvider);
             await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
 
-            await Task.Delay(2100).ConfigureAwait(false);
+            timeProvider.Advance(TimeSpan.FromSeconds(10));
+            await FlushBackgroundContinuationsAsync().ConfigureAwait(false);
 
             await using NntpArticleSessionLease lease = await manager.AcquireAsync("<disabled@test>", CancellationToken.None).ConfigureAwait(false);
             using NntpArticleAcquisitionResult result = await lease.Session.DownloadArticleAsync("<disabled@test>", CancellationToken.None).ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(result.FailureCode);
 
+            await articleReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             Assert.True(result.IsSuccess);
         }
 
@@ -971,6 +1024,351 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             Buffer.BlockCopy(headers, 0, article, 0, headers.Length);
             Buffer.BlockCopy(bodyBytes, 0, article, headers.Length, bodyBytes.Length);
             return article;
+        }
+
+        /// <summary>
+        /// Creates a task-completion signal that resumes waiters asynchronously.
+        /// </summary>
+        /// <returns>Uncompleted coordination signal for deterministic protocol sequencing.</returns>
+        private static TaskCompletionSource<bool> CreateSignal()
+        {
+            return new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        /// <summary>
+        /// Yields control so timer-driven background continuations can observe newly advanced manual time.
+        /// </summary>
+        /// <returns>A task that completes after queued continuations have had an opportunity to run.</returns>
+        private static async Task FlushBackgroundContinuationsAsync()
+        {
+            await Task.Yield();
+            await Task.Yield();
+        }
+
+        /// <summary>
+        /// Monitors an active ARTICLE exchange for an unexpected DATE command before the response is released.
+        /// </summary>
+        /// <param name="stream">Connected protocol stream.</param>
+        /// <param name="unexpectedDateObserved">Signal completed when an unexpected DATE line is observed.</param>
+        /// <param name="cancellationToken">Cancellation token used to stop monitoring once the guarded phase ends.</param>
+        /// <returns>A task that completes when monitoring ends or cancellation is requested.</returns>
+        private static async Task MonitorUnexpectedDateWhileArticleActiveAsync(Stream stream, TaskCompletionSource<bool> unexpectedDateObserved, CancellationToken cancellationToken)
+        {
+            try
+            {
+                string line = await FakeArticleServer.ReadAsciiLineAsync(stream, cancellationToken).ConfigureAwait(false);
+                if (string.Equals(line, "DATE", StringComparison.Ordinal))
+                {
+                    _ = unexpectedDateObserved.TrySetResult(true);
+                }
+                else
+                {
+                    Assert.Fail($"Unexpected protocol command while ARTICLE was active: {line}");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        /// <summary>
+        /// Deterministic time provider that advances UTC time and timer callbacks only when tests request it.
+        /// </summary>
+        private sealed class ManualTimeProvider : TimeProvider
+        {
+            /// <summary>
+            /// Synchronizes mutable timer and clock state.
+            /// </summary>
+            private readonly object _gate = new();
+
+            /// <summary>
+            /// Tracks timers created through this provider.
+            /// </summary>
+            private readonly List<ManualTimer> _timers = [];
+
+            /// <summary>
+            /// Current deterministic UTC time.
+            /// </summary>
+            private DateTimeOffset _utcNow;
+
+            /// <summary>
+            /// Initializes the provider at a deterministic UTC timestamp.
+            /// </summary>
+            /// <param name="utcNow">Initial UTC time returned by the provider.</param>
+            internal ManualTimeProvider(DateTimeOffset utcNow)
+            {
+                _utcNow = utcNow;
+            }
+
+            /// <summary>
+            /// Returns the current deterministic UTC time.
+            /// </summary>
+            /// <returns>Current UTC time.</returns>
+            public override DateTimeOffset GetUtcNow()
+            {
+                lock (_gate)
+                {
+                    return _utcNow;
+                }
+            }
+
+            /// <summary>
+            /// Creates a timer bound to this provider's manually advanced clock.
+            /// </summary>
+            /// <param name="callback">Callback invoked when the timer becomes due.</param>
+            /// <param name="state">Optional timer state.</param>
+            /// <param name="dueTime">Initial due time relative to the current manual clock.</param>
+            /// <param name="period">Recurring timer period or <see cref="Timeout.InfiniteTimeSpan"/> for one-shot timers.</param>
+            /// <returns>Timer handle controlled by this provider.</returns>
+            public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            {
+                ArgumentNullException.ThrowIfNull(callback);
+
+                ManualTimer timer = new(this, callback, state);
+                timer.Change(dueTime, period);
+                lock (_gate)
+                {
+                    _timers.Add(timer);
+                }
+
+                return timer;
+            }
+
+            /// <summary>
+            /// Advances the manual clock and synchronously fires any timers that become due.
+            /// </summary>
+            /// <param name="elapsed">Amount of time to advance.</param>
+            internal void Advance(TimeSpan elapsed)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThan(elapsed, TimeSpan.Zero);
+
+                List<(TimerCallback Callback, object? State)> dueCallbacks = [];
+
+                lock (_gate)
+                {
+                    _utcNow += elapsed;
+                    while (TryCollectNextDueCallback(dueCallbacks))
+                    {
+                    }
+                }
+
+                foreach ((TimerCallback callback, object? state) in dueCallbacks)
+                {
+                    callback(state);
+                }
+            }
+
+            /// <summary>
+            /// Removes a disposed timer from provider tracking.
+            /// </summary>
+            /// <param name="timer">Timer to remove.</param>
+            private void RemoveTimer(ManualTimer timer)
+            {
+                lock (_gate)
+                {
+                    _timers.Remove(timer);
+                }
+            }
+
+            /// <summary>
+            /// Collects the next due timer callback, if any, and advances that timer's schedule.
+            /// </summary>
+            /// <param name="dueCallbacks">Callback collection that receives the next due callback.</param>
+            /// <returns><see langword="true"/> when a due callback was collected; otherwise <see langword="false"/>.</returns>
+            private bool TryCollectNextDueCallback(List<(TimerCallback Callback, object? State)> dueCallbacks)
+            {
+                ManualTimer? nextTimer = null;
+                DateTimeOffset nextDueUtc = DateTimeOffset.MaxValue;
+
+                foreach (ManualTimer timer in _timers)
+                {
+                    if (!timer.TryGetNextDueUtc(out DateTimeOffset dueUtc) || dueUtc > _utcNow)
+                    {
+                        continue;
+                    }
+
+                    if (nextTimer is null || dueUtc < nextDueUtc)
+                    {
+                        nextTimer = timer;
+                        nextDueUtc = dueUtc;
+                    }
+                }
+
+                if (nextTimer is null)
+                {
+                    return false;
+                }
+
+                nextTimer.AdvanceScheduleFromFire();
+                dueCallbacks.Add((nextTimer.Callback, nextTimer.State));
+                return true;
+            }
+
+            /// <summary>
+            /// Provider-owned timer implementation whose schedule advances only when manual time moves forward.
+            /// </summary>
+            private sealed class ManualTimer : ITimer
+            {
+                /// <summary>
+                /// Owning manual time provider.
+                /// </summary>
+                private readonly ManualTimeProvider _owner;
+
+                /// <summary>
+                /// Timer callback invoked when due.
+                /// </summary>
+                private readonly TimerCallback _callback;
+
+                /// <summary>
+                /// Optional callback state.
+                /// </summary>
+                private readonly object? _state;
+
+                /// <summary>
+                /// Recurrence period or <see cref="Timeout.InfiniteTimeSpan"/> for one-shot timers.
+                /// </summary>
+                private TimeSpan _period = Timeout.InfiniteTimeSpan;
+
+                /// <summary>
+                /// Next absolute due time or <see langword="null"/> when disabled.
+                /// </summary>
+                private DateTimeOffset? _nextDueUtc;
+
+                /// <summary>
+                /// Tracks whether disposal has been requested.
+                /// </summary>
+                private bool _disposed;
+
+                /// <summary>
+                /// Initializes a provider-owned manual timer.
+                /// </summary>
+                /// <param name="owner">Owning manual time provider.</param>
+                /// <param name="callback">Callback invoked when the timer becomes due.</param>
+                /// <param name="state">Optional callback state.</param>
+                internal ManualTimer(ManualTimeProvider owner, TimerCallback callback, object? state)
+                {
+                    _owner = owner;
+                    _callback = callback;
+                    _state = state;
+                }
+
+                /// <summary>
+                /// Returns the callback associated with this timer.
+                /// </summary>
+                internal TimerCallback Callback => _callback;
+
+                /// <summary>
+                /// Returns the state associated with this timer.
+                /// </summary>
+                internal object? State => _state;
+
+                /// <summary>
+                /// Changes the timer due time and recurrence period.
+                /// </summary>
+                /// <param name="dueTime">New due time relative to the current manual clock.</param>
+                /// <param name="period">New recurrence period or <see cref="Timeout.InfiniteTimeSpan"/> for one-shot timers.</param>
+                /// <returns><see langword="true"/> when the timer was updated; otherwise <see langword="false"/> if already disposed.</returns>
+                public bool Change(TimeSpan dueTime, TimeSpan period)
+                {
+                    lock (_owner._gate)
+                    {
+                        if (_disposed)
+                        {
+                            return false;
+                        }
+
+                        ValidateDelay(dueTime, nameof(dueTime));
+                        ValidateDelay(period, nameof(period));
+                        _period = period;
+                        _nextDueUtc = dueTime == Timeout.InfiniteTimeSpan ? null : _owner._utcNow + dueTime;
+                        return true;
+                    }
+                }
+
+                /// <summary>
+                /// Disposes the timer and removes it from provider tracking.
+                /// </summary>
+                public void Dispose()
+                {
+                    bool removed = false;
+                    lock (_owner._gate)
+                    {
+                        if (_disposed)
+                        {
+                            return;
+                        }
+
+                        _disposed = true;
+                        _nextDueUtc = null;
+                        removed = true;
+                    }
+
+                    if (removed)
+                    {
+                        _owner.RemoveTimer(this);
+                    }
+                }
+
+                /// <summary>
+                /// Disposes the timer asynchronously.
+                /// </summary>
+                /// <returns>A completed disposal task.</returns>
+                public ValueTask DisposeAsync()
+                {
+                    Dispose();
+                    return ValueTask.CompletedTask;
+                }
+
+                /// <summary>
+                /// Returns the next due timestamp when the timer is enabled.
+                /// </summary>
+                /// <param name="dueUtc">Receives the next due time when available.</param>
+                /// <returns><see langword="true"/> when the timer is enabled; otherwise <see langword="false"/>.</returns>
+                internal bool TryGetNextDueUtc(out DateTimeOffset dueUtc)
+                {
+                    if (!_disposed && _nextDueUtc is DateTimeOffset nextDueUtc)
+                    {
+                        dueUtc = nextDueUtc;
+                        return true;
+                    }
+
+                    dueUtc = default;
+                    return false;
+                }
+
+                /// <summary>
+                /// Advances the timer schedule after one due callback has been collected.
+                /// </summary>
+                internal void AdvanceScheduleFromFire()
+                {
+                    if (_nextDueUtc is null)
+                    {
+                        return;
+                    }
+
+                    if (_period == Timeout.InfiniteTimeSpan)
+                    {
+                        _nextDueUtc = null;
+                        return;
+                    }
+
+                    _nextDueUtc += _period;
+                }
+
+                /// <summary>
+                /// Validates timer delay arguments accepted by this manual provider.
+                /// </summary>
+                /// <param name="delay">Delay value to validate.</param>
+                /// <param name="parameterName">Associated parameter name.</param>
+                /// <exception cref="ArgumentOutOfRangeException">Thrown when the delay is negative and not <see cref="Timeout.InfiniteTimeSpan"/>.</exception>
+                private static void ValidateDelay(TimeSpan delay, string parameterName)
+                {
+                    if (delay < TimeSpan.Zero && delay != Timeout.InfiniteTimeSpan)
+                    {
+                        throw new ArgumentOutOfRangeException(parameterName);
+                    }
+                }
+            }
         }
 
         /// <summary>

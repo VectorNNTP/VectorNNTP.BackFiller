@@ -87,6 +87,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private RabbitMqConsumerLifecycleState _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
         /// <summary>
+        /// Indicates whether cancel-admitted-work shutdown has abandoned new settlement admission for the current session lifecycle.
+        /// </summary>
+        private bool _settlementAdmissionAbandoned;
+        /// <summary>
         /// Stores disposed used by rabbit mq backbone consumer session.
         /// </summary>
         private bool _disposed;
@@ -311,6 +315,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                 _consumerTag = consumerTag;
                 _lifecycleState = RabbitMqConsumerLifecycleState.Running;
+                _settlementAdmissionAbandoned = false;
                 _drainCompletion = CreateCompletedDrainSource();
                 _admittedDeliveryCount = 0;
                 LogConsumerStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _queueName, ActiveConnectionGeneration, consumerTag);
@@ -334,6 +339,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                 _consumerTag = null;
                 _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+                _settlementAdmissionAbandoned = false;
                 _admittedDeliveryCount = 0;
                 _drainCompletion = CreateCompletedDrainSource();
                 _connectionScope?.Dispose();
@@ -385,6 +391,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             if (cancelAdmittedWork)
             {
                 _sessionCancellation?.Cancel();
+                _settlementAdmissionAbandoned = true;
                 AbandonAdmittedDeliveriesForDrainAccountingNoLock();
             }
 
@@ -438,6 +445,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _consumerTag = null;
             _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
             _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+            _settlementAdmissionAbandoned = false;
             _admittedDeliveryCount = 0;
             _drainCompletion = CreateCompletedDrainSource();
 
@@ -823,6 +831,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     if (_owner._ownedChannel is null || _owner._lifecycleState is RabbitMqConsumerLifecycleState.Stopped)
                     {
                         throw new InvalidOperationException("RabbitMQ consumer session channel is not available for settlement.");
+                    }
+
+                    if (_owner._settlementAdmissionAbandoned)
+                    {
+                        throw new InvalidOperationException("RabbitMQ delivery settlement was abandoned during consumer shutdown.");
                     }
 
                     long activeGeneration = _owner.ActiveConnectionGeneration;
