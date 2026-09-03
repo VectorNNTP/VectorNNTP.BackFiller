@@ -122,7 +122,7 @@ function Invoke-WatchedRun {
 
 			$tail = Get-Content $stdoutPath -Tail 400 -ErrorAction SilentlyContinue
 			foreach ($line in $tail) {
-				if ($line -match '\[xUnit\.net.*\]\s+\s*(VectorNNTP\.Backfiller\.Tests\.TransitPublisherTests\.[^\s]+)\s+\[(PASS|FAIL|SKIP)\]') {
+				if ($line -match '\[xUnit\.net.*\]\s+\s*(VectorNNTP\.BackFiller\.Tests\.Runtime\.Transit\.TransitPublisherTests\.[^\s]+)\s+\[(PASS|FAIL|SKIP)\]') {
 					$tn = $Matches[1]
 					if ($seenCompleted.Add($tn)) {
 						$lastCompleted = $tn
@@ -177,7 +177,7 @@ function Invoke-WatchedRun {
 					$analysisLines = Get-Content $analysisPath -ErrorAction SilentlyContinue
 					foreach ($ln in $analysisLines) {
 						if ($ln -match 'TransitPublisherTests\.<([^>]+)>d__') {
-							$activeTest = "VectorNNTP.Backfiller.Tests.TransitPublisherTests.$($Matches[1])"
+							$activeTest = "VectorNNTP.BackFiller.Tests.Runtime.Transit.TransitPublisherTests.$($Matches[1])"
 							break
 						}
 					}
