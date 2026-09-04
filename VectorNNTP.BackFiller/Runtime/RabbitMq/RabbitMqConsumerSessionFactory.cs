@@ -157,11 +157,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Registration for graceful-shutdown notifications.
         /// </summary>
-        private readonly IDisposable _gracefulShutdownRegistration;
+        private readonly CancellationTokenRegistration _gracefulShutdownRegistration;
         /// <summary>
         /// Registration for forced-shutdown notifications.
         /// </summary>
-        private readonly IDisposable _forcedShutdownRegistration;
+        private readonly CancellationTokenRegistration _forcedShutdownRegistration;
 
         /// <summary>
         /// Indicates that service shutdown has begun and reconciliation should stop.

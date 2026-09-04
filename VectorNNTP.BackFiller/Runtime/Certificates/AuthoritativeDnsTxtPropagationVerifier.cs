@@ -227,7 +227,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 try
                 {
                     byte[] response = await SendDnsUdpQueryAsync(nameServerAddress, request, cancellationToken).ConfigureAwait(false);
-                    IReadOnlyList<string> names = DnsWireMessageParser.ParseNsRecordNames(response);
+                    List<string> names = DnsWireMessageParser.ParseNsRecordNames(response);
                     if (names.Count > 0)
                     {
                         return names;
@@ -431,7 +431,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// </summary>
             /// <param name="message">Wire-format DNS response bytes.</param>
             /// <returns>Normalized NS host names discovered in the response.</returns>
-            internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
+            internal static List<string> ParseNsRecordNames(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
                 (int questionCount, int answerCount, int authorityCount, _) = ReadHeaderCounts(message);
@@ -475,7 +475,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// </summary>
             /// <param name="message">Wire-format DNS response bytes.</param>
             /// <returns>TXT payload strings reconstructed from the response.</returns>
-            internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
+            internal static List<string> ParseTxtValues(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
                 (int questionCount, int answerCount, _, _) = ReadHeaderCounts(message);

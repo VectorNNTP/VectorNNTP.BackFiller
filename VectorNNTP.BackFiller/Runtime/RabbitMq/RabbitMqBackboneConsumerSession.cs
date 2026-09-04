@@ -97,7 +97,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Serilog diagnostic scope pushed while a live consumer is active.
         /// </summary>
-        private IDisposable? _connectionScope;
+        private CompositeDisposable? _connectionScope;
 
         /// <summary>
         /// Internal consumer-session lifecycle states.
@@ -859,7 +859,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Pushes the connection-scoped Serilog properties used while the consumer is active.
         /// </summary>
-        private IDisposable BeginConnectionScope()
+        private CompositeDisposable BeginConnectionScope()
         {
             List<IDisposable> scopes =
             [

@@ -902,7 +902,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private async Task RequeueClaimedAndOutstandingAfterFaultAsync(
             TransitConnection connection,
-            IReadOnlyList<TransitWorkItem>? claimed,
+            List<TransitWorkItem>? claimed,
             CancellationToken cancellationToken)
         {
             Console.WriteLine($"[TRACE-RI-20] {TraceStamp()} Requeue BEGIN connectionId={connection.ConnectionId} claimedCount={(claimed is null ? 0 : claimed.Count)}");

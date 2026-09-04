@@ -498,9 +498,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="arguments">Immutable declaration arguments.</param>
         /// <returns>A mutable dictionary copy, or <see langword="null"/> when no arguments were supplied.</returns>
-        private static IDictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
+        private static Dictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
         {
-            return arguments is null ? null : (IDictionary<string, object?>)arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);
+            return arguments is null ? null : arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);
         }
     }
 }

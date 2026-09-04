@@ -61,11 +61,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Registration for graceful-shutdown notifications.
         /// </summary>
-        private IDisposable? _gracefulShutdownRegistration;
+        private CancellationTokenRegistration _gracefulShutdownRegistration;
         /// <summary>
         /// Registration for forced-shutdown notifications.
         /// </summary>
-        private IDisposable? _forcedShutdownRegistration;
+        private CancellationTokenRegistration _forcedShutdownRegistration;
 
         /// <summary>
         /// Observable RabbitMQ infrastructure state reported to other startup and runtime components.
@@ -248,11 +248,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _state = RabbitMqInfrastructureState.Stopping;
             _shutdownCts.Cancel();
 
-            _gracefulShutdownRegistration?.Dispose();
-            _gracefulShutdownRegistration = null;
-
-            _forcedShutdownRegistration?.Dispose();
-            _forcedShutdownRegistration = null;
+            _gracefulShutdownRegistration.Dispose();
+            _forcedShutdownRegistration.Dispose();
 
             _ = _recoverySignal.Release();
 
