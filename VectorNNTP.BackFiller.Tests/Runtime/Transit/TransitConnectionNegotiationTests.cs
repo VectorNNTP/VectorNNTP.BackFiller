@@ -409,17 +409,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("closed while awaiting line response", ex.Message, StringComparison.OrdinalIgnoreCase);
 
-            (string? serverLocalEndpoint, string? clientLocalEndpoint) = await endpointCapture.Task;
-            string? listenerLocalEndpoint = GetListenerLocalEndpoint(server);
-            string? clientRemoteEndpoint = serverLocalEndpoint ?? listenerLocalEndpoint;
-            string? clientEndpoint = clientLocalEndpoint;
-
-            static string? GetListenerLocalEndpoint(FakeNntpServer serverInstance)
-            {
-                FieldInfo? listenerField = typeof(FakeNntpServer).GetField("_listener", BindingFlags.Instance | BindingFlags.NonPublic);
-                TcpListener? listener = listenerField?.GetValue(serverInstance) as TcpListener;
-                return listener?.LocalEndpoint?.ToString();
-            }
+            _ = await endpointCapture.Task;
         }
         /// <summary>
         /// Confirms the initialize async when server closes during capabilities throws behavior.

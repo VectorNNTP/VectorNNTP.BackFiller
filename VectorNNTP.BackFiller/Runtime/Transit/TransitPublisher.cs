@@ -96,6 +96,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private long _nextWorkItemId;
         /// <summary>
+        /// Aggregate bytes transmitted across all connections that have participated in the publisher lifetime.
+        /// </summary>
+        private long _totalBytesTransmitted;
+        /// <summary>
+        /// Aggregate bytes received across all connections that have participated in the publisher lifetime.
+        /// </summary>
+        private long _totalBytesReceived;
+        /// <summary>
         /// Aggregate count of articles admitted for submission.
         /// </summary>
         private long _totalArticlesSubmitted;
@@ -266,8 +274,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <returns>The current transport snapshot.</returns>
         internal TransitTransportSnapshot CaptureTransportSnapshot(int activeConnections, int outstandingSubmissions)
         {
-            long totalBytesTransmitted = 0;
-            long totalBytesReceived = 0;
+            long totalBytesTransmitted = Interlocked.Read(ref _totalBytesTransmitted);
+            long totalBytesReceived = Interlocked.Read(ref _totalBytesReceived);
+
             for (int i = 0; i < _connections.Length; i++)
             {
                 TransitConnection? connection = _connections[i];
@@ -852,6 +861,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                                 connection = replacement;
                                 continue;
                             }
+
+                            TransitConnection.TransitConnectionDiagnosticsSnapshot retiredDiagnostics = reconnectTarget.CaptureDiagnosticsSnapshot();
+                            _ = Interlocked.Add(ref _totalBytesTransmitted, retiredDiagnostics.BytesTransmitted);
+                            _ = Interlocked.Add(ref _totalBytesReceived, retiredDiagnostics.BytesReceived);
 
                             long reconnects = Interlocked.Increment(ref _totalReconnects);
                             Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-START slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} totalReconnects={reconnects}");

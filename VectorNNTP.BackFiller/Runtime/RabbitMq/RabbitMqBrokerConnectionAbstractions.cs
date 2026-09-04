@@ -230,7 +230,29 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IReadOnlyList<string> hosts = RabbitMqConnectionFactoryBuilder.BuildHostList(runtimeOptions);
 
             IConnection connection = await factory.CreateConnectionAsync(hosts, cancellationToken).ConfigureAwait(false);
-            return new RabbitMqBrokerConnectionAdapter(connection, runtimeOptions.VirtualHost);
+            return await CreateOwnedConnectionAsync(connection, runtimeOptions.VirtualHost).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Transfers ownership of an opened RabbitMQ connection into the adapter boundary.
+        /// </summary>
+        /// <param name="connection">Opened broker connection about to be owned by the adapter.</param>
+        /// <param name="virtualHost">Configured virtual host used to establish the connection.</param>
+        /// <returns>The owned broker connection abstraction.</returns>
+        internal static async Task<IRabbitMqBrokerConnection> CreateOwnedConnectionAsync(IConnection connection, string virtualHost)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualHost);
+
+            try
+            {
+                return new RabbitMqBrokerConnectionAdapter(connection, virtualHost);
+            }
+            catch
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
         }
     }
 

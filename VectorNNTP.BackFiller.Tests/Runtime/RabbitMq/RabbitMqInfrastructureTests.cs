@@ -76,6 +76,25 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         }
 
         /// <summary>
+        /// Confirms the connector disposes the raw connection when adapter construction fails.
+        /// </summary>
+        [Fact]
+        public async Task RabbitMqBrokerConnector_WhenAdapterConstructionFails_DisposesUnderlyingConnection()
+        {
+            object proxyObject = DispatchProxy.Create<IConnection, DisposableConnection>();
+            IConnection connection = (IConnection)proxyObject;
+            DisposableConnection proxy = (DisposableConnection)proxyObject;
+            proxy.ClientProvidedNameValue = null;
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await RabbitMqBrokerConnector.CreateOwnedConnectionAsync(connection, "/"));
+
+            Assert.Contains("ClientProvidedName", exception.Message, StringComparison.Ordinal);
+            Assert.True(proxy.IsDisposed);
+            Assert.False(proxy.IsOpen);
+        }
+
+        /// <summary>
         /// Confirms the topology builder backbone namespaces are isolated behavior.
         /// </summary>
         [Fact]
@@ -609,6 +628,54 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     _ when targetMethod.Name.StartsWith("remove_", StringComparison.Ordinal) => null,
                     _ => throw new NotSupportedException($"Unhandled IConnection member in test proxy: {targetMethod.Name}"),
                 };
+            }
+        }
+
+        private class DisposableConnection : DispatchProxy
+        {
+            /// <summary>
+            /// Tracks whether the connection has been disposed by the connector cleanup path.
+            /// </summary>
+            internal bool IsDisposed { get; private set; }
+
+            /// <summary>
+            /// Tracks whether the connection remains open before cleanup runs.
+            /// </summary>
+            internal bool IsOpen => !IsDisposed;
+
+            /// <summary>
+            /// Supplies the client-provided name value surfaced by the proxied IConnection test double.
+            /// </summary>
+            internal string? ClientProvidedNameValue { get; set; }
+
+            /// <summary>
+            /// Handles proxied IConnection member invocations for the connector cleanup regression test.
+            /// </summary>
+            /// <param name="targetMethod">Invoked member metadata.</param>
+            /// <param name="args">Invocation arguments.</param>
+            /// <returns>Member return value for the proxied call.</returns>
+            protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+            {
+                ArgumentNullException.ThrowIfNull(targetMethod);
+
+                return targetMethod.Name switch
+                {
+                    "get_ClientProvidedName" => ClientProvidedNameValue,
+                    "DisposeAsync" => DisposeAsync(),
+                    _ when targetMethod.Name.StartsWith("add_", StringComparison.Ordinal) => null,
+                    _ when targetMethod.Name.StartsWith("remove_", StringComparison.Ordinal) => null,
+                    _ => throw new NotSupportedException($"Unhandled IConnection member in test proxy: {targetMethod.Name}"),
+                };
+            }
+
+            /// <summary>
+            /// Marks the connection as disposed and completes asynchronously.
+            /// </summary>
+            /// <returns>A completed value task.</returns>
+            private ValueTask DisposeAsync()
+            {
+                IsDisposed = true;
+                return ValueTask.CompletedTask;
             }
         }
 

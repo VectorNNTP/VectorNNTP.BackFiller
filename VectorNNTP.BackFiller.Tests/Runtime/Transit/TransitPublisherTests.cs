@@ -2419,6 +2419,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(0, ownerSlotIndex);
             await WaitForPrimaryReadyWithConnectionIdAsync(publisher, originalConnectionId, timeout.Token);
 
+            TransitTransportSnapshot transportBeforeReplacement = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+
             releaseFirstSessionDisconnect.TrySetResult();
             await firstSessionDisconnected.Task.WaitAsync(timeout.Token);
             await WaitForPrimaryTerminalFaultAsync(publisher, timeout.Token);
@@ -2453,6 +2457,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(1, postRaceSnapshot.TotalReconnects);
             Assert.False(thirdSessionAccepted.Task.IsCompleted);
 
+            TransitTransportSnapshot postRaceTransportSnapshot = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+            Assert.True(postRaceTransportSnapshot.TotalBytesTransmitted >= transportBeforeReplacement.TotalBytesTransmitted);
+            Assert.True(postRaceTransportSnapshot.TotalBytesReceived >= transportBeforeReplacement.TotalBytesReceived);
+
             TransitPublishResult postReconnectResult = await publisher.PublishAsync(postReconnectMessageId, payload, CancellationToken.None)
                 .AsTask()
                 .WaitAsync(timeout.Token);
@@ -2463,6 +2473,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             string postReconnectEndpoint = await postReconnectTakethisEndpoint.Task.WaitAsync(timeout.Token);
             Assert.True(EndpointsMatch(replacementLocalEndpoint, postReconnectEndpoint));
+
+            TransitTransportSnapshot finalTransportSnapshot = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+            Assert.True(finalTransportSnapshot.TotalBytesTransmitted >= postRaceTransportSnapshot.TotalBytesTransmitted);
+            Assert.True(finalTransportSnapshot.TotalBytesReceived >= postRaceTransportSnapshot.TotalBytesReceived);
 
             await WaitForPrimaryReadyWithConnectionIdAsync(publisher, replacementConnectionId, timeout.Token);
             Assert.False(thirdSessionAccepted.Task.IsCompleted);

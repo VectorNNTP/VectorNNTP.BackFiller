@@ -302,7 +302,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             byte[] request = DnsWireMessageBuilder.BuildQuery(fqdn, DnsRecordTypeCode.Txt);
             byte[] response = await SendDnsUdpQueryAsync(nameServer, request, cancellationToken).ConfigureAwait(false);
-            IReadOnlyList<string> txtValues = DnsWireMessageParser.ParseTxtValues(response);
+            List<string> txtValues = DnsWireMessageParser.ParseTxtValues(response);
             return txtValues.Any(value => string.Equals(value, expectedTxtValue, StringComparison.Ordinal));
         }
 
