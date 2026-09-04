@@ -378,6 +378,5 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="exception">Exception captured from the reload failure path.</param>
         [LoggerMessage(EventId = 2710, Level = LogLevel.Error, Message = "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
         private static partial void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception);
-
-            }
-        }
+    }
+}
