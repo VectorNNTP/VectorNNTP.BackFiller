@@ -982,12 +982,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             int? articleSizeBytes,
             NntpArticleAcquisitionFailureCode? failureReason)
         {
+            if (!logger.IsEnabled(LogLevel.Information))
+            {
+                return;
+            }
+
+            string duration = FormatElapsed(elapsed);
+            string failureReasonText = failureReason?.ToString() ?? string.Empty;
             logger.LogInformation(
                 "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
                 messageId,
                 outcome,
-                FormatElapsed(elapsed),
-                failureReason?.ToString() ?? string.Empty,
+                duration,
+                failureReasonText,
                 articleSizeBytes);
         }
 
@@ -1006,10 +1013,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             TimeSpan elapsed,
             int? articleSizeBytes)
         {
+            if (!logger.IsEnabled(LogLevel.Information))
+            {
+                return;
+            }
+
+            string duration = FormatElapsed(elapsed);
             logger.LogInformation(
                 "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
                 messageId,
-                FormatElapsed(elapsed),
+                duration,
                 failureCode,
                 failureCode,
                 articleSizeBytes);

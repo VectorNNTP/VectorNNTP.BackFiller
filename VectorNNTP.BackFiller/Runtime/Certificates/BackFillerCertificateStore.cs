@@ -508,17 +508,20 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
                 }
 
-                FileInfo tempInfo = new(tempPath);
-                FileInfo? targetInfo = File.Exists(targetPath) ? new FileInfo(targetPath) : null;
-                logger?.LogInformation(
-                    "Certificate artifact ready for atomic replace; Operation=move; ProcessId={ProcessId}; SourcePath={SourcePath}; DestinationPath={DestinationPath}; SourceExists={SourceExists}; DestinationExists={DestinationExists}; SourceLength={SourceLength}; DestinationLength={DestinationLength}",
-                    Environment.ProcessId,
-                    tempInfo.FullName,
-                    Path.GetFullPath(targetPath),
-                    tempInfo.Exists,
-                    targetInfo is not null,
-                    tempInfo.Exists ? tempInfo.Length : -1L,
-                    targetInfo?.Length ?? -1L);
+                if (logger is not null && logger.IsEnabled(LogLevel.Information))
+                {
+                    FileInfo tempInfo = new(tempPath);
+                    FileInfo? targetInfo = File.Exists(targetPath) ? new FileInfo(targetPath) : null;
+                    logger.LogInformation(
+                        "Certificate artifact ready for atomic replace; Operation=move; ProcessId={ProcessId}; SourcePath={SourcePath}; DestinationPath={DestinationPath}; SourceExists={SourceExists}; DestinationExists={DestinationExists}; SourceLength={SourceLength}; DestinationLength={DestinationLength}",
+                        Environment.ProcessId,
+                        tempInfo.FullName,
+                        Path.GetFullPath(targetPath),
+                        tempInfo.Exists,
+                        targetInfo is not null,
+                        tempInfo.Exists ? tempInfo.Length : -1L,
+                        targetInfo?.Length ?? -1L);
+                }
 
                 File.Move(tempPath, targetPath, overwrite: true);
 

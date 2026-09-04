@@ -1072,6 +1072,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             string? replyTo,
             ReadOnlyMemory<byte> payload)
         {
+            if (!logger.IsEnabled(LogLevel.Information))
+            {
+                return;
+            }
+
             string payloadUtf8 = Encoding.UTF8.GetString(payload.Span);
             string payloadHex = Convert.ToHexString(payload.Span);
             string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
