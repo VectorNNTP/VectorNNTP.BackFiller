@@ -511,7 +511,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             {
                 bool isAuthInfoUser = command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase);
                 bool isAuthInfoPass = command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase);
-    
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
                     if (isAuthInfoUser)
