@@ -1957,7 +1957,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
-        /// Confirms the dispose async when worker outlives bounded wait does not surface queue semaphore disposal races behavior.
+        /// Verifies that a worker outliving the bounded disposal wait does not race with disposal of the queue semaphore.
         /// </summary>
         [Fact]
         public async Task DisposeAsync_WhenWorkerOutlivesBoundedWait_DoesNotSurfaceQueueSemaphoreDisposalRace()
