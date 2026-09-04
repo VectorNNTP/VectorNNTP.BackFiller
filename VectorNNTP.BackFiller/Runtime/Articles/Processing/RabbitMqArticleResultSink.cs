@@ -120,9 +120,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Emits the response publish-not-confirmed requeue log event.
+        /// Emits the response publish-not-confirmed requeue log event when RabbitMQ refuses confirmation and the delivery must be requeued.
         /// </summary>
+        /// <param name="logger">Logger receiving the requeue event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="publishStatus">Terminal publish status that caused the requeue decision.</param>
         [LoggerMessage(
+            EventId = 3403,
             Level = LogLevel.Warning,
             Message = "RabbitMQ response publish was not confirmed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} PublishStatus={PublishStatus}")]
         private static partial void LogRabbitMqResponsePublishNotConfirmedRequeue(
@@ -134,9 +141,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             RabbitMqResponsePublishStatus publishStatus);
 
         /// <summary>
-        /// Emits the RabbitMQ delivery acknowledged log event.
+        /// Emits the RabbitMQ delivery acknowledged log event after the delivery has been settled successfully.
         /// </summary>
+        /// <param name="logger">Logger receiving the acknowledgement event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag acknowledged by the broker.</param>
         [LoggerMessage(
+            EventId = 3404,
             Level = LogLevel.Information,
             Message = "RabbitMQ delivery acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag}")]
         private static partial void LogRabbitMqDeliveryAcknowledged(
@@ -148,9 +162,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             ulong deliveryTag);
 
         /// <summary>
-        /// Emits the RabbitMQ delivery negatively acknowledged log event.
+        /// Emits the RabbitMQ delivery negatively acknowledged log event after the delivery has been settled unsuccessfully.
         /// </summary>
+        /// <param name="logger">Logger receiving the negative-acknowledgement event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
+        /// <param name="requeue">Whether the broker was instructed to requeue the delivery.</param>
         [LoggerMessage(
+            EventId = 3405,
             Level = LogLevel.Information,
             Message = "RabbitMQ delivery negatively acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Requeue={Requeue}")]
         private static partial void LogRabbitMqDeliveryNegativelyAcknowledged(

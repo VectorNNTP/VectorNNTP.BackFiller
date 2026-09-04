@@ -383,7 +383,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="payloadUtf8">The UTF-8 encoded payload.</param>
         /// <param name="payloadHex">The hexadecimal representation of the payload.</param>
         /// <param name="payloadSha256">The SHA-256 hash of the payload.</param>
-        [LoggerMessage(EventId = 4300, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}")]
+        [LoggerMessage(EventId = 3500, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}")]
         private static partial void LogPayloadDiagnosticParserEntry(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -407,7 +407,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="jsonPath">The JSON path.</param>
         /// <param name="jsonLineNumber">The JSON line number.</param>
         /// <param name="jsonBytePositionInLine">The JSON byte position in line.</param>
-        [LoggerMessage(EventId = 4301, Level = LogLevel.Warning, Message = "RabbitMQ payload diagnostic parser JsonException. CorrelationId={CorrelationId} DeliveryTag={DeliveryTag} JsonExceptionMessage={JsonExceptionMessage} JsonPath={JsonPath} JsonLineNumber={JsonLineNumber} JsonBytePositionInLine={JsonBytePositionInLine}")]
+        [LoggerMessage(EventId = 3501, Level = LogLevel.Warning, Message = "RabbitMQ payload diagnostic parser JsonException. CorrelationId={CorrelationId} DeliveryTag={DeliveryTag} JsonExceptionMessage={JsonExceptionMessage} JsonPath={JsonPath} JsonLineNumber={JsonLineNumber} JsonBytePositionInLine={JsonBytePositionInLine}")]
         private static partial void LogPayloadDiagnosticParserJsonException(
             ILogger logger,
             string? correlationId,
@@ -432,7 +432,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="backbone">The backbone.</param>
         /// <param name="payloadLength">The payload length.</param>
         /// <param name="payloadSha256">The SHA-256 hash of the payload.</param>
-        [LoggerMessage(EventId = 4302, Level = LogLevel.Warning, Message = "RabbitMQ article-work request rejected. Reason={Reason} CorrelationId={CorrelationId} ReplyTo={ReplyTo} RabbitMqMessageId={RabbitMqMessageId} DeliveryTag={DeliveryTag} Backbone={Backbone} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}")]
+        [LoggerMessage(EventId = 3502, Level = LogLevel.Warning, Message = "RabbitMQ article-work request rejected. Reason={Reason} CorrelationId={CorrelationId} ReplyTo={ReplyTo} RabbitMqMessageId={RabbitMqMessageId} DeliveryTag={DeliveryTag} Backbone={Backbone} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}")]
         private static partial void LogArticleWorkRequestRejected(
             ILogger logger,
             string reason,

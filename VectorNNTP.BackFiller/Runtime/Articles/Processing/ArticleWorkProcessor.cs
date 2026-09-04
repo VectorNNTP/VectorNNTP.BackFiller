@@ -156,9 +156,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Emits the article processing completed log event.
+        /// Emits the article processing completed log event after backbone retrieval and classification succeed.
         /// </summary>
+        /// <param name="logger">Logger receiving the completed processing event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="outcome">Terminal processing outcome reported to downstream phases.</param>
+        /// <param name="disposition">Broker settlement recommendation derived from the terminal outcome.</param>
+        /// <param name="providerFailureCode">Acquisition failure classification when the retrieval layer failed.</param>
+        /// <param name="responseCode">NNTP response code returned by the upstream provider when available.</param>
         [LoggerMessage(
+            EventId = 3300,
             Level = LogLevel.Information,
             Message = "Article processing completed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} ProviderFailureCode={ProviderFailureCode} ResponseCode={ResponseCode}")]
         private static partial void LogArticleProcessingCompleted(
@@ -173,9 +183,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             int? responseCode);
 
         /// <summary>
-        /// Emits the article processing failed unexpectedly log event.
+        /// Emits the article processing failed unexpectedly log event when an unhandled exception escapes the retriever or classifier path.
         /// </summary>
+        /// <param name="exception">Unhandled exception captured from the processing pipeline.</param>
+        /// <param name="logger">Logger receiving the unexpected-failure event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
         [LoggerMessage(
+            EventId = 3301,
             Level = LogLevel.Error,
             Message = "Article processing failed unexpectedly. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
         private static partial void LogArticleProcessingFailedUnexpectedly(

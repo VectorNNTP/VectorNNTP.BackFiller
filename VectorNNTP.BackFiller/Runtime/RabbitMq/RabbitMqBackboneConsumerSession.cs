@@ -641,17 +641,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             long activeGeneration = ActiveConnectionGeneration;
-            if (activeGeneration <= 0)
-            {
-                return true;
-            }
-
-            if (_ownedChannel.ConnectionGeneration != activeGeneration)
-            {
-                return true;
-            }
-
-            return _connectionManager.ConnectionGeneration > activeGeneration;
+            return activeGeneration <= 0 || _ownedChannel.ConnectionGeneration != activeGeneration || _connectionManager.ConnectionGeneration > activeGeneration;
         }
 
         /// <summary>
@@ -935,117 +925,149 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
         }
 
-        /// <summary>
-        /// Emits the consumer started log event for rabbit mq backbone consumer session.
-        /// </summary>
-        private static void LogConsumerStarted(ILogger logger, string backbone, int sessionOrdinal, string queue, long connectionGeneration, string consumerTag)
-        {
-            logger.LogInformation("RabbitMQ consumer session started. Backbone={Backbone} Session={SessionOrdinal} Queue={Queue} ConnectionGeneration={ConnectionGeneration} ConsumerTag={ConsumerTag}", backbone, sessionOrdinal, queue, connectionGeneration, consumerTag);
-        }
 
         /// <summary>
-        /// Emits the consumer stopped log event for rabbit mq backbone consumer session.
+        /// Emits the informational log describing a newly started consumer session and its broker registration details.
         /// </summary>
-        private static void LogConsumerStopped(ILogger logger, string backbone, int sessionOrdinal)
-        {
-            logger.LogInformation("RabbitMQ consumer session stopped. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
-        }
+        /// <param name="logger">Logger receiving the start event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the started consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="queue">RabbitMQ queue that the consumer registered against.</param>
+        /// <param name="connectionGeneration">Connection generation assigned to the owned channel when the consumer started.</param>
+        /// <param name="consumerTag">Broker-issued consumer tag returned from the BasicConsume registration.</param>
+        [LoggerMessage(EventId = 4300, Level = LogLevel.Information, Message = "RabbitMQ consumer session started. Backbone={Backbone} Session={SessionOrdinal} Queue={Queue} ConnectionGeneration={ConnectionGeneration} ConsumerTag={ConsumerTag}")]
+        private static partial void LogConsumerStarted(ILogger logger, string backbone, int sessionOrdinal, string queue, long connectionGeneration, string consumerTag);
 
         /// <summary>
-        /// Emits the consumer retiring log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that the consumer session has fully stopped.
         /// </summary>
-        private static void LogConsumerRetiring(ILogger logger, string backbone, int sessionOrdinal, int admittedCount)
-        {
-            logger.LogInformation("RabbitMQ consumer session entering retiring state. Backbone={Backbone} Session={SessionOrdinal} AdmittedDeliveries={AdmittedDeliveries}", backbone, sessionOrdinal, admittedCount);
-        }
+        /// <param name="logger">Logger receiving the stop event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the stopped consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        [LoggerMessage(EventId = 4301, Level = LogLevel.Information, Message = "RabbitMQ consumer session stopped. Backbone={Backbone} Session={SessionOrdinal}")]
+        private static partial void LogConsumerStopped(ILogger logger, string backbone, int sessionOrdinal);
 
         /// <summary>
-        /// Emits the consumer drain started log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that the consumer session is entering its retiring state.
         /// </summary>
-        private static void LogConsumerDrainStarted(ILogger logger, string backbone, int sessionOrdinal, int admittedCount)
-        {
-            logger.LogInformation("RabbitMQ consumer drain started. Backbone={Backbone} Session={SessionOrdinal} PendingAdmittedDeliveries={PendingAdmittedDeliveries}", backbone, sessionOrdinal, admittedCount);
-        }
+        /// <param name="logger">Logger receiving the retirement event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the retiring consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="admittedDeliveries">Number of admitted deliveries still tracked when retirement begins.</param>
+        [LoggerMessage(EventId = 4302, Level = LogLevel.Information, Message = "RabbitMQ consumer session entering retiring state. Backbone={Backbone} Session={SessionOrdinal} AdmittedDeliveries={AdmittedDeliveries}")]
+        private static partial void LogConsumerRetiring(ILogger logger, string backbone, int sessionOrdinal, int admittedDeliveries);
 
         /// <summary>
-        /// Emits the consumer drain completed log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that drain processing has started for a retiring consumer session.
         /// </summary>
-        private static void LogConsumerDrainCompleted(ILogger logger, string backbone, int sessionOrdinal)
-        {
-            logger.LogInformation("RabbitMQ consumer drain completed. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
-        }
+        /// <param name="logger">Logger receiving the drain-start event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the draining consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="pendingAdmittedDeliveries">Number of admitted deliveries still pending when drain begins.</param>
+        [LoggerMessage(EventId = 4303, Level = LogLevel.Information, Message = "RabbitMQ consumer drain started. Backbone={Backbone} Session={SessionOrdinal} PendingAdmittedDeliveries={PendingAdmittedDeliveries}")]
+        private static partial void LogConsumerDrainStarted(ILogger logger, string backbone, int sessionOrdinal, int pendingAdmittedDeliveries);
 
         /// <summary>
-        /// Emits the consumer shutdown observed log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that drain processing has completed for a consumer session.
         /// </summary>
-        private static void LogConsumerShutdownObserved(ILogger logger, string backbone, int sessionOrdinal, ushort replyCode, string replyText, string initiator)
-        {
-            logger.LogWarning("RabbitMQ consumer shutdown observed. Backbone={Backbone} Session={SessionOrdinal} ReplyCode={ReplyCode} ReplyText={ReplyText} Initiator={Initiator}", backbone, sessionOrdinal, replyCode, replyText, initiator);
-        }
+        /// <param name="logger">Logger receiving the drain-complete event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the drained consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        [LoggerMessage(EventId = 4304, Level = LogLevel.Information, Message = "RabbitMQ consumer drain completed. Backbone={Backbone} Session={SessionOrdinal}")]
+        private static partial void LogConsumerDrainCompleted(ILogger logger, string backbone, int sessionOrdinal);
 
         /// <summary>
-        /// Emits the consumer recreation starting log event for rabbit mq backbone consumer session.
+        /// Emits the warning log that a broker shutdown notification was observed for the active consumer registration.
         /// </summary>
-        private static void LogConsumerRecreationStarting(ILogger logger, string backbone, int sessionOrdinal, long previousGeneration, long newGeneration)
-        {
-            logger.LogInformation("RabbitMQ consumer recreation starting due to connection replacement. Backbone={Backbone} Session={SessionOrdinal} PreviousGeneration={PreviousGeneration} NewGeneration={NewGeneration}", backbone, sessionOrdinal, previousGeneration, newGeneration);
-        }
+        /// <param name="logger">Logger receiving the shutdown-observed event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the affected consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="replyCode">Broker shutdown reply code reported by RabbitMQ.</param>
+        /// <param name="replyText">Broker shutdown reply text reported by RabbitMQ.</param>
+        /// <param name="initiator">String form of the shutdown initiator reported by RabbitMQ.</param>
+        [LoggerMessage(EventId = 4305, Level = LogLevel.Warning, Message = "RabbitMQ consumer shutdown observed. Backbone={Backbone} Session={SessionOrdinal} ReplyCode={ReplyCode} ReplyText={ReplyText} Initiator={Initiator}")]
+        private static partial void LogConsumerShutdownObserved(ILogger logger, string backbone, int sessionOrdinal, ushort replyCode, string replyText, string initiator);
 
         /// <summary>
-        /// Emits the consumer recreation completed log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that a consumer recreation has begun because the connection generation changed.
         /// </summary>
-        private static void LogConsumerRecreationCompleted(ILogger logger, string backbone, int sessionOrdinal, long activeGeneration)
-        {
-            logger.LogInformation("RabbitMQ consumer recreation completed. Backbone={Backbone} Session={SessionOrdinal} ActiveGeneration={ActiveGeneration}", backbone, sessionOrdinal, activeGeneration);
-        }
+        /// <param name="logger">Logger receiving the recreation-start event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the consumer being recreated.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="previousGeneration">Connection generation that was active before the replacement began.</param>
+        /// <param name="newGeneration">Requested connection generation that triggered the replacement.</param>
+        [LoggerMessage(EventId = 4306, Level = LogLevel.Information, Message = "RabbitMQ consumer recreation starting due to connection replacement. Backbone={Backbone} Session={SessionOrdinal} PreviousGeneration={PreviousGeneration} NewGeneration={NewGeneration}")]
+        private static partial void LogConsumerRecreationStarting(ILogger logger, string backbone, int sessionOrdinal, long previousGeneration, long newGeneration);
 
         /// <summary>
-        /// Emits the consumer cancel during shutdown failed log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that a consumer recreation completed and is now bound to the replacement generation.
         /// </summary>
-        private static void LogConsumerCancelDuringShutdownFailed(ILogger logger, string backbone, int sessionOrdinal, string reason)
-        {
-            logger.LogDebug("RabbitMQ consumer cancellation during shutdown encountered error. Backbone={Backbone} Session={SessionOrdinal} Reason={Reason}", backbone, sessionOrdinal, reason);
-        }
+        /// <param name="logger">Logger receiving the recreation-complete event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the recreated consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="activeGeneration">Connection generation now bound to the active consumer registration.</param>
+        [LoggerMessage(EventId = 4307, Level = LogLevel.Information, Message = "RabbitMQ consumer recreation completed. Backbone={Backbone} Session={SessionOrdinal} ActiveGeneration={ActiveGeneration}")]
+        private static partial void LogConsumerRecreationCompleted(ILogger logger, string backbone, int sessionOrdinal, long activeGeneration);
 
         /// <summary>
-        /// Emits the consumer channel dispose during shutdown failed log event for rabbit mq backbone consumer session.
+        /// Emits the debug log that a cancellation request during expected shutdown encountered an error message.
         /// </summary>
-        private static void LogConsumerChannelDisposeDuringShutdownFailed(ILogger logger, string backbone, int sessionOrdinal, string reason)
-        {
-            logger.LogDebug("RabbitMQ consumer channel dispose during shutdown encountered error. Backbone={Backbone} Session={SessionOrdinal} Reason={Reason}", backbone, sessionOrdinal, reason);
-        }
+        /// <param name="logger">Logger receiving the shutdown-cancellation diagnostic.</param>
+        /// <param name="backbone">Backbone queue identity associated with the shutdown attempt.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="reason">Exception message captured from the failed cancellation attempt.</param>
+        [LoggerMessage(EventId = 4308, Level = LogLevel.Debug, Message = "RabbitMQ consumer cancellation during shutdown encountered error. Backbone={Backbone} Session={SessionOrdinal} Reason={Reason}")]
+        private static partial void LogConsumerCancelDuringShutdownFailed(ILogger logger, string backbone, int sessionOrdinal, string reason);
 
         /// <summary>
-        /// Emits the consumer prefetch configured log event for rabbit mq backbone consumer session.
+        /// Emits the debug log that a channel disposal request during expected shutdown encountered an error message.
         /// </summary>
-        private static void LogConsumerPrefetchConfigured(ILogger logger, string backbone, int sessionOrdinal, ushort prefetchCount)
-        {
-            logger.LogInformation("RabbitMQ consumer prefetch configured. Backbone={Backbone} Session={SessionOrdinal} PrefetchCount={PrefetchCount}", backbone, sessionOrdinal, prefetchCount);
-        }
+        /// <param name="logger">Logger receiving the shutdown-disposal diagnostic.</param>
+        /// <param name="backbone">Backbone queue identity associated with the shutdown attempt.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="reason">Exception message captured from the failed channel disposal attempt.</param>
+        [LoggerMessage(EventId = 4309, Level = LogLevel.Debug, Message = "RabbitMQ consumer channel dispose during shutdown encountered error. Backbone={Backbone} Session={SessionOrdinal} Reason={Reason}")]
+        private static partial void LogConsumerChannelDisposeDuringShutdownFailed(ILogger logger, string backbone, int sessionOrdinal, string reason);
 
         /// <summary>
-        /// Emits the consumer cancellation failed log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that the consumer prefetch setting has been configured.
         /// </summary>
-        private static void LogConsumerCancellationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
-        {
-            logger.LogError(exception, "RabbitMQ consumer cancellation failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
-        }
+        /// <param name="logger">Logger receiving the prefetch-configured event for the consumer session.</param>
+        /// <param name="backbone">Backbone queue identity associated with the configured consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="prefetchCount">Prefetch count applied to the RabbitMQ channel.</param>
+        [LoggerMessage(EventId = 4310, Level = LogLevel.Information, Message = "RabbitMQ consumer prefetch configured. Backbone={Backbone} Session={SessionOrdinal} PrefetchCount={PrefetchCount}")]
+        private static partial void LogConsumerPrefetchConfigured(ILogger logger, string backbone, int sessionOrdinal, ushort prefetchCount);
 
         /// <summary>
-        /// Emits the consumer channel dispose failed log event for rabbit mq backbone consumer session.
+        /// Emits the error log that cancellation of the consumer session failed unexpectedly.
         /// </summary>
-        private static void LogConsumerChannelDisposeFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
-        {
-            logger.LogError(exception, "RabbitMQ consumer channel disposal failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
-        }
+        /// <param name="logger">Logger receiving the cancellation-failure event.</param>
+        /// <param name="backbone">Backbone queue identity associated with the affected consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="exception">Exception raised while cancelling the active RabbitMQ consumer registration.</param>
+        [LoggerMessage(EventId = 4311, Level = LogLevel.Error, Message = "RabbitMQ consumer cancellation failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}")]
+        private static partial void LogConsumerCancellationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception);
 
         /// <summary>
-        /// Emits the consumer cancellation observed log event for rabbit mq backbone consumer session.
+        /// Emits the error log that channel disposal for the consumer session failed unexpectedly.
         /// </summary>
-        private static void LogConsumerCancellationObserved(ILogger logger, string backbone, int sessionOrdinal, int consumerTagCount)
-        {
-            logger.LogWarning("RabbitMQ consumer unregistered by broker. Backbone={Backbone} Session={SessionOrdinal} ConsumerTagCount={ConsumerTagCount}", backbone, sessionOrdinal, consumerTagCount);
-        }
+        /// <param name="logger">Logger receiving the channel-disposal failure event.</param>
+        /// <param name="backbone">Backbone queue identity associated with the affected consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="exception">Exception raised while disposing the owned RabbitMQ channel.</param>
+        [LoggerMessage(EventId = 4312, Level = LogLevel.Error, Message = "RabbitMQ consumer channel disposal failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}")]
+        private static partial void LogConsumerChannelDisposeFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception);
+
+        /// <summary>
+        /// Emits the warning log that the broker unregistered the consumer registration unexpectedly.
+        /// </summary>
+        /// <param name="logger">Logger receiving the broker-unregistered event.</param>
+        /// <param name="backbone">Backbone queue identity associated with the affected consumer.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="consumerTagCount">Number of consumer tags reported by the broker in the unregistration callback.</param>
+        [LoggerMessage(EventId = 4313, Level = LogLevel.Warning, Message = "RabbitMQ consumer unregistered by broker. Backbone={Backbone} Session={SessionOrdinal} ConsumerTagCount={ConsumerTagCount}")]
+        private static partial void LogConsumerCancellationObserved(ILogger logger, string backbone, int sessionOrdinal, int consumerTagCount);
 
         /// <summary>
         /// Determines whether a delivery matches the configured diagnostic correlation identifier.
@@ -1058,8 +1080,39 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Emits the payload diagnostic at callback entry log event for rabbit mq backbone consumer session.
+        /// Emits the debug log that a delivery was ignored because the consumer generation is stale.
         /// </summary>
+        /// <param name="logger">Logger receiving the stale-generation diagnostic.</param>
+        /// <param name="backbone">Backbone queue identity associated with the ignored delivery.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="deliveryGeneration">Generation captured when the delivery was admitted.</param>
+        /// <param name="currentGeneration">Current connection generation used to determine staleness.</param>
+        [LoggerMessage(EventId = 4314, Level = LogLevel.Debug, Message = "RabbitMQ delivery ignored because session generation is stale. Backbone={Backbone} Session={SessionOrdinal} DeliveryGeneration={DeliveryGeneration} CurrentGeneration={CurrentGeneration}")]
+        private static partial void LogDeliveryIgnoredFromStaleGeneration(ILogger logger, string backbone, int sessionOrdinal, long deliveryGeneration, long currentGeneration);
+
+        /// <summary>
+        /// Emits the error log that consumer recreation failed unexpectedly after a shutdown or unregistration callback.
+        /// </summary>
+        /// <param name="logger">Logger receiving the recreation-failure event.</param>
+        /// <param name="backbone">Backbone queue identity associated with the consumer being recreated.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="exception">Exception raised while stopping or restarting the consumer registration.</param>
+        [LoggerMessage(EventId = 4315, Level = LogLevel.Error, Message = "RabbitMQ consumer recreation failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}")]
+        private static partial void LogConsumerRecreationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception);
+
+        /// <summary>
+        /// Emits the informational log that records a diagnostic snapshot of the callback payload before settlement and forwarding.
+        /// </summary>
+        /// <param name="logger">Logger receiving the payload-diagnostic event.</param>
+        /// <param name="timestampUtc">UTC time at which the callback snapshot was captured.</param>
+        /// <param name="backbone">Backbone queue identity associated with the delivery callback.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="sessionKey">Canonical session key that identifies the owning session.</param>
+        /// <param name="deliveryTag">Broker delivery tag associated with the snapshot.</param>
+        /// <param name="correlationId">Message correlation identifier observed on the delivery.</param>
+        /// <param name="rabbitMqMessageId">RabbitMQ message identifier observed on the delivery.</param>
+        /// <param name="replyTo">Reply-to address observed on the delivery.</param>
+        /// <param name="payload">Payload captured from the callback body.</param>
         private static void LogPayloadDiagnosticAtCallbackEntry(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -1081,8 +1134,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             string payloadHex = Convert.ToHexString(payload.Span);
             string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
 
-            logger.LogInformation(
-                "RabbitMQ payload diagnostic callback-entry. TimestampUtc={TimestampUtc:o} Backbone={Backbone} Session={SessionOrdinal} SessionKey={SessionKey} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}",
+            LogPayloadDiagnosticAtCallbackEntryMessage(
+                logger,
                 timestampUtc,
                 backbone,
                 sessionOrdinal,
@@ -1098,19 +1151,35 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Emits the delivery ignored from stale generation log event for rabbit mq backbone consumer session.
+        /// Emits the informational log that records a diagnostic snapshot of the callback payload before settlement and forwarding.
         /// </summary>
-        private static void LogDeliveryIgnoredFromStaleGeneration(ILogger logger, string backbone, int sessionOrdinal, long deliveryGeneration, long currentGeneration)
-        {
-            logger.LogDebug("RabbitMQ delivery ignored because session generation is stale. Backbone={Backbone} Session={SessionOrdinal} DeliveryGeneration={DeliveryGeneration} CurrentGeneration={CurrentGeneration}", backbone, sessionOrdinal, deliveryGeneration, currentGeneration);
-        }
-
-        /// <summary>
-        /// Emits the consumer recreation failed log event for rabbit mq backbone consumer session.
-        /// </summary>
-        private static void LogConsumerRecreationFailed(ILogger logger, string backbone, int sessionOrdinal, Exception exception)
-        {
-            logger.LogError(exception, "RabbitMQ consumer recreation failed unexpectedly. Backbone={Backbone} Session={SessionOrdinal}", backbone, sessionOrdinal);
-        }
+        /// <param name="logger">Logger receiving the payload-diagnostic event.</param>
+        /// <param name="timestampUtc">UTC time at which the callback snapshot was captured.</param>
+        /// <param name="backbone">Backbone queue identity associated with the delivery callback.</param>
+        /// <param name="sessionOrdinal">Stable session ordinal for the consumer instance.</param>
+        /// <param name="sessionKey">Canonical session key that identifies the owning session.</param>
+        /// <param name="deliveryTag">Broker delivery tag associated with the snapshot.</param>
+        /// <param name="correlationId">Message correlation identifier observed on the delivery.</param>
+        /// <param name="rabbitMqMessageId">RabbitMQ message identifier observed on the delivery.</param>
+        /// <param name="replyTo">Reply-to address observed on the delivery.</param>
+        /// <param name="payloadLength">Payload length captured from the callback body.</param>
+        /// <param name="payloadUtf8">UTF-8 decoded payload representation used for diagnostics.</param>
+        /// <param name="payloadHex">Hexadecimal payload representation used for diagnostics.</param>
+        /// <param name="payloadSha256">SHA-256 digest of the payload used for correlation and triage.</param>
+        [LoggerMessage(EventId = 4316, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic callback-entry. TimestampUtc={TimestampUtc:o} Backbone={Backbone} Session={SessionOrdinal} SessionKey={SessionKey} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}")]
+        private static partial void LogPayloadDiagnosticAtCallbackEntryMessage(
+            ILogger logger,
+            DateTimeOffset timestampUtc,
+            string backbone,
+            int sessionOrdinal,
+            string sessionKey,
+            ulong deliveryTag,
+            string? correlationId,
+            string? rabbitMqMessageId,
+            string? replyTo,
+            int payloadLength,
+            string payloadUtf8,
+            string payloadHex,
+            string payloadSha256);
     }
 }

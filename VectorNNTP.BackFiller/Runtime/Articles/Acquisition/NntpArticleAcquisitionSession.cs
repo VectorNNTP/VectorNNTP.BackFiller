@@ -475,11 +475,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 {
                     if (string.IsNullOrWhiteSpace(context.MessageId))
                     {
-                        _logger.LogDebug("RX: {StatusLine}", statusLine);
+                        LogStatusLineReceived(_logger, statusLine);
                     }
                     else
                     {
-                        _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", statusLine, context.MessageId);
+                        LogStatusLineReceivedWithMessageId(_logger, statusLine, context.MessageId);
                     }
                 }
 
@@ -517,22 +517,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 {
                     if (isAuthInfoUser)
                     {
-                        _logger.LogDebug("TX: AUTHINFO USER ***");
+                        LogAuthInfoUserCommand(_logger);
                     }
                     else if (isAuthInfoPass)
                     {
-                        _logger.LogDebug("TX: AUTHINFO PASS ***");
+                        LogAuthInfoPassCommand(_logger);
                     }
                     else
                     {
                         // Normal NNTP commands remain fully visible in debug logging.
                         if (string.IsNullOrWhiteSpace(context.MessageId))
                         {
-                            _logger.LogDebug("TX: {Command}", command);
+                            LogCommandSent(_logger, command);
                         }
                         else
                         {
-                            _logger.LogDebug("TX: {Command} MessageId={MessageId}", command, context.MessageId);
+                            LogCommandSentWithMessageId(_logger, command, context.MessageId);
                         }
                     }
                 }
@@ -950,7 +950,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="useSsl">SSL flag.</param>
         private static void LogSessionConnecting(ILogger logger, string host, int port, bool useSsl)
         {
-            logger.LogInformation("Connecting article acquisition session to {Host}:{Port} (SSL={UseSsl})", host, port, useSsl);
+            LogSessionConnectingMessage(logger, host, port, useSsl);
         }
 
         /// <summary>
@@ -962,7 +962,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="useSsl">SSL flag.</param>
         private static void LogSessionConnected(ILogger logger, string host, int port, bool useSsl)
         {
-            logger.LogInformation("Connected article acquisition session to {Host}:{Port} (SSL={UseSsl})", host, port, useSsl);
+            LogSessionConnectedMessage(logger, host, port, useSsl);
         }
 
         /// <summary>
@@ -1001,11 +1001,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <summary>
         /// Logs failed article outcomes.
         /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="messageId">Message-ID.</param>
-        /// <param name="failureCode">Failure classification.</param>
-        /// <param name="elapsed">Elapsed operation duration measured by monotonic stopwatch.</param>
-        /// <param name="articleSizeBytes">Optional article size associated with the failed operation.</param>
+        /// <param name="logger">Logger receiving the failure classification event.</param>
+        /// <param name="messageId">Canonical Message-ID for the article that failed.</param>
+        /// <param name="failureCode">Deterministic acquisition failure classification recorded for the attempt.</param>
+        /// <param name="elapsed">Elapsed operation duration measured by the monotonic stopwatch used for acquisition timing.</param>
+        /// <param name="articleSizeBytes">Optional article size associated with the failed operation when the article body was available.</param>
         private static void LogArticleFailure(
             ILogger logger,
             string messageId,
@@ -1029,9 +1029,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Emits the successful or non-fatal article outcome log event.
+        /// Emits the successful article outcome log event after acquisition completes without a fatal protocol failure.
         /// </summary>
+        /// <param name="logger">Logger receiving the article outcome event.</param>
+        /// <param name="messageId">Canonical Message-ID of the processed article.</param>
+        /// <param name="outcome">Human-readable terminal outcome text reported for the acquisition attempt.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the acquisition attempt.</param>
+        /// <param name="failureReason">Textual failure reason recorded for non-successful terminal states.</param>
+        /// <param name="articleSize">Optional article size in bytes when the article body was available.</param>
         [LoggerMessage(
+            EventId = 3000,
             Level = LogLevel.Information,
             Message = "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})")]
         private static partial void LogArticleOutcomeMessage(
@@ -1043,9 +1050,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             int? articleSize);
 
         /// <summary>
-        /// Emits the failed article outcome log event.
+        /// Emits the failed article outcome log event for deterministic acquisition failures.
         /// </summary>
+        /// <param name="logger">Logger receiving the failed article outcome event.</param>
+        /// <param name="messageId">Canonical Message-ID of the article that failed.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the acquisition attempt.</param>
+        /// <param name="failureCode">Deterministic acquisition failure classification.</param>
+        /// <param name="failureReason">Structured failure reason recorded for the failure event. The current acquisition contract reports the same classification for both fields.</param>
+        /// <param name="articleSize">Optional article size in bytes when the article body was available.</param>
         [LoggerMessage(
+            EventId = 3001,
             Level = LogLevel.Information,
             Message = "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})")]
         private static partial void LogArticleFailureMessage(
@@ -1055,6 +1069,104 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionFailureCode failureCode,
             NntpArticleAcquisitionFailureCode failureReason,
             int? articleSize);
+
+        /// <summary>
+        /// Emits the NNTP status line received debug log event.
+        /// </summary>
+        /// <param name="logger">Logger receiving the raw protocol receive event.</param>
+        /// <param name="statusLine">Decoded NNTP status line exactly as read from the wire.</param>
+        [LoggerMessage(
+            EventId = 3002,
+            Level = LogLevel.Debug,
+            Message = "RX: {StatusLine}")]
+        private static partial void LogStatusLineReceived(ILogger logger, string statusLine);
+
+        /// <summary>
+        /// Emits the NNTP status line received debug log event with the canonical Message-ID correlation value.
+        /// </summary>
+        /// <param name="logger">Logger receiving the correlated protocol receive event.</param>
+        /// <param name="statusLine">Decoded NNTP status line exactly as read from the wire.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the current acquisition attempt.</param>
+        [LoggerMessage(
+            EventId = 3003,
+            Level = LogLevel.Debug,
+            Message = "RX: {StatusLine} MessageId={MessageId}")]
+        private static partial void LogStatusLineReceivedWithMessageId(
+            ILogger logger,
+            string statusLine,
+            string messageId);
+
+        /// <summary>
+        /// Emits the redacted AUTHINFO USER debug log event without exposing credentials.
+        /// </summary>
+        /// <param name="logger">Logger receiving the redacted outbound authentication command event.</param>
+        [LoggerMessage(
+            EventId = 3004,
+            Level = LogLevel.Debug,
+            Message = "TX: AUTHINFO USER ***")]
+        private static partial void LogAuthInfoUserCommand(ILogger logger);
+
+        /// <summary>
+        /// Emits the redacted AUTHINFO PASS debug log event without exposing credentials.
+        /// </summary>
+        /// <param name="logger">Logger receiving the redacted outbound authentication command event.</param>
+        [LoggerMessage(
+            EventId = 3005,
+            Level = LogLevel.Debug,
+            Message = "TX: AUTHINFO PASS ***")]
+        private static partial void LogAuthInfoPassCommand(ILogger logger);
+
+        /// <summary>
+        /// Emits the raw NNTP command write debug log event.
+        /// </summary>
+        /// <param name="logger">Logger receiving the outbound command event.</param>
+        /// <param name="command">Command text transmitted to the NNTP server.</param>
+        [LoggerMessage(
+            EventId = 3006,
+            Level = LogLevel.Debug,
+            Message = "TX: {Command}")]
+        private static partial void LogCommandSent(ILogger logger, string command);
+
+        /// <summary>
+        /// Emits the raw NNTP command write debug log event with the canonical Message-ID correlation value.
+        /// </summary>
+        /// <param name="logger">Logger receiving the correlated outbound command event.</param>
+        /// <param name="command">Command text transmitted to the NNTP server.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the current acquisition attempt.</param>
+        [LoggerMessage(
+            EventId = 3007,
+            Level = LogLevel.Debug,
+            Message = "TX: {Command} MessageId={MessageId}")]
+        private static partial void LogCommandSentWithMessageId(
+            ILogger logger,
+            string command,
+            string messageId);
+
+        /// <summary>
+        /// Emits the acquisition-session connect log event when a reusable NNTP connection is being established.
+        /// </summary>
+        /// <param name="logger">Logger receiving the connect event.</param>
+        /// <param name="host">NNTP server host name or address being contacted.</param>
+        /// <param name="port">NNTP server port.</param>
+        /// <param name="useSsl">Whether TLS is required for the connection attempt.</param>
+        [LoggerMessage(
+            EventId = 3008,
+            Level = LogLevel.Information,
+            Message = "Connecting article acquisition session to {Host}:{Port} (SSL={UseSsl})")]
+        private static partial void LogSessionConnectingMessage(ILogger logger, string host, int port, bool useSsl);
+
+        /// <summary>
+        /// Emits the acquisition-session connected log event after the NNTP transport becomes ready for later commands.
+        /// </summary>
+        /// <param name="logger">Logger receiving the connected event.</param>
+        /// <param name="host">NNTP server host name or address that was successfully contacted.</param>
+        /// <param name="port">NNTP server port that was successfully contacted.</param>
+        /// <param name="useSsl">Whether TLS was negotiated for the reusable session.</param>
+        [LoggerMessage(
+            EventId = 3009,
+            Level = LogLevel.Information,
+            Message = "Connected article acquisition session to {Host}:{Port} (SSL={UseSsl})")]
+        private static partial void LogSessionConnectedMessage(ILogger logger, string host, int port, bool useSsl);
 
         /// <summary>
         /// Accumulates received article bytes in a pooled buffer that can grow up to the configured article-size ceiling.
