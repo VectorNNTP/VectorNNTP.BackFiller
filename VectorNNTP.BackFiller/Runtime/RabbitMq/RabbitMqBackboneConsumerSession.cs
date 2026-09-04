@@ -919,10 +919,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private void ThrowIfDisposed()
         {
-            if (_disposed)
-            {
-                throw new ObjectDisposedException(nameof(RabbitMqBackboneConsumerSession));
-            }
+            ObjectDisposedException.ThrowIf(_disposed, this);
         }
 
 
