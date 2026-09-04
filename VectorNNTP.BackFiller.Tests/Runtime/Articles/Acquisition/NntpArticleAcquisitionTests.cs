@@ -9,6 +9,7 @@
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
@@ -88,6 +89,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
 
             Assert.NotNull(session);
             Assert.Equal(NntpArticleAcquisitionFailureCode.None, connectResult.FailureCode);
+            Assert.Null(connectResult.ArticleBuffer);
+            Assert.False(connectResult.IsSuccess);
 
             await using (session)
             {
@@ -135,6 +138,62 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleNotFound, missing.FailureCode);
                 Assert.True(exists.IsSuccess);
                 Assert.Equal(secondArticle, exists.ArticleBytes.ToArray());
+            }
+        }
+
+        /// <summary>
+        /// Confirms status-only success factory preserves protocol status details without creating a payload-bearing success.
+        /// </summary>
+        [Fact]
+        public void StatusSuccess_WhenCreated_UsesNoneWithoutPayloadAndKeepsIsSuccessFalse()
+        {
+            using NntpArticleAcquisitionResult result = NntpArticleAcquisitionResult.StatusSuccess(111, "20260826010101");
+            Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
+            Assert.Equal(111, result.ResponseCode);
+            Assert.Equal("20260826010101", result.ResponseText);
+            Assert.Null(result.ArticleBuffer);
+            Assert.False(result.IsSuccess);
+        }
+
+        /// <summary>
+        /// Confirms ARTICLE status classification reports command acceptance as status-only success before payload acquisition.
+        /// </summary>
+        [Fact]
+        public void ClassifyArticleStatus_WhenStatus220_ReturnsStatusSuccessWithoutPayload()
+        {
+            MethodInfo? classify = typeof(NntpArticleAcquisitionSession).GetMethod("ClassifyArticleStatus", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(classify);
+
+            object? raw = classify.Invoke(null, [220, "article follows"]);
+            NntpArticleAcquisitionResult result = Assert.IsType<NntpArticleAcquisitionResult>(raw);
+            using (result)
+            {
+                Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
+                Assert.Equal(220, result.ResponseCode);
+                Assert.Equal("article follows", result.ResponseText);
+                Assert.Null(result.ArticleBuffer);
+                Assert.False(result.IsSuccess);
+            }
+        }
+
+        /// <summary>
+        /// Confirms DATE status classification reports command success as status-only success without article payload.
+        /// </summary>
+        [Fact]
+        public void ClassifyDateStatus_WhenStatus111_ReturnsStatusSuccessWithoutPayload()
+        {
+            MethodInfo? classify = typeof(NntpArticleAcquisitionSession).GetMethod("ClassifyDateStatus", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.NotNull(classify);
+
+            object? raw = classify.Invoke(null, [111, "20260826010101"]);
+            NntpArticleAcquisitionResult result = Assert.IsType<NntpArticleAcquisitionResult>(raw);
+            using (result)
+            {
+                Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
+                Assert.Equal(111, result.ResponseCode);
+                Assert.Equal("20260826010101", result.ResponseText);
+                Assert.Null(result.ArticleBuffer);
+                Assert.False(result.IsSuccess);
             }
         }
 
@@ -355,6 +414,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 Assert.Equal(NntpArticleAcquisitionFailureCode.None, result.FailureCode);
                 Assert.Equal(111, result.ResponseCode);
                 Assert.Equal("20260826010101", result.ResponseText);
+                Assert.Null(result.ArticleBuffer);
+                Assert.False(result.IsSuccess);
             }
         }
 

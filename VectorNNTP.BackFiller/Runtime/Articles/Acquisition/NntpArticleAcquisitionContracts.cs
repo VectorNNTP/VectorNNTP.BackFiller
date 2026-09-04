@@ -265,6 +265,24 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
+        /// Creates a successful command/status result that intentionally carries no article payload.
+        /// </summary>
+        /// <param name="responseCode">NNTP status code returned for the successful command response.</param>
+        /// <param name="responseText">NNTP status text returned for the successful command response.</param>
+        /// <returns>
+        /// A result whose <see cref="FailureCode"/> is <see cref="NntpArticleAcquisitionFailureCode.None"/>, whose <see cref="ArticleBuffer"/> is <see langword="null"/>,
+        /// and whose <see cref="IsSuccess"/> remains <see langword="false"/> because no article payload has been acquired.
+        /// </returns>
+        /// <remarks>
+        /// Use this for protocol/status success states such as connect and DATE outcomes, or intermediate ARTICLE status handling before payload acquisition.
+        /// Callers that require completed article acquisition must continue to rely on <see cref="IsSuccess"/> and payload-bearing <see cref="Success(int, string, DownloadedArticleBuffer)"/>.
+        /// </remarks>
+        internal static NntpArticleAcquisitionResult StatusSuccess(int responseCode, string responseText)
+        {
+            return new(NntpArticleAcquisitionFailureCode.None, responseCode, responseText, articleBuffer: null);
+        }
+
+        /// <summary>
         /// Creates a result that records a non-payload outcome.
         /// </summary>
         /// <param name="failureCode">Deterministic outcome classification.</param>

@@ -699,7 +699,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         {
             return statusCode switch
             {
-                220 => NntpArticleAcquisitionResult.Success(statusCode, statusText, articleBuffer: null),
+                220 => NntpArticleAcquisitionResult.StatusSuccess(statusCode, statusText),
                 430 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ArticleNotFound, statusCode, statusText),
                 480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
                 500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
@@ -723,7 +723,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         {
             return statusCode switch
             {
-                111 => NntpArticleAcquisitionResult.Success(statusCode, statusText, articleBuffer: null),
+                111 => NntpArticleAcquisitionResult.StatusSuccess(statusCode, statusText),
                 480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
                 500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
                 _ => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
