@@ -250,6 +250,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private readonly string _virtualHost;
 
         /// <summary>
+        /// Validated client-provided connection name preserved as a non-null adapter boundary invariant.
+        /// </summary>
+        private readonly string _clientProvidedName;
+
+        /// <summary>
         /// Forwarder attached to the client's asynchronous shutdown event.
         /// </summary>
         private readonly AsyncEventHandler<ShutdownEventArgs> _connectionShutdownAsyncHandler;
@@ -290,6 +295,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _virtualHost = !string.IsNullOrWhiteSpace(virtualHost)
                 ? virtualHost
                 : throw new ArgumentException("Virtual host is required.", nameof(virtualHost));
+            _clientProvidedName = !string.IsNullOrWhiteSpace(_connection.ClientProvidedName)
+                ? _connection.ClientProvidedName
+                : throw new InvalidOperationException("RabbitMQ connection invariant violated: IConnection.ClientProvidedName must be non-null and non-whitespace at RabbitMqBrokerConnectionAdapter boundary.");
 
             _connectionShutdownAsyncHandler = (sender, args) =>
             {
@@ -348,7 +356,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public string VirtualHost => _virtualHost;
 
         /// <inheritdoc/>
-        public string ClientProvidedName => _connection.ClientProvidedName;
+        public string ClientProvidedName => _clientProvidedName;
 
         /// <inheritdoc/>
         public IConnection UnderlyingConnection => _connection;
