@@ -34,10 +34,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator;
         /// <summary>
-        /// Unified time provider used for connection timestamps.
-        /// </summary>
-        private readonly TimeProvider _timeProvider;
-        /// <summary>
         /// Supplies the logger used by rabbit mq connection manager.
         /// </summary>
         private readonly ILogger<RabbitMqConnectionManager> _logger;
@@ -99,10 +95,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Indicates whether topology declaration has completed for the current connection lifecycle.
         /// </summary>
         private volatile bool _topologyInitialized;
-        /// <summary>
-        /// UTC timestamp of the most recent successful connection establishment.
-        /// </summary>
-        private DateTimeOffset? _lastConnectedAtUtc;
 
         /// <summary>
         /// Initializes a new RabbitMQ connection manager.
@@ -127,7 +119,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _options = runtimeOptions.RabbitMq ?? throw new InvalidOperationException("Validated runtime RabbitMQ settings were not provided.");
             _connectionName = RabbitMqRuntimeOptions.GetDefaultConnectionName(runtimeOptions.CanonicalBackFillerFqdn);
             _shutdownCoordinator = shutdownCoordinator;
-            _timeProvider = timeProvider;
             _logger = logger;
             _connector = connector ?? new RabbitMqBrokerConnector();
 
@@ -308,7 +299,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _connection = connection;
                 _recoveryAttempt = 0;
                 _ = Interlocked.Exchange(ref _consecutiveClientRecoveryErrors, 0);
-                _lastConnectedAtUtc = _timeProvider.GetUtcNow();
                 _state = RabbitMqInfrastructureState.Connected;
 
                 long generation = Interlocked.Increment(ref _connectionGeneration);

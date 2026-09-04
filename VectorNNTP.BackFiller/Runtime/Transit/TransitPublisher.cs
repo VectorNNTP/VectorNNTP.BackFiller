@@ -1109,42 +1109,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Reconnects a faulted slot without overwriting a newer healthy connection installed concurrently.
-        /// </summary>
-        /// <param name="slotIndex">The connection slot whose current connection is being replaced.</param>
-        /// <param name="cancellationToken">Cancels the reconnect operation.</param>
-        /// <returns>A task that completes when the reconnect attempt finishes.</returns>
-        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
-        {
-            if (slotIndex < 0 || slotIndex >= _connections.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Reconnect slot index must reference a valid connection slot.");
-            }
-
-            TransitConnection? reconnectTarget = _connections[slotIndex];
-            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
-            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                TransitConnection? replacement = _connections[slotIndex];
-                if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
-                {
-                    Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} replacementConnectionId={replacement.ConnectionId}");
-                    return;
-                }
-
-                long reconnects = Interlocked.Increment(ref _totalReconnects);
-                Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync START slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} totalReconnects={reconnects}");
-                TransitConnection connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} ReconnectAsync READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
-                _connections[slotIndex] = connection;
-            }
-            finally
-            {
-                _ = reconnectGate.Release();
-            }
-        }
 
         /// <summary>
         /// Creates and initializes a new transit connection for one slot.

@@ -8,7 +8,6 @@
 using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates
@@ -531,11 +530,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     FileInfo tempInfo = new(tempPath);
                     FileInfo? targetInfo = File.Exists(targetPath) ? new FileInfo(targetPath) : null;
+                    string targetFullPath = Path.GetFullPath(targetPath);
                     LogCertificateArtifactReadyForAtomicReplace(
                         logger,
                         Environment.ProcessId,
                         tempInfo.FullName,
-                        Path.GetFullPath(targetPath),
+                        targetFullPath,
                         tempInfo.Exists,
                         targetInfo is not null,
                         tempInfo.Exists ? tempInfo.Length : -1L,

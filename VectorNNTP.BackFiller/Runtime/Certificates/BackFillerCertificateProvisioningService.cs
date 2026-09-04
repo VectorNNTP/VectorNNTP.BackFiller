@@ -20,14 +20,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed partial class BackFillerCertificateProvisioningService : IDisposable
     {
         /// <summary>
-        /// Registered certificate-store dependency supplied when composing the provisioning stack.
-        /// </summary>
-        /// <remarks>
-        /// The current implementation relies on <see cref="BackFillerCertificateStore"/>'s static helpers rather than
-        /// invoking this instance directly.
-        /// </remarks>
-        private readonly BackFillerCertificateStore _certificateStore;
-        /// <summary>
         /// ACME issuer used when a replacement listener certificate must be requested.
         /// </summary>
         private readonly IAcmeCertificateIssuer _acmeIssuer;
@@ -69,7 +61,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(timeProvider);
 
-            _certificateStore = certificateStore;
             _acmeIssuer = acmeIssuer;
             _certificateState = certificateState;
             _logger = logger;
@@ -159,7 +150,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     throw;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     if (evaluation.IsUsable && evaluation.Certificate is not null)
                     {
@@ -209,7 +200,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     throw;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     LogCertificateRenewalFailedRetainingExistingCertificate(_logger);
                     _certificateState.Publish(evaluation.Certificate);
@@ -275,10 +266,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
 
             _certificateState.Publish(activated);
+            DateTimeOffset activatedNotAfterUtc = activated.Certificate.NotAfter.ToUniversalTime();
             LogListenerCertificateActivatedSuccessfully(
                 _logger,
                 activated.Certificate.Subject,
-                activated.Certificate.NotAfter.ToUniversalTime());
+                activatedNotAfterUtc);
         }
 
         /// <summary>
