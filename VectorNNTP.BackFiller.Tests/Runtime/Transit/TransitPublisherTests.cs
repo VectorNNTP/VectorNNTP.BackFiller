@@ -554,8 +554,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             _ = await response239Sent.Task.WaitAsync(responseTimeout.Token);
 
             using CancellationTokenSource terminalizationTimeout = new(TimeSpan.FromSeconds(5));
-            TransitTransportSnapshot finalSnapshot = default;
-            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot finalDiagnostics = default!;
+            TransitTransportSnapshot? finalSnapshot = null;
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot? finalDiagnostics = null;
             while (true)
             {
                 terminalizationTimeout.Token.ThrowIfCancellationRequested();
@@ -572,6 +572,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 await Task.Yield();
             }
 
+            Assert.NotNull(finalSnapshot);
+            Assert.NotNull(finalDiagnostics);
             Assert.Equal(1, finalSnapshot.TotalArticlesAccepted);
             Assert.Equal(0, finalDiagnostics.QueueSnapshot.InFlightCount);
             Assert.Equal(0, GetActiveSubmissionCount(publisher));
@@ -2212,18 +2214,24 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     cancellationToken.ThrowIfCancellationRequested();
 
                     TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
-                    if (snapshot.Slots.Length > 0
-                        && snapshot.Slots[0].HasCurrentConnection
-                        && !string.IsNullOrWhiteSpace(snapshot.Slots[0].CurrentConnectionId)
-                        && !string.Equals(snapshot.Slots[0].CurrentConnectionId, excludedConnectionId, StringComparison.Ordinal))
+                    if (snapshot.Slots.Length > 0)
                     {
-                        string currentConnectionId = snapshot.Slots[0].CurrentConnectionId;
-                        TransitPublisher.ConnectionDiagnosticsEntry? entry = ResolvePrimaryEntry(snapshot);
-                        if (entry is not null
-                            && entry.Snapshot.CurrentState == TransitConnectionState.Ready
-                            && !string.IsNullOrWhiteSpace(entry.Snapshot.LocalEndpoint))
+                        TransitPublisher.ConnectionSlotSnapshot primarySlot = snapshot.Slots[0];
+                        string? candidateConnectionId = primarySlot.CurrentConnectionId;
+                        if (primarySlot.HasCurrentConnection
+                            && !string.IsNullOrWhiteSpace(candidateConnectionId)
+                            && !string.Equals(candidateConnectionId, excludedConnectionId, StringComparison.Ordinal))
                         {
-                            return (currentConnectionId, entry.Snapshot.LocalEndpoint);
+                            string currentConnectionId = candidateConnectionId;
+                            TransitPublisher.ConnectionDiagnosticsEntry? entry = ResolvePrimaryEntry(snapshot);
+                            string? candidateLocalEndpoint = entry?.Snapshot.LocalEndpoint;
+                            if (entry is not null
+                                && entry.Snapshot.CurrentState == TransitConnectionState.Ready
+                                && !string.IsNullOrWhiteSpace(candidateLocalEndpoint))
+                            {
+                                string localEndpoint = candidateLocalEndpoint;
+                                return (currentConnectionId, localEndpoint);
+                            }
                         }
                     }
 
@@ -4540,12 +4548,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             ArgumentNullException.ThrowIfNull(publisher);
 
             TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
-            if (snapshot.Slots.Length == 0 || !snapshot.Slots[0].HasCurrentConnection || string.IsNullOrWhiteSpace(snapshot.Slots[0].CurrentConnectionId))
+            if (snapshot.Slots.Length == 0)
             {
                 return TransitConnectionState.Disconnected;
             }
 
-            string primaryConnectionId = snapshot.Slots[0].CurrentConnectionId;
+            TransitPublisher.ConnectionSlotSnapshot primarySlot = snapshot.Slots[0];
+            string? candidatePrimaryConnectionId = primarySlot.CurrentConnectionId;
+            if (!primarySlot.HasCurrentConnection || string.IsNullOrWhiteSpace(candidatePrimaryConnectionId))
+            {
+                return TransitConnectionState.Disconnected;
+            }
+
+            string primaryConnectionId = candidatePrimaryConnectionId;
             TransitPublisher.ConnectionDiagnosticsEntry? entry = snapshot.Connections.FirstOrDefault(candidate => string.Equals(candidate.ConnectionId, primaryConnectionId, StringComparison.Ordinal));
             return entry?.Snapshot.CurrentState ?? TransitConnectionState.Disconnected;
         }
