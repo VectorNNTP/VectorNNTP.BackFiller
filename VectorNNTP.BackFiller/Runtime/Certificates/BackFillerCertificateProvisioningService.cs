@@ -150,11 +150,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     throw;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     if (evaluation.IsUsable && evaluation.Certificate is not null)
                     {
-                        LogCertificateRenewalFailedUsingExistingCertificate(_logger);
+                        LogCertificateRenewalFailedUsingExistingCertificate(_logger, ex);
                         _certificateState.Publish(evaluation.Certificate);
                         return false;
                     }
@@ -200,9 +200,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     throw;
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    LogCertificateRenewalFailedRetainingExistingCertificate(_logger);
+                    LogCertificateRenewalFailedRetainingExistingCertificate(_logger, ex);
                     _certificateState.Publish(evaluation.Certificate);
                     return;
                 }
@@ -304,8 +304,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Emits the warning log indicating renewal failed but the previous certificate remains usable.
         /// </summary>
         /// <param name="logger">Logger receiving the renewal-failed event.</param>
+        /// <param name="exception">Exception describing the renewal failure.</param>
         [LoggerMessage(EventId = 2702, Level = LogLevel.Warning, Message = "Certificate renewal failed; continuing with active valid certificate.")]
-        private static partial void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger);
+        private static partial void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception);
 
         /// <summary>
         /// Emits the informational log indicating the service is reusing the current listener certificate.
@@ -326,8 +327,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Emits the warning log indicating renewal failed but the existing valid certificate can still be retained.
         /// </summary>
         /// <param name="logger">Logger receiving the retained-certificate event.</param>
+        /// <param name="exception">Exception describing the renewal failure.</param>
         [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Certificate renewal failed; retaining existing valid certificate.")]
-        private static partial void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger);
+        private static partial void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception);
 
         /// <summary>
         /// Emits the informational log indicating the current certificate cannot be reused and ACME provisioning must begin.
