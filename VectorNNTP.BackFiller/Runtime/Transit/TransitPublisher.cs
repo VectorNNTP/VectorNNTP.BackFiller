@@ -96,14 +96,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private long _nextWorkItemId;
         /// <summary>
-        /// Aggregate bytes transmitted across all connections.
-        /// </summary>
-        private long _totalBytesTransmitted;
-        /// <summary>
-        /// Aggregate bytes received across all connections.
-        /// </summary>
-        private long _totalBytesReceived;
-        /// <summary>
         /// Aggregate count of articles admitted for submission.
         /// </summary>
         private long _totalArticlesSubmitted;
@@ -274,9 +266,24 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <returns>The current transport snapshot.</returns>
         internal TransitTransportSnapshot CaptureTransportSnapshot(int activeConnections, int outstandingSubmissions)
         {
+            long totalBytesTransmitted = 0;
+            long totalBytesReceived = 0;
+            for (int i = 0; i < _connections.Length; i++)
+            {
+                TransitConnection? connection = _connections[i];
+                if (connection is null)
+                {
+                    continue;
+                }
+
+                TransitConnection.TransitConnectionDiagnosticsSnapshot diagnostics = connection.CaptureDiagnosticsSnapshot();
+                totalBytesTransmitted += diagnostics.BytesTransmitted;
+                totalBytesReceived += diagnostics.BytesReceived;
+            }
+
             return new TransitTransportSnapshot(
-                TotalBytesTransmitted: Interlocked.Read(ref _totalBytesTransmitted),
-                TotalBytesReceived: Interlocked.Read(ref _totalBytesReceived),
+                TotalBytesTransmitted: totalBytesTransmitted,
+                TotalBytesReceived: totalBytesReceived,
                 TotalArticlesSubmitted: Interlocked.Read(ref _totalArticlesSubmitted),
                 TotalArticlesAccepted: Interlocked.Read(ref _totalArticlesAccepted),
                 TotalArticlesRejected: Interlocked.Read(ref _totalArticlesRejected),
@@ -1096,6 +1103,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     case TransitWorkItemState.CompletedRejected:
                     case TransitWorkItemState.CompletedFailed:
                     case TransitWorkItemState.CompletedCanceled:
+                        break;
+                    default:
                         break;
                 }
 
