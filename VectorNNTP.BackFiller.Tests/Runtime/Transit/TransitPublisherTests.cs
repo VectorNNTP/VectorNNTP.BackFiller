@@ -405,6 +405,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             TaskCompletionSource firstSawTakethis = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource secondSawTakethis = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource allowResponses = new(TaskCreationOptions.RunContinuationsAsynchronously);
             List<string> firstSessionObservedMessageIds = [];
             List<string> secondSessionObservedMessageIds = [];
 
@@ -442,6 +443,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     observedMessageIds.Add(messageId);
                     _ = observedSignal.TrySetResult();
 
+                    await allowResponses.Task.WaitAsync(cancellationToken);
                     await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
                 }
             }
@@ -459,9 +461,28 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Task<TransitPublishResult> second = publisher.PublishAsync(secondMessageId, secondPayload, CancellationToken.None).AsTask();
 
             using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(10));
+            await WaitForOutstandingAwaitingResponsesAsync(publisher, minimumAwaitingResponses: 2, observedTimeout.Token);
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot observedSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+            TransitPublisher.ConnectionDiagnosticsEntry[] participatingConnections = observedSnapshot.Connections
+                .Where(static entry => entry.Snapshot.OutstandingOperations.Any(static operation => operation.WaitingFor239Response))
+                .ToArray();
+            Assert.Equal(2, participatingConnections.Length);
+
+            string[] awaitingMessageIds = participatingConnections
+                .SelectMany(static entry => entry.Snapshot.OutstandingOperations)
+                .Where(static operation => operation.WaitingFor239Response)
+                .Select(static operation => operation.MessageId)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            Assert.Contains(firstMessageId, awaitingMessageIds);
+            Assert.Contains(secondMessageId, awaitingMessageIds);
+
             await Task.WhenAll(
                 firstSawTakethis.Task.WaitAsync(observedTimeout.Token),
                 secondSawTakethis.Task.WaitAsync(observedTimeout.Token));
+
+            allowResponses.TrySetResult();
 
             using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
             TransitPublishResult[] results = await Task.WhenAll(first, second).WaitAsync(completionTimeout.Token);
