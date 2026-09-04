@@ -43,7 +43,7 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Build solution
-        run: dotnet build VectorNNTP.BackFiller.slnx --configuration Release
+        run: dotnet build VectorNNTP.BackFiller.slnx --configuration Release /p:TreatWarningsAsErrors=false
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4
