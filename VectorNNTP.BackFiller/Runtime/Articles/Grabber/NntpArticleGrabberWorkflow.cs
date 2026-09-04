@@ -126,6 +126,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         {
             return acquisitionFailureCode switch
             {
+                NntpArticleAcquisitionFailureCode.None => NntpArticleGrabberFailureCode.AcquisitionFailure,
                 NntpArticleAcquisitionFailureCode.InvalidMessageId => NntpArticleGrabberFailureCode.InvalidMessageId,
                 NntpArticleAcquisitionFailureCode.ArticleNotFound => NntpArticleGrabberFailureCode.ArticleNotFound,
                 NntpArticleAcquisitionFailureCode.AuthenticationFailure => NntpArticleGrabberFailureCode.AuthenticationFailure,
@@ -145,22 +146,34 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <returns>The workflow classification reported to downstream processing.</returns>
         private static NntpArticleGrabberFailureCode MapParseFailure(NntpArticleParseResult parse)
         {
-            return parse.FailureCode == NntpArticleParseFailureCode.YEncDecodingFailed
-                ? NntpArticleGrabberFailureCode.YEncValidationFailure
-                : parse.FailureCode switch
-                {
-                    NntpArticleParseFailureCode.MissingOrInvalidDate => NntpArticleGrabberFailureCode.InvalidDate,
-                    NntpArticleParseFailureCode.MissingMessageId
-                    or NntpArticleParseFailureCode.InvalidMessageId
-                    or NntpArticleParseFailureCode.DuplicateMessageId
-                    or NntpArticleParseFailureCode.MissingNewsgroups
-                    or NntpArticleParseFailureCode.InvalidNewsgroups
-                    or NntpArticleParseFailureCode.InvalidFrom
-                    or NntpArticleParseFailureCode.InvalidPath
-                    or NntpArticleParseFailureCode.DuplicateNewsgroups
-                    or NntpArticleParseFailureCode.DuplicatePath => NntpArticleGrabberFailureCode.InvalidHeaders,
-                    _ => NntpArticleGrabberFailureCode.MalformedArticle,
-                };
+            return parse.FailureCode switch
+            {
+                NntpArticleParseFailureCode.YEncDecodingFailed => NntpArticleGrabberFailureCode.YEncValidationFailure,
+                NntpArticleParseFailureCode.None
+                or NntpArticleParseFailureCode.EmptyArticle
+                or NntpArticleParseFailureCode.MissingHeaderBodySeparator
+                or NntpArticleParseFailureCode.ArticleTooLarge
+                or NntpArticleParseFailureCode.HeaderSectionTooLarge
+                or NntpArticleParseFailureCode.TooManyHeaders
+                or NntpArticleParseFailureCode.HeaderLineTooLong
+                or NntpArticleParseFailureCode.MalformedHeader
+                or NntpArticleParseFailureCode.MalformedHeaderContinuation
+                or NntpArticleParseFailureCode.HeaderNameTooLong
+                or NntpArticleParseFailureCode.HeaderValueTooLong
+                or NntpArticleParseFailureCode.ContainsNul
+                or NntpArticleParseFailureCode.ContainsIllegalControlByte => NntpArticleGrabberFailureCode.MalformedArticle,
+                NntpArticleParseFailureCode.MissingOrInvalidDate => NntpArticleGrabberFailureCode.InvalidDate,
+                NntpArticleParseFailureCode.MissingMessageId
+                or NntpArticleParseFailureCode.InvalidMessageId
+                or NntpArticleParseFailureCode.DuplicateMessageId
+                or NntpArticleParseFailureCode.MissingNewsgroups
+                or NntpArticleParseFailureCode.InvalidNewsgroups
+                or NntpArticleParseFailureCode.InvalidFrom
+                or NntpArticleParseFailureCode.InvalidPath
+                or NntpArticleParseFailureCode.DuplicateNewsgroups
+                or NntpArticleParseFailureCode.DuplicatePath => NntpArticleGrabberFailureCode.InvalidHeaders,
+                _ => NntpArticleGrabberFailureCode.MalformedArticle,
+            };
         }
 
         /// <summary>

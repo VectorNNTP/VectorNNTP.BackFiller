@@ -1043,6 +1043,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
                 TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
                 TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                TransitPublishStatus.Queued
+                or TransitPublishStatus.Unavailable
+                or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
                 TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
                 _ => Interlocked.Increment(ref _totalArticlesFailed),
             };
@@ -1089,6 +1092,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     case TransitWorkItemState.AwaitingResponse:
                         _globalQueue.MarkInFlightTerminal();
                         break;
+                    case TransitWorkItemState.CompletedAccepted:
+                    case TransitWorkItemState.CompletedRejected:
+                    case TransitWorkItemState.CompletedFailed:
+                    case TransitWorkItemState.CompletedCanceled:
+                        break;
                 }
 
                 bool removed = _activeWorkItems.TryRemove(item.WorkItemId, out _);
@@ -1099,6 +1107,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
                     TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
                     TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                    TransitPublishStatus.Queued
+                    or TransitPublishStatus.Unavailable
+                    or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
                     TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
                     _ => Interlocked.Increment(ref _totalArticlesFailed),
                 };

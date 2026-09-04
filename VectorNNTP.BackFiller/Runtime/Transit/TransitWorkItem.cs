@@ -471,6 +471,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitPublishStatus.Accepted => TransitWorkItemState.CompletedAccepted,
                 TransitPublishStatus.Rejected => TransitWorkItemState.CompletedRejected,
                 TransitPublishStatus.Canceled => TransitWorkItemState.CompletedCanceled,
+                TransitPublishStatus.Queued
+                or TransitPublishStatus.Unavailable
+                or TransitPublishStatus.Failed
+                or TransitPublishStatus.Ambiguous => TransitWorkItemState.CompletedFailed,
                 _ => TransitWorkItemState.CompletedFailed,
             };
         }

@@ -67,6 +67,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     Requeue: true,
                     PublishResponse: false),
 
+                ArticleWorkProcessingOutcome.UnexpectedFailure => new RabbitMqDispositionPlan(
+                    Action: RabbitMqDispositionAction.Nack,
+                    Requeue: true,
+                    PublishResponse: false),
+
                 _ => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: true,

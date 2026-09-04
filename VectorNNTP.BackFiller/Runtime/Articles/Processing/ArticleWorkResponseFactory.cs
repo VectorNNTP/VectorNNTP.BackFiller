@@ -69,6 +69,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     Uri: null,
                     Error: result.ResponseText ?? "Request payload was invalid."),
 
+                ArticleWorkProcessingOutcome.ProviderFailure => null,
+
+                ArticleWorkProcessingOutcome.Cancelled => null,
+
+                ArticleWorkProcessingOutcome.UnexpectedFailure => null,
+
                 _ => null,
             };
         }
