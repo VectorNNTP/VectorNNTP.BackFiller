@@ -18,12 +18,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// connection claims it, and explicit accounting helpers enforce exactly-once transfer between queued,
     /// retry-pending, in-flight, and terminal states.
     /// </remarks>
-    internal sealed class GlobalTransitWorkQueue
+    internal sealed class GlobalTransitWorkQueue : IDisposable
     {
         /// <summary>
         /// Ready queue from which connections claim immediately publishable work items.
         /// </summary>
         private readonly Channel<TransitWorkItem> _readyQueue;
+
+        /// <summary>
+        /// Ensures disposal of owned synchronization resources is idempotent.
+        /// </summary>
+        private int _disposeSignaled;
 
         /// <summary>
         /// FIFO schedule of retries waiting for their eligibility time.
@@ -512,6 +517,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="Item">Retry-pending work item.</param>
         /// <param name="NotBeforeUtc">UTC time before which the item must not be re-enqueued.</param>
         private readonly record struct ScheduledRetry(TransitWorkItem Item, DateTimeOffset NotBeforeUtc);
+
+        /// <summary>
+        /// Disposes synchronization resources owned by the global transit queue.
+        /// </summary>
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposeSignaled, 1) != 0)
+            {
+                return;
+            }
+
+            _retryScheduledSignal.Dispose();
+        }
     }
 
     /// <summary>

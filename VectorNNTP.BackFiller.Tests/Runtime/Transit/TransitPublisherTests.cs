@@ -1969,6 +1969,149 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Confirms the dispose async when worker outlives bounded wait does not surface queue semaphore disposal races behavior.
+        /// </summary>
+        [Fact]
+        public async Task DisposeAsync_WhenWorkerOutlivesBoundedWait_DoesNotSurfaceQueueSemaphoreDisposalRace()
+        {
+            using CancellationTokenSource testTimeout = new(TimeSpan.FromSeconds(10));
+
+            TaskCompletionSource allowCapabilities = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource releaseSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            string firstMessageId = "<bounded-dispose-prime@example.com>";
+            string secondMessageId = "<bounded-dispose-race@example.com>";
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await allowCapabilities.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {firstMessageId} transferred");
+
+                string secondCommand = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                if (string.Equals(secondCommand, $"TAKETHIS {secondMessageId}", StringComparison.Ordinal))
+                {
+                    _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                    await releaseSecondResponse.Task.WaitAsync(cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, $"239 {secondMessageId} transferred");
+                    return;
+                }
+
+                Assert.Equal("QUIT", secondCommand);
+                await FakePublisherServer.WriteLineAsync(stream, "205 closing connection");
+            });
+
+            BackFillerRuntimeOptions options = new(
+                CanonicalBackFillerFqdn: "bf.example.com",
+                BackFillerId: 42,
+                CanonicalDnsSuffix: "example.com",
+                ValidatedLogDirectory: "C:\\logs",
+                ValidatedCertificateDirectory: "C:\\certs",
+                RabbitMqHosts: ["localhost"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: false,
+                TransitServerHost: IPAddress.Loopback.ToString(),
+                TransitServerPort: server.Port,
+                TransitServerUseSsl: false,
+                ShutdownGracePeriodSeconds: 60,
+                ShutdownDrainQueuedWork: true,
+                ShutdownFinishActiveArticles: true,
+                RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
+                WriteBatchCoalesceMicroseconds: 250,
+                TransitShutdownDrainGracePeriod: TimeSpan.Zero,
+                TransitShutdownDrainInactivityWatchdog: TimeSpan.Zero,
+                TransitShutdownAbsoluteMaximum: TimeSpan.Zero);
+
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 1);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+            allowCapabilities.TrySetResult();
+
+            TransitPublishResult prime = await publisher.PublishAsync(
+                firstMessageId,
+                new byte[] { (byte)'p', (byte)'\n' },
+                CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Accepted, prime.Status);
+
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+            SemaphoreSlim retryScheduledSignal = GetRetryScheduledSignal(queue);
+            object claimGate = GetClaimGate(queue);
+
+            TaskCompletionSource claimGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            using ManualResetEventSlim releaseClaimGate = new(false);
+
+            Task claimGateHolder = Task.Run(() =>
+            {
+                Monitor.Enter(claimGate);
+                try
+                {
+                    claimGateHeld.TrySetResult();
+                    releaseClaimGate.Wait(testTimeout.Token);
+                }
+                finally
+                {
+                    Monitor.Exit(claimGate);
+                }
+            }, CancellationToken.None);
+
+            await claimGateHeld.Task.WaitAsync(testTimeout.Token);
+
+            try
+            {
+                Task<TransitPublishResult> secondPublish = publisher.PublishAsync(
+                    secondMessageId,
+                    new byte[] { (byte)'x', (byte)'\n' },
+                    CancellationToken.None).AsTask();
+
+                while (GetQueuedSubmissionCount(publisher) == 0)
+                {
+                    testTimeout.Token.ThrowIfCancellationRequested();
+                    await Task.Yield();
+                }
+
+                Task disposeTask = publisher.DisposeAsync().AsTask();
+                await disposeTask.WaitAsync(testTimeout.Token);
+
+                int remainingAfterDispose = GetRemainingConnectionWorkerCount(publisher);
+                Assert.True(remainingAfterDispose > 0, "Expected bounded DisposeAsync to return while the worker remained blocked on queue claim.");
+
+                _ = retryScheduledSignal.Release();
+                _ = retryScheduledSignal.Wait(0);
+
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(testTimeout.Token);
+
+                releaseSecondResponse.TrySetResult();
+                TransitPublishResult secondResult = await secondPublish.WaitAsync(testTimeout.Token);
+                Assert.True(secondResult.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Ambiguous or TransitPublishStatus.Canceled);
+
+                await WaitForRemainingConnectionWorkerCountAsync(publisher, expectedCount: 0, testTimeout.Token);
+                Assert.Throws<ObjectDisposedException>(() => retryScheduledSignal.Release());
+            }
+            finally
+            {
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(testTimeout.Token);
+            }
+        }
+
+        /// <summary>
         /// Verifies same-slot reconnect deduplication when multiple reconnect triggers race.
         /// </summary>
         /// <remarks>
@@ -4405,6 +4548,88 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             string primaryConnectionId = snapshot.Slots[0].CurrentConnectionId;
             TransitPublisher.ConnectionDiagnosticsEntry? entry = snapshot.Connections.FirstOrDefault(candidate => string.Equals(candidate.ConnectionId, primaryConnectionId, StringComparison.Ordinal));
             return entry?.Snapshot.CurrentState ?? TransitConnectionState.Disconnected;
+        }
+
+        /// <summary>
+        /// Gets the remaining worker count tracked by the publisher for shutdown-lifecycle assertions.
+        /// </summary>
+        /// <param name="publisher">Publisher whose worker count is inspected.</param>
+        /// <returns>The current count of connection workers that have not yet exited.</returns>
+        private static int GetRemainingConnectionWorkerCount(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            FieldInfo? field = typeof(TransitPublisher).GetField("_remainingConnectionWorkers", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? value = field.GetValue(publisher);
+            return Assert.IsType<int>(value);
+        }
+
+        /// <summary>
+        /// Waits until the publisher worker counter reaches the requested value.
+        /// </summary>
+        /// <param name="publisher">Publisher whose worker count is observed.</param>
+        /// <param name="expectedCount">Expected remaining worker count.</param>
+        /// <param name="cancellationToken">Cancellation token for bounded waiting.</param>
+        /// <returns>A task that completes once the expected worker count is observed.</returns>
+        private static async Task WaitForRemainingConnectionWorkerCountAsync(TransitPublisher publisher, int expectedCount, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            while (GetRemainingConnectionWorkerCount(publisher) != expectedCount)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Yield();
+            }
+        }
+
+        /// <summary>
+        /// Reads the publisher's owned global queue through reflection for lifecycle assertions.
+        /// </summary>
+        /// <param name="publisher">Publisher whose queue reference is inspected.</param>
+        /// <returns>The current global transit work queue instance owned by the publisher.</returns>
+        private static GlobalTransitWorkQueue GetGlobalQueue(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            FieldInfo? field = typeof(TransitPublisher).GetField("_globalQueue", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? value = field.GetValue(publisher);
+            return Assert.IsType<GlobalTransitWorkQueue>(value);
+        }
+
+        /// <summary>
+        /// Reads the queue-owned retry-signal semaphore through reflection for lifecycle assertions.
+        /// </summary>
+        /// <param name="queue">Queue whose retry signal is inspected.</param>
+        /// <returns>The queue-owned retry scheduling semaphore.</returns>
+        private static SemaphoreSlim GetRetryScheduledSignal(GlobalTransitWorkQueue queue)
+        {
+            ArgumentNullException.ThrowIfNull(queue);
+
+            FieldInfo? field = typeof(GlobalTransitWorkQueue).GetField("_retryScheduledSignal", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? value = field.GetValue(queue);
+            return Assert.IsType<SemaphoreSlim>(value);
+        }
+
+        /// <summary>
+        /// Reads the queue claim gate object through reflection so tests can deterministically block worker claim progress.
+        /// </summary>
+        /// <param name="queue">Queue whose claim gate is inspected.</param>
+        /// <returns>The queue claim synchronization object.</returns>
+        private static object GetClaimGate(GlobalTransitWorkQueue queue)
+        {
+            ArgumentNullException.ThrowIfNull(queue);
+
+            FieldInfo? field = typeof(GlobalTransitWorkQueue).GetField("_claimGate", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? value = field.GetValue(queue);
+            return Assert.IsType<object>(value);
         }
 
         /// <summary>

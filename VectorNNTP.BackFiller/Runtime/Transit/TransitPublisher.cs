@@ -141,6 +141,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private volatile bool _disposeRequested;
         /// <summary>
+        /// Tracks the number of connection workers that have been started and not yet exited.
+        /// </summary>
+        private int _remainingConnectionWorkers;
+        /// <summary>
         /// Observable aggregate publisher lifecycle state.
         /// </summary>
         private volatile TransitConnectionState _state = TransitConnectionState.Disconnected;
@@ -306,7 +310,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             for (int i = 0; i < _connections.Length; i++)
             {
                 int slotIndex = i;
-                _connectionWorkers[i] = Task.Run(() => RunConnectionWorkerAsync(slotIndex, _connectionWorkersCancellation.Token), CancellationToken.None);
+                _ = Interlocked.Increment(ref _remainingConnectionWorkers);
+                try
+                {
+                    _connectionWorkers[i] = Task.Run(() => RunConnectionWorkerAsync(slotIndex, _connectionWorkersCancellation.Token), CancellationToken.None);
+                }
+                catch
+                {
+                    _ = Interlocked.Decrement(ref _remainingConnectionWorkers);
+                    throw;
+                }
             }
 
             foreach (Task worker in _connectionWorkers)
@@ -668,6 +681,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             await AwaitDeferredConnectionDisposalsAsync().ConfigureAwait(false);
 
             _connectionWorkersCancellation.Dispose();
+            TryFinalizeQueueDisposal();
             TransitionState(TransitConnectionState.Disconnected);
         }
 
@@ -676,42 +690,32 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private async Task RunConnectionWorkerAsync(int slotIndex, CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[TRACE-RI-10] {TraceStamp()} Worker START slot={slotIndex}");
-            TransitConnection? connection = null;
-
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                List<TransitWorkItem>? claimed = null;
+                Console.WriteLine($"[TRACE-RI-10] {TraceStamp()} Worker START slot={slotIndex}");
+                TransitConnection? connection = null;
 
-                try
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    await _globalQueue.DrainEligibleRetriesAsync(cancellationToken).ConfigureAwait(false);
+                    List<TransitWorkItem>? claimed = null;
 
-                    bool hasWork = await _globalQueue.WaitForWorkAsync(cancellationToken).ConfigureAwait(false);
-                    //Console.WriteLine($"[TRACE-RI-12] {TraceStamp()} Worker WAIT-FOR-WORK slot={slotIndex} connectionId={(connection?.ConnectionId ?? "none")} hasWork={hasWork}");
-                    if (!hasWork)
+                    try
                     {
-                        continue;
-                    }
+                        await _globalQueue.DrainEligibleRetriesAsync(cancellationToken).ConfigureAwait(false);
 
-                    if (connection is null)
-                    {
-                        connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: false, cancellationToken).ConfigureAwait(false);
-                        //Console.WriteLine($"[TRACE-RI-11] {TraceStamp()} Worker INITIAL-CONNECTION-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
-                        _connections[slotIndex] = connection;
-                    }
+                        bool hasWork = await _globalQueue.WaitForWorkAsync(cancellationToken).ConfigureAwait(false);
+                        //Console.WriteLine($"[TRACE-RI-12] {TraceStamp()} Worker WAIT-FOR-WORK slot={slotIndex} connectionId={(connection?.ConnectionId ?? "none")} hasWork={hasWork}");
+                        if (!hasWork)
+                        {
+                            continue;
+                        }
 
-                    if (connection.CurrentState == TransitConnectionState.Faulted)
-                    {
-                        throw new IOException("Transit connection faulted before claiming new work.");
-                    }
-
-                    connection.ThrowIfResponseLoopFaulted();
-
-                    claimed = new List<TransitWorkItem>(connection.PipelineDepth);
-                    for (int i = 0; i < connection.PipelineDepth; i++)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
+                        if (connection is null)
+                        {
+                            connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: false, cancellationToken).ConfigureAwait(false);
+                            //Console.WriteLine($"[TRACE-RI-11] {TraceStamp()} Worker INITIAL-CONNECTION-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
+                            _connections[slotIndex] = connection;
+                        }
 
                         if (connection.CurrentState == TransitConnectionState.Faulted)
                         {
@@ -720,136 +724,176 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                         connection.ThrowIfResponseLoopFaulted();
 
-                        if (!_globalQueue.TryClaim(connection.ConnectionId, out TransitWorkItem? item) || item is null)
+                        claimed = new List<TransitWorkItem>(connection.PipelineDepth);
+                        for (int i = 0; i < connection.PipelineDepth; i++)
                         {
-                            break;
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            if (connection.CurrentState == TransitConnectionState.Faulted)
+                            {
+                                throw new IOException("Transit connection faulted before claiming new work.");
+                            }
+
+                            connection.ThrowIfResponseLoopFaulted();
+
+                            if (!_globalQueue.TryClaim(connection.ConnectionId, out TransitWorkItem? item) || item is null)
+                            {
+                                break;
+                            }
+
+                            claimed.Add(item);
+                            cancellationToken.ThrowIfCancellationRequested();
                         }
 
-                        claimed.Add(item);
-                        cancellationToken.ThrowIfCancellationRequested();
-                    }
-
-                    if (claimed.Count == 0)
-                    {
-                        continue;
-                    }
-
-                    Console.WriteLine($"[TRACE-RI-13] {TraceStamp()} Worker CLAIMED slot={slotIndex} connectionId={connection.ConnectionId} claimedCount={claimed.Count} items=[{string.Join(",", claimed.Select(static x => $"{x.WorkItemId}:{x.State}"))}]");
-                    await connection.ProcessBatchAsync(claimed, cancellationToken).ConfigureAwait(false);
-
-                    int remainingCompletions = claimed.Count;
-                    while (remainingCompletions > 0)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        while (connection.TryTakeCompleted(out TransitWorkItem completedItem, out TransitPublishResult result))
+                        if (claimed.Count == 0)
                         {
-                            CompleteTerminal(completedItem, result);
-                            remainingCompletions--;
+                            continue;
+                        }
+
+                        Console.WriteLine($"[TRACE-RI-13] {TraceStamp()} Worker CLAIMED slot={slotIndex} connectionId={connection.ConnectionId} claimedCount={claimed.Count} items=[{string.Join(",", claimed.Select(static x => $"{x.WorkItemId}:{x.State}"))}]");
+                        await connection.ProcessBatchAsync(claimed, cancellationToken).ConfigureAwait(false);
+
+                        int remainingCompletions = claimed.Count;
+                        while (remainingCompletions > 0)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            while (connection.TryTakeCompleted(out TransitWorkItem completedItem, out TransitPublishResult result))
+                            {
+                                CompleteTerminal(completedItem, result);
+                                remainingCompletions--;
+                                if (remainingCompletions == 0)
+                                {
+                                    break;
+                                }
+                            }
+
                             if (remainingCompletions == 0)
                             {
                                 break;
                             }
+
+                            try
+                            {
+                                connection.ThrowIfResponseLoopFaulted();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[TRACE-RI-14] {TraceStamp()} Worker THROWIFRESPONSELOOPFAULTED-THREW slot={slotIndex} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
+                                throw;
+                            }
+
+                            _ = await connection.WaitForCompletedAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        if (connection is not null)
+                        {
+                            await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, CancellationToken.None).ConfigureAwait(false);
+                            _ = TrackDeferredConnectionDisposal(connection);
+                        }
+                        else if (claimed is not null)
+                        {
+                            foreach (TransitWorkItem claimedItem in claimed)
+                            {
+                                await RequeueOrTerminalizeFailureAsync(
+                                    claimedItem,
+                                    TransitWorkFailureClass.ConnectionDisposed,
+                                    TransitTransmissionUncertainty.ConnectionFailedDuringSend,
+                                    CancellationToken.None).ConfigureAwait(false);
+                            }
                         }
 
-                        if (remainingCompletions == 0)
+                        break;
+                    }
+                    catch (Exception ex) when (connection is not null && IsConnectionLifecycleSubmitFailure(connection, ex))
+                    {
+                        Console.WriteLine($"[TRACE-RI-15] {TraceStamp()} Worker LIFECYCLE-CATCH-ENTER slot={slotIndex} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
+                        await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, cancellationToken).ConfigureAwait(false);
+                        Console.WriteLine($"[TRACE-RI-16] {TraceStamp()} Worker REQUEUE-COMPLETE slot={slotIndex} connectionId={connection.ConnectionId}");
+
+                        bool shutdownActive = _disposeRequested || cancellationToken.IsCancellationRequested;
+                        _ = TrackDeferredConnectionDisposal(connection);
+                        Console.WriteLine($"[TRACE-RI-17] {TraceStamp()} Worker DEFER-DISPOSE-SCHEDULED slot={slotIndex} connectionId={connection.ConnectionId} shutdownActive={shutdownActive}");
+                        if (shutdownActive)
                         {
                             break;
                         }
 
-                        try
+                        if (_disposeRequested || cancellationToken.IsCancellationRequested)
                         {
-                            connection.ThrowIfResponseLoopFaulted();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[TRACE-RI-14] {TraceStamp()} Worker THROWIFRESPONSELOOPFAULTED-THREW slot={slotIndex} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
-                            throw;
+                            break;
                         }
 
-                        _ = await connection.WaitForCompletedAsync(cancellationToken).ConfigureAwait(false);
-                    }
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    if (connection is not null)
-                    {
-                        await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, CancellationToken.None).ConfigureAwait(false);
-                        _ = TrackDeferredConnectionDisposal(connection);
-                    }
-                    else if (claimed is not null)
-                    {
-                        foreach (TransitWorkItem claimedItem in claimed)
-                        {
-                            await RequeueOrTerminalizeFailureAsync(
-                                claimedItem,
-                                TransitWorkFailureClass.ConnectionDisposed,
-                                TransitTransmissionUncertainty.ConnectionFailedDuringSend,
-                                CancellationToken.None).ConfigureAwait(false);
-                        }
-                    }
-
-                    break;
-                }
-                catch (Exception ex) when (connection is not null && IsConnectionLifecycleSubmitFailure(connection, ex))
-                {
-                    Console.WriteLine($"[TRACE-RI-15] {TraceStamp()} Worker LIFECYCLE-CATCH-ENTER slot={slotIndex} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
-                    await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, cancellationToken).ConfigureAwait(false);
-                    Console.WriteLine($"[TRACE-RI-16] {TraceStamp()} Worker REQUEUE-COMPLETE slot={slotIndex} connectionId={connection.ConnectionId}");
-
-                    bool shutdownActive = _disposeRequested || cancellationToken.IsCancellationRequested;
-                    _ = TrackDeferredConnectionDisposal(connection);
-                    Console.WriteLine($"[TRACE-RI-17] {TraceStamp()} Worker DEFER-DISPOSE-SCHEDULED slot={slotIndex} connectionId={connection.ConnectionId} shutdownActive={shutdownActive}");
-                    if (shutdownActive)
-                    {
-                        break;
-                    }
-
-                    if (_disposeRequested || cancellationToken.IsCancellationRequested)
-                    {
-                        break;
-                    }
-
-                    if (!HasConnectionDemand())
-                    {
-                        connection = null;
-                        _connections[slotIndex] = null;
-                        continue;
-                    }
-
-                    TransitConnection reconnectTarget = connection;
-                    SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
-                    await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    try
-                    {
-                        TransitConnection? replacement = _connections[slotIndex];
-                        if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
-                        {
-                            Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} replacementConnectionId={replacement.ConnectionId}");
-                            connection = replacement;
-                            continue;
-                        }
-
-                        long reconnects = Interlocked.Increment(ref _totalReconnects);
-                        Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-START slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} totalReconnects={reconnects}");
-                        try
-                        {
-                            connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
-                        }
-                        catch (NoConnectionDemandException)
+                        if (!HasConnectionDemand())
                         {
                             connection = null;
                             _connections[slotIndex] = null;
                             continue;
                         }
-                        Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} Worker RECONNECT-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
-                        _connections[slotIndex] = connection;
-                    }
-                    finally
-                    {
-                        _ = reconnectGate.Release();
+
+                        TransitConnection reconnectTarget = connection;
+                        SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
+                        await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        try
+                        {
+                            TransitConnection? replacement = _connections[slotIndex];
+                            if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
+                            {
+                                Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} replacementConnectionId={replacement.ConnectionId}");
+                                connection = replacement;
+                                continue;
+                            }
+
+                            long reconnects = Interlocked.Increment(ref _totalReconnects);
+                            Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-START slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} totalReconnects={reconnects}");
+                            try
+                            {
+                                connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
+                            }
+                            catch (NoConnectionDemandException)
+                            {
+                                connection = null;
+                                _connections[slotIndex] = null;
+                                continue;
+                            }
+                            Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} Worker RECONNECT-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
+                            _connections[slotIndex] = connection;
+                        }
+                        finally
+                        {
+                            _ = reconnectGate.Release();
+                        }
                     }
                 }
+            }
+            finally
+            {
+                OnConnectionWorkerExited();
+            }
+        }
+
+        /// <summary>
+        /// Records one worker exit and finalizes queue disposal when shutdown has been requested and no workers remain.
+        /// </summary>
+        private void OnConnectionWorkerExited()
+        {
+            int remaining = Interlocked.Decrement(ref _remainingConnectionWorkers);
+            if (_disposeRequested && remaining == 0)
+            {
+                _globalQueue.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Finalizes queue disposal immediately when shutdown has been requested and no workers remain.
+        /// </summary>
+        private void TryFinalizeQueueDisposal()
+        {
+            if (_disposeRequested && Volatile.Read(ref _remainingConnectionWorkers) == 0)
+            {
+                _globalQueue.Dispose();
             }
         }
 
