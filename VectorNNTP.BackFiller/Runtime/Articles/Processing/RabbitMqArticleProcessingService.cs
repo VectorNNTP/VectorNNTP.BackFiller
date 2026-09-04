@@ -97,8 +97,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     }
 
                     await _resultSink.OnProcessedAsync(result, operationToken).ConfigureAwait(false);
-                    _logger.LogInformation(
-                        "Article processing result forwarded. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} Redelivered={Redelivered}",
+                    LogArticleProcessingResultForwarded(
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -133,6 +133,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
             return CancellationTokenSource.CreateLinkedTokenSource(hostToken, deliveryToken);
         }
+
+        /// <summary>
+        /// Emits the article processing result forwarded log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article processing result forwarded. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} Redelivered={Redelivered}")]
+        private static partial void LogArticleProcessingResultForwarded(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ArticleWorkProcessingOutcome outcome,
+            ArticleWorkDispositionRecommendation disposition,
+            bool redelivered);
 
     }
 

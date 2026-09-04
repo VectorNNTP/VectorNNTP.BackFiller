@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// <remarks>
     /// A single owned publish channel is reused behind a semaphore so concurrent callers serialize confirm-sensitive work and stale channels can be discarded when the connection generation changes.
     /// </remarks>
-    internal sealed class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
+    internal sealed partial class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
     {
         /// <summary>
         /// Connection manager that creates and recovers owned RabbitMQ channels.
@@ -145,8 +145,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                             new InvalidOperationException("RabbitMQ connection generation changed during response publication."));
                     }
 
-                    _logger.LogInformation(
-                        "RabbitMQ RPC response published and confirmed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}",
+                    LogRabbitMqRpcResponsePublishedAndConfirmed(
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -162,9 +162,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 {
                     await ResetPublishChannelAsync().ConfigureAwait(false);
 
-                    _logger.LogWarning(
+                    LogRabbitMqRpcResponsePublishFailed(
                         ex,
-                        "RabbitMQ RPC response publish failed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}",
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -242,5 +242,32 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 await owned.DisposeAsync().ConfigureAwait(false);
             }
         }
+
+        /// <summary>
+        /// Emits the RabbitMQ RPC response published and confirmed log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "RabbitMQ RPC response published and confirmed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
+        private static partial void LogRabbitMqRpcResponsePublishedAndConfirmed(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone);
+
+        /// <summary>
+        /// Emits the RabbitMQ RPC response publish failed log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Warning,
+            Message = "RabbitMQ RPC response publish failed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
+        private static partial void LogRabbitMqRpcResponsePublishFailed(
+            Exception exception,
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone);
     }
 }

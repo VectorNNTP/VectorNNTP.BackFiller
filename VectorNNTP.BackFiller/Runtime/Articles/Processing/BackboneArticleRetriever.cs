@@ -101,8 +101,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     .ConfigureAwait(false);
 
                 lease.ReportAcquisitionOutcome(grabberResult.AcquisitionFailureCode ?? NntpArticleAcquisitionFailureCode.None);
-                _logger.LogInformation(
-                    "Article retrieval completed. MessageId={MessageId} Backbone={Backbone} AccountId={AccountId} SlotId={SlotId} GrabberFailure={GrabberFailure} AcquisitionFailure={AcquisitionFailure} DurationMs={DurationMs}",
+                LogArticleRetrievalCompleted(
+                    _logger,
                     request.MessageId,
                     request.Backbone,
                     lease.AccountId,
@@ -125,5 +125,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Emits the article retrieval completed log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article retrieval completed. MessageId={MessageId} Backbone={Backbone} AccountId={AccountId} SlotId={SlotId} GrabberFailure={GrabberFailure} AcquisitionFailure={AcquisitionFailure} DurationMs={DurationMs}")]
+        private static partial void LogArticleRetrievalCompleted(
+            ILogger logger,
+            string messageId,
+            string backbone,
+            Guid accountId,
+            int slotId,
+            NntpArticleGrabberFailureCode grabberFailure,
+            NntpArticleAcquisitionFailureCode? acquisitionFailure,
+            double durationMs);
     }
 }

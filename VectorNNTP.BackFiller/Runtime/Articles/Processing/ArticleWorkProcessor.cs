@@ -76,8 +76,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         ResponseText: grabberResult.ResponseText,
                         UnexpectedException: null);
 
-                    _logger.LogInformation(
-                        "Article processing completed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} ProviderFailureCode={ProviderFailureCode} ResponseCode={ResponseCode}",
+                    LogArticleProcessingCompleted(
+                        _logger,
                         request.RequestId,
                         result.CorrelationId,
                         request.MessageId,
@@ -112,7 +112,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Article processing failed unexpectedly. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}", request.RequestId, delivery.CorrelationId, request.MessageId, request.Backbone);
+                LogArticleProcessingFailedUnexpectedly(ex, _logger, request.RequestId, delivery.CorrelationId, request.MessageId, request.Backbone);
                 return new ArticleWorkProcessingResult(
                     Request: request,
                     Delivery: delivery,
@@ -155,5 +155,35 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             };
         }
 
+        /// <summary>
+        /// Emits the article processing completed log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article processing completed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} ProviderFailureCode={ProviderFailureCode} ResponseCode={ResponseCode}")]
+        private static partial void LogArticleProcessingCompleted(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ArticleWorkProcessingOutcome outcome,
+            ArticleWorkDispositionRecommendation disposition,
+            NntpArticleAcquisitionFailureCode? providerFailureCode,
+            int? responseCode);
+
+        /// <summary>
+        /// Emits the article processing failed unexpectedly log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Error,
+            Message = "Article processing failed unexpectedly. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
+        private static partial void LogArticleProcessingFailedUnexpectedly(
+            Exception exception,
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone);
     }
 }
