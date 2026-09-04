@@ -57,7 +57,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.Equal((ushort)32, consumerChannel.LastPrefetchCount);
             Assert.Equal(manager.ConnectionGeneration, session.ActiveConnectionGeneration);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None);
             await session.DisposeAsync();
             await manager.DisposeAsync();
         }
@@ -109,7 +109,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
             Assert.False(consumerChannel.LastConsumeAutoAck);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
@@ -161,7 +161,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.Equal(expectedPayload, deliveryPayload);
             Assert.Equal(expectedSha256, actualSha256);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
@@ -204,8 +204,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.All(consumerChannels, static channel => Assert.Equal("grabbers.giganews", channel.LastConsumeQueue));
             Assert.NotSame(consumerChannels[0], consumerChannels[1]);
 
-            await first.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
-            await second.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await first.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            await second.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await first.DisposeAsync().ConfigureAwait(false);
             await second.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
@@ -262,7 +262,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 .Count(static channel => channel.IsConsumerCurrentlyActive);
             Assert.Equal(1, activeConsumers);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
@@ -301,7 +301,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.Equal(initialCancelCount, consumerChannel.CancelCallCount);
             Assert.Equal(1, connector.ConnectCallCount);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
@@ -329,7 +329,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
             TrackingChannel channel = connector.RequireLastConnection().Channels.Single(static c => c.ConsumeCallCount == 1);
 
-            await session.StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             int consumeCountAfterStop = channel.ConsumeCallCount;
 
             await session.HandleConnectionReplacedAsync(new RabbitMqConnectionReplacedEventArgs(manager.ConnectionGeneration + 1, IsReplacement: true), CancellationToken.None).ConfigureAwait(false);
@@ -368,7 +368,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await channel.DeliverAsync(501UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x10 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             RabbitMqArticleDelivery admitted = Assert.Single(sink.Deliveries);
 
-            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: false);
+            Task stopTask = session.StopAsync(cancelAdmittedWork: false, cancellationToken: CancellationToken.None);
 
             bool waitingForDrain = await WaitForAsync(() => channel.CancelCallCount == 1 && !stopTask.IsCompleted, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             Assert.True(waitingForDrain);
@@ -413,7 +413,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await channel.DeliverAsync(601UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x11 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             RabbitMqArticleDelivery admitted = Assert.Single(sink.Deliveries);
 
-            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            Task stopTask = session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None);
             bool stopCompleted = await WaitForAsync(() => stopTask.IsCompleted, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             Assert.True(stopCompleted);
             await stopTask.ConfigureAwait(false);
@@ -463,7 +463,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await channel.DeliverAsync(602UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x21 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             RabbitMqArticleDelivery admitted = Assert.Single(deliverySink.Deliveries);
 
-            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            Task stopTask = session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None);
             await channel.CancelEntered.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
             RabbitMqArticleResultSink resultSink = CreateArticleResultSinkForSessionRace();
@@ -523,7 +523,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await channel.DeliverAsync(603UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x22 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             RabbitMqArticleDelivery admitted = Assert.Single(deliverySink.Deliveries);
 
-            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: true);
+            Task stopTask = session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None);
             await channel.CancelEntered.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
             Task settlementTask = admitted.Settlement.AckAsync(CancellationToken.None).AsTask();
@@ -572,7 +572,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await channel.DeliverAsync(601UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x11 }, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             RabbitMqArticleDelivery first = Assert.Single(sink.Deliveries);
 
-            Task stopTask = session.StopAsync(CancellationToken.None, cancelAdmittedWork: false);
+            Task stopTask = session.StopAsync(cancelAdmittedWork: false, cancellationToken: CancellationToken.None);
             bool retiring = await WaitForAsync(() => channel.CancelCallCount == 1, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             Assert.True(retiring);
 
@@ -2107,7 +2107,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <param name="cancelAdmittedWork">The cancel admitted work used by this test scenario.</param>
             /// <returns>The value returned by the stop async helper.</returns>
-            public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
+            public async Task StopAsync(bool cancelAdmittedWork, CancellationToken cancellationToken)
             {
                 if (!IsRunning)
                 {
@@ -2138,7 +2138,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             public async ValueTask DisposeAsync()
             {
                 DisposeCalled = true;
-                await StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+                await StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             }
         }
 
@@ -2416,7 +2416,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <param name="cancelAdmittedWork">The cancel admitted work used by this test scenario.</param>
             /// <returns>The value returned by the stop async helper.</returns>
-            public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
+            public async Task StopAsync(bool cancelAdmittedWork, CancellationToken cancellationToken)
             {
                 StopCallCount++;
                 LastCancelAdmittedWork = cancelAdmittedWork;
@@ -2425,7 +2425,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     throw new InvalidOperationException("Observed session has not been attached to an inner RabbitMQ session.");
                 }
 
-                await _inner.StopAsync(cancellationToken, cancelAdmittedWork).ConfigureAwait(false);
+                await _inner.StopAsync(cancelAdmittedWork: cancelAdmittedWork, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
@@ -2612,7 +2612,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <param name="cancelAdmittedWork">The cancel admitted work used by this test scenario.</param>
             /// <returns>The value returned by the stop async helper.</returns>
-            public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
+            public async Task StopAsync(bool cancelAdmittedWork, CancellationToken cancellationToken)
             {
                 bool wasRunning = IsRunning;
                 if (wasRunning)
@@ -2649,7 +2649,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             public async ValueTask DisposeAsync()
             {
                 DisposeCalled = true;
-                await StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+                await StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             }
         }
 
@@ -2894,7 +2894,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <param name="cancelAdmittedWork">The cancel admitted work used by this test scenario.</param>
             /// <returns>The value returned by the stop async helper.</returns>
-            public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
+            public async Task StopAsync(bool cancelAdmittedWork, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 _ = cancelAdmittedWork;
@@ -2944,7 +2944,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     throw new InvalidOperationException($"Injected dispose failure for {Identity.SessionKey}.");
                 }
 
-                await StopAsync(CancellationToken.None, cancelAdmittedWork: true).ConfigureAwait(false);
+                await StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             }
         }
 

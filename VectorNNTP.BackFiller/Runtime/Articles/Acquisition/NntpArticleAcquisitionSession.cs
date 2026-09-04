@@ -163,12 +163,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
                 _ = await ExecuteWithTimeoutAsync(
                     options.ConnectTimeout,
-                    cancellationToken,
                     async token =>
                     {
                         await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
                         return true;
-                    }).ConfigureAwait(false);
+                    },
+                    cancellationToken).ConfigureAwait(false);
 
                 stream = tcpClient.GetStream();
                 if (endpoint.UseSsl)
@@ -190,13 +190,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
-                        cancellationToken,
                         async token =>
                         {
                             await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
 
                             return true;
-                        }).ConfigureAwait(false);
+                        },
+                        cancellationToken).ConfigureAwait(false);
 
                     stream = sslStream;
                 }
@@ -204,7 +204,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 NntpArticleAcquisitionSession session = new(endpoint, options, logger, tcpClient, stream, connectionLoggingScope, connectionLoggingContext);
 
                 NntpArticleAcquisitionTraceContext greetingContext = new(NntpArticleAcquisitionOperation.Connect, MessageId: null, MaximumValue: null, ActualValue: null);
-                string greetingLine = await session.ReadProtocolLineAsync(options.CommandTimeout, cancellationToken, greetingContext).ConfigureAwait(false);
+                string greetingLine = await session.ReadProtocolLineAsync(options.CommandTimeout, greetingContext, cancellationToken).ConfigureAwait(false);
                 if (!TryParseStatusLine(greetingLine, out int greetingCode, out string greetingText))
                 {
                     throw new NntpArticleAcquisitionException(
@@ -273,9 +273,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             try
             {
                 string command = string.Create(CultureInfo.InvariantCulture, $"ARTICLE {messageId}");
-                await WriteCommandAsync(command, _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
-
-                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
+                await WriteCommandAsync(command, _options.CommandTimeout, writeContext, redactCredentials: false, cancellationToken).ConfigureAwait(false);
+                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, statusContext, cancellationToken).ConfigureAwait(false);
                 if (!TryParseStatusLine(statusLine, out int statusCode, out string statusText))
                 {
                     throw new NntpArticleAcquisitionException(
@@ -287,7 +286,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 NntpArticleAcquisitionResult statusResult = ClassifyArticleStatus(statusCode, statusText);
                 if (statusResult.FailureCode == NntpArticleAcquisitionFailureCode.None)
                 {
-                    DownloadedArticleBuffer buffer = await ReadArticlePayloadAsync(cancellationToken, payloadContext).ConfigureAwait(false);
+                    DownloadedArticleBuffer buffer = await ReadArticlePayloadAsync(payloadContext, cancellationToken).ConfigureAwait(false);
                     NntpArticleAcquisitionResult success = NntpArticleAcquisitionResult.Success(statusCode, statusText, buffer);
                     LogArticleOutcome(_logger, messageId, "downloaded", stopwatch.Elapsed, success.ArticleLength, failureReason: null);
                     return success;
@@ -337,8 +336,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             try
             {
-                await WriteCommandAsync("DATE", _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
-                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
+                await WriteCommandAsync("DATE", _options.CommandTimeout, writeContext, redactCredentials: false, cancellationToken).ConfigureAwait(false);
+                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, statusContext, cancellationToken).ConfigureAwait(false);
                 return !TryParseStatusLine(statusLine, out int statusCode, out string statusText)
                     ? throw new NntpArticleAcquisitionException(
                         NntpArticleAcquisitionFailureCode.MalformedResponse,
@@ -411,8 +410,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             NntpArticleAcquisitionTraceContext userWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
             NntpArticleAcquisitionTraceContext userRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
-            await WriteCommandAsync($"AUTHINFO USER {_endpoint.Username}", _options.CommandTimeout, cancellationToken, userWrite, redactCredentials: true).ConfigureAwait(false);
-            string userLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, userRead).ConfigureAwait(false);
+            await WriteCommandAsync($"AUTHINFO USER {_endpoint.Username}", _options.CommandTimeout, userWrite, redactCredentials: true, cancellationToken).ConfigureAwait(false);
+            string userLine = await ReadProtocolLineAsync(_options.CommandTimeout, userRead, cancellationToken).ConfigureAwait(false);
             if (!TryParseStatusLine(userLine, out int userCode, out string userText))
             {
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO USER status line.");
@@ -430,8 +429,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             NntpArticleAcquisitionTraceContext passWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
             NntpArticleAcquisitionTraceContext passRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
-            await WriteCommandAsync($"AUTHINFO PASS {_endpoint.Password}", _options.CommandTimeout, cancellationToken, passWrite, redactCredentials: true).ConfigureAwait(false);
-            string passLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, passRead).ConfigureAwait(false);
+            await WriteCommandAsync($"AUTHINFO PASS {_endpoint.Password}", _options.CommandTimeout, passWrite, redactCredentials: true, cancellationToken).ConfigureAwait(false);
+            string passLine = await ReadProtocolLineAsync(_options.CommandTimeout, passRead, cancellationToken).ConfigureAwait(false);
             return !TryParseStatusLine(passLine, out int passCode, out string passText)
                 ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO PASS status line.")
                 : passCode == 281 ? null : ClassifyAuthInfoPassFailureStatus(passCode, passText);
@@ -446,15 +445,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <returns>The received status line text.</returns>
         private async ValueTask<string> ReadProtocolLineAsync(
             TimeSpan timeout,
-            CancellationToken cancellationToken,
-            NntpArticleAcquisitionTraceContext context)
+            NntpArticleAcquisitionTraceContext context,
+            CancellationToken cancellationToken)
         {
             try
             {
                 (string? line, _, bool completedWithoutLine) = await ExecuteWithTimeoutAsync(
                     timeout,
-                    cancellationToken,
-                    token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token)).ConfigureAwait(false);
+                    token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token),
+                    cancellationToken).ConfigureAwait(false);
 
                 if (completedWithoutLine)
                 {
@@ -503,9 +502,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private async Task WriteCommandAsync(
             string command,
             TimeSpan timeout,
-            CancellationToken cancellationToken,
             NntpArticleAcquisitionTraceContext context,
-            bool redactCredentials)
+            bool redactCredentials,
+            CancellationToken cancellationToken)
         {
             await _commandWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -540,13 +539,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
                 _ = await ExecuteWithTimeoutAsync(
                     timeout,
-                    cancellationToken,
                     async token =>
                     {
                         await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
                         await _stream.FlushAsync(token).ConfigureAwait(false);
                         return true;
-                    }).ConfigureAwait(false);
+                    },
+                    cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (MarkTransportFailureForException(ex, cancellationToken))
             {
@@ -568,8 +567,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// The receive loop accepts payload fragmentation across pipe reads and terminates only on the NNTP terminator line. Any failure before <see cref="PooledArticleBuilder.Build"/> disposes the in-progress pooled buffer.
         /// </remarks>
         private async ValueTask<DownloadedArticleBuffer> ReadArticlePayloadAsync(
-            CancellationToken cancellationToken,
-            NntpArticleAcquisitionTraceContext context)
+            NntpArticleAcquisitionTraceContext context,
+            CancellationToken cancellationToken)
         {
             PooledArticleBuilder builder = new(_options.MaxArticleBytes, context);
             bool atLineStart = true;
@@ -580,8 +579,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 {
                     ReadResult readResult = await ExecuteWithTimeoutAsync(
                         _options.ReceiveTimeout,
-                        cancellationToken,
-                        token => _reader.ReadAsync(token)).ConfigureAwait(false);
+                        token => _reader.ReadAsync(token),
+                        cancellationToken).ConfigureAwait(false);
 
                     ReadOnlySequence<byte> sequence = readResult.Buffer;
                     SequenceReader<byte> reader = new(sequence);
@@ -802,8 +801,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <exception cref="TimeoutException">Thrown when the linked timeout fires before the caller token is cancelled.</exception>
         private static async ValueTask<T> ExecuteWithTimeoutAsync<T>(
             TimeSpan timeout,
-            CancellationToken cancellationToken,
-            Func<CancellationToken, ValueTask<T>> operation)
+            Func<CancellationToken, ValueTask<T>> operation,
+            CancellationToken cancellationToken)
         {
             using CancellationTokenSource timeoutSource = new(timeout);
             using CancellationTokenSource linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
@@ -835,8 +834,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             try
             {
-                await WriteCommandAsync("QUIT", _options.CommandTimeout, quitTimeout.Token, quitWriteContext, redactCredentials: false).ConfigureAwait(false);
-                _ = await ReadProtocolLineAsync(_options.CommandTimeout, quitTimeout.Token, quitReadContext).ConfigureAwait(false);
+                await WriteCommandAsync("QUIT", _options.CommandTimeout, quitWriteContext, redactCredentials: false, cancellationToken: quitTimeout.Token).ConfigureAwait(false);
+                _ = await ReadProtocolLineAsync(_options.CommandTimeout, quitReadContext, quitTimeout.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (quitTimeout.IsCancellationRequested)
             {

@@ -60,7 +60,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         string? CorrelationId,
         string? ReplyTo,
         ReadOnlyMemory<byte> Payload,
-        CancellationToken CancellationToken,
         IRabbitMqDeliverySettlement Settlement,
-        IRabbitMqAdmittedDeliveryTracker? AdmissionTracker = null);
+        IRabbitMqAdmittedDeliveryTracker? AdmissionTracker = null,
+        CancellationToken CancellationToken = default);
 }

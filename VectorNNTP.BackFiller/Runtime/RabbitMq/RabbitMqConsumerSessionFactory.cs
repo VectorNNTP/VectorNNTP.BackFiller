@@ -295,7 +295,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             for (int index = 0; index < retirements.Count; index++)
             {
-                await ExecuteRetirementOperationAsync(retirements[index], cancellationToken, cancelAdmittedWork: false).ConfigureAwait(false);
+                await ExecuteRetirementOperationAsync(retirements[index], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             for (int index = 0; index < pendingRetirements.Count; index++)
@@ -536,7 +536,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             for (int i = 0; i < retirements.Count; i++)
             {
-                await ExecuteRetirementOperationAsync(retirements[i], cancellationToken, cancelAdmittedWork: false).ConfigureAwait(false);
+                await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             for (int i = 0; i < starts.Count; i++)
@@ -635,7 +635,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             {
                 try
                 {
-                    await ExecuteRetirementOperationAsync(retirements[i], cancellationToken, cancelAdmittedWork: true).ConfigureAwait(false);
+                    await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: true, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -689,7 +689,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Stops, disposes, and resolves completion tracking for one retiring session.
         /// </summary>
-        private async Task ExecuteRetirementOperationAsync(RetirementOperation operation, CancellationToken cancellationToken, bool cancelAdmittedWork)
+        private async Task ExecuteRetirementOperationAsync(RetirementOperation operation, bool cancelAdmittedWork, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(operation);
 
@@ -697,7 +697,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             bool retirementCompleted = false;
             try
             {
-                await operation.Runtime.Session.StopAsync(cancellationToken, cancelAdmittedWork).ConfigureAwait(false);
+                await operation.Runtime.Session.StopAsync(cancelAdmittedWork, cancellationToken).ConfigureAwait(false);
                 await operation.Runtime.Session.DisposeAsync().ConfigureAwait(false);
                 retirementCompleted = true;
 

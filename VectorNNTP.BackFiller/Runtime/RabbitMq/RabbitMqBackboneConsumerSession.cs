@@ -232,15 +232,15 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Stops the session, optionally canceling admitted work before waiting for drain completion.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token for the stop sequence.</param>
         /// <param name="cancelAdmittedWork"><see langword="true"/> to cancel admitted deliveries before draining.</param>
+        /// <param name="cancellationToken">Cancellation token for the stop sequence.</param>
         /// <returns>A task that completes after the consumer is canceled and admitted deliveries have drained.</returns>
-        public async Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork)
+        public async Task StopAsync(bool cancelAdmittedWork, CancellationToken cancellationToken)
         {
             await _lifecycleGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await StopCoreAsync(cancellationToken, expectedShutdown: true, cancelAdmittedWork).ConfigureAwait(false);
+                await StopCoreAsync(expectedShutdown: true, cancelAdmittedWork: cancelAdmittedWork, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -264,7 +264,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                await StopCoreAsync(CancellationToken.None, expectedShutdown: true, cancelAdmittedWork: true).ConfigureAwait(false);
+                await StopCoreAsync(expectedShutdown: true, cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             }
             finally
             {
@@ -351,7 +351,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Core stop path that retires the consumer, optionally cancels admitted work, and waits for drain completion.
         /// </summary>
-        private async Task StopCoreAsync(CancellationToken cancellationToken, bool expectedShutdown, bool cancelAdmittedWork)
+        private async Task StopCoreAsync(bool expectedShutdown, bool cancelAdmittedWork, CancellationToken cancellationToken)
         {
             bool hasSessionResources = _lifecycleState is not RabbitMqConsumerLifecycleState.Stopped || _ownedChannel is not null || _consumer is not null || _sessionCancellation is not null || !string.IsNullOrWhiteSpace(_consumerTag);
             if (!hasSessionResources)
@@ -532,9 +532,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 CorrelationId: correlationId,
                 ReplyTo: replyTo,
                 Payload: payloadCopy,
-                CancellationToken: cancellationToken,
                 Settlement: new RabbitMqDeliverySettlement(this, args.DeliveryTag, deliveryGeneration, tracker),
-                AdmissionTracker: tracker);
+                AdmissionTracker: tracker,
+                CancellationToken: cancellationToken);
 
             try
             {
@@ -624,7 +624,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             long previousGeneration = ActiveConnectionGeneration;
             LogConsumerRecreationStarting(_logger, _identity.Backbone, _identity.SessionOrdinal, previousGeneration, requestedGeneration);
 
-            await StopCoreAsync(CancellationToken.None, expectedShutdown: false, cancelAdmittedWork: true).ConfigureAwait(false);
+            await StopCoreAsync(expectedShutdown: false, cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await StartCoreAsync(cancellationToken).ConfigureAwait(false);
 
             LogConsumerRecreationCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal, ActiveConnectionGeneration);
