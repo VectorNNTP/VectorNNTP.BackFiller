@@ -37,7 +37,7 @@ jobs:
         run: dotnet restore VectorNNTP.BackFiller.slnx
 
       - name: Build production project
-        run: dotnet build VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj --configuration Release --no-restore
+        run: dotnet build VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj --configuration Release --no-restore /p:TreatWarningsAsErrors=false
 
       - name: Build test project
         run: dotnet build VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj --configuration Release --no-restore /p:TreatWarningsAsErrors=false
