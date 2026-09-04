@@ -65,7 +65,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Current connection instance per pool slot.
         /// </summary>
-        private readonly TransitConnection[] _connections;
+        private readonly TransitConnection?[] _connections;
         /// <summary>
         /// Long-running worker task per connection slot.
         /// </summary>
@@ -197,7 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 maxQueuedItemCount: runtimeOptions.TransitQueueMaxItemCount,
                 maxQueuedPayloadBytes: runtimeOptions.TransitQueueMaxPayloadBytes);
 
-            _connections = new TransitConnection[_connectionPoolSize];
+            _connections = new TransitConnection?[_connectionPoolSize];
             _connectionWorkers = new Task[_connectionPoolSize];
             _reconnectGates = new SemaphoreSlim[_connectionPoolSize];
             for (int i = 0; i < _connectionPoolSize; i++)
@@ -504,7 +504,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <returns>The first greeting provenance snapshot found, or <see langword="null"/> when none is available.</returns>
         internal TransitConnection.P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
-            foreach (TransitConnection connection in _connections)
+            foreach (TransitConnection? connection in _connections)
             {
                 // TODO: CK Code Commented out for now because it is not used and causes a warning. Uncomment if needed in the future.
                 //TransitConnection.P1GreetingProvenanceSnapshot? snapshot = connection?.CaptureFirstP1GreetingProvenanceSnapshot();
