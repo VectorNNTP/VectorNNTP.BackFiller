@@ -245,10 +245,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <inheritdoc/>
         public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
-            if (retainConnectionCount < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(retainConnectionCount));
-            }
+            ArgumentOutOfRangeException.ThrowIfNegative(retainConnectionCount);
 
             List<RetirementOperation> retirements = [];
             List<Task> pendingRetirements = [];
@@ -551,7 +548,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Builds the desired logical session set from the current account snapshot.
         /// </summary>
-        private Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(
+        private static Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(
             NntpAccountSnapshotState snapshot,
             Func<string, bool> hasUsableBackboneCapacity)
         {
