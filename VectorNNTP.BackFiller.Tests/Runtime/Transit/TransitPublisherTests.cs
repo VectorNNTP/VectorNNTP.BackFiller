@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
-using VectorNNTP.BackFiller.Tests.TestInfrastructure;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
@@ -29,19 +28,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
     /// </remarks>
     public sealed class TransitPublisherTests
     {
-        /// <summary>
-        /// Creates a compact timestamp/thread/task marker for diagnostic traces emitted by tests that require forensic timing information.
-        /// </summary>
-        /// <returns>Returns a stable textual trace stamp containing UTC time, managed thread ID, and current task ID.</returns>
-        /// <summary>
-        /// Confirms the trace stamp behavior.
-        /// </summary>
-        /// <returns>The value returned by the trace stamp helper.</returns>
-        private static string TraceStamp()
-        {
-            return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
-        }
-
         /// <summary>
         /// Verifies that an initialized publisher admits a publish request, establishes the demand-driven transit connection, sends the article with the expected payload, and returns a definitive <c>239 Accepted</c> result correlated to the submitted Message-ID.
         /// </summary>
@@ -3064,97 +3050,50 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public async Task PublishAsync_WhenReconnectInitializationFails_CompletesSubmissionAmbiguousAndIncrementsAmbiguousMetric()
         {
-            string configuredTraceFile = Environment.GetEnvironmentVariable("VNNTP_RI_TRACE_FILE") ?? string.Empty;
-            string traceFile = string.IsNullOrWhiteSpace(configuredTraceFile)
-                ? Path.Combine(AppContext.BaseDirectory, $"ri-forensic-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.log")
-                : configuredTraceFile;
-            await using StreamWriter fileWriter = new(traceFile, append: false, Encoding.UTF8) { AutoFlush = true };
-            await using ConsoleOutputScope outputScope = await ConsoleOutputScope.CaptureToAsync(TextWriter.Synchronized(fileWriter)).ConfigureAwait(false);
+            string messageId = "<publisher-reconnect-init-fail@example.com>";
+            byte[] payload = [(byte)'R', (byte)'\n'];
 
-            try
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                    string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                    Assert.StartsWith($"TAKETHIS {messageId}", takethisLine, StringComparison.Ordinal);
+                    stream.Dispose();
+                },
+                async (stream, _) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "400 temporary failure");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource faultedTimeout = new(TimeSpan.FromSeconds(10));
+            while (GetPrimaryConnectionState(publisher) is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
             {
-                Console.WriteLine($"[TRACE-RI-80] {TraceStamp()} Test START PublishAsync_WhenReconnectInitializationFails... traceFile={traceFile}");
-                string messageId = "<publisher-reconnect-init-fail@example.com>";
-                byte[] payload = [(byte)'R', (byte)'\n'];
-
-                await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
-                [
-                    async (stream, cancellationToken) =>
-                    {
-                        Console.WriteLine($"[TRACE-RI-81] {TraceStamp()} Test Session1 ACCEPTED");
-                        await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
-                        await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
-                        Console.WriteLine($"[TRACE-RI-82] {TraceStamp()} Test Session1 CAPABILITIES-RECEIVED");
-                        await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
-                        await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
-                        await FakePublisherServer.WriteLineAsync(stream, ".");
-                        await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
-                        Console.WriteLine($"[TRACE-RI-83] {TraceStamp()} Test Session1 MODE-STREAM-RECEIVED");
-                        await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
-
-                        Console.WriteLine($"[TRACE-RI-84] {TraceStamp()} Test Session1 DISCONNECT");
-                        stream.Dispose();
-                    },
-                    async (stream, _) =>
-                    {
-                        Console.WriteLine($"[TRACE-RI-85] {TraceStamp()} Test Session2 ACCEPTED");
-                        await FakePublisherServer.WriteLineAsync(stream, "400 temporary failure");
-                        Console.WriteLine($"[TRACE-RI-86] {TraceStamp()} Test Session2 WROTE-400");
-                    },
-                ]);
-
-                await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
-                await publisher.InitializeAsync(CancellationToken.None);
-                Console.WriteLine($"[TRACE-RI-87] {TraceStamp()} Test Publisher.InitializeAsync COMPLETE state={publisher.CurrentState}");
-
-                using CancellationTokenSource faultedTimeout = new(TimeSpan.FromSeconds(10));
-                Console.WriteLine($"[TRACE-RI-88] {TraceStamp()} Test faultedTimeout CREATED seconds=10");
-                while (GetPrimaryConnectionState(publisher) is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
-                {
-                    await Task.Delay(10, faultedTimeout.Token);
-                }
-
-                TransitConnectionState observed = GetPrimaryConnectionState(publisher);
-                Console.WriteLine($"[TRACE-RI-89] {TraceStamp()} Test observed primary connection state={observed}");
-
-                using CancellationTokenSource publishTimeout = new(TimeSpan.FromSeconds(10));
-                Console.WriteLine($"[TRACE-RI-90] {TraceStamp()} Test publishTimeout CREATED seconds=10");
-                Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, payload, CancellationToken.None).AsTask();
-                Console.WriteLine($"[TRACE-RI-91] {TraceStamp()} Test publishTask CREATED taskId={publishTask.Id} isCompleted={publishTask.IsCompleted}");
-
-                publishTimeout.Token.Register(() =>
-                {
-                    TransitTransportSnapshot snapshotOnTimeout = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
-                    TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-                    Console.WriteLine($"[TRACE-RI-92] {TraceStamp()} Test publishTimeout CANCELED taskId={publishTask.Id} publishTaskCompleted={publishTask.IsCompleted} totalSubmitted={snapshotOnTimeout.TotalArticlesSubmitted} totalAmbiguous={snapshotOnTimeout.TotalArticlesAmbiguous} activeWorkItems={GetActiveSubmissionCount(publisher)} queued={diagnostics.QueueSnapshot.QueuedItemCount} retryPending={diagnostics.QueueSnapshot.RetryPendingCount} inFlight={diagnostics.QueueSnapshot.InFlightCount} reconnects={diagnostics.TotalReconnects}");
-                });
-
-                TransitPublishResult result;
-                try
-                {
-                    result = await publishTask.WaitAsync(publishTimeout.Token);
-                    Console.WriteLine($"[TRACE-RI-93] {TraceStamp()} Test publishTask COMPLETED taskId={publishTask.Id} status={result.Status}");
-                }
-                catch (Exception ex)
-                {
-                    TransitTransportSnapshot snapshotOnException = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
-                    Console.WriteLine($"[TRACE-RI-94] {TraceStamp()} Test publishTask EXCEPTION taskId={publishTask.Id} exType={ex.GetType().FullName} exMessage={ex.Message} publishTaskCompleted={publishTask.IsCompleted} totalSubmitted={snapshotOnException.TotalArticlesSubmitted} totalAmbiguous={snapshotOnException.TotalArticlesAmbiguous} activeWorkItems={GetActiveSubmissionCount(publisher)}");
-                    throw;
-                }
-
-                Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
-
-                TransitTransportSnapshot snapshot = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
-                Console.WriteLine($"[TRACE-RI-95] {TraceStamp()} Test assertions snapshot totalSubmitted={snapshot.TotalArticlesSubmitted} totalAmbiguous={snapshot.TotalArticlesAmbiguous}");
-                Assert.Equal(1, snapshot.TotalArticlesSubmitted);
-                Assert.Equal(1, snapshot.TotalArticlesAmbiguous);
-            }
-            finally
-            {
-                Console.Out.Flush();
+                await Task.Delay(10, faultedTimeout.Token);
             }
 
-            Console.WriteLine($"[TRACE-RI-99] Trace file written: {traceFile}");
+            using CancellationTokenSource publishTimeout = new(TimeSpan.FromSeconds(10));
+            Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, payload, CancellationToken.None).AsTask();
+
+            TransitPublishResult result = await publishTask.WaitAsync(publishTimeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
+
+            TransitTransportSnapshot snapshot = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
+            Assert.Equal(1, snapshot.TotalArticlesSubmitted);
+            Assert.Equal(1, snapshot.TotalArticlesAmbiguous);
         }
 
         /// <summary>
