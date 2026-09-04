@@ -515,15 +515,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             try
             {
-                using FileStream stream = new(
-                    tempPath,
-                    FileMode.CreateNew,
-                    FileAccess.Write,
-                    FileShare.None,
-                    bufferSize: 81920,
-                    useAsync: true);
-                await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                {
+                    using FileStream stream = new(
+                        tempPath,
+                        FileMode.CreateNew,
+                        FileAccess.Write,
+                        FileShare.None,
+                        bufferSize: 81920,
+                        useAsync: true);
+                    await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+                    await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
 
                 if (logger is not null && logger.IsEnabled(LogLevel.Information))
                 {
