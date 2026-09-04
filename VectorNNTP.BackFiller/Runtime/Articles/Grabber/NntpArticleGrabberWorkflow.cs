@@ -183,8 +183,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="duration">Formatted monotonic elapsed duration.</param>
         private static void LogWorkflowSuccess(ILogger logger, string messageId, NntpArticleType articleType, int articleSize, string duration)
         {
-            logger.LogInformation(
-                "Article workflow completed for {MessageId} in {Duration} (Outcome=Success, ArticleType={ArticleType}, ArticleSize={ArticleSize})",
+            LogWorkflowSuccessMessage(
+                logger,
                 messageId,
                 duration,
                 articleType,
@@ -210,8 +210,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             YEncArticleValidationStatus? yEncStatus,
             string duration)
         {
-            logger.LogInformation(
-                "Article workflow failed for {MessageId} in {Duration} (Outcome=Failure, FailureCode={FailureCode}, AcquisitionFailure={AcquisitionFailureCode}, ParseFailure={ParseFailureCode}, YEncStatus={YEncStatus})",
+            LogWorkflowFailureMessage(
+                logger,
                 messageId,
                 duration,
                 failureCode,
@@ -219,5 +219,33 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 parseFailureCode,
                 yEncStatus);
         }
+
+        /// <summary>
+        /// Emits the workflow success log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article workflow completed for {MessageId} in {Duration} (Outcome=Success, ArticleType={ArticleType}, ArticleSize={ArticleSize})")]
+        private static partial void LogWorkflowSuccessMessage(
+            ILogger logger,
+            string messageId,
+            string duration,
+            NntpArticleType articleType,
+            int articleSize);
+
+        /// <summary>
+        /// Emits the workflow failure log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article workflow failed for {MessageId} in {Duration} (Outcome=Failure, FailureCode={FailureCode}, AcquisitionFailure={AcquisitionFailureCode}, ParseFailure={ParseFailureCode}, YEncStatus={YEncStatus})")]
+        private static partial void LogWorkflowFailureMessage(
+            ILogger logger,
+            string messageId,
+            string duration,
+            NntpArticleGrabberFailureCode failureCode,
+            NntpArticleAcquisitionFailureCode? acquisitionFailureCode,
+            NntpArticleParseFailureCode? parseFailureCode,
+            YEncArticleValidationStatus? yEncStatus);
     }
 }

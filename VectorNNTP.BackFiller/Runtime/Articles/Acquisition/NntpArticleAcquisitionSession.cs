@@ -26,7 +26,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     /// Repository usage routes this type through <see cref="VectorNNTP.Backfiller.Runtime.Articles.Grabber.NntpArticleExecutionSessionManager"/>, which ensures that one active article workflow or keepalive probe uses a session at a time.
     /// The session serializes command writes to avoid QUIT racing active command emission during shutdown, but it is not a general-purpose concurrent NNTP command multiplexer.
     /// </remarks>
-    internal sealed class NntpArticleAcquisitionSession : IAsyncDisposable
+    internal sealed partial class NntpArticleAcquisitionSession : IAsyncDisposable
     {
         /// <summary>
         /// Endpoint settings.
@@ -989,8 +989,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             string duration = FormatElapsed(elapsed);
             string failureReasonText = failureReason?.ToString() ?? string.Empty;
-            logger.LogInformation(
-                "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
+            LogArticleOutcomeMessage(
+                logger,
                 messageId,
                 outcome,
                 duration,
@@ -1019,14 +1019,42 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             }
 
             string duration = FormatElapsed(elapsed);
-            logger.LogInformation(
-                "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
+            LogArticleFailureMessage(
+                logger,
                 messageId,
                 duration,
                 failureCode,
                 failureCode,
                 articleSizeBytes);
         }
+
+        /// <summary>
+        /// Emits the successful or non-fatal article outcome log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})")]
+        private static partial void LogArticleOutcomeMessage(
+            ILogger logger,
+            string messageId,
+            string outcome,
+            string duration,
+            string failureReason,
+            int? articleSize);
+
+        /// <summary>
+        /// Emits the failed article outcome log event.
+        /// </summary>
+        [LoggerMessage(
+            Level = LogLevel.Information,
+            Message = "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})")]
+        private static partial void LogArticleFailureMessage(
+            ILogger logger,
+            string messageId,
+            string duration,
+            NntpArticleAcquisitionFailureCode failureCode,
+            NntpArticleAcquisitionFailureCode failureReason,
+            int? articleSize);
 
         /// <summary>
         /// Accumulates received article bytes in a pooled buffer that can grow up to the configured article-size ceiling.
