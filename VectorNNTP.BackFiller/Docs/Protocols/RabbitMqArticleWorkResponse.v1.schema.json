@@ -49,7 +49,7 @@
         "string",
         "null"
       ],
-      "description": "Success retrieval location when available; null when not available in runtime architecture."
+      "description": "Success-only canonical article cache URI in the form cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}, where MessageIdMd5 is the lowercase hexadecimal MD5 digest of the ASCII bytes of the exact messageId string."
     },
     "error": {
       "type": "string",

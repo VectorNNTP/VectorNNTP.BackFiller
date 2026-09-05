@@ -5,6 +5,9 @@
 // VectorNNTP.Backfiller Runtime / Articles / Processing
 // Constructs terminal RabbitMQ RPC response payloads for deterministic processing outcomes.
 
+using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
+
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
@@ -19,6 +22,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// Canonical response schema version written into every emitted RPC payload.
         /// </summary>
         private const int ResponseVersion = 1;
+
+        /// <summary>
+        /// Canonical BackFiller instance URI prefix used in success response payloads.
+        /// </summary>
+        private readonly string _successUriPrefix;
+
+        /// <summary>
+        /// Initializes the response factory with authoritative runtime identity and listener endpoint configuration.
+        /// </summary>
+        /// <param name="runtimeOptions">Validated runtime options that provide canonical BackFiller FQDN and bind port.</param>
+        public ArticleWorkResponseFactory(BackFillerRuntimeOptions runtimeOptions)
+        {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+            _successUriPrefix = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}";
+        }
 
         /// <summary>
         /// Creates the version-1 RPC response payload for a terminal processing result when one should be published.
@@ -39,7 +57,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     MessageId: result.Request.MessageId,
                     Backbone: result.Request.Backbone,
                     Outcome: result.Outcome.ToString(),
-                    Uri: null,
+                    Uri: $"{_successUriPrefix}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}",
                     Error: null),
 
                 ArticleWorkProcessingOutcome.ArticleNotFound => new RabbitMqArticleWorkResponse(

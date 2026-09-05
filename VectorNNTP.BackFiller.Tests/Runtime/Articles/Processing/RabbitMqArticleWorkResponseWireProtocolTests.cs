@@ -18,10 +18,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
     public sealed class RabbitMqArticleWorkResponseWireProtocolTests
     {
         /// <summary>
-        /// Confirms the serialize v1 when success contains canonical fields and uri null behavior.
+        /// Confirms the serialize v1 when success contains canonical fields and concrete uri behavior.
         /// </summary>
         [Fact]
-        public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull()
+        public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndConcreteUri()
         {
             RabbitMqArticleWorkResponse response = new(
                 Version: 1,
@@ -29,13 +29,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 MessageId: "<12345@example.invalid>",
                 Backbone: "Giganews",
                 Outcome: nameof(ArticleWorkProcessingOutcome.Success),
-                Uri: null,
+                Uri: "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160",
                 Error: null);
 
             byte[] payload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
             string json = Encoding.UTF8.GetString(payload);
 
-            Assert.Equal("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<12345@example.invalid>\",\"backbone\":\"Giganews\",\"outcome\":\"Success\",\"uri\":null}", json);
+            Assert.Equal("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<12345@example.invalid>\",\"backbone\":\"Giganews\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}", json);
             Assert.DoesNotContain("correlationId", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("replyTo", json, StringComparison.OrdinalIgnoreCase);
         }

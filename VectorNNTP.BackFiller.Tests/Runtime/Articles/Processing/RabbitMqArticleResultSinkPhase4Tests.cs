@@ -9,7 +9,9 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using Xunit;
 
@@ -43,8 +45,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 messageId: "<success-ordering@example.com>",
                 backbone: "BackboneA");
 
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed, operationLog);
-            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions);
 
             await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
 
@@ -63,7 +66,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.DoesNotContain("replyTo", publisher.LastResponseJson!, StringComparison.OrdinalIgnoreCase);
             RabbitMqArticleWorkResponse successResponse = RabbitMqArticleWorkResponseWireProtocol.ParseV1(publisher.LastResponsePayload!);
             Assert.Equal(nameof(ArticleWorkProcessingOutcome.Success), successResponse.Outcome);
-            Assert.Null(successResponse.Uri);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            Assert.Equal(expectedUri, successResponse.Uri);
             Assert.Null(successResponse.Error);
         }
         /// <summary>
@@ -391,13 +395,35 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// </summary>
         /// <param name="responsePublisher">The response publisher used by this test scenario.</param>
         /// <returns>The value returned by the create sink helper.</returns>
-        private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher)
+        private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher, BackFillerRuntimeOptions? runtimeOptions = null)
         {
+            runtimeOptions ??= CreateRuntimeOptions();
             return new RabbitMqArticleResultSink(
                 planner: new ArticleWorkDispositionPlanner(),
-                responseFactory: new ArticleWorkResponseFactory(),
+                responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: responsePublisher,
                 logger: NullLogger<RabbitMqArticleResultSink>.Instance);
+        }
+
+        /// <summary>
+        /// Creates deterministic runtime options for success URI contract assertions.
+        /// </summary>
+        /// <returns>Runtime options with canonical BackFiller endpoint identity.</returns>
+        private static BackFillerRuntimeOptions CreateRuntimeOptions()
+        {
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: "backfiller01.usenet.ninja",
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "usenet.ninja",
+                ValidatedLogDirectory: "C:\\logs",
+                ValidatedCertificateDirectory: "C:\\certs",
+                RabbitMqHosts: ["rabbit01.usenet.ninja"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: true,
+                TransitServerHost: "transit01.usenet.ninja",
+                TransitServerPort: 563,
+                TransitServerUseSsl: true,
+                BindPort: 119);
         }
 
         /// <summary>

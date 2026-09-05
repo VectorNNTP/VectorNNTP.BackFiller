@@ -1911,7 +1911,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         {
             return new RabbitMqArticleResultSink(
                 planner: new ArticleWorkDispositionPlanner(),
-                responseFactory: new ArticleWorkResponseFactory(),
+                responseFactory: new ArticleWorkResponseFactory(CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1)),
                 responsePublisher: new TrackingRaceResponsePublisher(),
                 logger: NullLogger<RabbitMqArticleResultSink>.Instance);
         }
