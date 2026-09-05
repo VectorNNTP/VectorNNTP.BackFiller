@@ -20,7 +20,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// identity, server-auth EKU, and a buildable chain before the listener is allowed to use it. Issued material is
     /// written through same-directory temporary files so replacement is atomic with respect to the final target files.
     /// </remarks>
-    internal sealed class BackFillerCertificateStore
+    internal sealed partial class BackFillerCertificateStore
     {
         /// <summary>
         /// Evaluates whether an existing persisted listener certificate is usable and whether renewal is required.
@@ -168,10 +168,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            logger?.LogInformation(
-                "Loading listener certificate bundle for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}",
-                letsEncryptOptions.CanonicalCertificateSubjectName,
-                letsEncryptOptions.CertificatePfxPath);
+            if (logger is not null)
+            {
+                LogLoadingListenerCertificateBundle(
+                    logger,
+                    letsEncryptOptions.CanonicalCertificateSubjectName,
+                    letsEncryptOptions.CertificatePfxPath);
+            }
 
             try
             {
@@ -181,20 +184,26 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     letsEncryptOptions.PfxExportPassword,
                     X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
 
-                logger?.LogInformation(
-                    "Loaded listener certificate bundle for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}",
-                    letsEncryptOptions.CanonicalCertificateSubjectName,
-                    letsEncryptOptions.CertificatePfxPath);
+                if (logger is not null)
+                {
+                    LogLoadedListenerCertificateBundle(
+                        logger,
+                        letsEncryptOptions.CanonicalCertificateSubjectName,
+                        letsEncryptOptions.CertificatePfxPath);
+                }
 
                 return new BackFillerCertificateBundle(certificate, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
             }
             catch (Exception ex)
             {
-                logger?.LogError(
-                    ex,
-                    "Listener certificate bundle load failed for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}",
-                    letsEncryptOptions.CanonicalCertificateSubjectName,
-                    letsEncryptOptions.CertificatePfxPath);
+                if (logger is not null)
+                {
+                    LogListenerCertificateBundleLoadFailed(
+                        logger,
+                        letsEncryptOptions.CanonicalCertificateSubjectName,
+                        letsEncryptOptions.CertificatePfxPath,
+                        ex);
+                }
                 throw;
             }
         }
@@ -226,24 +235,30 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             string pfxTempPath = CertificateFileConventions.BuildAtomicTempPath(letsEncryptOptions.CertificatePfxPath);
             string keyTempPath = CertificateFileConventions.BuildAtomicTempPath(letsEncryptOptions.CertificatePrivateKeyPemPath);
 
-            logger?.LogInformation(
-                "Persisting listener certificate bundle for {Fqdn}; Operation=persist; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}; PfxTempPath={PfxTempPath}; KeyTempPath={KeyTempPath}",
-                letsEncryptOptions.CanonicalCertificateSubjectName,
-                letsEncryptOptions.CertificatePfxPath,
-                letsEncryptOptions.CertificatePrivateKeyPemPath,
-                pfxTempPath,
-                keyTempPath);
+            if (logger is not null)
+            {
+                LogPersistingListenerCertificateBundle(
+                    logger,
+                    letsEncryptOptions.CanonicalCertificateSubjectName,
+                    letsEncryptOptions.CertificatePfxPath,
+                    letsEncryptOptions.CertificatePrivateKeyPemPath,
+                    pfxTempPath,
+                    keyTempPath);
+            }
 
             try
             {
                 await WriteFileAtomicallyAsync(keyTempPath, letsEncryptOptions.CertificatePrivateKeyPemPath, issueResult.CertificatePrivateKeyPem, cancellationToken, logger).ConfigureAwait(false);
                 await WriteFileAtomicallyAsync(pfxTempPath, letsEncryptOptions.CertificatePfxPath, pfx, cancellationToken, logger).ConfigureAwait(false);
 
-                logger?.LogInformation(
-                    "Listener certificate bundle persisted for {Fqdn}; Operation=persist; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}",
-                    letsEncryptOptions.CanonicalCertificateSubjectName,
-                    letsEncryptOptions.CertificatePfxPath,
-                    letsEncryptOptions.CertificatePrivateKeyPemPath);
+                if (logger is not null)
+                {
+                    LogListenerCertificateBundlePersisted(
+                        logger,
+                        letsEncryptOptions.CanonicalCertificateSubjectName,
+                        letsEncryptOptions.CertificatePfxPath,
+                        letsEncryptOptions.CertificatePrivateKeyPemPath);
+                }
             }
             finally
             {
@@ -489,10 +504,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            logger?.LogInformation(
-                "Writing certificate artifact to temporary file; Operation=write; TempPath={TempPath}; TargetPath={TargetPath}",
-                tempPath,
-                targetPath);
+            if (logger is not null)
+            {
+                LogWritingCertificateArtifactToTemporaryFile(
+                    logger,
+                    tempPath,
+                    targetPath);
+            }
 
             try
             {
@@ -508,28 +526,38 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
                 }
 
-                FileInfo tempInfo = new(tempPath);
-                FileInfo? targetInfo = File.Exists(targetPath) ? new FileInfo(targetPath) : null;
-                logger?.LogInformation(
-                    "Certificate artifact ready for atomic replace; Operation=move; ProcessId={ProcessId}; SourcePath={SourcePath}; DestinationPath={DestinationPath}; SourceExists={SourceExists}; DestinationExists={DestinationExists}; SourceLength={SourceLength}; DestinationLength={DestinationLength}",
-                    Environment.ProcessId,
-                    tempInfo.FullName,
-                    Path.GetFullPath(targetPath),
-                    tempInfo.Exists,
-                    targetInfo is not null,
-                    tempInfo.Exists ? tempInfo.Length : -1L,
-                    targetInfo?.Length ?? -1L);
+                if (logger is not null && logger.IsEnabled(LogLevel.Information))
+                {
+                    FileInfo tempInfo = new(tempPath);
+                    FileInfo? targetInfo = File.Exists(targetPath) ? new FileInfo(targetPath) : null;
+                    string targetFullPath = Path.GetFullPath(targetPath);
+                    LogCertificateArtifactReadyForAtomicReplace(
+                        logger,
+                        Environment.ProcessId,
+                        tempInfo.FullName,
+                        targetFullPath,
+                        tempInfo.Exists,
+                        targetInfo is not null,
+                        tempInfo.Exists ? tempInfo.Length : -1L,
+                        targetInfo?.Length ?? -1L);
+                }
 
                 File.Move(tempPath, targetPath, overwrite: true);
 
-                logger?.LogInformation(
-                    "Certificate artifact moved atomically; Operation=move; TempPath={TempPath}; TargetPath={TargetPath}",
-                    tempPath,
-                    targetPath);
+                if (logger is not null)
+                {
+                    LogCertificateArtifactMovedAtomically(
+                        logger,
+                        tempPath,
+                        targetPath);
+                }
             }
             catch (Exception ex)
             {
-                logger?.LogError(ex, "Certificate artifact atomic write failed; Operation=write-or-move; TempPath={TempPath}; TargetPath={TargetPath}", tempPath, targetPath);
+                if (logger is not null)
+                {
+                    LogCertificateArtifactAtomicWriteFailed(logger, tempPath, targetPath, ex);
+                }
                 throw;
             }
         }
@@ -551,13 +579,136 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 if (File.Exists(tempPath))
                 {
                     File.Delete(tempPath);
-                    logger?.LogInformation("Deleted temporary certificate artifact; Operation=delete; TempPath={TempPath}", tempPath);
+                    if (logger is not null)
+                    {
+                        LogDeletedTemporaryCertificateArtifact(logger, tempPath);
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                logger?.LogWarning(ex, "Temporary certificate artifact cleanup failed; Operation=delete; TempPath={TempPath}", tempPath);
+                if (logger is not null)
+                {
+                    LogTemporaryCertificateArtifactCleanupFailed(logger, tempPath, ex);
+                }
             }
         }
+
+        /// <summary>
+        /// Emits the informational log that records the start of loading a persisted listener certificate bundle.
+        /// </summary>
+        /// <param name="logger">Logger receiving the bundle-loading event.</param>
+        /// <param name="fqdn">Generated BackFiller FQDN whose persisted certificate bundle is being read.</param>
+        /// <param name="certificatePfxPath">Full path to the persisted PFX bundle being loaded.</param>
+        [LoggerMessage(EventId = 2850, Level = LogLevel.Information, Message = "Loading listener certificate bundle for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}")]
+        private static partial void LogLoadingListenerCertificateBundle(ILogger logger, string fqdn, string certificatePfxPath);
+
+        /// <summary>
+        /// Emits the informational log that confirms a persisted listener certificate bundle was successfully loaded.
+        /// </summary>
+        /// <param name="logger">Logger receiving the bundle-loaded event.</param>
+        /// <param name="fqdn">Generated BackFiller FQDN whose persisted certificate bundle was loaded.</param>
+        /// <param name="certificatePfxPath">Full path to the persisted PFX bundle that was read successfully.</param>
+        [LoggerMessage(EventId = 2851, Level = LogLevel.Information, Message = "Loaded listener certificate bundle for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}")]
+        private static partial void LogLoadedListenerCertificateBundle(ILogger logger, string fqdn, string certificatePfxPath);
+
+        /// <summary>
+        /// Emits the error log that reports a failure while loading the persisted listener certificate bundle.
+        /// </summary>
+        /// <param name="logger">Logger receiving the bundle-load failure event.</param>
+        /// <param name="fqdn">Generated BackFiller FQDN whose persisted certificate bundle could not be loaded.</param>
+        /// <param name="certificatePfxPath">Full path to the persisted PFX bundle that failed to load.</param>
+        /// <param name="exception">Exception raised while reading or materializing the persisted certificate bundle.</param>
+        [LoggerMessage(EventId = 2852, Level = LogLevel.Error, Message = "Listener certificate bundle load failed for {Fqdn}; Operation=load; CertificatePfxPath={CertificatePfxPath}")]
+        private static partial void LogListenerCertificateBundleLoadFailed(ILogger logger, string fqdn, string certificatePfxPath, Exception exception);
+
+        /// <summary>
+        /// Emits the informational log that records the start of certificate bundle persistence.
+        /// </summary>
+        /// <param name="logger">Logger receiving the bundle-persisting event.</param>
+        /// <param name="fqdn">Generated BackFiller FQDN whose certificate artifacts are being written.</param>
+        /// <param name="certificatePfxPath">Final PFX destination path for the persisted bundle.</param>
+        /// <param name="certificatePrivateKeyPemPath">Final private-key PEM destination path for the persisted bundle.</param>
+        /// <param name="pfxTempPath">Temporary staging path used for the PFX payload.</param>
+        /// <param name="keyTempPath">Temporary staging path used for the private-key PEM payload.</param>
+        [LoggerMessage(EventId = 2853, Level = LogLevel.Information, Message = "Persisting listener certificate bundle for {Fqdn}; Operation=persist; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}; PfxTempPath={PfxTempPath}; KeyTempPath={KeyTempPath}")]
+        private static partial void LogPersistingListenerCertificateBundle(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, string pfxTempPath, string keyTempPath);
+
+        /// <summary>
+        /// Emits the informational log that confirms the certificate bundle was persisted successfully.
+        /// </summary>
+        /// <param name="logger">Logger receiving the bundle-persisted event.</param>
+        /// <param name="fqdn">Generated BackFiller FQDN whose certificate artifacts were written.</param>
+        /// <param name="certificatePfxPath">Final PFX destination path that now contains the persisted bundle.</param>
+        /// <param name="certificatePrivateKeyPemPath">Final private-key PEM destination path that now contains the persisted bundle.</param>
+        [LoggerMessage(EventId = 2854, Level = LogLevel.Information, Message = "Listener certificate bundle persisted for {Fqdn}; Operation=persist; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
+        private static partial void LogListenerCertificateBundlePersisted(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath);
+
+        /// <summary>
+        /// Emits the informational log that records a certificate artifact being written to its temporary staging file.
+        /// </summary>
+        /// <param name="logger">Logger receiving the staging-write event.</param>
+        /// <param name="tempPath">Temporary file path used to stage the artifact before the atomic move.</param>
+        /// <param name="targetPath">Final file path that will receive the staged artifact.</param>
+        [LoggerMessage(EventId = 2855, Level = LogLevel.Information, Message = "Writing certificate artifact to temporary file; Operation=write; TempPath={TempPath}; TargetPath={TargetPath}")]
+        private static partial void LogWritingCertificateArtifactToTemporaryFile(ILogger logger, string tempPath, string targetPath);
+
+        /// <summary>
+        /// Emits the informational log that records the source and destination characteristics immediately before an atomic certificate-artifact replacement.
+        /// </summary>
+        /// <param name="logger">Logger receiving the atomic-replace event.</param>
+        /// <param name="processId">Operating-system process identifier for the current persistence attempt.</param>
+        /// <param name="sourcePath">Temporary source path that will be moved into place.</param>
+        /// <param name="destinationPath">Final certificate artifact path that will receive the replacement.</param>
+        /// <param name="sourceExists">Whether the temporary source path exists at log time.</param>
+        /// <param name="destinationExists">Whether the destination path exists at log time.</param>
+        /// <param name="sourceLength">Current byte length of the temporary source artifact.</param>
+        /// <param name="destinationLength">Current byte length of the existing destination artifact.</param>
+        [LoggerMessage(EventId = 2856, Level = LogLevel.Information, Message = "Certificate artifact ready for atomic replace; Operation=move; ProcessId={ProcessId}; SourcePath={SourcePath}; DestinationPath={DestinationPath}; SourceExists={SourceExists}; DestinationExists={DestinationExists}; SourceLength={SourceLength}; DestinationLength={DestinationLength}")]
+        private static partial void LogCertificateArtifactReadyForAtomicReplace(
+            ILogger logger,
+            int processId,
+            string sourcePath,
+            string destinationPath,
+            bool sourceExists,
+            bool destinationExists,
+            long sourceLength,
+            long destinationLength);
+
+        /// <summary>
+        /// Emits the informational log that confirms a certificate artifact has been staged into place after the atomic move.
+        /// </summary>
+        /// <param name="logger">Logger receiving the atomic-move-success event.</param>
+        /// <param name="tempPath">Temporary staging path that was moved into the final destination.</param>
+        /// <param name="targetPath">Final file path that now contains the staged certificate artifact.</param>
+        [LoggerMessage(EventId = 2857, Level = LogLevel.Information, Message = "Certificate artifact moved atomically; Operation=move; TempPath={TempPath}; TargetPath={TargetPath}")]
+        private static partial void LogCertificateArtifactMovedAtomically(ILogger logger, string tempPath, string targetPath);
+
+        /// <summary>
+        /// Emits the error log that reports a failure while writing or moving a certificate artifact atomically.
+        /// </summary>
+        /// <param name="logger">Logger receiving the atomic-write failure event.</param>
+        /// <param name="tempPath">Temporary staging path associated with the failed operation.</param>
+        /// <param name="targetPath">Final target path associated with the failed operation.</param>
+        /// <param name="exception">Exception raised while writing the temporary artifact or moving it into place.</param>
+        [LoggerMessage(EventId = 2858, Level = LogLevel.Error, Message = "Certificate artifact atomic write failed; Operation=write-or-move; TempPath={TempPath}; TargetPath={TargetPath}")]
+        private static partial void LogCertificateArtifactAtomicWriteFailed(ILogger logger, string tempPath, string targetPath, Exception exception);
+
+        /// <summary>
+        /// Emits the informational log that records deletion of a temporary certificate artifact after persistence finishes.
+        /// </summary>
+        /// <param name="logger">Logger receiving the temporary-artifact deletion event.</param>
+        /// <param name="tempPath">Temporary staging path that was deleted during cleanup.</param>
+        [LoggerMessage(EventId = 2859, Level = LogLevel.Information, Message = "Deleted temporary certificate artifact; Operation=delete; TempPath={TempPath}")]
+        private static partial void LogDeletedTemporaryCertificateArtifact(ILogger logger, string tempPath);
+
+        /// <summary>
+        /// Emits the warning log that reports best-effort cleanup failure for a temporary certificate artifact.
+        /// </summary>
+        /// <param name="logger">Logger receiving the cleanup-failure event.</param>
+        /// <param name="tempPath">Temporary staging path that could not be removed.</param>
+        /// <param name="exception">Exception raised while deleting the temporary artifact during cleanup.</param>
+        [LoggerMessage(EventId = 2860, Level = LogLevel.Warning, Message = "Temporary certificate artifact cleanup failed; Operation=delete; TempPath={TempPath}")]
+        private static partial void LogTemporaryCertificateArtifactCleanupFailed(ILogger logger, string tempPath, Exception exception);
     }
 }

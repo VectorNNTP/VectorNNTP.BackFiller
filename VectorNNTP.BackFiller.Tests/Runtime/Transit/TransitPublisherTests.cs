@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
-using VectorNNTP.BackFiller.Tests.TestInfrastructure;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
@@ -29,19 +28,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
     /// </remarks>
     public sealed class TransitPublisherTests
     {
-        /// <summary>
-        /// Creates a compact timestamp/thread/task marker for diagnostic traces emitted by tests that require forensic timing information.
-        /// </summary>
-        /// <returns>Returns a stable textual trace stamp containing UTC time, managed thread ID, and current task ID.</returns>
-        /// <summary>
-        /// Confirms the trace stamp behavior.
-        /// </summary>
-        /// <returns>The value returned by the trace stamp helper.</returns>
-        private static string TraceStamp()
-        {
-            return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
-        }
-
         /// <summary>
         /// Verifies that an initialized publisher admits a publish request, establishes the demand-driven transit connection, sends the article with the expected payload, and returns a definitive <c>239 Accepted</c> result correlated to the submitted Message-ID.
         /// </summary>
@@ -554,8 +540,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             _ = await response239Sent.Task.WaitAsync(responseTimeout.Token);
 
             using CancellationTokenSource terminalizationTimeout = new(TimeSpan.FromSeconds(5));
-            TransitTransportSnapshot finalSnapshot = default;
-            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot finalDiagnostics = default!;
+            TransitTransportSnapshot? finalSnapshot = null;
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot? finalDiagnostics = null;
             while (true)
             {
                 terminalizationTimeout.Token.ThrowIfCancellationRequested();
@@ -572,6 +558,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 await Task.Yield();
             }
 
+            Assert.NotNull(finalSnapshot);
+            Assert.NotNull(finalDiagnostics);
             Assert.Equal(1, finalSnapshot.TotalArticlesAccepted);
             Assert.Equal(0, finalDiagnostics.QueueSnapshot.InFlightCount);
             Assert.Equal(0, GetActiveSubmissionCount(publisher));
@@ -2033,12 +2021,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 TransitShutdownDrainInactivityWatchdog: TimeSpan.Zero,
                 TransitShutdownAbsoluteMaximum: TimeSpan.Zero);
 
+            TaskCompletionSource<bool> claimBoundarySignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Action claimBoundaryObserved = () => _ = claimBoundarySignal.TrySetResult(true);
+
             await using TransitPublisher publisher = new(
                 options,
                 TimeProvider.System,
                 NullLogger<TransitPublisher>.Instance,
                 connectionPoolSize: 1,
-                perConnectionPipelineDepth: 1);
+                perConnectionPipelineDepth: 1,
+                claimBoundaryObserved: claimBoundaryObserved);
 
             await publisher.InitializeAsync(CancellationToken.None);
             allowCapabilities.TrySetResult();
@@ -2050,7 +2042,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(TransitPublishStatus.Accepted, prime.Status);
 
             GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
-            SemaphoreSlim retryScheduledSignal = GetRetryScheduledSignal(queue);
             object claimGate = GetClaimGate(queue);
 
             TaskCompletionSource claimGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2079,30 +2070,23 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     new byte[] { (byte)'x', (byte)'\n' },
                     CancellationToken.None).AsTask();
 
-                while (GetQueuedSubmissionCount(publisher) == 0)
-                {
-                    testTimeout.Token.ThrowIfCancellationRequested();
-                    await Task.Yield();
-                }
+                await claimBoundarySignal.Task.WaitAsync(testTimeout.Token);
 
                 Task disposeTask = publisher.DisposeAsync().AsTask();
-                await disposeTask.WaitAsync(testTimeout.Token);
-
-                int remainingAfterDispose = GetRemainingConnectionWorkerCount(publisher);
-                Assert.True(remainingAfterDispose > 0, "Expected bounded DisposeAsync to return while the worker remained blocked on queue claim.");
-
-                _ = retryScheduledSignal.Release();
-                _ = retryScheduledSignal.Wait(0);
-
-                releaseClaimGate.Set();
-                await claimGateHolder.WaitAsync(testTimeout.Token);
 
                 releaseSecondResponse.TrySetResult();
                 TransitPublishResult secondResult = await secondPublish.WaitAsync(testTimeout.Token);
                 Assert.True(secondResult.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Ambiguous or TransitPublishStatus.Canceled);
 
+                Assert.False(
+                    claimGateHolder.IsCompleted,
+                    "Expected bounded DisposeAsync to return while the worker remained blocked on queue claim.");
+
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(testTimeout.Token);
+
+                await disposeTask.WaitAsync(testTimeout.Token);
                 await WaitForRemainingConnectionWorkerCountAsync(publisher, expectedCount: 0, testTimeout.Token);
-                Assert.Throws<ObjectDisposedException>(() => retryScheduledSignal.Release());
             }
             finally
             {
@@ -2212,19 +2196,47 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     cancellationToken.ThrowIfCancellationRequested();
 
                     TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
-                    if (snapshot.Slots.Length > 0
-                        && snapshot.Slots[0].HasCurrentConnection
-                        && !string.IsNullOrWhiteSpace(snapshot.Slots[0].CurrentConnectionId)
-                        && !string.Equals(snapshot.Slots[0].CurrentConnectionId, excludedConnectionId, StringComparison.Ordinal))
+                    if (snapshot.Slots.Length > 0)
                     {
-                        string currentConnectionId = snapshot.Slots[0].CurrentConnectionId;
-                        TransitPublisher.ConnectionDiagnosticsEntry? entry = ResolvePrimaryEntry(snapshot);
-                        if (entry is not null
-                            && entry.Snapshot.CurrentState == TransitConnectionState.Ready
-                            && !string.IsNullOrWhiteSpace(entry.Snapshot.LocalEndpoint))
+                        TransitPublisher.ConnectionSlotSnapshot primarySlot = snapshot.Slots[0];
+                        string? candidateConnectionId = primarySlot.CurrentConnectionId;
+                        if (primarySlot.HasCurrentConnection
+                            && !string.IsNullOrWhiteSpace(candidateConnectionId)
+                            && !string.Equals(candidateConnectionId, excludedConnectionId, StringComparison.Ordinal))
                         {
-                            return (currentConnectionId, entry.Snapshot.LocalEndpoint);
+                            string currentConnectionId = candidateConnectionId;
+                            TransitPublisher.ConnectionDiagnosticsEntry? entry = ResolvePrimaryEntry(snapshot);
+                            string? candidateLocalEndpoint = entry?.Snapshot.LocalEndpoint;
+                            if (entry is not null
+                                && entry.Snapshot.CurrentState == TransitConnectionState.Ready
+                                && !string.IsNullOrWhiteSpace(candidateLocalEndpoint))
+                            {
+                                string localEndpoint = candidateLocalEndpoint;
+                                return (currentConnectionId, localEndpoint);
+                            }
                         }
+                    }
+
+                    await Task.Yield();
+                }
+            }
+
+            static async Task<TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot> WaitForPrimaryReconnectPendingAsync(
+                TransitPublisher publisher,
+                string originalConnectionId,
+                CancellationToken cancellationToken)
+            {
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+                    if (snapshot.TotalReconnects >= 1
+                        && snapshot.Slots.Length > 0
+                        && !snapshot.Slots[0].HasCurrentConnection
+                        && snapshot.Connections.All(entry => !string.Equals(entry.ConnectionId, originalConnectionId, StringComparison.Ordinal)))
+                    {
+                        return snapshot;
                     }
 
                     await Task.Yield();
@@ -2425,12 +2437,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(0, ownerSlotIndex);
             await WaitForPrimaryReadyWithConnectionIdAsync(publisher, originalConnectionId, timeout.Token);
 
+            TransitTransportSnapshot transportBeforeReplacement = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+
             releaseFirstSessionDisconnect.TrySetResult();
             await firstSessionDisconnected.Task.WaitAsync(timeout.Token);
             await WaitForPrimaryTerminalFaultAsync(publisher, timeout.Token);
 
             Task<TransitPublishResult> submissionA = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
             Task<TransitPublishResult> submissionB = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot reconnectPendingSnapshot = await WaitForPrimaryReconnectPendingAsync(
+                publisher,
+                originalConnectionId,
+                timeout.Token);
+            Assert.False(reconnectPendingSnapshot.Slots[0].HasCurrentConnection);
+            Assert.Null(reconnectPendingSnapshot.Slots[0].CurrentConnectionId);
+            Assert.DoesNotContain(
+                reconnectPendingSnapshot.Connections,
+                entry => string.Equals(entry.ConnectionId, originalConnectionId, StringComparison.Ordinal));
+            Assert.Equal(1, reconnectPendingSnapshot.TotalReconnects);
+
+            TransitTransportSnapshot reconnectPendingTransport = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+            Assert.True(reconnectPendingTransport.TotalBytesTransmitted >= transportBeforeReplacement.TotalBytesTransmitted);
+            Assert.True(reconnectPendingTransport.TotalBytesReceived >= transportBeforeReplacement.TotalBytesReceived);
 
             releaseSecondSessionHandshake.TrySetResult();
 
@@ -2454,10 +2487,20 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot postRaceSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
             TransitPublisher.ConnectionDiagnosticsEntry? postRaceEntry = ResolvePrimaryEntry(postRaceSnapshot);
             Assert.NotNull(postRaceEntry);
+            Assert.Equal(replacementConnectionId, postRaceEntry.ConnectionId);
             Assert.False(string.IsNullOrWhiteSpace(postRaceEntry.Snapshot.LocalEndpoint));
             Assert.True(EndpointsMatch(replacementLocalEndpoint, postRaceEntry.Snapshot.LocalEndpoint!));
+            Assert.DoesNotContain(postRaceSnapshot.Connections, entry => string.Equals(entry.ConnectionId, originalConnectionId, StringComparison.Ordinal));
             Assert.Equal(1, postRaceSnapshot.TotalReconnects);
             Assert.False(thirdSessionAccepted.Task.IsCompleted);
+
+            TransitTransportSnapshot postRaceTransportSnapshot = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+            Assert.True(transportBeforeReplacement.TotalBytesTransmitted > 0);
+            Assert.True(transportBeforeReplacement.TotalBytesReceived > 0);
+            Assert.True(postRaceTransportSnapshot.TotalBytesTransmitted >= transportBeforeReplacement.TotalBytesTransmitted);
+            Assert.True(postRaceTransportSnapshot.TotalBytesReceived >= transportBeforeReplacement.TotalBytesReceived);
 
             TransitPublishResult postReconnectResult = await publisher.PublishAsync(postReconnectMessageId, payload, CancellationToken.None)
                 .AsTask()
@@ -2469,6 +2512,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             string postReconnectEndpoint = await postReconnectTakethisEndpoint.Task.WaitAsync(timeout.Token);
             Assert.True(EndpointsMatch(replacementLocalEndpoint, postReconnectEndpoint));
+
+            TransitTransportSnapshot finalTransportSnapshot = publisher.CaptureTransportSnapshot(
+                activeConnections: 1,
+                outstandingSubmissions: checked((int)GetQueuedSubmissionCount(publisher)));
+            Assert.True(finalTransportSnapshot.TotalBytesTransmitted >= postRaceTransportSnapshot.TotalBytesTransmitted);
+            Assert.True(finalTransportSnapshot.TotalBytesReceived >= postRaceTransportSnapshot.TotalBytesReceived);
 
             await WaitForPrimaryReadyWithConnectionIdAsync(publisher, replacementConnectionId, timeout.Token);
             Assert.False(thirdSessionAccepted.Task.IsCompleted);
@@ -3056,97 +3105,102 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public async Task PublishAsync_WhenReconnectInitializationFails_CompletesSubmissionAmbiguousAndIncrementsAmbiguousMetric()
         {
-            string configuredTraceFile = Environment.GetEnvironmentVariable("VNNTP_RI_TRACE_FILE") ?? string.Empty;
-            string traceFile = string.IsNullOrWhiteSpace(configuredTraceFile)
-                ? Path.Combine(AppContext.BaseDirectory, $"ri-forensic-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.log")
-                : configuredTraceFile;
-            await using StreamWriter fileWriter = new(traceFile, append: false, Encoding.UTF8) { AutoFlush = true };
-            await using ConsoleOutputScope outputScope = await ConsoleOutputScope.CaptureToAsync(TextWriter.Synchronized(fileWriter)).ConfigureAwait(false);
+            string messageId = "<publisher-reconnect-init-fail@example.com>";
+            byte[] payload = [(byte)'R', (byte)'\n'];
+
+            TaskCompletionSource firstSessionReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource allowFirstSessionClose = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource firstSessionClosed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource secondSessionAccepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource allowSecondGreeting = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+                    firstSessionReady.TrySetResult();
+
+                    await allowFirstSessionClose.Task.WaitAsync(cancellationToken);
+                    stream.Dispose();
+                    firstSessionClosed.TrySetResult();
+                },
+                async (stream, cancellationToken) =>
+                {
+                    secondSessionAccepted.TrySetResult();
+                    await allowSecondGreeting.Task.WaitAsync(cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "400 temporary failure");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1, transitRetryMaxAttempts: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+            object claimGate = GetClaimGate(queue);
+            TaskCompletionSource claimGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            using ManualResetEventSlim releaseClaimGate = new(false);
+            Task claimGateHolder = Task.Run(() =>
+            {
+                Monitor.Enter(claimGate);
+                try
+                {
+                    claimGateHeld.TrySetResult();
+                    releaseClaimGate.Wait();
+                }
+                finally
+                {
+                    Monitor.Exit(claimGate);
+                }
+            }, CancellationToken.None);
 
             try
             {
-                Console.WriteLine($"[TRACE-RI-80] {TraceStamp()} Test START PublishAsync_WhenReconnectInitializationFails... traceFile={traceFile}");
-                string messageId = "<publisher-reconnect-init-fail@example.com>";
-                byte[] payload = [(byte)'R', (byte)'\n'];
-
-                await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
-                [
-                    async (stream, cancellationToken) =>
-                    {
-                        Console.WriteLine($"[TRACE-RI-81] {TraceStamp()} Test Session1 ACCEPTED");
-                        await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
-                        await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
-                        Console.WriteLine($"[TRACE-RI-82] {TraceStamp()} Test Session1 CAPABILITIES-RECEIVED");
-                        await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
-                        await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
-                        await FakePublisherServer.WriteLineAsync(stream, ".");
-                        await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
-                        Console.WriteLine($"[TRACE-RI-83] {TraceStamp()} Test Session1 MODE-STREAM-RECEIVED");
-                        await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
-
-                        Console.WriteLine($"[TRACE-RI-84] {TraceStamp()} Test Session1 DISCONNECT");
-                        stream.Dispose();
-                    },
-                    async (stream, _) =>
-                    {
-                        Console.WriteLine($"[TRACE-RI-85] {TraceStamp()} Test Session2 ACCEPTED");
-                        await FakePublisherServer.WriteLineAsync(stream, "400 temporary failure");
-                        Console.WriteLine($"[TRACE-RI-86] {TraceStamp()} Test Session2 WROTE-400");
-                    },
-                ]);
-
-                await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
-                await publisher.InitializeAsync(CancellationToken.None);
-                Console.WriteLine($"[TRACE-RI-87] {TraceStamp()} Test Publisher.InitializeAsync COMPLETE state={publisher.CurrentState}");
-
-                using CancellationTokenSource faultedTimeout = new(TimeSpan.FromSeconds(10));
-                Console.WriteLine($"[TRACE-RI-88] {TraceStamp()} Test faultedTimeout CREATED seconds=10");
-                while (GetPrimaryConnectionState(publisher) is not TransitConnectionState.Faulted and not TransitConnectionState.Disconnected)
-                {
-                    await Task.Delay(10, faultedTimeout.Token);
-                }
-
-                TransitConnectionState observed = GetPrimaryConnectionState(publisher);
-                Console.WriteLine($"[TRACE-RI-89] {TraceStamp()} Test observed primary connection state={observed}");
-
-                using CancellationTokenSource publishTimeout = new(TimeSpan.FromSeconds(10));
-                Console.WriteLine($"[TRACE-RI-90] {TraceStamp()} Test publishTimeout CREATED seconds=10");
+                using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+                await claimGateHeld.Task.WaitAsync(timeout.Token);
                 Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, payload, CancellationToken.None).AsTask();
-                Console.WriteLine($"[TRACE-RI-91] {TraceStamp()} Test publishTask CREATED taskId={publishTask.Id} isCompleted={publishTask.IsCompleted}");
 
-                publishTimeout.Token.Register(() =>
-                {
-                    TransitTransportSnapshot snapshotOnTimeout = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
-                    TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
-                    Console.WriteLine($"[TRACE-RI-92] {TraceStamp()} Test publishTimeout CANCELED taskId={publishTask.Id} publishTaskCompleted={publishTask.IsCompleted} totalSubmitted={snapshotOnTimeout.TotalArticlesSubmitted} totalAmbiguous={snapshotOnTimeout.TotalArticlesAmbiguous} activeWorkItems={GetActiveSubmissionCount(publisher)} queued={diagnostics.QueueSnapshot.QueuedItemCount} retryPending={diagnostics.QueueSnapshot.RetryPendingCount} inFlight={diagnostics.QueueSnapshot.InFlightCount} reconnects={diagnostics.TotalReconnects}");
-                });
+                await firstSessionReady.Task.WaitAsync(timeout.Token);
 
-                TransitPublishResult result;
-                try
-                {
-                    result = await publishTask.WaitAsync(publishTimeout.Token);
-                    Console.WriteLine($"[TRACE-RI-93] {TraceStamp()} Test publishTask COMPLETED taskId={publishTask.Id} status={result.Status}");
-                }
-                catch (Exception ex)
-                {
-                    TransitTransportSnapshot snapshotOnException = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
-                    Console.WriteLine($"[TRACE-RI-94] {TraceStamp()} Test publishTask EXCEPTION taskId={publishTask.Id} exType={ex.GetType().FullName} exMessage={ex.Message} publishTaskCompleted={publishTask.IsCompleted} totalSubmitted={snapshotOnException.TotalArticlesSubmitted} totalAmbiguous={snapshotOnException.TotalArticlesAmbiguous} activeWorkItems={GetActiveSubmissionCount(publisher)}");
-                    throw;
-                }
+                TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot pendingSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+                Assert.Equal(1, pendingSnapshot.QueueSnapshot.QueuedItemCount);
+                Assert.Equal(1, GetActiveSubmissionCount(publisher));
+                Assert.False(secondSessionAccepted.Task.IsCompleted);
+
+                allowFirstSessionClose.TrySetResult();
+                await firstSessionClosed.Task.WaitAsync(timeout.Token);
+
+                TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterFirstCloseSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+                Assert.Equal(1, afterFirstCloseSnapshot.QueueSnapshot.QueuedItemCount);
+                Assert.Equal(1, GetActiveSubmissionCount(publisher));
+
+                releaseClaimGate.Set();
+
+                TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeReplacementFailureSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+                Assert.Equal(1, beforeReplacementFailureSnapshot.QueueSnapshot.QueuedItemCount);
+                Assert.Equal(1, GetActiveSubmissionCount(publisher));
+                Assert.False(publishTask.IsCompleted);
+                Assert.False(allowSecondGreeting.Task.IsCompleted);
+
+                allowSecondGreeting.TrySetResult();
+                TransitPublishResult result = await publishTask.WaitAsync(timeout.Token);
 
                 Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
-
                 TransitTransportSnapshot snapshot = publisher.CaptureTransportSnapshot(activeConnections: 0, outstandingSubmissions: 0);
-                Console.WriteLine($"[TRACE-RI-95] {TraceStamp()} Test assertions snapshot totalSubmitted={snapshot.TotalArticlesSubmitted} totalAmbiguous={snapshot.TotalArticlesAmbiguous}");
                 Assert.Equal(1, snapshot.TotalArticlesSubmitted);
                 Assert.Equal(1, snapshot.TotalArticlesAmbiguous);
             }
             finally
             {
-                Console.Out.Flush();
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(CancellationToken.None);
             }
-
-            Console.WriteLine($"[TRACE-RI-99] Trace file written: {traceFile}");
         }
 
         /// <summary>
@@ -4133,8 +4187,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             int port,
             int connectionPoolSize,
             int perConnectionPipelineDepth = 8,
+            int transitRetryMaxAttempts = 3,
             TimeSpan? connectionResponseProgressTimeout = null,
-            TimeSpan? connectionResponseProgressCheckInterval = null)
+            TimeSpan? connectionResponseProgressCheckInterval = null,
+            Action? claimBoundaryObserved = null)
         {
             BackFillerRuntimeOptions options = new(
                 CanonicalBackFillerFqdn: "bf.example.com",
@@ -4152,7 +4208,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 ShutdownDrainQueuedWork: true,
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
-                WriteBatchCoalesceMicroseconds: 250);
+                WriteBatchCoalesceMicroseconds: 250,
+                TransitRetryMaxAttempts: transitRetryMaxAttempts);
 
             return new TransitPublisher(
                 options,
@@ -4161,7 +4218,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionPoolSize,
                 perConnectionPipelineDepth,
                 connectionResponseProgressTimeout,
-                connectionResponseProgressCheckInterval);
+                connectionResponseProgressCheckInterval,
+                timingCollector: null,
+                claimBoundaryObserved: claimBoundaryObserved);
         }
 
         /// <summary>
@@ -4540,12 +4599,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             ArgumentNullException.ThrowIfNull(publisher);
 
             TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
-            if (snapshot.Slots.Length == 0 || !snapshot.Slots[0].HasCurrentConnection || string.IsNullOrWhiteSpace(snapshot.Slots[0].CurrentConnectionId))
+            if (snapshot.Slots.Length == 0)
             {
                 return TransitConnectionState.Disconnected;
             }
 
-            string primaryConnectionId = snapshot.Slots[0].CurrentConnectionId;
+            TransitPublisher.ConnectionSlotSnapshot primarySlot = snapshot.Slots[0];
+            string? candidatePrimaryConnectionId = primarySlot.CurrentConnectionId;
+            if (!primarySlot.HasCurrentConnection || string.IsNullOrWhiteSpace(candidatePrimaryConnectionId))
+            {
+                return TransitConnectionState.Disconnected;
+            }
+
+            string primaryConnectionId = candidatePrimaryConnectionId;
             TransitPublisher.ConnectionDiagnosticsEntry? entry = snapshot.Connections.FirstOrDefault(candidate => string.Equals(candidate.ConnectionId, primaryConnectionId, StringComparison.Ordinal));
             return entry?.Snapshot.CurrentState ?? TransitConnectionState.Disconnected;
         }

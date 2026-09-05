@@ -52,6 +52,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Optional correlation identifier that enables payload diagnostics for matching deliveries.
         /// </summary>
         private readonly string? _diagnosticCorrelationId;
+        /// <summary>
+        /// Maximum RabbitMQ work-request envelope size allowed before the consumer copies the borrowed broker body.
+        /// </summary>
+        private readonly int _workRequestMaxPayloadBytes;
 
         /// <summary>
         /// Initializes the default factory used to create concrete consumer sessions.
@@ -74,6 +78,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _diagnosticCorrelationId = string.IsNullOrWhiteSpace(rabbitMq.DiagnosticPayloadCorrelationId)
                 ? null
                 : rabbitMq.DiagnosticPayloadCorrelationId.Trim();
+            _workRequestMaxPayloadBytes = rabbitMq.WorkRequestMaxPayloadBytes;
         }
 
         /// <inheritdoc/>
@@ -92,6 +97,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 deliverySink,
                 _loggerFactory.CreateLogger<RabbitMqBackboneConsumerSession>(),
                 prefetchCount,
+                _workRequestMaxPayloadBytes,
                 _diagnosticCorrelationId);
         }
     }
@@ -157,11 +163,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Registration for graceful-shutdown notifications.
         /// </summary>
-        private readonly IDisposable _gracefulShutdownRegistration;
+        private readonly CancellationTokenRegistration _gracefulShutdownRegistration;
         /// <summary>
         /// Registration for forced-shutdown notifications.
         /// </summary>
-        private readonly IDisposable _forcedShutdownRegistration;
+        private readonly CancellationTokenRegistration _forcedShutdownRegistration;
 
         /// <summary>
         /// Indicates that service shutdown has begun and reconciliation should stop.
@@ -245,10 +251,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <inheritdoc/>
         public async Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
         {
-            if (retainConnectionCount < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(retainConnectionCount));
-            }
+            ArgumentOutOfRangeException.ThrowIfNegative(retainConnectionCount);
 
             List<RetirementOperation> retirements = [];
             List<Task> pendingRetirements = [];
@@ -280,7 +283,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     _ = _sessionRuntimes.Remove(retirement.SessionKey);
                 }
 
-                foreach ((string sessionKey, RetiringSessionRuntimeState retiring) in _retiringSessionRuntimes)
+                foreach ((_, RetiringSessionRuntimeState retiring) in _retiringSessionRuntimes)
                 {
                     if (retiring.Identity.AccountId == accountId && retiring.Identity.ConnectionNumber > retainConnectionCount)
                     {
@@ -295,7 +298,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             for (int index = 0; index < retirements.Count; index++)
             {
-                await ExecuteRetirementOperationAsync(retirements[index], cancellationToken, cancelAdmittedWork: false).ConfigureAwait(false);
+                await ExecuteRetirementOperationAsync(retirements[index], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             for (int index = 0; index < pendingRetirements.Count; index++)
@@ -536,7 +539,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             for (int i = 0; i < retirements.Count; i++)
             {
-                await ExecuteRetirementOperationAsync(retirements[i], cancellationToken, cancelAdmittedWork: false).ConfigureAwait(false);
+                await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
             }
 
             for (int i = 0; i < starts.Count; i++)
@@ -551,7 +554,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Builds the desired logical session set from the current account snapshot.
         /// </summary>
-        private Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(
+        private static Dictionary<string, RabbitMqConsumerSessionIdentity> BuildDesiredSessions(
             NntpAccountSnapshotState snapshot,
             Func<string, bool> hasUsableBackboneCapacity)
         {
@@ -635,7 +638,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             {
                 try
                 {
-                    await ExecuteRetirementOperationAsync(retirements[i], cancellationToken, cancelAdmittedWork: true).ConfigureAwait(false);
+                    await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: true, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -689,7 +692,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Stops, disposes, and resolves completion tracking for one retiring session.
         /// </summary>
-        private async Task ExecuteRetirementOperationAsync(RetirementOperation operation, CancellationToken cancellationToken, bool cancelAdmittedWork)
+        private async Task ExecuteRetirementOperationAsync(RetirementOperation operation, bool cancelAdmittedWork, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(operation);
 
@@ -697,7 +700,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             bool retirementCompleted = false;
             try
             {
-                await operation.Runtime.Session.StopAsync(cancellationToken, cancelAdmittedWork).ConfigureAwait(false);
+                await operation.Runtime.Session.StopAsync(cancelAdmittedWork, cancellationToken).ConfigureAwait(false);
                 await operation.Runtime.Session.DisposeAsync().ConfigureAwait(false);
                 retirementCompleted = true;
 
@@ -726,14 +729,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                         _ = _retiringSessionRuntimes.Remove(operation.SessionKey);
                     }
 
-                    if (failure is null)
-                    {
-                        _ = operation.CompletionSource.TrySetResult(true);
-                    }
-                    else
-                    {
-                        _ = operation.CompletionSource.TrySetException(failure);
-                    }
+                    _ = failure is null ? operation.CompletionSource.TrySetResult(true) : operation.CompletionSource.TrySetException(failure);
                 }
                 finally
                 {

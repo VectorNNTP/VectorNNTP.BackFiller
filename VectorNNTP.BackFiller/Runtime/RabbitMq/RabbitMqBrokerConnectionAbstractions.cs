@@ -230,7 +230,29 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IReadOnlyList<string> hosts = RabbitMqConnectionFactoryBuilder.BuildHostList(runtimeOptions);
 
             IConnection connection = await factory.CreateConnectionAsync(hosts, cancellationToken).ConfigureAwait(false);
-            return new RabbitMqBrokerConnectionAdapter(connection, runtimeOptions.VirtualHost);
+            return await CreateOwnedConnectionAsync(connection, runtimeOptions.VirtualHost).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Transfers ownership of an opened RabbitMQ connection into the adapter boundary.
+        /// </summary>
+        /// <param name="connection">Opened broker connection about to be owned by the adapter.</param>
+        /// <param name="virtualHost">Configured virtual host used to establish the connection.</param>
+        /// <returns>The owned broker connection abstraction.</returns>
+        internal static async Task<IRabbitMqBrokerConnection> CreateOwnedConnectionAsync(IConnection connection, string virtualHost)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            ArgumentException.ThrowIfNullOrWhiteSpace(virtualHost);
+
+            try
+            {
+                return new RabbitMqBrokerConnectionAdapter(connection, virtualHost);
+            }
+            catch
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
         }
     }
 
@@ -248,6 +270,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Validated virtual host associated with the connection.
         /// </summary>
         private readonly string _virtualHost;
+
+        /// <summary>
+        /// Validated client-provided connection name preserved as a non-null adapter boundary invariant.
+        /// </summary>
+        private readonly string _clientProvidedName;
 
         /// <summary>
         /// Forwarder attached to the client's asynchronous shutdown event.
@@ -290,6 +317,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _virtualHost = !string.IsNullOrWhiteSpace(virtualHost)
                 ? virtualHost
                 : throw new ArgumentException("Virtual host is required.", nameof(virtualHost));
+            _clientProvidedName = !string.IsNullOrWhiteSpace(_connection.ClientProvidedName)
+                ? _connection.ClientProvidedName
+                : throw new InvalidOperationException("RabbitMQ connection invariant violated: IConnection.ClientProvidedName must be non-null and non-whitespace at RabbitMqBrokerConnectionAdapter boundary.");
 
             _connectionShutdownAsyncHandler = (sender, args) =>
             {
@@ -348,7 +378,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         public string VirtualHost => _virtualHost;
 
         /// <inheritdoc/>
-        public string ClientProvidedName => _connection.ClientProvidedName;
+        public string ClientProvidedName => _clientProvidedName;
 
         /// <inheritdoc/>
         public IConnection UnderlyingConnection => _connection;
@@ -490,9 +520,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         /// <param name="arguments">Immutable declaration arguments.</param>
         /// <returns>A mutable dictionary copy, or <see langword="null"/> when no arguments were supplied.</returns>
-        private static IDictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
+        private static Dictionary<string, object?>? ToMutable(IReadOnlyDictionary<string, object?>? arguments)
         {
-            return arguments is null ? null : (IDictionary<string, object?>)arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);
+            return arguments is null ? null : arguments.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, StringComparer.Ordinal);
         }
     }
 }

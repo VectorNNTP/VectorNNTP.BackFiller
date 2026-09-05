@@ -26,7 +26,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     /// Repository usage routes this type through <see cref="VectorNNTP.Backfiller.Runtime.Articles.Grabber.NntpArticleExecutionSessionManager"/>, which ensures that one active article workflow or keepalive probe uses a session at a time.
     /// The session serializes command writes to avoid QUIT racing active command emission during shutdown, but it is not a general-purpose concurrent NNTP command multiplexer.
     /// </remarks>
-    internal sealed class NntpArticleAcquisitionSession : IAsyncDisposable
+    internal sealed partial class NntpArticleAcquisitionSession : IAsyncDisposable
     {
         /// <summary>
         /// Endpoint settings.
@@ -163,12 +163,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
                 _ = await ExecuteWithTimeoutAsync(
                     options.ConnectTimeout,
-                    cancellationToken,
                     async token =>
                     {
                         await tcpClient.ConnectAsync(endpoint.Host, endpoint.Port, token).ConfigureAwait(false);
                         return true;
-                    }).ConfigureAwait(false);
+                    },
+                    cancellationToken).ConfigureAwait(false);
 
                 stream = tcpClient.GetStream();
                 if (endpoint.UseSsl)
@@ -190,13 +190,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
                     _ = await ExecuteWithTimeoutAsync(
                         options.ConnectTimeout,
-                        cancellationToken,
                         async token =>
                         {
                             await sslStream.AuthenticateAsClientAsync(sslOptions, token).ConfigureAwait(false);
 
                             return true;
-                        }).ConfigureAwait(false);
+                        },
+                        cancellationToken).ConfigureAwait(false);
 
                     stream = sslStream;
                 }
@@ -204,7 +204,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 NntpArticleAcquisitionSession session = new(endpoint, options, logger, tcpClient, stream, connectionLoggingScope, connectionLoggingContext);
 
                 NntpArticleAcquisitionTraceContext greetingContext = new(NntpArticleAcquisitionOperation.Connect, MessageId: null, MaximumValue: null, ActualValue: null);
-                string greetingLine = await session.ReadProtocolLineAsync(options.CommandTimeout, cancellationToken, greetingContext).ConfigureAwait(false);
+                string greetingLine = await session.ReadProtocolLineAsync(options.CommandTimeout, greetingContext, cancellationToken).ConfigureAwait(false);
                 if (!TryParseStatusLine(greetingLine, out int greetingCode, out string greetingText))
                 {
                     throw new NntpArticleAcquisitionException(
@@ -273,9 +273,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             try
             {
                 string command = string.Create(CultureInfo.InvariantCulture, $"ARTICLE {messageId}");
-                await WriteCommandAsync(command, _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
-
-                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
+                await WriteCommandAsync(command, _options.CommandTimeout, writeContext, redactCredentials: false, cancellationToken).ConfigureAwait(false);
+                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, statusContext, cancellationToken).ConfigureAwait(false);
                 if (!TryParseStatusLine(statusLine, out int statusCode, out string statusText))
                 {
                     throw new NntpArticleAcquisitionException(
@@ -287,7 +286,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 NntpArticleAcquisitionResult statusResult = ClassifyArticleStatus(statusCode, statusText);
                 if (statusResult.FailureCode == NntpArticleAcquisitionFailureCode.None)
                 {
-                    DownloadedArticleBuffer buffer = await ReadArticlePayloadAsync(cancellationToken, payloadContext).ConfigureAwait(false);
+                    DownloadedArticleBuffer buffer = await ReadArticlePayloadAsync(payloadContext, cancellationToken).ConfigureAwait(false);
                     NntpArticleAcquisitionResult success = NntpArticleAcquisitionResult.Success(statusCode, statusText, buffer);
                     LogArticleOutcome(_logger, messageId, "downloaded", stopwatch.Elapsed, success.ArticleLength, failureReason: null);
                     return success;
@@ -337,8 +336,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             try
             {
-                await WriteCommandAsync("DATE", _options.CommandTimeout, cancellationToken, writeContext, redactCredentials: false).ConfigureAwait(false);
-                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, statusContext).ConfigureAwait(false);
+                await WriteCommandAsync("DATE", _options.CommandTimeout, writeContext, redactCredentials: false, cancellationToken).ConfigureAwait(false);
+                string statusLine = await ReadProtocolLineAsync(_options.CommandTimeout, statusContext, cancellationToken).ConfigureAwait(false);
                 return !TryParseStatusLine(statusLine, out int statusCode, out string statusText)
                     ? throw new NntpArticleAcquisitionException(
                         NntpArticleAcquisitionFailureCode.MalformedResponse,
@@ -411,8 +410,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             NntpArticleAcquisitionTraceContext userWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
             NntpArticleAcquisitionTraceContext userRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
-            await WriteCommandAsync($"AUTHINFO USER {_endpoint.Username}", _options.CommandTimeout, cancellationToken, userWrite, redactCredentials: true).ConfigureAwait(false);
-            string userLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, userRead).ConfigureAwait(false);
+            await WriteCommandAsync($"AUTHINFO USER {_endpoint.Username}", _options.CommandTimeout, userWrite, redactCredentials: true, cancellationToken).ConfigureAwait(false);
+            string userLine = await ReadProtocolLineAsync(_options.CommandTimeout, userRead, cancellationToken).ConfigureAwait(false);
             if (!TryParseStatusLine(userLine, out int userCode, out string userText))
             {
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO USER status line.");
@@ -430,8 +429,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             NntpArticleAcquisitionTraceContext passWrite = new(NntpArticleAcquisitionOperation.CommandWrite, null, null, null);
             NntpArticleAcquisitionTraceContext passRead = new(NntpArticleAcquisitionOperation.StatusRead, null, null, null);
-            await WriteCommandAsync($"AUTHINFO PASS {_endpoint.Password}", _options.CommandTimeout, cancellationToken, passWrite, redactCredentials: true).ConfigureAwait(false);
-            string passLine = await ReadProtocolLineAsync(_options.CommandTimeout, cancellationToken, passRead).ConfigureAwait(false);
+            await WriteCommandAsync($"AUTHINFO PASS {_endpoint.Password}", _options.CommandTimeout, passWrite, redactCredentials: true, cancellationToken).ConfigureAwait(false);
+            string passLine = await ReadProtocolLineAsync(_options.CommandTimeout, passRead, cancellationToken).ConfigureAwait(false);
             return !TryParseStatusLine(passLine, out int passCode, out string passText)
                 ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.MalformedResponse, null, "Malformed AUTHINFO PASS status line.")
                 : passCode == 281 ? null : ClassifyAuthInfoPassFailureStatus(passCode, passText);
@@ -446,15 +445,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <returns>The received status line text.</returns>
         private async ValueTask<string> ReadProtocolLineAsync(
             TimeSpan timeout,
-            CancellationToken cancellationToken,
-            NntpArticleAcquisitionTraceContext context)
+            NntpArticleAcquisitionTraceContext context,
+            CancellationToken cancellationToken)
         {
             try
             {
                 (string? line, _, bool completedWithoutLine) = await ExecuteWithTimeoutAsync(
                     timeout,
-                    cancellationToken,
-                    token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token)).ConfigureAwait(false);
+                    token => TransitProtocolParser.ReadNntpLineWithByteCountAndCompletionAsync(_reader, token),
+                    cancellationToken).ConfigureAwait(false);
 
                 if (completedWithoutLine)
                 {
@@ -475,11 +474,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 {
                     if (string.IsNullOrWhiteSpace(context.MessageId))
                     {
-                        _logger.LogDebug("RX: {StatusLine}", statusLine);
+                        LogStatusLineReceived(_logger, statusLine);
                     }
                     else
                     {
-                        _logger.LogDebug("RX: {StatusLine} MessageId={MessageId}", statusLine, context.MessageId);
+                        LogStatusLineReceivedWithMessageId(_logger, statusLine, context.MessageId);
                     }
                 }
 
@@ -503,36 +502,36 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         private async Task WriteCommandAsync(
             string command,
             TimeSpan timeout,
-            CancellationToken cancellationToken,
             NntpArticleAcquisitionTraceContext context,
-            bool redactCredentials)
+            bool redactCredentials,
+            CancellationToken cancellationToken)
         {
             await _commandWriteGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 bool isAuthInfoUser = command.StartsWith("AUTHINFO USER ", StringComparison.OrdinalIgnoreCase);
                 bool isAuthInfoPass = command.StartsWith("AUTHINFO PASS ", StringComparison.OrdinalIgnoreCase);
-    
+
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
                     if (isAuthInfoUser)
                     {
-                        _logger.LogDebug("TX: AUTHINFO USER ***");
+                        LogAuthInfoUserCommand(_logger);
                     }
                     else if (isAuthInfoPass)
                     {
-                        _logger.LogDebug("TX: AUTHINFO PASS ***");
+                        LogAuthInfoPassCommand(_logger);
                     }
                     else
                     {
                         // Normal NNTP commands remain fully visible in debug logging.
                         if (string.IsNullOrWhiteSpace(context.MessageId))
                         {
-                            _logger.LogDebug("TX: {Command}", command);
+                            LogCommandSent(_logger, command);
                         }
                         else
                         {
-                            _logger.LogDebug("TX: {Command} MessageId={MessageId}", command, context.MessageId);
+                            LogCommandSentWithMessageId(_logger, command, context.MessageId);
                         }
                     }
                 }
@@ -540,13 +539,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 byte[] bytes = Encoding.ASCII.GetBytes(command + "\r\n");
                 _ = await ExecuteWithTimeoutAsync(
                     timeout,
-                    cancellationToken,
                     async token =>
                     {
                         await _stream.WriteAsync(bytes, token).ConfigureAwait(false);
                         await _stream.FlushAsync(token).ConfigureAwait(false);
                         return true;
-                    }).ConfigureAwait(false);
+                    },
+                    cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (MarkTransportFailureForException(ex, cancellationToken))
             {
@@ -568,8 +567,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// The receive loop accepts payload fragmentation across pipe reads and terminates only on the NNTP terminator line. Any failure before <see cref="PooledArticleBuilder.Build"/> disposes the in-progress pooled buffer.
         /// </remarks>
         private async ValueTask<DownloadedArticleBuffer> ReadArticlePayloadAsync(
-            CancellationToken cancellationToken,
-            NntpArticleAcquisitionTraceContext context)
+            NntpArticleAcquisitionTraceContext context,
+            CancellationToken cancellationToken)
         {
             PooledArticleBuilder builder = new(_options.MaxArticleBytes, context);
             bool atLineStart = true;
@@ -580,8 +579,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 {
                     ReadResult readResult = await ExecuteWithTimeoutAsync(
                         _options.ReceiveTimeout,
-                        cancellationToken,
-                        token => _reader.ReadAsync(token)).ConfigureAwait(false);
+                        token => _reader.ReadAsync(token),
+                        cancellationToken).ConfigureAwait(false);
 
                     ReadOnlySequence<byte> sequence = readResult.Buffer;
                     SequenceReader<byte> reader = new(sequence);
@@ -699,7 +698,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         {
             return statusCode switch
             {
-                220 => NntpArticleAcquisitionResult.Success(statusCode, statusText, articleBuffer: null),
+                220 => NntpArticleAcquisitionResult.StatusSuccess(statusCode, statusText),
                 430 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ArticleNotFound, statusCode, statusText),
                 480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
                 500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
@@ -723,7 +722,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         {
             return statusCode switch
             {
-                111 => NntpArticleAcquisitionResult.Success(statusCode, statusText, articleBuffer: null),
+                111 => NntpArticleAcquisitionResult.StatusSuccess(statusCode, statusText),
                 480 or 481 or 482 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.AuthenticationFailure, statusCode, statusText),
                 500 or 501 or 502 or 503 => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.RemoteRejected, statusCode, statusText),
                 _ => NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, statusCode, statusText),
@@ -802,8 +801,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <exception cref="TimeoutException">Thrown when the linked timeout fires before the caller token is cancelled.</exception>
         private static async ValueTask<T> ExecuteWithTimeoutAsync<T>(
             TimeSpan timeout,
-            CancellationToken cancellationToken,
-            Func<CancellationToken, ValueTask<T>> operation)
+            Func<CancellationToken, ValueTask<T>> operation,
+            CancellationToken cancellationToken)
         {
             using CancellationTokenSource timeoutSource = new(timeout);
             using CancellationTokenSource linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
@@ -835,8 +834,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
 
             try
             {
-                await WriteCommandAsync("QUIT", _options.CommandTimeout, quitTimeout.Token, quitWriteContext, redactCredentials: false).ConfigureAwait(false);
-                _ = await ReadProtocolLineAsync(_options.CommandTimeout, quitTimeout.Token, quitReadContext).ConfigureAwait(false);
+                await WriteCommandAsync("QUIT", _options.CommandTimeout, quitWriteContext, redactCredentials: false, cancellationToken: quitTimeout.Token).ConfigureAwait(false);
+                _ = await ReadProtocolLineAsync(_options.CommandTimeout, quitReadContext, quitTimeout.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (quitTimeout.IsCancellationRequested)
             {
@@ -950,7 +949,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="useSsl">SSL flag.</param>
         private static void LogSessionConnecting(ILogger logger, string host, int port, bool useSsl)
         {
-            logger.LogInformation("Connecting article acquisition session to {Host}:{Port} (SSL={UseSsl})", host, port, useSsl);
+            LogSessionConnectingMessage(logger, host, port, useSsl);
         }
 
         /// <summary>
@@ -962,7 +961,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <param name="useSsl">SSL flag.</param>
         private static void LogSessionConnected(ILogger logger, string host, int port, bool useSsl)
         {
-            logger.LogInformation("Connected article acquisition session to {Host}:{Port} (SSL={UseSsl})", host, port, useSsl);
+            LogSessionConnectedMessage(logger, host, port, useSsl);
         }
 
         /// <summary>
@@ -982,23 +981,30 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             int? articleSizeBytes,
             NntpArticleAcquisitionFailureCode? failureReason)
         {
-            logger.LogInformation(
-                "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
+            if (!logger.IsEnabled(LogLevel.Information))
+            {
+                return;
+            }
+
+            string duration = FormatElapsed(elapsed);
+            string failureReasonText = failureReason?.ToString() ?? string.Empty;
+            LogArticleOutcomeMessage(
+                logger,
                 messageId,
                 outcome,
-                FormatElapsed(elapsed),
-                failureReason?.ToString() ?? string.Empty,
+                duration,
+                failureReasonText,
                 articleSizeBytes);
         }
 
         /// <summary>
         /// Logs failed article outcomes.
         /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="messageId">Message-ID.</param>
-        /// <param name="failureCode">Failure classification.</param>
-        /// <param name="elapsed">Elapsed operation duration measured by monotonic stopwatch.</param>
-        /// <param name="articleSizeBytes">Optional article size associated with the failed operation.</param>
+        /// <param name="logger">Logger receiving the failure classification event.</param>
+        /// <param name="messageId">Canonical Message-ID for the article that failed.</param>
+        /// <param name="failureCode">Deterministic acquisition failure classification recorded for the attempt.</param>
+        /// <param name="elapsed">Elapsed operation duration measured by the monotonic stopwatch used for acquisition timing.</param>
+        /// <param name="articleSizeBytes">Optional article size associated with the failed operation when the article body was available.</param>
         private static void LogArticleFailure(
             ILogger logger,
             string messageId,
@@ -1006,14 +1012,160 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             TimeSpan elapsed,
             int? articleSizeBytes)
         {
-            logger.LogInformation(
-                "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})",
+            if (!logger.IsEnabled(LogLevel.Information))
+            {
+                return;
+            }
+
+            string duration = FormatElapsed(elapsed);
+            LogArticleFailureMessage(
+                logger,
                 messageId,
-                FormatElapsed(elapsed),
+                duration,
                 failureCode,
                 failureCode,
                 articleSizeBytes);
         }
+
+        /// <summary>
+        /// Emits the successful article outcome log event after acquisition completes without a fatal protocol failure.
+        /// </summary>
+        /// <param name="logger">Logger receiving the article outcome event.</param>
+        /// <param name="messageId">Canonical Message-ID of the processed article.</param>
+        /// <param name="outcome">Human-readable terminal outcome text reported for the acquisition attempt.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the acquisition attempt.</param>
+        /// <param name="failureReason">Textual failure reason recorded for non-successful terminal states.</param>
+        /// <param name="articleSize">Optional article size in bytes when the article body was available.</param>
+        [LoggerMessage(
+            EventId = 3000,
+            Level = LogLevel.Information,
+            Message = "Article {MessageId} {Outcome} in {Duration} (FailureReason={FailureReason}, ArticleSize={ArticleSize})")]
+        private static partial void LogArticleOutcomeMessage(
+            ILogger logger,
+            string messageId,
+            string outcome,
+            string duration,
+            string failureReason,
+            int? articleSize);
+
+        /// <summary>
+        /// Emits the failed article outcome log event for deterministic acquisition failures.
+        /// </summary>
+        /// <param name="logger">Logger receiving the failed article outcome event.</param>
+        /// <param name="messageId">Canonical Message-ID of the article that failed.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the acquisition attempt.</param>
+        /// <param name="failureCode">Deterministic acquisition failure classification.</param>
+        /// <param name="failureReason">Structured failure reason recorded for the failure event. The current acquisition contract reports the same classification for both fields.</param>
+        /// <param name="articleSize">Optional article size in bytes when the article body was available.</param>
+        [LoggerMessage(
+            EventId = 3001,
+            Level = LogLevel.Information,
+            Message = "Article {MessageId} failed in {Duration}: {FailureCode} (FailureReason={FailureReason}, ArticleSize={ArticleSize})")]
+        private static partial void LogArticleFailureMessage(
+            ILogger logger,
+            string messageId,
+            string duration,
+            NntpArticleAcquisitionFailureCode failureCode,
+            NntpArticleAcquisitionFailureCode failureReason,
+            int? articleSize);
+
+        /// <summary>
+        /// Emits the NNTP status line received debug log event.
+        /// </summary>
+        /// <param name="logger">Logger receiving the raw protocol receive event.</param>
+        /// <param name="statusLine">Decoded NNTP status line exactly as read from the wire.</param>
+        [LoggerMessage(
+            EventId = 3002,
+            Level = LogLevel.Debug,
+            Message = "RX: {StatusLine}")]
+        private static partial void LogStatusLineReceived(ILogger logger, string statusLine);
+
+        /// <summary>
+        /// Emits the NNTP status line received debug log event with the canonical Message-ID correlation value.
+        /// </summary>
+        /// <param name="logger">Logger receiving the correlated protocol receive event.</param>
+        /// <param name="statusLine">Decoded NNTP status line exactly as read from the wire.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the current acquisition attempt.</param>
+        [LoggerMessage(
+            EventId = 3003,
+            Level = LogLevel.Debug,
+            Message = "RX: {StatusLine} MessageId={MessageId}")]
+        private static partial void LogStatusLineReceivedWithMessageId(
+            ILogger logger,
+            string statusLine,
+            string messageId);
+
+        /// <summary>
+        /// Emits the redacted AUTHINFO USER debug log event without exposing credentials.
+        /// </summary>
+        /// <param name="logger">Logger receiving the redacted outbound authentication command event.</param>
+        [LoggerMessage(
+            EventId = 3004,
+            Level = LogLevel.Debug,
+            Message = "TX: AUTHINFO USER ***")]
+        private static partial void LogAuthInfoUserCommand(ILogger logger);
+
+        /// <summary>
+        /// Emits the redacted AUTHINFO PASS debug log event without exposing credentials.
+        /// </summary>
+        /// <param name="logger">Logger receiving the redacted outbound authentication command event.</param>
+        [LoggerMessage(
+            EventId = 3005,
+            Level = LogLevel.Debug,
+            Message = "TX: AUTHINFO PASS ***")]
+        private static partial void LogAuthInfoPassCommand(ILogger logger);
+
+        /// <summary>
+        /// Emits the raw NNTP command write debug log event.
+        /// </summary>
+        /// <param name="logger">Logger receiving the outbound command event.</param>
+        /// <param name="command">Command text transmitted to the NNTP server.</param>
+        [LoggerMessage(
+            EventId = 3006,
+            Level = LogLevel.Debug,
+            Message = "TX: {Command}")]
+        private static partial void LogCommandSent(ILogger logger, string command);
+
+        /// <summary>
+        /// Emits the raw NNTP command write debug log event with the canonical Message-ID correlation value.
+        /// </summary>
+        /// <param name="logger">Logger receiving the correlated outbound command event.</param>
+        /// <param name="command">Command text transmitted to the NNTP server.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the current acquisition attempt.</param>
+        [LoggerMessage(
+            EventId = 3007,
+            Level = LogLevel.Debug,
+            Message = "TX: {Command} MessageId={MessageId}")]
+        private static partial void LogCommandSentWithMessageId(
+            ILogger logger,
+            string command,
+            string messageId);
+
+        /// <summary>
+        /// Emits the acquisition-session connect log event when a reusable NNTP connection is being established.
+        /// </summary>
+        /// <param name="logger">Logger receiving the connect event.</param>
+        /// <param name="host">NNTP server host name or address being contacted.</param>
+        /// <param name="port">NNTP server port.</param>
+        /// <param name="useSsl">Whether TLS is required for the connection attempt.</param>
+        [LoggerMessage(
+            EventId = 3008,
+            Level = LogLevel.Information,
+            Message = "Connecting article acquisition session to {Host}:{Port} (SSL={UseSsl})")]
+        private static partial void LogSessionConnectingMessage(ILogger logger, string host, int port, bool useSsl);
+
+        /// <summary>
+        /// Emits the acquisition-session connected log event after the NNTP transport becomes ready for later commands.
+        /// </summary>
+        /// <param name="logger">Logger receiving the connected event.</param>
+        /// <param name="host">NNTP server host name or address that was successfully contacted.</param>
+        /// <param name="port">NNTP server port that was successfully contacted.</param>
+        /// <param name="useSsl">Whether TLS was negotiated for the reusable session.</param>
+        [LoggerMessage(
+            EventId = 3009,
+            Level = LogLevel.Information,
+            Message = "Connected article acquisition session to {Host}:{Port} (SSL={UseSsl})")]
+        private static partial void LogSessionConnectedMessage(ILogger logger, string host, int port, bool useSsl);
 
         /// <summary>
         /// Accumulates received article bytes in a pooled buffer that can grow up to the configured article-size ceiling.

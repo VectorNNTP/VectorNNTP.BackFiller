@@ -39,10 +39,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Stops the broker consumer, drains admitted deliveries, and releases session-owned channel resources.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token for the stop operation.</param>
         /// <param name="cancelAdmittedWork"><see langword="true"/> to cancel admitted-delivery tokens while draining work; otherwise in-flight work is allowed to continue cooperatively.</param>
+        /// <param name="cancellationToken">Cancellation token for the stop operation.</param>
         /// <returns>A task that completes after the session has drained and torn down its broker registration.</returns>
-        public Task StopAsync(CancellationToken cancellationToken, bool cancelAdmittedWork);
+        public Task StopAsync(bool cancelAdmittedWork, CancellationToken cancellationToken);
     }
 
     /// <summary>

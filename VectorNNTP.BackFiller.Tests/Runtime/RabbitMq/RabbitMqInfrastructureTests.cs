@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the rabbit mq infrastructure test suite.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -60,6 +61,39 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.True(snapshot.HasPassword);
             Assert.DoesNotContain(options.Password!, snapshot.ToString(), StringComparison.Ordinal);
         }
+
+        /// <summary>
+        /// Confirms the adapter rejects a broker connection that reports a null client-provided name.
+        /// </summary>
+        [Fact]
+        public void BrokerConnectionAdapter_WhenClientProvidedNameIsNull_ThrowsInvariantViolation()
+        {
+            IConnection connection = DispatchProxy.Create<IConnection, TestBrokerConnectionProxy>();
+            ((TestBrokerConnectionProxy)(object)connection).ClientProvidedNameValue = null;
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => new RabbitMqBrokerConnectionAdapter(connection, "/"));
+            Assert.Contains("ClientProvidedName", exception.Message, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Confirms the connector disposes the raw connection when adapter construction fails.
+        /// </summary>
+        [Fact]
+        public async Task RabbitMqBrokerConnector_WhenAdapterConstructionFails_DisposesUnderlyingConnection()
+        {
+            object proxyObject = DispatchProxy.Create<IConnection, DisposableConnection>();
+            IConnection connection = (IConnection)proxyObject;
+            DisposableConnection proxy = (DisposableConnection)proxyObject;
+            proxy.ClientProvidedNameValue = null;
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await RabbitMqBrokerConnector.CreateOwnedConnectionAsync(connection, "/"));
+
+            Assert.Contains("ClientProvidedName", exception.Message, StringComparison.Ordinal);
+            Assert.True(proxy.IsDisposed);
+            Assert.False(proxy.IsOpen);
+        }
+
         /// <summary>
         /// Confirms the topology builder backbone namespaces are isolated behavior.
         /// </summary>
@@ -570,6 +604,81 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         /// </summary>
         /// <param name="id">The id used by this test scenario.</param>
         /// <returns>The value returned by the fake rabbit mq channel helper.</returns>
+        private class TestBrokerConnectionProxy : DispatchProxy
+        {
+            /// <summary>
+            /// Supplies the client-provided name value surfaced by the proxied IConnection test double.
+            /// </summary>
+            internal string? ClientProvidedNameValue { get; set; }
+
+            /// <summary>
+            /// Handles all proxied IConnection member invocations for focused adapter invariant tests.
+            /// </summary>
+            /// <param name="targetMethod">Invoked member metadata.</param>
+            /// <param name="args">Invocation arguments.</param>
+            /// <returns>Member return value for the proxied call.</returns>
+            protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+            {
+                ArgumentNullException.ThrowIfNull(targetMethod);
+
+                return targetMethod.Name switch
+                {
+                    "get_ClientProvidedName" => ClientProvidedNameValue,
+                    _ when targetMethod.Name.StartsWith("add_", StringComparison.Ordinal) => null,
+                    _ when targetMethod.Name.StartsWith("remove_", StringComparison.Ordinal) => null,
+                    _ => throw new NotSupportedException($"Unhandled IConnection member in test proxy: {targetMethod.Name}"),
+                };
+            }
+        }
+
+        private class DisposableConnection : DispatchProxy
+        {
+            /// <summary>
+            /// Tracks whether the connection has been disposed by the connector cleanup path.
+            /// </summary>
+            internal bool IsDisposed { get; private set; }
+
+            /// <summary>
+            /// Tracks whether the connection remains open before cleanup runs.
+            /// </summary>
+            internal bool IsOpen => !IsDisposed;
+
+            /// <summary>
+            /// Supplies the client-provided name value surfaced by the proxied IConnection test double.
+            /// </summary>
+            internal string? ClientProvidedNameValue { get; set; }
+
+            /// <summary>
+            /// Handles proxied IConnection member invocations for the connector cleanup regression test.
+            /// </summary>
+            /// <param name="targetMethod">Invoked member metadata.</param>
+            /// <param name="args">Invocation arguments.</param>
+            /// <returns>Member return value for the proxied call.</returns>
+            protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+            {
+                ArgumentNullException.ThrowIfNull(targetMethod);
+
+                return targetMethod.Name switch
+                {
+                    "get_ClientProvidedName" => ClientProvidedNameValue,
+                    "DisposeAsync" => DisposeAsync(),
+                    _ when targetMethod.Name.StartsWith("add_", StringComparison.Ordinal) => null,
+                    _ when targetMethod.Name.StartsWith("remove_", StringComparison.Ordinal) => null,
+                    _ => throw new NotSupportedException($"Unhandled IConnection member in test proxy: {targetMethod.Name}"),
+                };
+            }
+
+            /// <summary>
+            /// Marks the connection as disposed and completes asynchronously.
+            /// </summary>
+            /// <returns>A completed value task.</returns>
+            private ValueTask DisposeAsync()
+            {
+                IsDisposed = true;
+                return ValueTask.CompletedTask;
+            }
+        }
+
         private sealed class FakeRabbitMqChannel(int id) : IRabbitMqChannel
         {
             /// <summary>

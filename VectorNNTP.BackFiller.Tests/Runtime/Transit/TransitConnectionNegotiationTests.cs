@@ -409,42 +409,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
             Assert.Contains("closed while awaiting line response", ex.Message, StringComparison.OrdinalIgnoreCase);
 
-            (string? serverLocalEndpoint, string? clientLocalEndpoint) = await endpointCapture.Task;
-            string listenerLocalEndpoint = GetListenerLocalEndpoint(server) ?? string.Empty;
-            string clientRemoteEndpoint = serverLocalEndpoint ?? listenerLocalEndpoint;
-            string clientEndpoint = clientLocalEndpoint ?? string.Empty;
-
-            string diagnosticLine = $"P1-TCP-ENDPOINT: listener={listenerLocalEndpoint} clientLocal={clientEndpoint} clientRemote={clientRemoteEndpoint} tuple={clientEndpoint}->{clientRemoteEndpoint}";
-            Console.WriteLine(diagnosticLine);
-
-            string artifactsDirectory = ResolveArtifactsDirectory();
-            _ = Directory.CreateDirectory(artifactsDirectory);
-            string diagnosticPath = Path.Combine(artifactsDirectory, "phase2-p1-greeting-test-endpoint-diag.txt");
-            File.WriteAllText(diagnosticPath, diagnosticLine + Environment.NewLine);
-
-            static string? GetListenerLocalEndpoint(FakeNntpServer serverInstance)
-            {
-                FieldInfo? listenerField = typeof(FakeNntpServer).GetField("_listener", BindingFlags.Instance | BindingFlags.NonPublic);
-                TcpListener? listener = listenerField?.GetValue(serverInstance) as TcpListener;
-                return listener?.LocalEndpoint?.ToString();
-            }
-
-            static string ResolveArtifactsDirectory()
-            {
-                DirectoryInfo? current = new(AppContext.BaseDirectory);
-                while (current is not null)
-                {
-                    string candidate = Path.Combine(current.FullName, "artifacts");
-                    if (Directory.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-
-                    current = current.Parent;
-                }
-
-                return Path.Combine(AppContext.BaseDirectory, "artifacts");
-            }
+            _ = await endpointCapture.Task;
         }
         /// <summary>
         /// Confirms the initialize async when server closes during capabilities throws behavior.

@@ -15,13 +15,13 @@ using VectorNNTP.Backfiller.Configuration;
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
-    /// BackFiller transit front-door and orchestration owner for the global bounded queue model.
-    ///
-    /// WHY THIS LOOKS DIFFERENT:
-    /// The design intentionally makes a single global queue the ownership boundary.
-    /// Publisher validates and admits work; connections claim and transmit work.
-    /// We intentionally avoid slot queues, materialization reservations, and write-intent ownership paths.
+    /// Owns transit admission, connection-slot orchestration, and the diagnostic snapshots that describe publisher-owned queue and lifetime state.
     /// </summary>
+    /// <remarks>
+    /// The publisher is the ownership boundary for outbound work. It validates and admits articles into the global queue, manages one worker slot
+    /// per connection, and exposes the authoritative queue and transport counters used to understand reconnects, retirement, and shutdown.
+    /// Connection objects own protocol I/O; the publisher owns slot visibility, lifetime aggregates, and the coordination needed to keep snapshots coherent.
+    /// </remarks>
     internal sealed partial class TransitPublisher : IAsyncDisposable
     {
         /// <summary>
@@ -65,7 +65,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Current connection instance per pool slot.
         /// </summary>
-        private readonly TransitConnection[] _connections;
+        private readonly TransitConnection?[] _connections;
+        /// <summary>
+        /// Monotonic per-slot version used to make slot handoffs and snapshots coherent.
+        /// </summary>
+        private readonly long[] _connectionSlotSnapshotVersions;
         /// <summary>
         /// Long-running worker task per connection slot.
         /// </summary>
@@ -90,17 +94,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Optional collector for timing data emitted by connection staging and completion observation.
         /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
+        /// <summary>
+        /// Optional internal claim-boundary signal for tests that need to observe when a worker is about to enter queue claiming.
+        /// </summary>
+        private readonly Action? _claimBoundaryObserved;
 
         /// <summary>
         /// Monotonic identifier source for newly admitted work items.
         /// </summary>
         private long _nextWorkItemId;
         /// <summary>
-        /// Aggregate bytes transmitted across all connections.
+        /// Aggregate bytes transmitted across all connections that have participated in the publisher lifetime.
         /// </summary>
         private long _totalBytesTransmitted;
         /// <summary>
-        /// Aggregate bytes received across all connections.
+        /// Aggregate bytes received across all connections that have participated in the publisher lifetime.
         /// </summary>
         private long _totalBytesReceived;
         /// <summary>
@@ -150,16 +158,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private volatile TransitConnectionState _state = TransitConnectionState.Disconnected;
 
         /// <summary>
-        /// Formats a low-level trace stamp for console diagnostics in this file.
+        /// Initializes the publisher's queue ownership, worker slots, lifetime counters, and reconnect coordination state from validated runtime options.
         /// </summary>
-        private static string TraceStamp()
-        {
-            return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
-        }
-
-        /// <summary>
-        /// Initializes the transit publisher, global queue, and connection-slot bookkeeping.
-        /// </summary>
+        /// <param name="runtimeOptions">Validated runtime settings that define queue bounds, retry behavior, and transit endpoint configuration.</param>
+        /// <param name="timeProvider">The time provider used to stamp runtime and diagnostic snapshots.</param>
+        /// <param name="logger">Structured logger used by the publisher and the connections it creates for lifecycle and diagnostic reporting.</param>
+        /// <param name="connectionPoolSize">The number of worker slots and slot records to maintain.</param>
+        /// <param name="perConnectionPipelineDepth">The maximum number of admitted items each active connection may pipeline.</param>
+        /// <param name="connectionResponseProgressTimeout">Optional watchdog timeout for detecting stalled connection responses during steady-state work.</param>
+        /// <param name="connectionResponseProgressCheckInterval">Optional interval used when polling connection response progress.</param>
+        /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
+        /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -168,7 +177,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int perConnectionPipelineDepth = DefaultPerConnectionPipelineDepth,
             TimeSpan? connectionResponseProgressTimeout = null,
             TimeSpan? connectionResponseProgressCheckInterval = null,
-            TransitTimingCollector? timingCollector = null)
+            TransitTimingCollector? timingCollector = null,
+            Action? claimBoundaryObserved = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
@@ -188,6 +198,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _timeProvider = timeProvider;
             _logger = logger;
             _timingCollector = timingCollector;
+            _claimBoundaryObserved = claimBoundaryObserved;
             _connectionPoolSize = connectionPoolSize;
             _perConnectionPipelineDepth = perConnectionPipelineDepth;
             _connectionResponseProgressTimeout = connectionResponseProgressTimeout;
@@ -197,7 +208,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 maxQueuedItemCount: runtimeOptions.TransitQueueMaxItemCount,
                 maxQueuedPayloadBytes: runtimeOptions.TransitQueueMaxPayloadBytes);
 
-            _connections = new TransitConnection[_connectionPoolSize];
+            _connections = new TransitConnection?[_connectionPoolSize];
+            _connectionSlotSnapshotVersions = new long[_connectionPoolSize];
             _connectionWorkers = new Task[_connectionPoolSize];
             _reconnectGates = new SemaphoreSlim[_connectionPoolSize];
             for (int i = 0; i < _connectionPoolSize; i++)
@@ -221,76 +233,167 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Captures a point-in-time diagnostic view of connection slots and active connections.
+        /// Marks one connection slot as mutating so snapshots retry instead of observing a half-retired or half-published slot.
         /// </summary>
-        /// <returns>The current connection diagnostics snapshot.</returns>
+        /// <param name="slotIndex">The slot whose shared visibility is about to change.</param>
+        private void BeginConnectionSlotTransition(int slotIndex)
+        {
+            _ = Interlocked.Increment(ref _connectionSlotSnapshotVersions[slotIndex]);
+        }
+
+        /// <summary>
+        /// Marks one connection slot as settled after a shared visibility change completes.
+        /// </summary>
+        /// <param name="slotIndex">The slot whose shared visibility just settled.</param>
+        private void EndConnectionSlotTransition(int slotIndex)
+        {
+            _ = Interlocked.Increment(ref _connectionSlotSnapshotVersions[slotIndex]);
+        }
+
+        /// <summary>
+        /// Captures a coherent diagnostic view of slot ownership, queue state, and the connections currently visible through the publisher.
+        /// </summary>
+        /// <remarks>
+        /// The version fence forces a retry while a slot is mutating so the returned snapshot never mixes retired bytes, retired ownership, and replacement visibility
+        /// from different stages of the same handoff. A slot may legitimately be empty while a replacement connection is still initializing outside the fence.
+        /// </remarks>
+        /// <returns>A point-in-time publisher diagnostics snapshot suitable for operator inspection and troubleshooting.</returns>
         internal TransitPublisherConnectionDiagnosticsSnapshot CaptureConnectionDiagnosticsSnapshot()
         {
-            ConnectionSlotSnapshot[] slots = new ConnectionSlotSnapshot[_connections.Length];
-            List<ConnectionDiagnosticsEntry> connectionEntries = [];
-
-            for (int i = 0; i < _connections.Length; i++)
+            while (true)
             {
-                TransitConnection? connection = _connections[i];
-                slots[i] = new ConnectionSlotSnapshot(
-                    SlotIndex: i,
-                    HasCurrentConnection: connection is not null,
-                    CurrentConnectionId: connection?.ConnectionId,
-                    TotalSubmissionsRouted: 0,
-                    Reconnects: 0,
-                    CreatedConnections: connection is null ? 0 : 1,
-                    MaxObservedInFlightDepth: 0,
-                    WaitedForChannelReadabilityCount: 0,
-                    WaitedForCompletionWhilePipelineFullCount: 0,
-                    FirstReachedConfiguredDepthTick: 0);
+                ConnectionSlotSnapshot[] slots = new ConnectionSlotSnapshot[_connections.Length];
+                List<ConnectionDiagnosticsEntry> connectionEntries = [];
+                bool retry = false;
 
-                if (connection is not null)
+                for (int i = 0; i < _connections.Length; i++)
                 {
-                    connectionEntries.Add(new ConnectionDiagnosticsEntry(
+                    long slotVersion = Interlocked.Read(ref _connectionSlotSnapshotVersions[i]);
+                    if ((slotVersion & 1L) != 0)
+                    {
+                        retry = true;
+                        break;
+                    }
+
+                    TransitConnection? connection = _connections[i];
+                    slots[i] = new ConnectionSlotSnapshot(
                         SlotIndex: i,
-                        ConnectionId: connection.ConnectionId,
-                        Snapshot: connection.CaptureDiagnosticsSnapshot()));
+                        HasCurrentConnection: connection is not null,
+                        CurrentConnectionId: connection?.ConnectionId,
+                        TotalSubmissionsRouted: 0,
+                        Reconnects: 0,
+                        CreatedConnections: connection is null ? 0 : 1,
+                        MaxObservedInFlightDepth: 0,
+                        WaitedForChannelReadabilityCount: 0,
+                        WaitedForCompletionWhilePipelineFullCount: 0,
+                        FirstReachedConfiguredDepthTick: 0);
+
+                    if (connection is not null)
+                    {
+                        connectionEntries.Add(new ConnectionDiagnosticsEntry(
+                            SlotIndex: i,
+                            ConnectionId: connection.ConnectionId,
+                            Snapshot: connection.CaptureDiagnosticsSnapshot()));
+                    }
+
+                    if (Interlocked.Read(ref _connectionSlotSnapshotVersions[i]) != slotVersion)
+                    {
+                        retry = true;
+                        break;
+                    }
+                }
+
+                if (!retry)
+                {
+                    return new TransitPublisherConnectionDiagnosticsSnapshot(
+                        ConfiguredConnectionPoolSize: _connectionPoolSize,
+                        ConfiguredPerConnectionPipelineDepth: _perConnectionPipelineDepth,
+                        TotalReconnects: Interlocked.Read(ref _totalReconnects),
+                        QueuedSubmissionCount: _globalQueue.QueuedItemCount,
+                        Slots: slots,
+                        Connections: [.. connectionEntries],
+                        SubmissionTraceRecords: [],
+                        PublishToConnectionTraceRecords: [],
+                        PumpFaultTelemetry: null,
+                        QueueSnapshot: _globalQueue.CaptureSnapshot());
                 }
             }
-
-            return new TransitPublisherConnectionDiagnosticsSnapshot(
-                ConfiguredConnectionPoolSize: _connectionPoolSize,
-                ConfiguredPerConnectionPipelineDepth: _perConnectionPipelineDepth,
-                TotalReconnects: Interlocked.Read(ref _totalReconnects),
-                QueuedSubmissionCount: _globalQueue.QueuedItemCount,
-                Slots: slots,
-                Connections: [.. connectionEntries],
-                SubmissionTraceRecords: [],
-                PublishToConnectionTraceRecords: [],
-                PumpFaultTelemetry: null,
-                QueueSnapshot: _globalQueue.CaptureSnapshot());
         }
 
         /// <summary>
-        /// Captures aggregate transport counters together with externally supplied connection counts.
+        /// Captures the publisher's lifetime transport counters together with caller-supplied operational counts.
         /// </summary>
-        /// <param name="activeConnections">Current number of active connections.</param>
-        /// <param name="outstandingSubmissions">Current number of outstanding submissions.</param>
-        /// <returns>The current transport snapshot.</returns>
+        /// <remarks>
+        /// The byte totals include retired connections that have already been rolled into the publisher lifetime aggregates. The same slot-version fence used by
+        /// the connection diagnostics snapshot prevents the method from combining retired visibility with pre-rollover per-connection counters.
+        /// </remarks>
+        /// <param name="activeConnections">The caller's current count of active connections.</param>
+        /// <param name="outstandingSubmissions">The caller's current count of outstanding submissions.</param>
+        /// <returns>A transport snapshot containing lifetime byte and article totals plus the supplied operational counts.</returns>
         internal TransitTransportSnapshot CaptureTransportSnapshot(int activeConnections, int outstandingSubmissions)
         {
-            return new TransitTransportSnapshot(
-                TotalBytesTransmitted: Interlocked.Read(ref _totalBytesTransmitted),
-                TotalBytesReceived: Interlocked.Read(ref _totalBytesReceived),
-                TotalArticlesSubmitted: Interlocked.Read(ref _totalArticlesSubmitted),
-                TotalArticlesAccepted: Interlocked.Read(ref _totalArticlesAccepted),
-                TotalArticlesRejected: Interlocked.Read(ref _totalArticlesRejected),
-                TotalArticlesAmbiguous: Interlocked.Read(ref _totalArticlesAmbiguous),
-                TotalReconnects: Interlocked.Read(ref _totalReconnects),
-                ActiveConnections: activeConnections,
-                OutstandingSubmissions: outstandingSubmissions);
+            while (true)
+            {
+                bool retry = false;
+
+                for (int i = 0; i < _connections.Length; i++)
+                {
+                    long slotVersion = Interlocked.Read(ref _connectionSlotSnapshotVersions[i]);
+                    if ((slotVersion & 1L) != 0)
+                    {
+                        retry = true;
+                        break;
+                    }
+                }
+
+                long totalBytesTransmitted = Interlocked.Read(ref _totalBytesTransmitted);
+                long totalBytesReceived = Interlocked.Read(ref _totalBytesReceived);
+
+                for (int i = 0; i < _connections.Length; i++)
+                {
+                    long slotVersion = Interlocked.Read(ref _connectionSlotSnapshotVersions[i]);
+                    if ((slotVersion & 1L) != 0)
+                    {
+                        retry = true;
+                        break;
+                    }
+
+                    TransitConnection? connection = _connections[i];
+                    if (connection is not null)
+                    {
+                        TransitConnection.TransitConnectionDiagnosticsSnapshot diagnostics = connection.CaptureDiagnosticsSnapshot();
+                        totalBytesTransmitted += diagnostics.BytesTransmitted;
+                        totalBytesReceived += diagnostics.BytesReceived;
+                    }
+
+                    if (Interlocked.Read(ref _connectionSlotSnapshotVersions[i]) != slotVersion)
+                    {
+                        retry = true;
+                        break;
+                    }
+                }
+
+                if (!retry)
+                {
+                    return new TransitTransportSnapshot(
+                        TotalBytesTransmitted: totalBytesTransmitted,
+                        TotalBytesReceived: totalBytesReceived,
+                        TotalArticlesSubmitted: Interlocked.Read(ref _totalArticlesSubmitted),
+                        TotalArticlesAccepted: Interlocked.Read(ref _totalArticlesAccepted),
+                        TotalArticlesRejected: Interlocked.Read(ref _totalArticlesRejected),
+                        TotalArticlesAmbiguous: Interlocked.Read(ref _totalArticlesAmbiguous),
+                        TotalReconnects: Interlocked.Read(ref _totalReconnects),
+                        ActiveConnections: activeConnections,
+                        OutstandingSubmissions: outstandingSubmissions);
+                }
+            }
         }
 
         /// <summary>
-        /// Starts the per-slot connection workers and transitions the publisher into ready state.
+        /// Starts one worker per slot, waits for any immediate startup faults, and transitions the publisher to ready only after the worker set is established.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token for initialization.</param>
-        /// <returns>A task that completes after worker startup and readiness checks finish.</returns>
+        /// <param name="cancellationToken">Cancellation token used to abort initialization before the publisher becomes ready.</param>
+        /// <returns>A task that completes after worker startup, fault observation, and the ready-state transition finish.</returns>
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -340,19 +443,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Validates, copies, admits, and waits for terminal completion of one article publish request.
+        /// Validates one article submission, copies it into publisher-owned storage, admits it to the global queue, and waits for terminal completion.
         /// </summary>
-        /// <param name="messageId">Article Message-ID used for protocol framing and response correlation.</param>
-        /// <param name="articlePayload">Full article payload ending in LF so TAKETHIS framing preserves byte integrity.</param>
-        /// <param name="cancellationToken">Cancellation token for admission and caller wait.</param>
-        /// <returns>The terminal publish result for the admitted work item.</returns>
+        /// <param name="messageId">The article Message-ID used for protocol framing and response correlation.</param>
+        /// <param name="articlePayload">The full article payload; it must end in LF so TAKETHIS framing preserves byte integrity.</param>
+        /// <param name="cancellationToken">Cancellation token applied to admission and to the caller's wait for the terminal result.</param>
+        /// <returns>The terminal publish result for the admitted work item, or an unavailable result if the publisher has not been initialized or is shutting down.</returns>
         internal async ValueTask<TransitPublishResult> PublishAsync(
             string messageId,
             ReadOnlyMemory<byte> articlePayload,
             CancellationToken cancellationToken)
         {
             long publishAsyncEnterTick = Stopwatch.GetTimestamp();
-            Console.WriteLine($"[TRACE-RI-01] {TraceStamp()} PublishAsync ENTER messageId={messageId}");
 
             if (string.IsNullOrWhiteSpace(messageId))
             {
@@ -392,16 +494,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 messageId: messageId,
                 payload: payloadCopy,
                 maxAttempts: _runtimeOptions.TransitRetryMaxAttempts);
-            Console.WriteLine($"[TRACE-RI-02] {TraceStamp()} PublishAsync CREATED workItemId={workItem.WorkItemId} state={workItem.State} maxAttempts={workItem.MaxAttempts}");
 
             _activeWorkItems[workItem.WorkItemId] = workItem;
-            Console.WriteLine($"[TRACE-RI-03] {TraceStamp()} PublishAsync ACTIVE-ADD workItemId={workItem.WorkItemId} activeCount={_activeWorkItems.Count} state={workItem.State}");
 
             try
             {
                 await _globalQueue.EnqueueAsync(workItem, cancellationToken).ConfigureAwait(false);
                 _ = Interlocked.Increment(ref _totalArticlesSubmitted);
-                Console.WriteLine($"[TRACE-RI-04] {TraceStamp()} PublishAsync ENQUEUED workItemId={workItem.WorkItemId} state={workItem.State} totalSubmitted={Interlocked.Read(ref _totalArticlesSubmitted)}");
             }
             catch (OperationCanceledException)
             {
@@ -416,80 +515,88 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             if (!cancellationToken.CanBeCanceled)
             {
-                Console.WriteLine($"[TRACE-RI-05] {TraceStamp()} PublishAsync COMPLETIONTASK-OBTAINED workItemId={workItem.WorkItemId} taskId={workItem.CompletionTask.Id} canCancel=false isCompleted={workItem.CompletionTask.IsCompleted}");
                 TransitPublishResult completed = await workItem.CompletionTask.ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-06] {TraceStamp()} PublishAsync COMPLETIONTASK-COMPLETED workItemId={workItem.WorkItemId} taskId={workItem.CompletionTask.Id} status={completed.Status}");
                 TransitPublishResult tracedResult = completed with
                 {
                     T0PublishAsyncEnterTick = publishAsyncEnterTick,
                     T7PublishAsyncCompleteTick = Stopwatch.GetTimestamp(),
                 };
-                Console.WriteLine($"[TRACE-RI-07] {TraceStamp()} PublishAsync RETURN workItemId={workItem.WorkItemId} status={tracedResult.Status}");
                 return tracedResult;
             }
 
             Task<TransitPublishResult> completionTask = workItem.CompletionTask;
-            Console.WriteLine($"[TRACE-RI-05] {TraceStamp()} PublishAsync COMPLETIONTASK-OBTAINED workItemId={workItem.WorkItemId} taskId={completionTask.Id} canCancel=true isCompleted={completionTask.IsCompleted}");
             Task cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             Task completedTask = await Task.WhenAny(completionTask, cancellationTask).ConfigureAwait(false);
 
             if (ReferenceEquals(completedTask, completionTask))
             {
                 TransitPublishResult result = await completionTask.ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-06] {TraceStamp()} PublishAsync COMPLETIONTASK-COMPLETED workItemId={workItem.WorkItemId} taskId={completionTask.Id} status={result.Status}");
                 TransitPublishResult tracedResult = result with
                 {
                     T0PublishAsyncEnterTick = publishAsyncEnterTick,
                     T7PublishAsyncCompleteTick = Stopwatch.GetTimestamp(),
                 };
-                Console.WriteLine($"[TRACE-RI-07] {TraceStamp()} PublishAsync RETURN workItemId={workItem.WorkItemId} status={tracedResult.Status}");
                 return tracedResult;
             }
 
             workItem.MarkCancelRequested();
-            Console.WriteLine($"[TRACE-RI-08] {TraceStamp()} PublishAsync CANCELED-BEFORE-COMPLETION workItemId={workItem.WorkItemId} taskId={completionTask.Id} completionIsCompleted={completionTask.IsCompleted} itemTerminal={workItem.IsTerminal}");
             throw new OperationCanceledException("Transit publish canceled.", cancellationToken);
         }
 
         /// <summary>
-        /// Placeholder hook for recording a submission-pump fault measurement window.
+        /// Records the measurement window associated with a submission-pump fault.
         /// </summary>
+        /// <remarks>
+        /// The current implementation is a no-op placeholder; the parameters define the diagnostic contract for future telemetry without changing
+        /// current runtime behavior.
+        /// </remarks>
         /// <param name="measurementStartStopwatchTick">Stopwatch tick marking the start of the measurement window.</param>
         /// <param name="measurementEndStopwatchTick">Stopwatch tick marking the end of the measurement window.</param>
-        /// <param name="measurementBoundaryObserved"><see langword="true"/> when the measurement end boundary had already been observed.</param>
+        /// <param name="measurementBoundaryObserved"><see langword="true"/> when the end boundary was already observed at the time of the fault.</param>
         internal static void MarkSubmissionPumpFaultMeasurementWindow(long measurementStartStopwatchTick, long measurementEndStopwatchTick, bool measurementBoundaryObserved)
         {
+            _ = measurementStartStopwatchTick;
+            _ = measurementEndStopwatchTick;
+            _ = measurementBoundaryObserved;
         }
 
         /// <summary>
-        /// Placeholder hook for recording whether all producers had completed when a pump fault was observed.
+        /// Records whether all producers had completed when a submission-pump fault was observed.
         /// </summary>
+        /// <remarks>
+        /// This is currently a no-op placeholder that preserves the future telemetry shape for fault analysis.
+        /// </remarks>
         /// <param name="allProducersCompleted"><see langword="true"/> when all producers had completed at fault time.</param>
         internal static void MarkSubmissionPumpFaultProducerCompletion(bool allProducersCompleted)
         {
+            _ = allProducersCompleted;
         }
 
         /// <summary>
-        /// Placeholder hook for recording whether dispatcher completion had been observed when a pump fault occurred.
+        /// Records whether dispatcher completion had already been observed when a submission-pump fault occurred.
         /// </summary>
+        /// <remarks>
+        /// This is currently a no-op placeholder that preserves the future telemetry shape for fault analysis.
+        /// </remarks>
         /// <param name="dispatchersCompleted"><see langword="true"/> when dispatcher completion had been observed at fault time.</param>
         internal static void MarkSubmissionPumpFaultDispatchersCompleted(bool dispatchersCompleted)
         {
+            _ = dispatchersCompleted;
         }
 
         /// <summary>
-        /// Captures submission-pump fault telemetry when such tracking is enabled.
+        /// Captures the current submission-pump fault telemetry snapshot when future instrumentation has populated one.
         /// </summary>
-        /// <returns>The captured telemetry snapshot, or <see langword="null"/> when none is available.</returns>
+        /// <returns>The captured telemetry snapshot, or <see langword="null"/> when no telemetry has been recorded.</returns>
         internal static PumpFaultTelemetrySnapshot? CaptureSubmissionPumpFaultTelemetrySnapshot()
         {
             return null;
         }
 
         /// <summary>
-        /// Captures aggregate submission-pump fault counters.
+        /// Captures the current aggregate submission-pump fault counters.
         /// </summary>
-        /// <returns>The current fault counters.</returns>
+        /// <returns>The current fault counters; the present implementation returns zeroed placeholder values.</returns>
         internal static SubmissionPumpFaultCounts CaptureSubmissionPumpFaultCounts()
         {
             return new SubmissionPumpFaultCounts(
@@ -499,29 +606,31 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Returns the first captured greeting provenance snapshot from any live connection, when available.
+        /// Returns a greeting-provenance snapshot when the publisher exposes one through the connection capture path.
         /// </summary>
-        /// <returns>The first greeting provenance snapshot found, or <see langword="null"/> when none is available.</returns>
+        /// <remarks>
+        /// The current implementation does not yet surface a live greeting-provenance capture and therefore returns <see langword="null"/>.
+        /// </remarks>
+        /// <returns>The first available greeting-provenance snapshot, or <see langword="null"/> when none is currently exposed.</returns>
         internal TransitConnection.P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
-            foreach (TransitConnection connection in _connections)
+            foreach (TransitConnection? _ in _connections)
             {
-                // TODO: CK Code Commented out for now because it is not used and causes a warning. Uncomment if needed in the future.
-                //TransitConnection.P1GreetingProvenanceSnapshot? snapshot = connection?.CaptureFirstP1GreetingProvenanceSnapshot();
-                //if (snapshot is not null)
-                //{
-                //    return snapshot;
-                //}
+                TransitConnection.P1GreetingProvenanceSnapshot? snapshot = TransitConnection.CaptureFirstP1GreetingProvenanceSnapshot();
+                if (snapshot is not null)
+                {
+                    return snapshot;
+                }
             }
 
             return null;
         }
 
         /// <summary>
-        /// Freezes queue admission, stops connection workers, and terminalizes any remaining owned work.
+        /// Freezes admission, cancels connection workers, and terminalizes any work still owned by the publisher during preemption.
         /// </summary>
-        /// <param name="cancellationToken">Cancellation token for worker shutdown.</param>
-        /// <returns>A task that completes after preemption cleanup finishes.</returns>
+        /// <param name="cancellationToken">Cancellation token used while waiting for worker shutdown.</param>
+        /// <returns>A task that completes after preemption cleanup and final terminalization finish.</returns>
         internal async Task PreemptSubmissionProcessingAsync(CancellationToken cancellationToken)
         {
             _globalQueue.FreezeAdmission();
@@ -555,16 +664,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             if (workerWaitTimedOut)
             {
-                Console.WriteLine("[SHUTDOWN-DIAG] Worker preemption wait timed out; continuing with forced terminalization.");
             }
 
             await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
         }
 
         /// <summary>
-        /// Disposes the publisher by preempting work, awaiting workers, and releasing connection resources.
+        /// Disposes the publisher by stopping admission, canceling workers, draining remaining work, and releasing connection resources.
         /// </summary>
-        /// <returns>A value task that completes after worker shutdown and connection disposal finish.</returns>
+        /// <remarks>
+        /// Disposal preserves ownership boundaries: the publisher cancels worker activity, terminalizes tracked work, and then waits for deferred connection
+        /// disposals so slot handoffs do not leak resources or re-attach retired connections.
+        /// </remarks>
+        /// <returns>A value task that completes after worker shutdown, deferred connection disposal, and terminalization finish.</returns>
         public async ValueTask DisposeAsync()
         {
             if (_disposeRequested)
@@ -641,7 +753,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TimeSpan remaining = absoluteEnd - _timeProvider.GetUtcNow();
                 if (remaining <= TimeSpan.Zero)
                 {
-                    Console.WriteLine("[SHUTDOWN-DIAG] Publisher dispose reached absolute shutdown deadline while awaiting connection workers.");
                     break;
                 }
 
@@ -651,7 +762,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
                 catch (TimeoutException)
                 {
-                    Console.WriteLine("[SHUTDOWN-DIAG] Publisher dispose timed out while awaiting connection workers; continuing teardown.");
                     break;
                 }
                 catch (OperationCanceledException)
@@ -688,11 +798,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Main worker loop for one connection slot that ensures connectivity, claims work, and processes completions.
         /// </summary>
+        /// <param name="slotIndex">The index of the slot for which the connection worker is running.</param>
+        /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         private async Task RunConnectionWorkerAsync(int slotIndex, CancellationToken cancellationToken)
         {
             try
             {
-                Console.WriteLine($"[TRACE-RI-10] {TraceStamp()} Worker START slot={slotIndex}");
                 TransitConnection? connection = null;
 
                 while (!cancellationToken.IsCancellationRequested)
@@ -704,7 +816,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         await _globalQueue.DrainEligibleRetriesAsync(cancellationToken).ConfigureAwait(false);
 
                         bool hasWork = await _globalQueue.WaitForWorkAsync(cancellationToken).ConfigureAwait(false);
-                        //Console.WriteLine($"[TRACE-RI-12] {TraceStamp()} Worker WAIT-FOR-WORK slot={slotIndex} connectionId={(connection?.ConnectionId ?? "none")} hasWork={hasWork}");
                         if (!hasWork)
                         {
                             continue;
@@ -713,8 +824,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         if (connection is null)
                         {
                             connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: false, cancellationToken).ConfigureAwait(false);
-                            //Console.WriteLine($"[TRACE-RI-11] {TraceStamp()} Worker INITIAL-CONNECTION-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
-                            _connections[slotIndex] = connection;
+                            BeginConnectionSlotTransition(slotIndex);
+                            try
+                            {
+                                _connections[slotIndex] = connection;
+                            }
+                            finally
+                            {
+                                EndConnectionSlotTransition(slotIndex);
+                            }
                         }
 
                         if (connection.CurrentState == TransitConnectionState.Faulted)
@@ -728,6 +846,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         for (int i = 0; i < connection.PipelineDepth; i++)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
+
+                            _claimBoundaryObserved?.Invoke();
 
                             if (connection.CurrentState == TransitConnectionState.Faulted)
                             {
@@ -750,7 +870,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             continue;
                         }
 
-                        Console.WriteLine($"[TRACE-RI-13] {TraceStamp()} Worker CLAIMED slot={slotIndex} connectionId={connection.ConnectionId} claimedCount={claimed.Count} items=[{string.Join(",", claimed.Select(static x => $"{x.WorkItemId}:{x.State}"))}]");
                         await connection.ProcessBatchAsync(claimed, cancellationToken).ConfigureAwait(false);
 
                         int remainingCompletions = claimed.Count;
@@ -777,9 +896,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             {
                                 connection.ThrowIfResponseLoopFaulted();
                             }
-                            catch (Exception ex)
+                            catch
                             {
-                                Console.WriteLine($"[TRACE-RI-14] {TraceStamp()} Worker THROWIFRESPONSELOOPFAULTED-THREW slot={slotIndex} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
                                 throw;
                             }
 
@@ -791,7 +909,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         if (connection is not null)
                         {
                             await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, CancellationToken.None).ConfigureAwait(false);
-                            _ = TrackDeferredConnectionDisposal(connection);
+                            Task disposalTask = TrackDeferredConnectionDisposal(connection);
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
                         }
                         else if (claimed is not null)
                         {
@@ -809,27 +928,40 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
                     catch (Exception ex) when (connection is not null && IsConnectionLifecycleSubmitFailure(connection, ex))
                     {
-                        Console.WriteLine($"[TRACE-RI-15] {TraceStamp()} Worker LIFECYCLE-CATCH-ENTER slot={slotIndex} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
                         await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, cancellationToken).ConfigureAwait(false);
-                        Console.WriteLine($"[TRACE-RI-16] {TraceStamp()} Worker REQUEUE-COMPLETE slot={slotIndex} connectionId={connection.ConnectionId}");
 
                         bool shutdownActive = _disposeRequested || cancellationToken.IsCancellationRequested;
-                        _ = TrackDeferredConnectionDisposal(connection);
-                        Console.WriteLine($"[TRACE-RI-17] {TraceStamp()} Worker DEFER-DISPOSE-SCHEDULED slot={slotIndex} connectionId={connection.ConnectionId} shutdownActive={shutdownActive}");
+                        Task disposalTask = TrackDeferredConnectionDisposal(connection);
                         if (shutdownActive)
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
                             break;
                         }
 
                         if (_disposeRequested || cancellationToken.IsCancellationRequested)
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
                             break;
                         }
 
                         if (!HasConnectionDemand())
                         {
-                            connection = null;
-                            _connections[slotIndex] = null;
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
+
+                            BeginConnectionSlotTransition(slotIndex);
+                            try
+                            {
+                                TransitConnection.TransitConnectionDiagnosticsSnapshot retiredDiagnostics = connection.CaptureDiagnosticsSnapshot();
+                                connection = null;
+                                _connections[slotIndex] = null;
+                                _ = Interlocked.Add(ref _totalBytesTransmitted, retiredDiagnostics.BytesTransmitted);
+                                _ = Interlocked.Add(ref _totalBytesReceived, retiredDiagnostics.BytesReceived);
+                            }
+                            finally
+                            {
+                                EndConnectionSlotTransition(slotIndex);
+                            }
+
                             continue;
                         }
 
@@ -838,28 +970,51 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
                         try
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
+
                             TransitConnection? replacement = _connections[slotIndex];
                             if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
                             {
-                                Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} replacementConnectionId={replacement.ConnectionId}");
                                 connection = replacement;
                                 continue;
                             }
 
-                            long reconnects = Interlocked.Increment(ref _totalReconnects);
-                            Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} Worker RECONNECT-START slot={slotIndex} priorConnectionId={reconnectTarget.ConnectionId} totalReconnects={reconnects}");
+                            BeginConnectionSlotTransition(slotIndex);
                             try
                             {
-                                connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
+                                TransitConnection.TransitConnectionDiagnosticsSnapshot retiredDiagnostics = reconnectTarget.CaptureDiagnosticsSnapshot();
+                                connection = null;
+                                _connections[slotIndex] = null;
+                                _ = Interlocked.Add(ref _totalBytesTransmitted, retiredDiagnostics.BytesTransmitted);
+                                _ = Interlocked.Add(ref _totalBytesReceived, retiredDiagnostics.BytesReceived);
+                            }
+                            finally
+                            {
+                                EndConnectionSlotTransition(slotIndex);
+                            }
+
+                            _ = Interlocked.Increment(ref _totalReconnects);
+                            TransitConnection initializedReplacement;
+                            try
+                            {
+                                initializedReplacement = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
                             }
                             catch (NoConnectionDemandException)
                             {
                                 connection = null;
-                                _connections[slotIndex] = null;
                                 continue;
                             }
-                            Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} Worker RECONNECT-READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
-                            _connections[slotIndex] = connection;
+
+                            BeginConnectionSlotTransition(slotIndex);
+                            try
+                            {
+                                _connections[slotIndex] = initializedReplacement;
+                                connection = initializedReplacement;
+                            }
+                            finally
+                            {
+                                EndConnectionSlotTransition(slotIndex);
+                            }
                         }
                         finally
                         {
@@ -875,7 +1030,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Records one worker exit and finalizes queue disposal when shutdown has been requested and no workers remain.
+        /// Records one worker exit and finalizes queue disposal when shutdown has been requested and the last worker leaves.
         /// </summary>
         private void OnConnectionWorkerExited()
         {
@@ -898,24 +1053,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Requeues or terminalizes work still associated with a faulted connection after worker failure.
+        /// Collects the work still owned by a faulted connection and routes it back through retry or terminalization paths.
         /// </summary>
         private async Task RequeueClaimedAndOutstandingAfterFaultAsync(
             TransitConnection connection,
-            IReadOnlyList<TransitWorkItem>? claimed,
+            List<TransitWorkItem>? claimed,
             CancellationToken cancellationToken)
         {
-            Console.WriteLine($"[TRACE-RI-20] {TraceStamp()} Requeue BEGIN connectionId={connection.ConnectionId} claimedCount={(claimed is null ? 0 : claimed.Count)}");
             while (connection.TryTakeCompleted(out TransitWorkItem completedItem, out TransitPublishResult completedResult))
             {
-                Console.WriteLine($"[TRACE-RI-21] {TraceStamp()} Requeue DRAIN-COMPLETED connectionId={connection.ConnectionId} workItemId={completedItem.WorkItemId} status={completedResult.Status}");
                 CompleteTerminal(completedItem, completedResult);
             }
 
             Dictionary<long, TransitWorkItem> unresolvedById = [];
 
             IReadOnlyList<TransitWorkItem> unresolvedOwned = connection.DrainOutstandingOwnedWorkForRetry();
-            Console.WriteLine($"[TRACE-RI-22] {TraceStamp()} Requeue DRAIN-OWNED connectionId={connection.ConnectionId} unresolvedOwnedCount={unresolvedOwned.Count}");
             foreach (TransitWorkItem item in unresolvedOwned)
             {
                 unresolvedById[item.WorkItemId] = item;
@@ -934,21 +1086,23 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             foreach (TransitWorkItem item in unresolvedById.Values)
             {
-                Console.WriteLine($"[TRACE-RI-23] {TraceStamp()} Requeue ITEM connectionId={connection.ConnectionId} workItemId={item.WorkItemId} stateBefore={item.State} attempts={item.AttemptCount}");
                 await RequeueOrTerminalizeFailureAsync(
                     item,
                     TransitWorkFailureClass.ConnectionDisposed,
                     TransitTransmissionUncertainty.ConnectionFailedDuringSend,
                     cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-24] {TraceStamp()} Requeue ITEM-DONE connectionId={connection.ConnectionId} workItemId={item.WorkItemId} stateAfter={item.State} terminal={item.IsTerminal}");
             }
 
-            Console.WriteLine($"[TRACE-RI-25] {TraceStamp()} Requeue END connectionId={connection.ConnectionId} unresolvedCount={unresolvedById.Count}");
         }
 
         /// <summary>
-        /// Requeues a failed work item when retry budget remains, otherwise terminalizes it.
+        /// Requeues a failed work item when retry budget remains, otherwise terminalizes it as failed or ambiguous according to the observed uncertainty.
         /// </summary>
+        /// <param name="item">The work item to requeue or terminalize.</param>
+        /// <param name="failureClass">The class of the failure that occurred.</param>
+        /// <param name="uncertainty">The level of uncertainty associated with the failure.</param>
+        /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+        /// <returns>A task that represents the asynchronous operation.</returns>
         private async ValueTask RequeueOrTerminalizeFailureAsync(
             TransitWorkItem item,
             TransitWorkFailureClass failureClass,
@@ -971,18 +1125,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     ProvenanceTick: Stopwatch.GetTimestamp());
 
                 CompleteTerminal(item, ambiguous);
-                Console.WriteLine($"[TRACE-RI-28] {TraceStamp()} RequeueOrTerminalize TERMINAL-AMBIGUOUS workItemId={item.WorkItemId} state={item.State}");
                 return;
             }
 
             if (item.State == TransitWorkItemState.RetryPending)
             {
-                Console.WriteLine($"[TRACE-RI-28] {TraceStamp()} RequeueOrTerminalize ALREADY-RETRYPENDING workItemId={item.WorkItemId}");
                 return;
             }
 
             TimeSpan delay = ComputeRetryDelay(item.AttemptCount);
-            Console.WriteLine($"[TRACE-RI-26] {TraceStamp()} RequeueOrTerminalize START workItemId={item.WorkItemId} state={item.State} attempts={item.AttemptCount} delayMs={delay.TotalMilliseconds:F0}");
             bool transferOwnershipFromInFlight = item.State is TransitWorkItemState.Claimed
                 or TransitWorkItemState.Staged
                 or TransitWorkItemState.Flushed
@@ -995,7 +1146,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 delay,
                 transferOwnershipFromInFlight,
                 cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"[TRACE-RI-27] {TraceStamp()} RequeueOrTerminalize SCHEDULE-RESULT workItemId={item.WorkItemId} scheduled={scheduled} state={item.State} terminal={item.IsTerminal}");
 
             if (scheduled)
             {
@@ -1012,16 +1162,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 ProvenanceTick: Stopwatch.GetTimestamp());
 
             CompleteTerminal(item, failed, inFlightOwnershipAlreadyTransferred: true);
-            Console.WriteLine($"[TRACE-RI-28] {TraceStamp()} RequeueOrTerminalize TERMINAL-FAILED workItemId={item.WorkItemId} state={item.State}");
         }
 
         /// <summary>
-        /// Applies a terminal result, updates aggregate counters, and removes tracking for one work item.
+        /// Applies one terminal publish result exactly once, updates lifetime counters, and releases the publisher's tracking of the work item.
         /// </summary>
+        /// <param name="item">The work item to complete.</param>
+        /// <param name="result">The terminal result to apply.</param>
+        /// <param name="inFlightOwnershipAlreadyTransferred">Indicates whether in-flight ownership was already transferred before this terminalization path ran.</param>
         private void CompleteTerminal(TransitWorkItem item, TransitPublishResult result, bool inFlightOwnershipAlreadyTransferred = false)
         {
             bool transitioned = item.TryTransitionToTerminal(result.Status, result.Provenance, out TransitWorkItemState priorState);
-            Console.WriteLine($"[TRACE-RI-29] {TraceStamp()} CompleteTerminal TRY-COMPLETE workItemId={item.WorkItemId} status={result.Status} priorState={priorState} completed={transitioned} completionTaskCompleted={item.CompletionTask.IsCompleted}");
             if (!transitioned)
             {
                 return;
@@ -1035,14 +1186,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _globalQueue.MarkInFlightTerminal();
             }
 
-            bool removed = _activeWorkItems.TryRemove(item.WorkItemId, out _);
-            Console.WriteLine($"[TRACE-RI-30] {TraceStamp()} CompleteTerminal ACTIVE-REMOVE workItemId={item.WorkItemId} removed={removed} activeCount={_activeWorkItems.Count}");
+            _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
 
             _ = result.Status switch
             {
                 TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
                 TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
                 TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                TransitPublishStatus.Queued
+                or TransitPublishStatus.Unavailable
+                or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
                 TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
                 _ => Interlocked.Increment(ref _totalArticlesFailed),
             };
@@ -1050,12 +1203,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Forces all still-tracked work items to terminal completion during preemption or shutdown.
+        /// Forces every still-tracked admitted item to a terminal result during preemption or shutdown.
         /// </summary>
+        /// <returns>A task that completes after all remaining owned work has been terminalized.</returns>
         private async Task ForceTerminalizeRemainingWorkAsync()
         {
             TransitWorkItem[] remaining = [.. _activeWorkItems.Values];
-            Console.WriteLine($"[TRACE-RI-31] {TraceStamp()} ForceTerminalize ENTER remainingCount={remaining.Length}");
             foreach (TransitWorkItem item in remaining)
             {
                 TransitPublishResult forced = new(
@@ -1067,9 +1220,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     ProvenanceConnectionState: _state,
                     ProvenanceTick: Stopwatch.GetTimestamp());
 
-                TransitWorkItemState stateBefore = item.State;
                 bool transitioned = item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState);
-                Console.WriteLine($"[TRACE-RI-32] {TraceStamp()} ForceTerminalize TRY-COMPLETE workItemId={item.WorkItemId} stateBefore={stateBefore} priorState={priorState} forcedStatus={forced.Status} completed={transitioned} completionTaskCompleted={item.CompletionTask.IsCompleted}");
                 if (!transitioned)
                 {
                     continue;
@@ -1089,68 +1240,45 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     case TransitWorkItemState.AwaitingResponse:
                         _globalQueue.MarkInFlightTerminal();
                         break;
+                    case TransitWorkItemState.CompletedAccepted:
+                    case TransitWorkItemState.CompletedRejected:
+                    case TransitWorkItemState.CompletedFailed:
+                    case TransitWorkItemState.CompletedCanceled:
+                        break;
+                    default:
+                        break;
                 }
 
-                bool removed = _activeWorkItems.TryRemove(item.WorkItemId, out _);
-                Console.WriteLine($"[TRACE-RI-33] {TraceStamp()} ForceTerminalize ACTIVE-REMOVE workItemId={item.WorkItemId} removed={removed} activeCount={_activeWorkItems.Count}");
+                _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
 
                 _ = forced.Status switch
                 {
                     TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
                     TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
                     TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                    TransitPublishStatus.Queued
+                    or TransitPublishStatus.Unavailable
+                    or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
                     TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
                     _ => Interlocked.Increment(ref _totalArticlesFailed),
                 };
                 _ = item.TrySetCompletionResult(forced);
             }
 
-            Console.WriteLine($"[TRACE-RI-34] {TraceStamp()} ForceTerminalize EXIT");
             await Task.CompletedTask.ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Reconnects a faulted slot without overwriting a newer healthy connection installed concurrently.
-        /// </summary>
-        /// <param name="slotIndex">The connection slot whose current connection is being replaced.</param>
-        /// <param name="cancellationToken">Cancels the reconnect operation.</param>
-        /// <returns>A task that completes when the reconnect attempt finishes.</returns>
-        private async Task ReconnectAsync(int slotIndex, CancellationToken cancellationToken)
-        {
-            if (slotIndex < 0 || slotIndex >= _connections.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(slotIndex), slotIndex, "Reconnect slot index must reference a valid connection slot.");
-            }
-
-            TransitConnection? reconnectTarget = _connections[slotIndex];
-            SemaphoreSlim reconnectGate = _reconnectGates[slotIndex];
-            await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            try
-            {
-                TransitConnection? replacement = _connections[slotIndex];
-                if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
-                {
-                    Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync SKIP-EXTERNAL slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} replacementConnectionId={replacement.ConnectionId}");
-                    return;
-                }
-
-                long reconnects = Interlocked.Increment(ref _totalReconnects);
-                Console.WriteLine($"[TRACE-RI-18] {TraceStamp()} ReconnectAsync START slot={slotIndex} priorConnectionId={reconnectTarget?.ConnectionId ?? "none"} totalReconnects={reconnects}");
-                TransitConnection connection = await CreateAndInitializeConnectionAsync(slotIndex, reconnecting: true, cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-19] {TraceStamp()} ReconnectAsync READY slot={slotIndex} connectionId={connection.ConnectionId} state={connection.CurrentState}");
-                _connections[slotIndex] = connection;
-            }
-            finally
-            {
-                _ = reconnectGate.Release();
-            }
-        }
 
         /// <summary>
-        /// Creates and initializes a new transit connection for one slot.
+        /// Creates a connection for one slot, initializes it, and retries lifecycle failures while the publisher still has demand.
         /// </summary>
+        /// <param name="slotIndex">The slot index being serviced.</param>
+        /// <param name="reconnecting">Indicates whether the call is part of a reconnect path.</param>
+        /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+        /// <returns>The initialized <see cref="TransitConnection"/>.</returns>
         private async Task<TransitConnection> CreateAndInitializeConnectionAsync(int slotIndex, bool reconnecting, CancellationToken cancellationToken)
         {
+            _ = slotIndex;
             int consecutiveLifecycleInitializationFailures = 0;
             int attempt = 0;
 
@@ -1162,7 +1290,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 attempt++;
-                Console.WriteLine($"[TRACE-RI-35] {TraceStamp()} InitLoop ATTEMPT-START slot={slotIndex} reconnecting={reconnecting} attempt={attempt} failureCount={consecutiveLifecycleInitializationFailures}");
                 cancellationToken.ThrowIfCancellationRequested();
                 if (_disposeRequested)
                 {
@@ -1181,7 +1308,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     responseProgressTimeout: initializationResponseProgressTimeout,
                     responseProgressCheckInterval: _connectionResponseProgressCheckInterval,
                     timingCollector: _timingCollector);
-                Console.WriteLine($"[TRACE-RI-36] {TraceStamp()} InitLoop CONNECTION-CREATED slot={slotIndex} reconnecting={reconnecting} attempt={attempt} connectionId={connection.ConnectionId} timeoutMs={initializationResponseProgressTimeout?.TotalMilliseconds.ToString("F0") ?? "null"} hasOutstanding={hasOutstandingAdmittedWork}");
 
                 try
                 {
@@ -1191,23 +1317,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         throw new OperationCanceledException("Transit publisher shutdown in progress.", cancellationToken);
                     }
 
-                    Console.WriteLine($"[TRACE-RI-37] {TraceStamp()} InitLoop INITIALIZE-START slot={slotIndex} reconnecting={reconnecting} attempt={attempt} connectionId={connection.ConnectionId}");
                     await connection.InitializeAsync(cancellationToken).ConfigureAwait(false);
-                    Console.WriteLine($"[TRACE-RI-38] {TraceStamp()} InitLoop INITIALIZE-SUCCESS slot={slotIndex} reconnecting={reconnecting} attempt={attempt} connectionId={connection.ConnectionId} state={connection.CurrentState}");
                     return connection;
                 }
                 catch (Exception ex) when (IsConnectionLifecycleSubmitFailure(connection, ex))
                 {
-                    Console.WriteLine($"[TRACE-RI-39] {TraceStamp()} InitLoop INITIALIZE-EXCEPTION slot={slotIndex} reconnecting={reconnecting} attempt={attempt} connectionId={connection.ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
                     try
                     {
-                        Console.WriteLine($"[TRACE-RI-40] {TraceStamp()} InitLoop DISPOSE-FAILED-CONNECTION-START slot={slotIndex} attempt={attempt} connectionId={connection.ConnectionId}");
                         await connection.DisposeAsync().ConfigureAwait(false);
-                        Console.WriteLine($"[TRACE-RI-41] {TraceStamp()} InitLoop DISPOSE-FAILED-CONNECTION-END slot={slotIndex} attempt={attempt} connectionId={connection.ConnectionId}");
                     }
-                    catch (Exception disposeEx)
+                    catch
                     {
-                        Console.WriteLine($"[TRACE-RI-42] {TraceStamp()} InitLoop DISPOSE-FAILED-CONNECTION-EXCEPTION slot={slotIndex} attempt={attempt} connectionId={connection.ConnectionId} exType={disposeEx.GetType().FullName} exMessage={disposeEx.Message}");
                     }
 
                     cancellationToken.ThrowIfCancellationRequested();
@@ -1217,39 +1337,34 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
 
                     bool hasOutstandingNow = HasOutstandingAdmittedWork();
-                    Console.WriteLine($"[TRACE-RI-43] {TraceStamp()} InitLoop FAILURE-COUNT-BEFORE slot={slotIndex} reconnecting={reconnecting} attempt={attempt} failureCount={consecutiveLifecycleInitializationFailures} hasOutstanding={hasOutstandingNow} threshold={_runtimeOptions.TransitRetryMaxAttempts}");
                     _ = Interlocked.Increment(ref _totalReconnects);
                     consecutiveLifecycleInitializationFailures++;
                     bool thresholdReached = hasOutstandingNow && consecutiveLifecycleInitializationFailures >= _runtimeOptions.TransitRetryMaxAttempts;
-                    Console.WriteLine($"[TRACE-RI-44] {TraceStamp()} InitLoop FAILURE-COUNT-AFTER slot={slotIndex} reconnecting={reconnecting} attempt={attempt} failureCount={consecutiveLifecycleInitializationFailures} thresholdReached={thresholdReached}");
 
                     if (thresholdReached)
                     {
-                        Console.WriteLine($"[TRACE-RI-45] {TraceStamp()} InitLoop FORCE-TERMINALIZE-ENTER slot={slotIndex} reconnecting={reconnecting} attempt={attempt}");
                         await ForceTerminalizeRemainingWorkAsync().ConfigureAwait(false);
-                        Console.WriteLine($"[TRACE-RI-46] {TraceStamp()} InitLoop FORCE-TERMINALIZE-EXIT slot={slotIndex} reconnecting={reconnecting} attempt={attempt}");
                         consecutiveLifecycleInitializationFailures = 0;
-                        Console.WriteLine($"[TRACE-RI-47] {TraceStamp()} InitLoop FAILURE-COUNT-RESET slot={slotIndex} reconnecting={reconnecting} attempt={attempt} failureCount={consecutiveLifecycleInitializationFailures}");
                     }
 
-                    Console.WriteLine($"[TRACE-RI-48] {TraceStamp()} InitLoop RETRY-DELAY-START slot={slotIndex} reconnecting={reconnecting} attempt={attempt} delayMs=250");
                     await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
-                    Console.WriteLine($"[TRACE-RI-49] {TraceStamp()} InitLoop RETRY-DELAY-END slot={slotIndex} reconnecting={reconnecting} attempt={attempt}");
                 }
             }
         }
 
         /// <summary>
-        /// Determines whether the publisher still owns any non-terminal admitted work.
+        /// Determines whether the publisher still owns any admitted work that has not reached a terminal result.
         /// </summary>
+        /// <returns><c>true</c> if at least one admitted item is still non-terminal; otherwise, <c>false</c>.</returns>
         private bool HasOutstandingAdmittedWork()
         {
             return _activeWorkItems.Values.Any(static item => !item.IsTerminal);
         }
 
         /// <summary>
-        /// Determines whether work demand still justifies keeping connection workers active.
+        /// Determines whether queued, retry-pending, in-flight, or still-owned work justifies keeping connection workers active.
         /// </summary>
+        /// <returns><c>true</c> if the publisher still has connection demand; otherwise, <c>false</c>.</returns>
         private bool HasConnectionDemand()
         {
             GlobalTransitWorkQueueSnapshot snapshot = _globalQueue.CaptureSnapshot();
@@ -1260,8 +1375,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Resolves the initialization watchdog timeout to apply to newly created connections.
+        /// Resolves the initialization watchdog timeout that should govern a newly created connection.
         /// </summary>
+        /// <param name="reconnecting">Indicates whether the connection is being reestablished rather than created for fresh demand.</param>
+        /// <param name="hasOutstandingAdmittedWork">Indicates whether the publisher still owns admitted work while the connection starts.</param>
+        /// <returns>The initialization response progress timeout that applies to the connection being created.</returns>
         private TimeSpan? ResolveInitializationResponseProgressTimeout(bool reconnecting, bool hasOutstandingAdmittedWork)
         {
             return reconnecting || hasOutstandingAdmittedWork
@@ -1272,6 +1390,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Computes the bounded retry delay with per-attempt exponential backoff and jitter.
         /// </summary>
+        /// <param name="attempt">The current retry attempt.</param>
+        /// <returns>The computed retry delay.</returns>
         private static TimeSpan ComputeRetryDelay(int attempt)
         {
             int boundedAttempt = Math.Clamp(attempt, 1, 3);
@@ -1290,6 +1410,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Updates the aggregate publisher lifecycle state.
         /// </summary>
+        /// <param name="state">The new state to transition to.</param>
         private void TransitionState(TransitConnectionState state)
         {
             _state = state;
@@ -1298,13 +1419,23 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Sentinel cancellation used when a worker wakes but no connection demand remains.
         /// </summary>
+        /// <remarks>
+        /// The exception is used as a local control-flow signal so a reconnect attempt can stop without converting demand loss into a hard failure.
+        /// </remarks>
         private sealed class NoConnectionDemandException : OperationCanceledException
         {
         }
 
         /// <summary>
-        /// Classifies submit failures that should be treated as connection-lifecycle faults.
+        /// Classifies submit failures that should be treated as connection-lifecycle faults instead of application-level publish failures.
         /// </summary>
+        /// <remarks>
+        /// This predicate lets the worker distinguish connection ownership, protocol, and transport failures from article-level settlement failures so the
+        /// reconnect path can retire or replace a connection without misclassifying the publish result.
+        /// </remarks>
+        /// <param name="connection">The connection on which the failure occurred.</param>
+        /// <param name="exception">The exception representing the failure being classified.</param>
+        /// <returns><c>true</c> if the failure should trigger connection-lifecycle handling; otherwise, <c>false</c>.</returns>
         private static bool IsConnectionLifecycleSubmitFailure(TransitConnection connection, Exception exception)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -1323,13 +1454,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         && (IsInitializationProtocolFailure(connection, invalid)
                             || invalid.Message.Contains("connection", StringComparison.OrdinalIgnoreCase)
                             || invalid.Message.Contains("Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal))));
-            Console.WriteLine($"[TRACE-RI-50] {TraceStamp()} LifecycleFilter connectionId={connection.ConnectionId} state={connection.CurrentState} responseLoopFaulted={connection.IsResponseLoopFaulted} exType={exception.GetType().FullName} exMessage={exception.Message} result={result}");
             return result;
         }
 
         /// <summary>
-        /// Detects initialization-phase protocol failures from invalid-operation diagnostics.
+        /// Detects initialization-phase protocol failures from invalid-operation diagnostics so they can be routed through lifecycle handling.
         /// </summary>
+        /// <remarks>
+        /// Only handshake-state failures are considered here; once the connection has moved past initialization, the caller treats the exception according to
+        /// the broader lifecycle classification rules.
+        /// </remarks>
+        /// <param name="connection">The connection on which the failure occurred.</param>
+        /// <param name="exception">The exception representing the failure being classified.</param>
+        /// <returns><c>true</c> if the failure is an initialization-phase protocol failure; otherwise, <c>false</c>.</returns>
         private static bool IsInitializationProtocolFailure(TransitConnection connection, InvalidOperationException exception)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -1351,8 +1488,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Tracks a connection disposal task that may outlive the slot handoff to a replacement connection.
+        /// Starts disposing a connection after ownership has moved away from the slot and keeps the disposal task for later observation.
         /// </summary>
+        /// <param name="connection">The connection to dispose asynchronously after handoff.</param>
+        /// <returns>The disposal task that was scheduled for deferred observation.</returns>
         private Task TrackDeferredConnectionDisposal(TransitConnection connection)
         {
             ArgumentNullException.ThrowIfNull(connection);
@@ -1363,8 +1502,27 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Awaits and then clears all deferred connection disposal tasks.
+        /// Observes one deferred connection-disposal task while preserving the publisher's best-effort teardown policy.
         /// </summary>
+        /// <param name="disposalTask">The deferred disposal task to observe.</param>
+        /// <returns>A task that completes after the disposal task has been observed.</returns>
+        private static async Task AwaitDeferredConnectionDisposalAsync(Task disposalTask)
+        {
+            ArgumentNullException.ThrowIfNull(disposalTask);
+
+            try
+            {
+                await disposalTask.ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// Awaits and then clears all deferred connection disposal tasks so slot handoffs do not leak unmanaged resources.
+        /// </summary>
+        /// <returns>A task that completes after every deferred connection disposal has been observed.</returns>
         private async Task AwaitDeferredConnectionDisposalsAsync()
         {
             Task[] pending = [.. _deferredConnectionDisposals.Values];
@@ -1388,8 +1546,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Point-in-time diagnostic snapshot of publisher slot state, active connections, and queue accounting.
+        /// Structured publisher diagnostics combining slot state, active connections, queue accounting, and pump-fault telemetry.
         /// </summary>
+        /// <remarks>
+        /// The snapshot is a publisher-owned diagnostic contract: it reports what is currently visible through the slot fence, the queue totals seen at the same
+        /// moment, and any captured pump-fault state needed to explain why a reconnect or shutdown path behaved the way it did.
+        /// </remarks>
+        /// <param name="ConfiguredConnectionPoolSize">The configured size of the connection pool.</param>
+        /// <param name="ConfiguredPerConnectionPipelineDepth">The configured pipeline depth per connection.</param>
+        /// <param name="TotalReconnects">The total number of reconnects observed by the publisher.</param>
+        /// <param name="QueuedSubmissionCount">The number of submissions currently queued for routing.</param>
+        /// <param name="Slots">The per-slot snapshots captured under the slot-version fence.</param>
+        /// <param name="Connections">The active connection snapshots paired with their slot indexes.</param>
+        /// <param name="SubmissionTraceRecords">The submission-routing trace records collected for diagnostics.</param>
+        /// <param name="PublishToConnectionTraceRecords">The publish-to-connection handoff trace records collected for diagnostics.</param>
+        /// <param name="PumpFaultTelemetry">The optional pump-fault telemetry snapshot when a submission-pump fault was captured.</param>
+        /// <param name="QueueSnapshot">The snapshot of the global transit work queue at the moment the diagnostics were captured.</param>
         internal sealed record TransitPublisherConnectionDiagnosticsSnapshot(
             int ConfiguredConnectionPoolSize,
             int ConfiguredPerConnectionPipelineDepth,
@@ -1403,8 +1575,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             GlobalTransitWorkQueueSnapshot QueueSnapshot);
 
         /// <summary>
-        /// Diagnostic snapshot for one connection slot in the publisher pool.
+        /// Structured diagnostic snapshot for one publisher slot, including the connection currently owning the slot when one exists.
         /// </summary>
+        /// <remarks>
+        /// A slot may be empty while a replacement connection is still initializing outside the slot fence. The snapshot reflects visibility, not lifetime
+        /// ownership of the retired connection object.
+        /// </remarks>
+        /// <param name="SlotIndex">The index of the slot.</param>
+        /// <param name="HasCurrentConnection">Indicates whether the slot currently has an owning connection.</param>
+        /// <param name="CurrentConnectionId">The identifier of the current connection, if any.</param>
+        /// <param name="TotalSubmissionsRouted">The total number of submissions routed through the slot.</param>
+        /// <param name="Reconnects">The total number of reconnects for the slot.</param>
+        /// <param name="CreatedConnections">The total number of connections created for the slot.</param>
+        /// <param name="MaxObservedInFlightDepth">The maximum observed in-flight depth for the slot.</param>
+        /// <param name="WaitedForChannelReadabilityCount">The number of times the slot waited for channel readability.</param>
+        /// <param name="WaitedForCompletionWhilePipelineFullCount">The number of times the slot waited for completion while the pipeline was full.</param>
+        /// <param name="FirstReachedConfiguredDepthTick">The tick at which the slot first reached the configured pipeline depth.</param>
         internal sealed record ConnectionSlotSnapshot(
             int SlotIndex,
             bool HasCurrentConnection,
@@ -1418,16 +1604,33 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long FirstReachedConfiguredDepthTick);
 
         /// <summary>
-        /// Pairs a slot index with the diagnostics snapshot captured from its current connection.
+        /// Associates one slot with the diagnostics snapshot captured from the connection that owned it when the snapshot was taken.
         /// </summary>
+        /// <remarks>
+        /// The entry ties a visible slot index to the corresponding connection diagnostics so operator snapshots can distinguish slot ownership from retired
+        /// connection history.
+        /// </remarks>
+        /// <param name="SlotIndex">The index of the slot.</param>
+        /// <param name="ConnectionId">The identifier of the connection that owned the slot.</param>
+        /// <param name="Snapshot">The diagnostics snapshot captured from that connection.</param>
         internal sealed record ConnectionDiagnosticsEntry(
             int SlotIndex,
             string ConnectionId,
             TransitConnection.TransitConnectionDiagnosticsSnapshot Snapshot);
 
         /// <summary>
-        /// Trace record describing when a submission left the publisher front door and entered connection routing.
+        /// Trace record describing when one submission left the publisher front door and entered connection routing.
         /// </summary>
+        /// <remarks>
+        /// The record captures a stable handoff timeline and queue depth correlation point for diagnostics only; it does not participate in settlement or retry
+        /// decisions.
+        /// </remarks>
+        /// <param name="MessageId">The article Message-ID associated with the submission.</param>
+        /// <param name="RemovedFromSubmissionChannelTick">The tick at which the submission was removed from the submission channel.</param>
+        /// <param name="PublishToConnectionInvokedTick">The tick at which publish-to-connection routing was invoked.</param>
+        /// <param name="InFlightCountBeforeAdd">The in-flight count before adding the submission.</param>
+        /// <param name="InFlightCountAfterAdd">The in-flight count after adding the submission.</param>
+        /// <param name="WriteIntentQueueDepthAtPumpRead">The write-intent queue depth when the pump observed the submission.</param>
         internal readonly record struct SubmissionTraceRecord(
             string MessageId,
             long RemovedFromSubmissionChannelTick,
@@ -1437,8 +1640,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int WriteIntentQueueDepthAtPumpRead);
 
         /// <summary>
-        /// Trace record describing one publish-to-connection handoff attempt.
+        /// Trace record describing one publish-to-connection handoff attempt and the timing around the TAKETHIS submit.
         /// </summary>
+        /// <remarks>
+        /// The timing fields are diagnostic correlation points used to understand slot routing latency and do not alter publish behavior.
+        /// </remarks>
+        /// <param name="MessageId">The article Message-ID associated with the handoff.</param>
+        /// <param name="SlotIndex">The index of the slot handling the attempt.</param>
+        /// <param name="MethodEntryTick">The tick at which the method was entered.</param>
+        /// <param name="SelectedConnectionId">The identifier of the selected connection, if any.</param>
+        /// <param name="BeforeSubmitTakethisTick">The tick captured immediately before the TAKETHIS submit.</param>
+        /// <param name="AfterSubmitTakethisTick">The tick captured immediately after the TAKETHIS submit.</param>
         internal readonly record struct PublishToConnectionTraceRecord(
             string MessageId,
             int SlotIndex,
@@ -1448,8 +1660,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long AfterSubmitTakethisTick);
 
         /// <summary>
-        /// Diagnostic snapshot for a captured submission-pump fault.
+        /// Structured telemetry describing one captured submission-pump fault and the derived classifications that explain it.
         /// </summary>
+        /// <remarks>
+        /// The snapshot is a diagnostic summary of a faulted pump state. It collects the first captured fault, the fault-time classification flags, and the
+        /// measurement/context fields needed to explain whether a reconnect, shutdown, or queue-invariant path produced the fault.
+        /// </remarks>
         internal sealed record PumpFaultTelemetrySnapshot(
             ExceptionDispatchInfo? FirstFault,
             long FaultCount,
@@ -1490,7 +1706,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             internal string ExceptionType => FaultType ?? string.Empty;
 
             /// <summary>
-            /// Gets the captured base exception type, or an empty string when none was recorded.
+            /// Gets the captured fault type, or an empty string when none was recorded.
             /// </summary>
             internal string BaseExceptionType => FaultType ?? string.Empty;
 
@@ -1601,8 +1817,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Identifies the publisher component that originated a captured pump fault.
+        /// Identifies the publisher component or lifecycle stage that originated a captured pump fault.
         /// </summary>
+        /// <remarks>
+        /// The value is a diagnostic origin classification used to correlate the fault with the reconnect or shutdown stage that observed it.
+        /// </remarks>
         internal enum TransitPublisherPumpFaultOrigin
         {
             CompleteInFlightSubmissionAsync = 0,
@@ -1617,8 +1836,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Indicates whether a fault was observed before or after the measurement boundary was closed.
+        /// Indicates whether a fault was captured before or after the measurement window was closed.
         /// </summary>
+        /// <remarks>
+        /// This classification is used to distinguish faults that occurred while the pump was still under observation from faults captured after the observation
+        /// boundary had settled.
+        /// </remarks>
         internal enum PumpFaultMeasurementState
         {
             Unknown = 0,
@@ -1627,8 +1850,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Buckets invalid-operation failures by the invariant or subsystem they appear to represent.
+        /// Buckets invalid-operation failures by the invariant or subsystem they most closely represent in pump-fault diagnostics.
         /// </summary>
+        /// <remarks>
+        /// The buckets are diagnostic classifications, not control-flow outcomes. They help explain whether a fault was closer to queue accounting, connection
+        /// ownership, terminalization, or a different invalid-operation path.
+        /// </remarks>
         internal enum InvalidOperationFingerprintMessageClass
         {
             None = 0,
@@ -1642,8 +1869,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Placeholder classification for whether producers had completed at fault time.
+        /// Placeholder classification for whether producers had completed when the fault was captured.
         /// </summary>
+        /// <remarks>
+        /// These states currently exist to preserve the diagnostic shape for future fault analysis.
+        /// </remarks>
         internal enum ProducerCompletionState
         {
             Unknown = 0,
@@ -1652,8 +1882,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Placeholder classification for whether dispatcher completion had been observed at fault time.
+        /// Placeholder classification for whether dispatcher completion had been observed when the fault was captured.
         /// </summary>
+        /// <remarks>
+        /// These states currently exist to preserve the diagnostic shape for future fault analysis.
+        /// </remarks>
         internal enum DispatchersCompletedState
         {
             Unknown = 0,
@@ -1662,16 +1895,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Aggregate submission-pump fault counters.
+        /// Aggregate counts for submission-pump faults, including initiating and cascade totals.
         /// </summary>
+        /// <remarks>
+        /// These counters are diagnostic aggregates only; they do not participate in publish settlement or retry decisions.
+        /// </remarks>
         internal readonly record struct SubmissionPumpFaultCounts(
             long TotalFaultCount,
             long InitiatingFaultCount,
             long CascadeFaultCount);
 
         /// <summary>
-        /// Buckets sanitized first-fault messages by recognized invariant or lifecycle pattern.
+        /// Buckets sanitized first-fault messages by the invariant or lifecycle pattern they match for diagnostics.
         /// </summary>
+        /// <remarks>
+        /// The sanitized class preserves enough detail to correlate fault messages without exposing the full raw exception text as the primary diagnostic key.
+        /// </remarks>
         internal enum SanitizedFirstFaultMessageClass
         {
             None = 0,

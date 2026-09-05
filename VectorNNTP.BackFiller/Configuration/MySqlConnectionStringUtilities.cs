@@ -491,7 +491,7 @@ namespace VectorNNTP.Backfiller.Configuration
                    HasConflictingAliases(rawPairs, MaxPoolSizeAliases);
         }
 
-        #pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
+#pragma warning disable CA1859 // Use concrete types when possible for improved performance - readonly semantics preferred for clarity
         /// <summary>
         /// Parses a connection string into raw key/value pairs before provider canonicalization.
         /// </summary>

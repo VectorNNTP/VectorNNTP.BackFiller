@@ -112,8 +112,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        _logger.LogInformation(
-                            "Authoritative DNS TXT propagation verified for {Fqdn}; Matched={Matched}; Required={Required}; TotalNameservers={TotalNameservers}",
+                        LogAuthoritativeDnsTxtPropagationVerified(
+                            _logger,
                             normalizedFqdn,
                             successCount,
                             requiredSuccesses,
@@ -127,6 +127,25 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             throw new TimeoutException($"Authoritative DNS TXT propagation timeout exceeded for '{normalizedFqdn}'.");
         }
+
+        /// <summary>
+        /// Emits the authoritative DNS TXT propagation success log event once the required authoritative quorum observes the expected TXT value.
+        /// </summary>
+        /// <param name="logger">Logger receiving the propagation-success event.</param>
+        /// <param name="fqdn">Fully qualified ACME TXT host name whose propagation was verified.</param>
+        /// <param name="matched">Number of authoritative nameservers that observed the expected TXT value.</param>
+        /// <param name="required">Minimum authoritative quorum required for propagation to be considered complete.</param>
+        /// <param name="totalNameservers">Total number of authoritative nameservers queried for the zone.</param>
+        [LoggerMessage(
+            EventId = 2804,
+            Level = LogLevel.Information,
+            Message = "Authoritative DNS TXT propagation verified for {Fqdn}; Matched={Matched}; Required={Required}; TotalNameservers={TotalNameservers}")]
+        private static partial void LogAuthoritativeDnsTxtPropagationVerified(
+            ILogger logger,
+            string fqdn,
+            int matched,
+            int required,
+            int totalNameservers);
 
         /// <summary>
         /// Resolves IP addresses for the authoritative nameservers responsible for the candidate DNS zone.
@@ -208,7 +227,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 try
                 {
                     byte[] response = await SendDnsUdpQueryAsync(nameServerAddress, request, cancellationToken).ConfigureAwait(false);
-                    IReadOnlyList<string> names = DnsWireMessageParser.ParseNsRecordNames(response);
+                    List<string> names = DnsWireMessageParser.ParseNsRecordNames(response);
                     if (names.Count > 0)
                     {
                         return names;
@@ -283,7 +302,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             byte[] request = DnsWireMessageBuilder.BuildQuery(fqdn, DnsRecordTypeCode.Txt);
             byte[] response = await SendDnsUdpQueryAsync(nameServer, request, cancellationToken).ConfigureAwait(false);
-            IReadOnlyList<string> txtValues = DnsWireMessageParser.ParseTxtValues(response);
+            List<string> txtValues = DnsWireMessageParser.ParseTxtValues(response);
             return txtValues.Any(value => string.Equals(value, expectedTxtValue, StringComparison.Ordinal));
         }
 
@@ -412,7 +431,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// </summary>
             /// <param name="message">Wire-format DNS response bytes.</param>
             /// <returns>Normalized NS host names discovered in the response.</returns>
-            internal static IReadOnlyList<string> ParseNsRecordNames(byte[] message)
+            internal static List<string> ParseNsRecordNames(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
                 (int questionCount, int answerCount, int authorityCount, _) = ReadHeaderCounts(message);
@@ -456,7 +475,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// </summary>
             /// <param name="message">Wire-format DNS response bytes.</param>
             /// <returns>TXT payload strings reconstructed from the response.</returns>
-            internal static IReadOnlyList<string> ParseTxtValues(byte[] message)
+            internal static List<string> ParseTxtValues(byte[] message)
             {
                 ArgumentNullException.ThrowIfNull(message);
                 (int questionCount, int answerCount, _, _) = ReadHeaderCounts(message);

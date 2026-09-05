@@ -101,6 +101,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private TcpClient? _tcpClient;
         /// <summary>
+        /// Captured local endpoint for the established transport session.
+        /// </summary>
+        private string? _localEndpoint;
+        /// <summary>
+        /// Captured remote endpoint for the established transport session.
+        /// </summary>
+        private string? _remoteEndpoint;
+        /// <summary>
         /// Currently active base transport stream, either raw network or negotiated TLS.
         /// </summary>
         private Stream? _transportStream;
@@ -249,15 +257,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Stopwatch tick of the last definitive response progress observed by the connection.
         /// </summary>
         private long _lastDefinitiveResponseProgressTick;
-
-        /// <summary>
-        /// Formats a trace stamp used by low-level diagnostic console output.
-        /// </summary>
-        /// <returns>An ISO-8601 UTC timestamp with managed thread and task identifiers.</returns>
-        private static string TraceStamp()
-        {
-            return $"{DateTimeOffset.UtcNow:O}|tid={Environment.CurrentManagedThreadId}|task={Task.CurrentId?.ToString() ?? "-"}";
-        }
 
         /// <summary>
         /// Initializes a transit connection configuration using platform-default server certificate validation.
@@ -537,7 +536,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         internal async Task InitializeAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Console.WriteLine($"[TRACE-RI-60] {TraceStamp()} Connection.Initialize START connectionId={ConnectionId} host={_host} port={_port} timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
 
             try
             {
@@ -547,7 +545,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     token => _tcpClient.ConnectAsync(_host, _port, token).AsTask(),
                     "TCP connect",
                     cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-61] {TraceStamp()} Connection.Initialize TCP-CONNECT-COMPLETE connectionId={ConnectionId}");
+                CaptureEstablishedEndpoints(_tcpClient.Client);
                 _ = Interlocked.Increment(ref _socketOpenCount);
 
                 _transportStream = _tcpClient.GetStream();
@@ -567,21 +565,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _writer = PipeWriter.Create(_writeStream, new StreamPipeWriterOptions(leaveOpen: true));
 
                 TransitionState(TransitConnectionState.AwaitingGreeting);
-                Console.WriteLine($"[TRACE-RI-62] {TraceStamp()} Connection.Initialize GREETING-READ-START connectionId={ConnectionId}");
                 string greetingLine = await AwaitInitializationStageAsync(
                     token => ReadLineAsync(token).AsTask(),
                     "greeting response",
                     cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-63] {TraceStamp()} Connection.Initialize GREETING-READ-COMPLETE connectionId={ConnectionId} line='{greetingLine}'");
                 TransitProtocolParser.ValidateGreeting(greetingLine);
 
                 TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-                Console.WriteLine($"[TRACE-RI-64] {TraceStamp()} Connection.Initialize CAPABILITIES-START connectionId={ConnectionId}");
                 Capabilities = await AwaitInitializationStageAsync(
                     ReadCapabilitiesAsync,
                     "CAPABILITIES exchange",
                     cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-65] {TraceStamp()} Connection.Initialize CAPABILITIES-COMPLETE connectionId={ConnectionId} supportsStreaming={Capabilities.SupportsStreaming}");
                 LogTransitCapabilities(_logger, ConnectionId, Capabilities.SupportsStartTls, Capabilities.SupportsStreaming);
 
                 if (!_useSsl && Capabilities.SupportsStartTls)
@@ -597,12 +591,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     _writer = PipeWriter.Create(_writeStream ?? throw new InvalidOperationException("Transit transport write stream is not initialized."), new StreamPipeWriterOptions(leaveOpen: true));
 
                     TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-                    Console.WriteLine($"[TRACE-RI-64A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-START connectionId={ConnectionId}");
                     Capabilities = await AwaitInitializationStageAsync(
                         ReadCapabilitiesAsync,
                         "CAPABILITIES exchange (post-STARTTLS)",
                         cancellationToken).ConfigureAwait(false);
-                    Console.WriteLine($"[TRACE-RI-65A] {TraceStamp()} Connection.Initialize CAPABILITIES-RENEGOTIATE-COMPLETE connectionId={ConnectionId} supportsStreaming={Capabilities.SupportsStreaming}");
                     LogTransitCapabilities(_logger, ConnectionId, Capabilities.SupportsStartTls, Capabilities.SupportsStreaming);
                 }
 
@@ -612,13 +604,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 TransitionState(TransitConnectionState.StartingStreaming);
-                Console.WriteLine($"[TRACE-RI-66] {TraceStamp()} Connection.Initialize MODE-STREAM-START connectionId={ConnectionId}");
                 await WriteCommandAsync("MODE STREAM", cancellationToken).ConfigureAwait(false);
                 string streamResponse = await AwaitInitializationStageAsync(
                     token => ReadLineAsync(token).AsTask(),
                     "MODE STREAM response",
                     cancellationToken).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-67] {TraceStamp()} Connection.Initialize MODE-STREAM-COMPLETE connectionId={ConnectionId} line='{streamResponse}'");
                 (int streamCode, _) = TransitProtocolParser.ParseStatusCodeAndText(streamResponse);
                 if (streamCode != 203)
                 {
@@ -627,7 +617,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 _streamingModeNegotiated = true;
                 TransitionState(TransitConnectionState.Ready);
-                Console.WriteLine($"[TRACE-RI-68] {TraceStamp()} Connection.Initialize SUCCESS connectionId={ConnectionId} state={CurrentState}");
                 _ = Interlocked.Increment(ref _readyTransitionCount);
                 LogTransitConnectionReady(_logger, ConnectionId, IsTlsActive);
 
@@ -1047,7 +1036,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         internal IReadOnlyList<TransitWorkItem> DrainOutstandingOwnedWorkForRetry()
         {
             List<TransitWorkItem> drained = [.. DrainOwnedPendingWork(static _ => true).Select(static pending => pending.WorkItem)];
-            // Console.WriteLine($"[TRACE-RI-79] {TraceStamp()} DrainOutstandingOwnedWorkForRetry connectionId={ConnectionId} count={drained.Count} items=[{string.Join(",", drained.Select(static x => $"{x.WorkItemId}:{x.State}:{x.AttemptCount}"))}]");
             return drained;
         }
 
@@ -1116,24 +1104,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long numberOfBatches = Interlocked.Read(ref _batchCount);
             double avgBatch = numberOfBatches == 0 ? 0 : (double)Interlocked.Read(ref _batchSizeTotal) / numberOfBatches;
 
-            string? localEndpoint = null;
-            string? remoteEndpoint = null;
-            TcpClient? tcpClient = _tcpClient;
-            Socket? socket = tcpClient?.Client;
-            if (socket is not null)
-            {
-                try
-                {
-                    localEndpoint = socket.LocalEndPoint?.ToString();
-                    remoteEndpoint = socket.RemoteEndPoint?.ToString();
-                }
-                catch (ObjectDisposedException)
-                {
-                    localEndpoint = null;
-                    remoteEndpoint = null;
-                }
-            }
-
             return new TransitConnectionDiagnosticsSnapshot(
                 ConnectionId: ConnectionId,
                 Host: _host,
@@ -1148,11 +1118,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 SubmissionsAmbiguous: Interlocked.Read(ref _submissionsAmbiguous),
                 SubmissionsUnavailable: Interlocked.Read(ref _submissionsUnavailable),
                 SubmissionsFailed: Interlocked.Read(ref _submissionsFailed),
+                BytesTransmitted: Interlocked.Read(ref _bytesTransmitted),
+                BytesReceived: Interlocked.Read(ref _bytesReceived),
                 MaxConcurrentSubmissions: Volatile.Read(ref _maxConcurrentSubmissions),
                 CurrentConcurrentSubmissions: _pendingByMessageId.Count,
                 CurrentWriteIntentQueueDepth: 0,
-                LocalEndpoint: localEndpoint,
-                RemoteEndpoint: remoteEndpoint,
+                LocalEndpoint: _localEndpoint,
+                RemoteEndpoint: _remoteEndpoint,
                 DiagnosticsSummary: new PipeliningDiagnosticSummary(
                     MaxPendingDepth: Volatile.Read(ref _maxConcurrentSubmissions),
                     MaxWriteQueueDepth: 0,
@@ -1324,11 +1296,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             if (Interlocked.CompareExchange(ref _responseLoopFaulted, 1, 0) != 0)
             {
-                Console.WriteLine($"[TRACE-RI-77] {TraceStamp()} ResponseLoopFault ALREADY-SIGNALED connectionId={ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message}");
                 return;
             }
 
-            Console.WriteLine($"[TRACE-RI-78] {TraceStamp()} ResponseLoopFault SIGNAL connectionId={ConnectionId} exType={ex.GetType().FullName} exMessage={ex.Message} cancelResponseLoop={cancelResponseLoop}");
             _responseLoopFault = ExceptionDispatchInfo.Capture(ex);
             TransitionState(TransitConnectionState.Faulted);
             LogTransitResponseLoopFaulted(_logger, ex, ConnectionId);
@@ -1617,23 +1587,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentNullException.ThrowIfNull(operation);
             ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
 
-            Console.WriteLine($"[TRACE-RI-69] {TraceStamp()} InitStage START connectionId={ConnectionId} stage='{stageName}' timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
             using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             stageTimeout.CancelAfter(_responseProgressTimeout);
 
             try
             {
                 await operation(stageTimeout.Token).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-70] {TraceStamp()} InitStage COMPLETE connectionId={ConnectionId} stage='{stageName}'");
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stageTimeout.IsCancellationRequested)
             {
-                Console.WriteLine($"[TRACE-RI-71] {TraceStamp()} InitStage TIMEOUT connectionId={ConnectionId} stage='{stageName}'");
                 throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.InitializationProgressTimeout, stageName);
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"[TRACE-RI-72] {TraceStamp()} InitStage EXCEPTION connectionId={ConnectionId} stage='{stageName}' exType={ex.GetType().FullName} exMessage={ex.Message}");
                 throw;
             }
         }
@@ -1657,24 +1623,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentNullException.ThrowIfNull(operation);
             ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
 
-            Console.WriteLine($"[TRACE-RI-73] {TraceStamp()} InitStageT START connectionId={ConnectionId} stage='{stageName}' timeoutMs={_responseProgressTimeout.TotalMilliseconds:F0}");
             using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             stageTimeout.CancelAfter(_responseProgressTimeout);
 
             try
             {
                 T value = await operation(stageTimeout.Token).ConfigureAwait(false);
-                Console.WriteLine($"[TRACE-RI-74] {TraceStamp()} InitStageT COMPLETE connectionId={ConnectionId} stage='{stageName}'");
                 return value;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && stageTimeout.IsCancellationRequested)
             {
-                Console.WriteLine($"[TRACE-RI-75] {TraceStamp()} InitStageT TIMEOUT connectionId={ConnectionId} stage='{stageName}'");
                 throw new TransitConnectionLifecycleException(TransitConnectionLifecycleFailure.InitializationProgressTimeout, stageName);
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"[TRACE-RI-76] {TraceStamp()} InitStageT EXCEPTION connectionId={ConnectionId} stage='{stageName}' exType={ex.GetType().FullName} exMessage={ex.Message}");
                 throw;
             }
         }
@@ -1746,6 +1708,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Captures the established socket endpoints for later diagnostics use.
+        /// </summary>
+        /// <param name="socket">Connected socket whose endpoints should be cached.</param>
+        private void CaptureEstablishedEndpoints(Socket socket)
+        {
+            _localEndpoint = socket.LocalEndPoint?.ToString();
+            _remoteEndpoint = socket.RemoteEndPoint?.ToString();
         }
 
         /// <summary>
@@ -2115,6 +2087,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long SubmissionsAmbiguous,
             long SubmissionsUnavailable,
             long SubmissionsFailed,
+            long BytesTransmitted,
+            long BytesReceived,
             int MaxConcurrentSubmissions,
             int CurrentConcurrentSubmissions,
             long CurrentWriteIntentQueueDepth,

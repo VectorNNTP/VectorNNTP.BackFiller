@@ -97,8 +97,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     }
 
                     await _resultSink.OnProcessedAsync(result, operationToken).ConfigureAwait(false);
-                    _logger.LogInformation(
-                        "Article processing result forwarded. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} Redelivered={Redelivered}",
+                    LogArticleProcessingResultForwarded(
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -133,6 +133,31 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
             return CancellationTokenSource.CreateLinkedTokenSource(hostToken, deliveryToken);
         }
+
+        /// <summary>
+        /// Emits the article processing result forwarded log event after Phase 3 hands the completed result to Phase 4.
+        /// </summary>
+        /// <param name="logger">Logger receiving the result-forwarded event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="outcome">Terminal processing outcome produced by the article processor.</param>
+        /// <param name="disposition">Broker settlement recommendation derived from the outcome.</param>
+        /// <param name="redelivered">Whether the source delivery was redelivered by RabbitMQ.</param>
+        [LoggerMessage(
+            EventId = 3400,
+            Level = LogLevel.Information,
+            Message = "Article processing result forwarded. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} Redelivered={Redelivered}")]
+        private static partial void LogArticleProcessingResultForwarded(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ArticleWorkProcessingOutcome outcome,
+            ArticleWorkDispositionRecommendation disposition,
+            bool redelivered);
 
     }
 

@@ -17,16 +17,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// usable. It is responsible for publishing the active certificate into shared runtime state and for ensuring
     /// that startup only activates a certificate that can be served by the inbound listener.
     /// </remarks>
-    internal sealed class BackFillerCertificateProvisioningService : IDisposable
+    internal sealed partial class BackFillerCertificateProvisioningService : IDisposable
     {
-        /// <summary>
-        /// Registered certificate-store dependency supplied when composing the provisioning stack.
-        /// </summary>
-        /// <remarks>
-        /// The current implementation relies on <see cref="BackFillerCertificateStore"/>'s static helpers rather than
-        /// invoking this instance directly.
-        /// </remarks>
-        private readonly BackFillerCertificateStore _certificateStore;
         /// <summary>
         /// ACME issuer used when a replacement listener certificate must be requested.
         /// </summary>
@@ -69,7 +61,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             ArgumentNullException.ThrowIfNull(logger);
             ArgumentNullException.ThrowIfNull(timeProvider);
 
-            _certificateStore = certificateStore;
             _acmeIssuer = acmeIssuer;
             _certificateState = certificateState;
             _logger = logger;
@@ -245,7 +236,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}", letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath);
+                LogCertificateIssuanceFailed(_logger, letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath, ex);
                 throw;
             }
 
@@ -257,7 +248,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}", letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath);
+                LogCertificatePersistenceFailed(_logger, letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath, ex);
                 throw;
             }
 
@@ -270,15 +261,16 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}", letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath);
+                LogCertificateReloadFailed(_logger, letsEncryptOptions.CanonicalCertificateSubjectName, letsEncryptOptions.CertificatePfxPath, letsEncryptOptions.CertificatePrivateKeyPemPath, ex);
                 throw;
             }
 
             _certificateState.Publish(activated);
+            DateTimeOffset activatedNotAfterUtc = activated.Certificate.NotAfter.ToUniversalTime();
             LogListenerCertificateActivatedSuccessfully(
                 _logger,
                 activated.Certificate.Subject,
-                activated.Certificate.NotAfter.ToUniversalTime());
+                activatedNotAfterUtc);
         }
 
         /// <summary>
@@ -294,190 +286,99 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Logs when certificate provisioning is disabled by configuration.
-        /// </summary>
-        private static readonly Action<ILogger, Exception?> LogCertificateProvisioningDisabledMessage =
-            LoggerMessage.Define(
-                LogLevel.Warning,
-                new EventId(2700, nameof(LogCertificateProvisioningDisabled)),
-                "BackFiller TLS certificate provisioning is disabled by configuration.");
-
-        /// <summary>
-        /// Logs when renewal is required but the existing certificate cannot be reused.
-        /// </summary>
-        private static readonly Action<ILogger, string, Exception?> LogCertificateRenewalRequiredWithUnusableCertificateMessage =
-            LoggerMessage.Define<string>(
-                LogLevel.Warning,
-                new EventId(2701, nameof(LogCertificateRenewalRequiredWithUnusableCertificate)),
-                "Certificate renewal required with unusable certificate: {Reason}");
-
-        /// <summary>
-        /// Logs when renewal failed but the previous certificate remains usable.
-        /// </summary>
-        private static readonly Action<ILogger, Exception?> LogCertificateRenewalFailedUsingExistingCertificateMessage =
-            LoggerMessage.Define(
-                LogLevel.Warning,
-                new EventId(2702, nameof(LogCertificateRenewalFailedUsingExistingCertificate)),
-                "Certificate renewal failed; continuing with active valid certificate.");
-
-        /// <summary>
-        /// Logs when the service is reusing the current listener certificate.
-        /// </summary>
-        private static readonly Action<ILogger, string, Exception?> LogUsingExistingListenerCertificateMessage =
-            LoggerMessage.Define<string>(
-                LogLevel.Information,
-                new EventId(2703, nameof(LogUsingExistingListenerCertificate)),
-                "Using existing listener certificate: {Reason}");
-
-        /// <summary>
-        /// Logs when renewal is about to be attempted inside the renewal window.
-        /// </summary>
-        private static readonly Action<ILogger, Exception?> LogListenerCertificateInsideRenewalWindowMessage =
-            LoggerMessage.Define(
-                LogLevel.Information,
-                new EventId(2704, nameof(LogListenerCertificateInsideRenewalWindow)),
-                "Listener certificate inside renewal window; attempting renewal.");
-
-        /// <summary>
-        /// Logs when renewal failed but the existing valid certificate can still be retained.
-        /// </summary>
-        private static readonly Action<ILogger, Exception?> LogCertificateRenewalFailedRetainingExistingCertificateMessage =
-            LoggerMessage.Define(
-                LogLevel.Warning,
-                new EventId(2705, nameof(LogCertificateRenewalFailedRetainingExistingCertificate)),
-                "Certificate renewal failed; retaining existing valid certificate.");
-
-        /// <summary>
-        /// Logs when the current certificate cannot be reused and ACME provisioning must begin.
-        /// </summary>
-        private static readonly Action<ILogger, string, Exception?> LogListenerCertificateUnavailableOrUnusableMessage =
-            LoggerMessage.Define<string>(
-                LogLevel.Information,
-                new EventId(2706, nameof(LogListenerCertificateUnavailableOrUnusable)),
-                "Listener certificate unavailable or unusable: {Reason}. Starting ACME provisioning.");
-
-        /// <summary>
-        /// Logs when a newly provisioned listener certificate becomes active.
-        /// </summary>
-        private static readonly Action<ILogger, string, DateTimeOffset, Exception?> LogListenerCertificateActivatedSuccessfullyMessage =
-            LoggerMessage.Define<string, DateTimeOffset>(
-                LogLevel.Information,
-                new EventId(2707, nameof(LogListenerCertificateActivatedSuccessfully)),
-                "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}");
-
-        /// <summary>
         /// Emits the warning log indicating certificate provisioning is disabled by configuration.
         /// </summary>
-        private static void LogCertificateProvisioningDisabled(ILogger logger)
-        {
-            LogCertificateProvisioningDisabledMessage(logger, null);
-        }
+        /// <param name="logger">Logger receiving the provisioning-disabled event.</param>
+        [LoggerMessage(EventId = 2700, Level = LogLevel.Warning, Message = "BackFiller TLS certificate provisioning is disabled by configuration.")]
+        private static partial void LogCertificateProvisioningDisabled(ILogger logger);
 
         /// <summary>
-        /// Emits the warning log indicating renewal is required and the currently loaded certificate cannot be reused.
+        /// Emits the warning log indicating renewal is required but the existing certificate cannot be reused.
         /// </summary>
-        private static void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason)
-        {
-            LogCertificateRenewalRequiredWithUnusableCertificateMessage(logger, reason, null);
-        }
+        /// <param name="logger">Logger receiving the renewal-required event.</param>
+        /// <param name="reason">Reason the existing certificate cannot be reused.</param>
+        [LoggerMessage(EventId = 2701, Level = LogLevel.Warning, Message = "Certificate renewal required with unusable certificate: {Reason}")]
+        private static partial void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason);
 
         /// <summary>
-        /// Emits the warning log indicating renewal failed but the previously active certificate remains usable.
+        /// Emits the warning log indicating renewal failed but the previous certificate remains usable.
         /// </summary>
-        private static void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception)
-        {
-            LogCertificateRenewalFailedUsingExistingCertificateMessage(logger, exception);
-        }
+        /// <param name="logger">Logger receiving the renewal-failed event.</param>
+        /// <param name="exception">Exception describing the renewal failure.</param>
+        [LoggerMessage(EventId = 2702, Level = LogLevel.Warning, Message = "Certificate renewal failed; continuing with active valid certificate.")]
+        private static partial void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception);
 
         /// <summary>
-        /// Emits the informational log indicating the persisted listener certificate was reused without renewal.
+        /// Emits the informational log indicating the service is reusing the current listener certificate.
         /// </summary>
-        private static void LogUsingExistingListenerCertificate(ILogger logger, string reason)
-        {
-            LogUsingExistingListenerCertificateMessage(logger, reason, null);
-        }
+        /// <param name="logger">Logger receiving the reuse event.</param>
+        /// <param name="reason">Reason the existing listener certificate is being reused.</param>
+        [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Using existing listener certificate: {Reason}")]
+        private static partial void LogUsingExistingListenerCertificate(ILogger logger, string reason);
 
         /// <summary>
-        /// Emits the informational log indicating renewal will be attempted because the current certificate is inside its renewal window.
+        /// Emits the informational log indicating renewal is about to be attempted inside the renewal window.
         /// </summary>
-        private static void LogListenerCertificateInsideRenewalWindow(ILogger logger)
-        {
-            LogListenerCertificateInsideRenewalWindowMessage(logger, null);
-        }
+        /// <param name="logger">Logger receiving the renewal-window event.</param>
+        [LoggerMessage(EventId = 2704, Level = LogLevel.Information, Message = "Listener certificate inside renewal window; attempting renewal.")]
+        private static partial void LogListenerCertificateInsideRenewalWindow(ILogger logger);
 
         /// <summary>
-        /// Emits the warning log indicating startup renewal failed and the existing valid certificate will remain active.
+        /// Emits the warning log indicating renewal failed but the existing valid certificate can still be retained.
         /// </summary>
-        private static void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception)
-        {
-            LogCertificateRenewalFailedRetainingExistingCertificateMessage(logger, exception);
-        }
+        /// <param name="logger">Logger receiving the retained-certificate event.</param>
+        /// <param name="exception">Exception describing the renewal failure.</param>
+        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Certificate renewal failed; retaining existing valid certificate.")]
+        private static partial void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception);
 
         /// <summary>
-        /// Emits the informational log indicating persisted certificate state cannot be used and fresh ACME provisioning will start.
+        /// Emits the informational log indicating the current certificate cannot be reused and ACME provisioning must begin.
         /// </summary>
-        private static void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason)
-        {
-            LogListenerCertificateUnavailableOrUnusableMessage(logger, reason, null);
-        }
+        /// <param name="logger">Logger receiving the ACME-provisioning event.</param>
+        /// <param name="reason">Reason the current listener certificate cannot be reused.</param>
+        [LoggerMessage(EventId = 2706, Level = LogLevel.Information, Message = "Listener certificate unavailable or unusable: {Reason}. Starting ACME provisioning.")]
+        private static partial void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason);
 
         /// <summary>
-        /// Emits the informational log indicating a newly loaded listener certificate bundle became active.
+        /// Emits the informational log indicating a newly provisioned listener certificate becomes active.
         /// </summary>
-        private static void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc)
-        {
-            LogListenerCertificateActivatedSuccessfullyMessage(logger, subject, notAfterUtc, null);
-        }
-
-        /// <summary>
-        /// Precompiled error log for ACME issuance failures before persistence begins.
-        /// </summary>
-        private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateIssuanceFailedMessage =
-            LoggerMessage.Define<string, string, string>(
-                LogLevel.Error,
-                new EventId(2708, nameof(LogCertificateIssuanceFailed)),
-                "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
-
-        /// <summary>
-        /// Precompiled error log for failures while persisting newly issued certificate artifacts.
-        /// </summary>
-        private static readonly Action<ILogger, string, string, string, Exception?> LogCertificatePersistenceFailedMessage =
-            LoggerMessage.Define<string, string, string>(
-                LogLevel.Error,
-                new EventId(2709, nameof(LogCertificatePersistenceFailed)),
-                "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
-
-        /// <summary>
-        /// Precompiled error log for failures while reloading persisted certificate artifacts before activation.
-        /// </summary>
-        private static readonly Action<ILogger, string, string, string, Exception?> LogCertificateReloadFailedMessage =
-            LoggerMessage.Define<string, string, string>(
-                LogLevel.Error,
-                new EventId(2710, nameof(LogCertificateReloadFailed)),
-                "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}");
+        /// <param name="logger">Logger receiving the activation event.</param>
+        /// <param name="subject">Subject name of the activated listener certificate.</param>
+        /// <param name="notAfterUtc">UTC expiration timestamp of the activated listener certificate.</param>
+        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}")]
+        private static partial void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc);
 
         /// <summary>
         /// Emits the error log indicating ACME issuance failed for the configured listener certificate target.
         /// </summary>
-        private static void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
-        {
-            LogCertificateIssuanceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
-        }
+        /// <param name="logger">Logger receiving the issuance-failure event.</param>
+        /// <param name="fqdn">Generated listener FQDN associated with the ACME order.</param>
+        /// <param name="certificatePfxPath">Output path for the generated PFX artifact.</param>
+        /// <param name="certificatePrivateKeyPemPath">Output path for the generated private-key PEM artifact.</param>
+        /// <param name="exception">Exception captured from the ACME issuance failure path.</param>
+        [LoggerMessage(EventId = 2708, Level = LogLevel.Error, Message = "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
+        private static partial void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception);
 
         /// <summary>
         /// Emits the error log indicating persistence of newly issued certificate artifacts failed.
         /// </summary>
-        private static void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
-        {
-            LogCertificatePersistenceFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
-        }
+        /// <param name="logger">Logger receiving the persistence-failure event.</param>
+        /// <param name="fqdn">Generated listener FQDN associated with the ACME order.</param>
+        /// <param name="certificatePfxPath">Output path for the generated PFX artifact.</param>
+        /// <param name="certificatePrivateKeyPemPath">Output path for the generated private-key PEM artifact.</param>
+        /// <param name="exception">Exception captured from the persistence failure path.</param>
+        [LoggerMessage(EventId = 2709, Level = LogLevel.Error, Message = "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
+        private static partial void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception);
 
         /// <summary>
         /// Emits the error log indicating reload of the persisted certificate bundle failed before activation.
         /// </summary>
-        private static void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception)
-        {
-            LogCertificateReloadFailedMessage(logger, fqdn, certificatePfxPath, certificatePrivateKeyPemPath, exception);
-        }
+        /// <param name="logger">Logger receiving the reload-failure event.</param>
+        /// <param name="fqdn">Generated listener FQDN associated with the ACME order.</param>
+        /// <param name="certificatePfxPath">Output path for the generated PFX artifact.</param>
+        /// <param name="certificatePrivateKeyPemPath">Output path for the generated private-key PEM artifact.</param>
+        /// <param name="exception">Exception captured from the reload failure path.</param>
+        [LoggerMessage(EventId = 2710, Level = LogLevel.Error, Message = "ACME certificate reload failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
+        private static partial void LogCertificateReloadFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception);
     }
 }

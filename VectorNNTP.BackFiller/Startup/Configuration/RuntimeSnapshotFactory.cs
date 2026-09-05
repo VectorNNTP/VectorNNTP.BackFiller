@@ -171,7 +171,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 SocketTimeoutSeconds: rabbitMq.SocketTimeoutSeconds ?? 0,
                 RequestedChannelMax: rabbitMq.RequestedChannelMax ?? 0,
                 ConsumerPrefetchCount: rabbitMq.ConsumerPrefetchCount,
-                DiagnosticPayloadCorrelationId: rabbitMq.DiagnosticPayloadCorrelationId);
+                DiagnosticPayloadCorrelationId: rabbitMq.DiagnosticPayloadCorrelationId,
+                WorkRequestMaxPayloadBytes: rabbitMq.WorkRequestMaxPayloadBytes ?? 0);
         }
 
         /// <summary>

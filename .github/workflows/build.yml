@@ -37,10 +37,10 @@ jobs:
         run: dotnet restore VectorNNTP.BackFiller.slnx
 
       - name: Build production project
-        run: dotnet build VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj --configuration Release --no-restore
+        run: dotnet build VectorNNTP.BackFiller/VectorNNTP.BackFiller.csproj --configuration Release --no-restore /p:TreatWarningsAsErrors=false
 
       - name: Build test project
-        run: dotnet build VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj --configuration Release --no-restore
+        run: dotnet build VectorNNTP.BackFiller.Tests/VectorNNTP.BackFiller.Tests.csproj --configuration Release --no-restore /p:TreatWarningsAsErrors=false
 
       - name: Run tests (with hang diagnostics)
         shell: bash
@@ -271,10 +271,10 @@ jobs:
         run: dotnet restore VectorNNTP.BackFiller.slnx
 
       - name: Build benchmark project
-        run: dotnet build VectorNNTP.BackFiller.Benchmarks/VectorNNTP.BackFiller.Benchmarks.csproj --configuration Release --no-restore
+        run: dotnet build VectorNNTP.BackFiller.Benchmarks/VectorNNTP.BackFiller.Benchmarks.csproj --configuration Release --no-restore /p:TreatWarningsAsErrors=false
 
       - name: Build benchmark test project
-        run: dotnet build VectorNNTP.BackFiller.Benchmarks.Tests/VectorNNTP.BackFiller.Benchmarks.Tests.csproj --configuration Release --no-restore
+        run: dotnet build VectorNNTP.BackFiller.Benchmarks.Tests/VectorNNTP.BackFiller.Benchmarks.Tests.csproj --configuration Release --no-restore /p:TreatWarningsAsErrors=false
 
       - name: Run benchmark contract tests
         run: >

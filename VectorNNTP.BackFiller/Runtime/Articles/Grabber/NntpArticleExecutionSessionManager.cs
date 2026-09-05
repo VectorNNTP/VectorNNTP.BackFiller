@@ -1160,184 +1160,96 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         }
 
         /// <summary>
-        /// Precompiled delegate for slot-ready lifecycle entries.
+        /// Emits the slot-ready lifecycle log event when a session becomes available for work.
         /// </summary>
-        private static readonly Action<ILogger, int, Guid, string, int, Exception?> LogSessionSlotReadyMessage =
-            LoggerMessage.Define<int, Guid, string, int>(
-                LogLevel.Information,
-                new EventId(3100, nameof(LogSessionSlotReady)),
-                "Grabber session slot ready: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}");
+        /// <param name="logger">Logger receiving the slot-ready event.</param>
+        /// <param name="slotId">Stable slot identifier for the leased session.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
+        /// <param name="host">Endpoint host for the leased session.</param>
+        /// <param name="port">Endpoint port for the leased session.</param>
+        [LoggerMessage(EventId = 3100, Level = LogLevel.Information, Message = "Grabber session slot ready: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}")]
+        private static partial void LogSessionSlotReady(ILogger logger, int slotId, Guid accountEntryId, string host, int port);
 
         /// <summary>
-        /// Precompiled delegate for slot-initialization failures.
+        /// Emits the slot-initialization failure log event when a leased slot cannot be started.
         /// </summary>
-        private static readonly Action<ILogger, Guid, int, string, int, NntpArticleAcquisitionFailureCode, string, Exception?> LogSessionSlotInitializationFailedMessage =
-            LoggerMessage.Define<Guid, int, string, int, NntpArticleAcquisitionFailureCode, string>(
-                LogLevel.Warning,
-                new EventId(3101, nameof(LogSessionSlotInitializationFailed)),
-                "Grabber session slot initialization failed: Account={AccountEntryId}, ConnectionIndex={ConnectionIndex}, Endpoint={Host}:{Port}, FailureCode={FailureCode}, Detail={Detail}");
+        /// <param name="logger">Logger receiving the slot-initialization failure event.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
+        /// <param name="connectionIndex">Per-account connection index used to create the slot.</param>
+        /// <param name="host">Endpoint host for the attempted slot connection.</param>
+        /// <param name="port">Endpoint port for the attempted slot connection.</param>
+        /// <param name="failureCode">Deterministic acquisition failure classification.</param>
+        /// <param name="detail">Failure detail text recorded for diagnostics.</param>
+        [LoggerMessage(EventId = 3101, Level = LogLevel.Warning, Message = "Grabber session slot initialization failed: Account={AccountEntryId}, ConnectionIndex={ConnectionIndex}, Endpoint={Host}:{Port}, FailureCode={FailureCode}, Detail={Detail}")]
+        private static partial void LogSessionSlotInitializationFailed(ILogger logger, Guid accountEntryId, int connectionIndex, string host, int port, NntpArticleAcquisitionFailureCode failureCode, string detail);
 
         /// <summary>
-        /// Precompiled delegate for lease-acquired entries.
+        /// Emits the lease-acquired log event for a work item assigned to a slot.
         /// </summary>
-        private static readonly Action<ILogger, string, int, Guid, string, int, Exception?> LogSessionLeaseAcquiredMessage =
-            LoggerMessage.Define<string, int, Guid, string, int>(
-                LogLevel.Debug,
-                new EventId(3102, nameof(LogSessionLeaseAcquired)),
-                "Grabber session lease acquired: MessageId={MessageId}, Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}");
+        /// <param name="logger">Logger receiving the lease-acquired event.</param>
+        /// <param name="messageId">Canonical Message-ID being processed by the leased slot.</param>
+        /// <param name="slotId">Stable slot identifier for the leased session.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
+        /// <param name="host">Endpoint host for the leased session.</param>
+        /// <param name="port">Endpoint port for the leased session.</param>
+        [LoggerMessage(EventId = 3102, Level = LogLevel.Debug, Message = "Grabber session lease acquired: MessageId={MessageId}, Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}")]
+        private static partial void LogSessionLeaseAcquired(ILogger logger, string messageId, int slotId, Guid accountEntryId, string host, int port);
 
         /// <summary>
-        /// Precompiled delegate for deterministic session retirement entries.
+        /// Emits the deterministic retirement log event for a previously active session.
         /// </summary>
-        private static readonly Action<ILogger, int, Guid, NntpArticleAcquisitionFailureCode, Exception?> LogSessionRetiredMessage =
-            LoggerMessage.Define<int, Guid, NntpArticleAcquisitionFailureCode>(
-                LogLevel.Warning,
-                new EventId(3103, nameof(LogSessionRetired)),
-                "Grabber session retired: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}");
-
-        /// <summary>
-        /// Precompiled delegate for successful slot reconnection entries.
-        /// </summary>
-        private static readonly Action<ILogger, int, Guid, string, int, Exception?> LogSessionReconnectedMessage =
-            LoggerMessage.Define<int, Guid, string, int>(
-                LogLevel.Information,
-                new EventId(3104, nameof(LogSessionReconnected)),
-                "Grabber session reconnected: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}");
-
-        /// <summary>
-        /// Precompiled delegate for failed slot reconnection entries.
-        /// </summary>
-        private static readonly Action<ILogger, int, Guid, NntpArticleAcquisitionFailureCode, int?, string, Exception?> LogSessionReconnectFailedMessage =
-            LoggerMessage.Define<int, Guid, NntpArticleAcquisitionFailureCode, int?, string>(
-                LogLevel.Warning,
-                new EventId(3105, nameof(LogSessionReconnectFailed)),
-                "Grabber session reconnect failed: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}, ResponseCode={ResponseCode}, Detail={Detail}");
-
-        /// <summary>
-        /// Precompiled delegate for successful DATE keepalive probes.
-        /// </summary>
-        private static readonly Action<ILogger, int, Guid, string, int, Exception?> LogSessionKeepAliveSucceededMessage =
-            LoggerMessage.Define<int, Guid, string, int>(
-                LogLevel.Debug,
-                new EventId(3106, nameof(LogSessionKeepAliveSucceeded)),
-                "Grabber session keepalive succeeded: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}");
-
-        /// <summary>
-        /// Precompiled delegate for failed DATE keepalive probes.
-        /// </summary>
-        private static readonly Action<ILogger, int, Guid, NntpArticleAcquisitionFailureCode, int?, string, Exception?> LogSessionKeepAliveFailedMessage =
-            LoggerMessage.Define<int, Guid, NntpArticleAcquisitionFailureCode, int?, string>(
-                LogLevel.Warning,
-                new EventId(3107, nameof(LogSessionKeepAliveFailed)),
-                "Grabber session keepalive failed: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}, ResponseCode={ResponseCode}, Detail={Detail}");
-
-        /// <summary>
-        /// Logs successful slot readiness.
-        /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
-        /// <param name="host">Endpoint host.</param>
-        /// <param name="port">Endpoint port.</param>
-        private static void LogSessionSlotReady(ILogger logger, int slotId, Guid accountEntryId, string host, int port)
-        {
-            LogSessionSlotReadyMessage(logger, slotId, accountEntryId, host, port, null);
-        }
-
-        /// <summary>
-        /// Logs slot initialization failure details.
-        /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
-        /// <param name="connectionIndex">Per-account connection index.</param>
-        /// <param name="host">Endpoint host.</param>
-        /// <param name="port">Endpoint port.</param>
-        /// <param name="failureCode">Deterministic acquisition failure code.</param>
-        /// <param name="detail">Failure detail text.</param>
-        private static void LogSessionSlotInitializationFailed(ILogger logger, Guid accountEntryId, int connectionIndex, string host, int port, NntpArticleAcquisitionFailureCode failureCode, string detail)
-        {
-            LogSessionSlotInitializationFailedMessage(logger, accountEntryId, connectionIndex, host, port, failureCode, detail, null);
-        }
-
-        /// <summary>
-        /// Logs lease acquisition for one work item and slot.
-        /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="messageId">Message-ID correlation value.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
-        /// <param name="host">Endpoint host.</param>
-        /// <param name="port">Endpoint port.</param>
-        private static void LogSessionLeaseAcquired(ILogger logger, string messageId, int slotId, Guid accountEntryId, string host, int port)
-        {
-            LogSessionLeaseAcquiredMessage(logger, messageId, slotId, accountEntryId, host, port, null);
-        }
-
-        /// <summary>
-        /// Logs deterministic retirement of a previously active session.
-        /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
+        /// <param name="logger">Logger receiving the retirement event.</param>
+        /// <param name="slotId">Stable slot identifier for the retired session.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
         /// <param name="failureCode">Outcome that triggered session retirement.</param>
-        private static void LogSessionRetired(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode)
-        {
-            LogSessionRetiredMessage(logger, slotId, accountEntryId, failureCode, null);
-        }
+        [LoggerMessage(EventId = 3103, Level = LogLevel.Warning, Message = "Grabber session retired: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}")]
+        private static partial void LogSessionRetired(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode);
 
         /// <summary>
-        /// Logs successful session reconnection for an existing slot.
+        /// Emits the successful reconnection log event for an existing slot.
         /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
-        /// <param name="host">Endpoint host.</param>
-        /// <param name="port">Endpoint port.</param>
-        private static void LogSessionReconnected(ILogger logger, int slotId, Guid accountEntryId, string host, int port)
-        {
-            LogSessionReconnectedMessage(logger, slotId, accountEntryId, host, port, null);
-        }
+        /// <param name="logger">Logger receiving the reconnection event.</param>
+        /// <param name="slotId">Stable slot identifier for the reconnected session.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
+        /// <param name="host">Endpoint host for the reconnected session.</param>
+        /// <param name="port">Endpoint port for the reconnected session.</param>
+        [LoggerMessage(EventId = 3104, Level = LogLevel.Information, Message = "Grabber session reconnected: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}")]
+        private static partial void LogSessionReconnected(ILogger logger, int slotId, Guid accountEntryId, string host, int port);
 
         /// <summary>
-        /// Logs failed reconnection details for an existing slot.
+        /// Emits the failed reconnection log event for an existing slot.
         /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
+        /// <param name="logger">Logger receiving the reconnection-failure event.</param>
+        /// <param name="slotId">Stable slot identifier for the reconnect attempt.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
         /// <param name="failureCode">Reconnect attempt failure code.</param>
-        /// <param name="responseCode">Optional NNTP response code when available.</param>
+        /// <param name="responseCode">Optional NNTP response code returned by the provider.</param>
         /// <param name="detail">Reconnect attempt detail text.</param>
-        private static void LogSessionReconnectFailed(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode, int? responseCode, string detail)
-        {
-            LogSessionReconnectFailedMessage(logger, slotId, accountEntryId, failureCode, responseCode, detail, null);
-        }
+        [LoggerMessage(EventId = 3105, Level = LogLevel.Warning, Message = "Grabber session reconnect failed: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}, ResponseCode={ResponseCode}, Detail={Detail}")]
+        private static partial void LogSessionReconnectFailed(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode, int? responseCode, string detail);
 
         /// <summary>
-        /// Logs a successful DATE keepalive probe for one slot.
+        /// Emits the successful DATE keepalive log event for one slot.
         /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
-        /// <param name="host">Endpoint host.</param>
-        /// <param name="port">Endpoint port.</param>
-        private static void LogSessionKeepAliveSucceeded(ILogger logger, int slotId, Guid accountEntryId, string host, int port)
-        {
-            LogSessionKeepAliveSucceededMessage(logger, slotId, accountEntryId, host, port, null);
-        }
+        /// <param name="logger">Logger receiving the keepalive-success event.</param>
+        /// <param name="slotId">Stable slot identifier for the keepalive probe.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
+        /// <param name="host">Endpoint host for the keepalive probe.</param>
+        /// <param name="port">Endpoint port for the keepalive probe.</param>
+        [LoggerMessage(EventId = 3106, Level = LogLevel.Debug, Message = "Grabber session keepalive succeeded: Slot={SlotId}, Account={AccountEntryId}, Endpoint={Host}:{Port}")]
+        private static partial void LogSessionKeepAliveSucceeded(ILogger logger, int slotId, Guid accountEntryId, string host, int port);
 
         /// <summary>
-        /// Logs a failed DATE keepalive probe for one slot.
+        /// Emits the failed DATE keepalive log event for one slot.
         /// </summary>
-        /// <param name="logger">Logger.</param>
-        /// <param name="slotId">Slot identifier.</param>
-        /// <param name="accountEntryId">Owning account identifier.</param>
+        /// <param name="logger">Logger receiving the keepalive-failure event.</param>
+        /// <param name="slotId">Stable slot identifier for the keepalive probe.</param>
+        /// <param name="accountEntryId">Owning account identifier associated with the slot.</param>
         /// <param name="failureCode">Deterministic keepalive failure code.</param>
-        /// <param name="responseCode">Optional NNTP response code when available.</param>
-        /// <param name="detail">Failure detail text.</param>
-        private static void LogSessionKeepAliveFailed(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode, int? responseCode, string detail)
-        {
-            LogSessionKeepAliveFailedMessage(logger, slotId, accountEntryId, failureCode, responseCode, detail, null);
-        }
+        /// <param name="responseCode">Optional NNTP response code returned by the provider.</param>
+        /// <param name="detail">Failure detail text recorded for diagnostics.</param>
+        [LoggerMessage(EventId = 3107, Level = LogLevel.Warning, Message = "Grabber session keepalive failed: Slot={SlotId}, Account={AccountEntryId}, FailureCode={FailureCode}, ResponseCode={ResponseCode}, Detail={Detail}")]
+        private static partial void LogSessionKeepAliveFailed(ILogger logger, int slotId, Guid accountEntryId, NntpArticleAcquisitionFailureCode failureCode, int? responseCode, string detail);
 
     }
 

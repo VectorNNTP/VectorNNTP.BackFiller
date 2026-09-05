@@ -18,7 +18,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// <remarks>
     /// A single owned publish channel is reused behind a semaphore so concurrent callers serialize confirm-sensitive work and stale channels can be discarded when the connection generation changes.
     /// </remarks>
-    internal sealed class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
+    internal sealed partial class RabbitMqArticleResponsePublisher : IRabbitMqArticleResponsePublisher, IAsyncDisposable
     {
         /// <summary>
         /// Connection manager that creates and recovers owned RabbitMQ channels.
@@ -145,8 +145,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                             new InvalidOperationException("RabbitMQ connection generation changed during response publication."));
                     }
 
-                    _logger.LogInformation(
-                        "RabbitMQ RPC response published and confirmed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}",
+                    LogRabbitMqRpcResponsePublishedAndConfirmed(
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -162,9 +162,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 {
                     await ResetPublishChannelAsync().ConfigureAwait(false);
 
-                    _logger.LogWarning(
+                    LogRabbitMqRpcResponsePublishFailed(
                         ex,
-                        "RabbitMQ RPC response publish failed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}",
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -242,5 +242,45 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 await owned.DisposeAsync().ConfigureAwait(false);
             }
         }
+
+        /// <summary>
+        /// Emits the RabbitMQ RPC response published and confirmed log event after the broker confirms the publish.
+        /// </summary>
+        /// <param name="logger">Logger receiving the confirmed publish event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        [LoggerMessage(
+            EventId = 3401,
+            Level = LogLevel.Information,
+            Message = "RabbitMQ RPC response published and confirmed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
+        private static partial void LogRabbitMqRpcResponsePublishedAndConfirmed(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone);
+
+        /// <summary>
+        /// Emits the RabbitMQ RPC response publish failed log event when the confirm-sensitive publish path throws or times out.
+        /// </summary>
+        /// <param name="exception">Exception captured from the publish/confirm failure path.</param>
+        /// <param name="logger">Logger receiving the failed publish event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        [LoggerMessage(
+            EventId = 3402,
+            Level = LogLevel.Warning,
+            Message = "RabbitMQ RPC response publish failed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
+        private static partial void LogRabbitMqRpcResponsePublishFailed(
+            Exception exception,
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone);
     }
 }

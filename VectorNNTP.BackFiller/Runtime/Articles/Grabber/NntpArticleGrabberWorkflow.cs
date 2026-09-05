@@ -126,6 +126,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         {
             return acquisitionFailureCode switch
             {
+                NntpArticleAcquisitionFailureCode.None => NntpArticleGrabberFailureCode.AcquisitionFailure,
                 NntpArticleAcquisitionFailureCode.InvalidMessageId => NntpArticleGrabberFailureCode.InvalidMessageId,
                 NntpArticleAcquisitionFailureCode.ArticleNotFound => NntpArticleGrabberFailureCode.ArticleNotFound,
                 NntpArticleAcquisitionFailureCode.AuthenticationFailure => NntpArticleGrabberFailureCode.AuthenticationFailure,
@@ -145,22 +146,34 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <returns>The workflow classification reported to downstream processing.</returns>
         private static NntpArticleGrabberFailureCode MapParseFailure(NntpArticleParseResult parse)
         {
-            return parse.FailureCode == NntpArticleParseFailureCode.YEncDecodingFailed
-                ? NntpArticleGrabberFailureCode.YEncValidationFailure
-                : parse.FailureCode switch
-                {
-                    NntpArticleParseFailureCode.MissingOrInvalidDate => NntpArticleGrabberFailureCode.InvalidDate,
-                    NntpArticleParseFailureCode.MissingMessageId
-                    or NntpArticleParseFailureCode.InvalidMessageId
-                    or NntpArticleParseFailureCode.DuplicateMessageId
-                    or NntpArticleParseFailureCode.MissingNewsgroups
-                    or NntpArticleParseFailureCode.InvalidNewsgroups
-                    or NntpArticleParseFailureCode.InvalidFrom
-                    or NntpArticleParseFailureCode.InvalidPath
-                    or NntpArticleParseFailureCode.DuplicateNewsgroups
-                    or NntpArticleParseFailureCode.DuplicatePath => NntpArticleGrabberFailureCode.InvalidHeaders,
-                    _ => NntpArticleGrabberFailureCode.MalformedArticle,
-                };
+            return parse.FailureCode switch
+            {
+                NntpArticleParseFailureCode.YEncDecodingFailed => NntpArticleGrabberFailureCode.YEncValidationFailure,
+                NntpArticleParseFailureCode.None
+                or NntpArticleParseFailureCode.EmptyArticle
+                or NntpArticleParseFailureCode.MissingHeaderBodySeparator
+                or NntpArticleParseFailureCode.ArticleTooLarge
+                or NntpArticleParseFailureCode.HeaderSectionTooLarge
+                or NntpArticleParseFailureCode.TooManyHeaders
+                or NntpArticleParseFailureCode.HeaderLineTooLong
+                or NntpArticleParseFailureCode.MalformedHeader
+                or NntpArticleParseFailureCode.MalformedHeaderContinuation
+                or NntpArticleParseFailureCode.HeaderNameTooLong
+                or NntpArticleParseFailureCode.HeaderValueTooLong
+                or NntpArticleParseFailureCode.ContainsNul
+                or NntpArticleParseFailureCode.ContainsIllegalControlByte => NntpArticleGrabberFailureCode.MalformedArticle,
+                NntpArticleParseFailureCode.MissingOrInvalidDate => NntpArticleGrabberFailureCode.InvalidDate,
+                NntpArticleParseFailureCode.MissingMessageId
+                or NntpArticleParseFailureCode.InvalidMessageId
+                or NntpArticleParseFailureCode.DuplicateMessageId
+                or NntpArticleParseFailureCode.MissingNewsgroups
+                or NntpArticleParseFailureCode.InvalidNewsgroups
+                or NntpArticleParseFailureCode.InvalidFrom
+                or NntpArticleParseFailureCode.InvalidPath
+                or NntpArticleParseFailureCode.DuplicateNewsgroups
+                or NntpArticleParseFailureCode.DuplicatePath => NntpArticleGrabberFailureCode.InvalidHeaders,
+                _ => NntpArticleGrabberFailureCode.MalformedArticle,
+            };
         }
 
         /// <summary>
@@ -176,15 +189,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <summary>
         /// Logs successful workflow outcomes with canonical Message-ID correlation.
         /// </summary>
-        /// <param name="logger">Logger receiving the entry.</param>
-        /// <param name="messageId">Canonical Message-ID.</param>
-        /// <param name="articleType">Detected parser article type.</param>
+        /// <param name="logger">Logger receiving the workflow success event.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the article workflow.</param>
+        /// <param name="articleType">Detected article type reported by the parser.</param>
         /// <param name="articleSize">Accepted article body size in bytes.</param>
-        /// <param name="duration">Formatted monotonic elapsed duration.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the workflow attempt.</param>
         private static void LogWorkflowSuccess(ILogger logger, string messageId, NntpArticleType articleType, int articleSize, string duration)
         {
-            logger.LogInformation(
-                "Article workflow completed for {MessageId} in {Duration} (Outcome=Success, ArticleType={ArticleType}, ArticleSize={ArticleSize})",
+            LogWorkflowSuccessMessage(
+                logger,
                 messageId,
                 duration,
                 articleType,
@@ -194,13 +207,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <summary>
         /// Logs failed workflow outcomes while preserving distinct acquisition, parser, and yEnc classifications.
         /// </summary>
-        /// <param name="logger">Logger receiving the entry.</param>
-        /// <param name="messageId">Canonical Message-ID.</param>
-        /// <param name="failureCode">Workflow-level deterministic failure code.</param>
-        /// <param name="acquisitionFailureCode">Acquisition-level failure code when available.</param>
-        /// <param name="parseFailureCode">Parser-level failure code when available.</param>
-        /// <param name="yEncStatus">yEnc validation status when available.</param>
-        /// <param name="duration">Formatted monotonic elapsed duration.</param>
+        /// <param name="logger">Logger receiving the workflow failure event.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the article workflow.</param>
+        /// <param name="failureCode">Workflow-level deterministic failure code reported to downstream processing.</param>
+        /// <param name="acquisitionFailureCode">Acquisition-level failure code when the workflow failed before parsing.</param>
+        /// <param name="parseFailureCode">Parser-level failure code when parsing rejected the article.</param>
+        /// <param name="yEncStatus">yEnc validation status when the parser rejected the article for yEnc reasons.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the workflow attempt.</param>
         private static void LogWorkflowFailure(
             ILogger logger,
             string messageId,
@@ -210,8 +223,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             YEncArticleValidationStatus? yEncStatus,
             string duration)
         {
-            logger.LogInformation(
-                "Article workflow failed for {MessageId} in {Duration} (Outcome=Failure, FailureCode={FailureCode}, AcquisitionFailure={AcquisitionFailureCode}, ParseFailure={ParseFailureCode}, YEncStatus={YEncStatus})",
+            LogWorkflowFailureMessage(
+                logger,
                 messageId,
                 duration,
                 failureCode,
@@ -219,5 +232,47 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 parseFailureCode,
                 yEncStatus);
         }
+
+        /// <summary>
+        /// Emits the workflow success log event when an article is acquired and parsed successfully.
+        /// </summary>
+        /// <param name="logger">Logger receiving the workflow success event.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the article workflow.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the workflow attempt.</param>
+        /// <param name="articleType">Detected article type reported by the parser.</param>
+        /// <param name="articleSize">Accepted article body size in bytes.</param>
+        [LoggerMessage(
+            EventId = 3200,
+            Level = LogLevel.Information,
+            Message = "Article workflow completed for {MessageId} in {Duration} (Outcome=Success, ArticleType={ArticleType}, ArticleSize={ArticleSize})")]
+        private static partial void LogWorkflowSuccessMessage(
+            ILogger logger,
+            string messageId,
+            string duration,
+            NntpArticleType articleType,
+            int articleSize);
+
+        /// <summary>
+        /// Emits the workflow failure log event when acquisition, parsing, or yEnc validation rejects the article.
+        /// </summary>
+        /// <param name="logger">Logger receiving the workflow failure event.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the article workflow.</param>
+        /// <param name="duration">Formatted monotonic elapsed duration for the workflow attempt.</param>
+        /// <param name="failureCode">Workflow-level deterministic failure code reported to downstream processing.</param>
+        /// <param name="acquisitionFailureCode">Acquisition-level failure code when the workflow failed before parsing.</param>
+        /// <param name="parseFailureCode">Parser-level failure code when parsing rejected the article.</param>
+        /// <param name="yEncStatus">yEnc validation status when the parser rejected the article for yEnc reasons.</param>
+        [LoggerMessage(
+            EventId = 3201,
+            Level = LogLevel.Information,
+            Message = "Article workflow failed for {MessageId} in {Duration} (Outcome=Failure, FailureCode={FailureCode}, AcquisitionFailure={AcquisitionFailureCode}, ParseFailure={ParseFailureCode}, YEncStatus={YEncStatus})")]
+        private static partial void LogWorkflowFailureMessage(
+            ILogger logger,
+            string messageId,
+            string duration,
+            NntpArticleGrabberFailureCode failureCode,
+            NntpArticleAcquisitionFailureCode? acquisitionFailureCode,
+            NntpArticleParseFailureCode? parseFailureCode,
+            YEncArticleValidationStatus? yEncStatus);
     }
 }

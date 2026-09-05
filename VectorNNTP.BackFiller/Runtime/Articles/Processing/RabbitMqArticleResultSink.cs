@@ -14,7 +14,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// <remarks>
     /// When a terminal response is required, the sink waits for broker confirmation before acknowledging or dropping the delivery. The result object is always disposed when processing completes.
     /// </remarks>
-    internal sealed class RabbitMqArticleResultSink : IArticleWorkResultSink
+    internal sealed partial class RabbitMqArticleResultSink : IArticleWorkResultSink
     {
         /// <summary>
         /// Planner that maps processing results to broker settlement and response-publication requirements.
@@ -78,8 +78,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     if (publishResult.Status is not RabbitMqResponsePublishStatus.Confirmed)
                     {
                         await result.Delivery.Settlement.NackAsync(requeue: true, cancellationToken).ConfigureAwait(false);
-                        _logger.LogWarning(
-                            "RabbitMQ response publish was not confirmed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} PublishStatus={PublishStatus}",
+                        LogRabbitMqResponsePublishNotConfirmedRequeue(
+                            _logger,
                             result.Request.RequestId,
                             result.CorrelationId,
                             result.Request.MessageId,
@@ -92,8 +92,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 if (plan.Action is RabbitMqDispositionAction.Ack)
                 {
                     await result.Delivery.Settlement.AckAsync(cancellationToken).ConfigureAwait(false);
-                    _logger.LogInformation(
-                        "RabbitMQ delivery acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag}",
+                    LogRabbitMqDeliveryAcknowledged(
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -103,8 +103,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 else
                 {
                     await result.Delivery.Settlement.NackAsync(plan.Requeue, cancellationToken).ConfigureAwait(false);
-                    _logger.LogInformation(
-                        "RabbitMQ delivery negatively acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Requeue={Requeue}",
+                    LogRabbitMqDeliveryNegativelyAcknowledged(
+                        _logger,
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
@@ -118,5 +118,70 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 result.Dispose();
             }
         }
+
+        /// <summary>
+        /// Emits the response publish-not-confirmed requeue log event when RabbitMQ refuses confirmation and the delivery must be requeued.
+        /// </summary>
+        /// <param name="logger">Logger receiving the requeue event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="publishStatus">Terminal publish status that caused the requeue decision.</param>
+        [LoggerMessage(
+            EventId = 3403,
+            Level = LogLevel.Warning,
+            Message = "RabbitMQ response publish was not confirmed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} PublishStatus={PublishStatus}")]
+        private static partial void LogRabbitMqResponsePublishNotConfirmedRequeue(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            RabbitMqResponsePublishStatus publishStatus);
+
+        /// <summary>
+        /// Emits the RabbitMQ delivery acknowledged log event after the delivery has been settled successfully.
+        /// </summary>
+        /// <param name="logger">Logger receiving the acknowledgement event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag acknowledged by the broker.</param>
+        [LoggerMessage(
+            EventId = 3404,
+            Level = LogLevel.Information,
+            Message = "RabbitMQ delivery acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag}")]
+        private static partial void LogRabbitMqDeliveryAcknowledged(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ulong deliveryTag);
+
+        /// <summary>
+        /// Emits the RabbitMQ delivery negatively acknowledged log event after the delivery has been settled unsuccessfully.
+        /// </summary>
+        /// <param name="logger">Logger receiving the negative-acknowledgement event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
+        /// <param name="requeue">Whether the broker was instructed to requeue the delivery.</param>
+        [LoggerMessage(
+            EventId = 3405,
+            Level = LogLevel.Information,
+            Message = "RabbitMQ delivery negatively acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Requeue={Requeue}")]
+        private static partial void LogRabbitMqDeliveryNegativelyAcknowledged(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ulong deliveryTag,
+            bool requeue);
     }
 }

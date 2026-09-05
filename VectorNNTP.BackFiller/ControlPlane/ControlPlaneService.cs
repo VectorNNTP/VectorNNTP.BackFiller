@@ -605,10 +605,10 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="logger">The logger receiving the refresh-failure event.</param>
         /// <param name="exception">Exception instance recorded with the warning log entry.</param>
         /// <remarks>
-        /// Source-generated logger method. Emits a <see cref="LogLevel.Warning"/> event with id 1001 and includes
+        /// Source-generated logger method. Emits an <see cref="LogLevel.Warning"/> event with id 1020 and includes
         /// <paramref name="exception"/> for exception-aware logging.
         /// </remarks>
-        [LoggerMessage(EventId = 1001, Level = LogLevel.Warning, Message = "Periodic NNTP account snapshot refresh failed")]
+        [LoggerMessage(EventId = 1020, Level = LogLevel.Warning, Message = "Periodic NNTP account snapshot refresh failed")]
         private static partial void LogNntpAccountRefreshFailed(ILogger logger, Exception exception);
 
         /// <summary>
@@ -617,7 +617,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <param name="logger">Logger receiving reconciliation events.</param>
         /// <param name="serverId">Authoritative server identifier of the snapshot.</param>
         /// <param name="desiredAccountCount">Number of enabled desired accounts in the snapshot.</param>
-        [LoggerMessage(EventId = 1010, Level = LogLevel.Information, Message = "Account reconciliation started: ServerId={ServerId}, DesiredAccounts={DesiredAccountCount}")]
+        [LoggerMessage(EventId = 1021, Level = LogLevel.Information, Message = "Account reconciliation started: ServerId={ServerId}, DesiredAccounts={DesiredAccountCount}")]
         private static partial void LogAccountReconciliationStarted(ILogger logger, int serverId, int desiredAccountCount);
 
         /// <summary>

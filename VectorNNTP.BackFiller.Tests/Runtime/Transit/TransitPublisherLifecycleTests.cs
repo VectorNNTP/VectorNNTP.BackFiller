@@ -45,8 +45,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             FieldInfo workersField = typeof(TransitPublisher).GetField("_connectionWorkers", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new InvalidOperationException("_connectionWorkers field was not found.");
-            Task[] workers = (Task[])workersField.GetValue(publisher)
-                ?? throw new InvalidOperationException("_connectionWorkers field value was null.");
+            object? workersRaw = workersField.GetValue(publisher);
+            Task[] workers = Assert.IsType<Task[]>(workersRaw);
 
             workers[0] = Task.CompletedTask;
 

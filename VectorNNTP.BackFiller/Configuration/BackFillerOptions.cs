@@ -298,6 +298,17 @@ namespace VectorNNTP.Backfiller.Configuration
     internal sealed class RabbitMqOptions
     {
         /// <summary>
+        /// Maximum RabbitMQ work-request envelope size, in bytes, admitted before the consumer copies the borrowed broker body.
+        /// </summary>
+        /// <remarks>
+        /// This bounds the control-plane JSON request envelope only; it does not apply to article bodies or the transit queue budget.
+        /// The default leaves headroom over the current canonical request shape while remaining in the KiB range to limit broker-controlled memory amplification.
+        /// </remarks>
+        [Required(ErrorMessage = "BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes is required")]
+        [Range(1, 4096, ErrorMessage = "BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes must be between 1 and 4096")]
+        public int? WorkRequestMaxPayloadBytes { get; set; } = 1024;
+
+        /// <summary>
         /// Gets or sets the maximum allowed duration, in seconds, for RabbitMQ operation-timeout coherence validation.
         /// </summary>
         /// <remarks>
@@ -896,6 +907,24 @@ namespace VectorNNTP.Backfiller.Configuration
                 diagnostics.Add(new RabbitMqValidationResult(
                     blockedSetting,
                     "ConnectionBlockedTimeoutSeconds must be greater than or equal to RpcTimeoutSeconds",
+                    ValidationSeverity.Error));
+            }
+
+            string payloadSetting = $"{settingPrefix}:RabbitMQ:WorkRequestMaxPayloadBytes";
+            if (rabbitMq.WorkRequestMaxPayloadBytes is null)
+            {
+                diagnostics.Add(new RabbitMqValidationResult(
+                    payloadSetting,
+                    "WorkRequestMaxPayloadBytes is required",
+                    ValidationSeverity.Error));
+                return diagnostics;
+            }
+
+            if (rabbitMq.WorkRequestMaxPayloadBytes is < 1 or > 4096)
+            {
+                diagnostics.Add(new RabbitMqValidationResult(
+                    payloadSetting,
+                    "WorkRequestMaxPayloadBytes must be between 1 and 4096",
                     ValidationSeverity.Error));
             }
 

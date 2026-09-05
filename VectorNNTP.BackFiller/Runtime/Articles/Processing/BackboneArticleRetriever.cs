@@ -101,8 +101,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     .ConfigureAwait(false);
 
                 lease.ReportAcquisitionOutcome(grabberResult.AcquisitionFailureCode ?? NntpArticleAcquisitionFailureCode.None);
-                _logger.LogInformation(
-                    "Article retrieval completed. MessageId={MessageId} Backbone={Backbone} AccountId={AccountId} SlotId={SlotId} GrabberFailure={GrabberFailure} AcquisitionFailure={AcquisitionFailure} DurationMs={DurationMs}",
+                LogArticleRetrievalCompleted(
+                    _logger,
                     request.MessageId,
                     request.Backbone,
                     lease.AccountId,
@@ -125,5 +125,29 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        /// <summary>
+        /// Emits the article retrieval completed log event after the leased backbone session has been classified.
+        /// </summary>
+        /// <param name="logger">Logger receiving the retrieval completion event.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the retrieved article.</param>
+        /// <param name="backbone">Backbone name used to acquire the session lease.</param>
+        /// <param name="accountId">Account identifier of the leased NNTP session.</param>
+        /// <param name="slotId">Slot identifier of the leased NNTP session.</param>
+        /// <param name="grabberFailure">Workflow-level failure classification reported by the grabber result.</param>
+        /// <param name="acquisitionFailure">Acquisition-layer failure classification when the workflow did not succeed.</param>
+        /// <param name="durationMs">Elapsed retrieval duration in milliseconds.</param>
+        [LoggerMessage(
+            EventId = 3302,
+            Level = LogLevel.Information,
+            Message = "Article retrieval completed. MessageId={MessageId} Backbone={Backbone} AccountId={AccountId} SlotId={SlotId} GrabberFailure={GrabberFailure} AcquisitionFailure={AcquisitionFailure} DurationMs={DurationMs}")]
+        private static partial void LogArticleRetrievalCompleted(
+            ILogger logger,
+            string messageId,
+            string backbone,
+            Guid accountId,
+            int slotId,
+            NntpArticleGrabberFailureCode grabberFailure,
+            NntpArticleAcquisitionFailureCode? acquisitionFailure,
+            double durationMs);
     }
 }
