@@ -327,9 +327,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             while (true)
             {
+                bool retry = false;
+
+                for (int i = 0; i < _connections.Length; i++)
+                {
+                    long slotVersion = Interlocked.Read(ref _connectionSlotSnapshotVersions[i]);
+                    if ((slotVersion & 1L) != 0)
+                    {
+                        retry = true;
+                        break;
+                    }
+                }
+
                 long totalBytesTransmitted = Interlocked.Read(ref _totalBytesTransmitted);
                 long totalBytesReceived = Interlocked.Read(ref _totalBytesReceived);
-                bool retry = false;
 
                 for (int i = 0; i < _connections.Length; i++)
                 {
@@ -889,7 +900,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         if (connection is not null)
                         {
                             await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, CancellationToken.None).ConfigureAwait(false);
-                            _ = TrackDeferredConnectionDisposal(connection);
+                            Task disposalTask = TrackDeferredConnectionDisposal(connection);
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
                         }
                         else if (claimed is not null)
                         {
@@ -910,19 +922,23 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         await RequeueClaimedAndOutstandingAfterFaultAsync(connection, claimed, cancellationToken).ConfigureAwait(false);
 
                         bool shutdownActive = _disposeRequested || cancellationToken.IsCancellationRequested;
-                        _ = TrackDeferredConnectionDisposal(connection);
+                        Task disposalTask = TrackDeferredConnectionDisposal(connection);
                         if (shutdownActive)
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
                             break;
                         }
 
                         if (_disposeRequested || cancellationToken.IsCancellationRequested)
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
                             break;
                         }
 
                         if (!HasConnectionDemand())
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
+
                             BeginConnectionSlotTransition(slotIndex);
                             try
                             {
@@ -945,6 +961,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         await reconnectGate.WaitAsync(cancellationToken).ConfigureAwait(false);
                         try
                         {
+                            await AwaitDeferredConnectionDisposalAsync(disposalTask).ConfigureAwait(false);
+
                             TransitConnection? replacement = _connections[slotIndex];
                             if (replacement is not null && !ReferenceEquals(replacement, reconnectTarget))
                             {
@@ -1472,6 +1490,24 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Task disposeTask = connection.DisposeAsync().AsTask();
             _deferredConnectionDisposals[connection.ConnectionId] = disposeTask;
             return disposeTask;
+        }
+
+        /// <summary>
+        /// Observes one deferred connection-disposal task while preserving the publisher's best-effort teardown policy.
+        /// </summary>
+        /// <param name="disposalTask">The deferred disposal task to observe.</param>
+        /// <returns>A task that completes after the disposal task has been observed.</returns>
+        private static async Task AwaitDeferredConnectionDisposalAsync(Task disposalTask)
+        {
+            ArgumentNullException.ThrowIfNull(disposalTask);
+
+            try
+            {
+                await disposalTask.ConfigureAwait(false);
+            }
+            catch
+            {
+            }
         }
 
         /// <summary>

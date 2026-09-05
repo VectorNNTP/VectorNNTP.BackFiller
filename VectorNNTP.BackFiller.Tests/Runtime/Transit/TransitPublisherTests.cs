@@ -3167,10 +3167,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             try
             {
                 using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+                await claimGateHeld.Task.WaitAsync(timeout.Token);
                 Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, payload, CancellationToken.None).AsTask();
 
                 await firstSessionReady.Task.WaitAsync(timeout.Token);
-                await claimGateHeld.Task.WaitAsync(timeout.Token);
 
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot pendingSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
                 Assert.Equal(1, pendingSnapshot.QueueSnapshot.QueuedItemCount);
