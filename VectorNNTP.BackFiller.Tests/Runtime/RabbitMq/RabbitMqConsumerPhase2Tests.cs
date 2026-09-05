@@ -9,6 +9,7 @@
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -160,6 +161,84 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
             Assert.Equal(expectedPayload, deliveryPayload);
             Assert.Equal(expectedSha256, actualSha256);
+
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Confirms the callback-entry payload diagnostic keeps only metadata, length, and the full-payload SHA-256 digest.
+        /// </summary>
+        [Fact]
+        public async Task Delivery_WhenDiagnosticCorrelationIdMatches_LogsLengthSha256AndMetadataWithoutRawPayload()
+        {
+            const string CorrelationId = "corr-4316-diagnostic";
+            List<CapturedLogEntry> entries = [];
+            CapturingLogger<RabbitMqBackboneConsumerSession> logger = new(entries);
+
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 17, connectionLimit: 16),
+                manager,
+                topologyInitializer,
+                sink,
+                logger,
+                prefetchCount: null,
+                diagnosticCorrelationId: CorrelationId);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            byte[] payload = [0x7B, 0x22, 0x6D, 0x73, 0x67, 0x22, 0x3A, 0x22, 0x68, 0x69, 0x22, 0x7D];
+            string expectedSha256 = Convert.ToHexString(SHA256.HashData(payload));
+
+            await consumerChannel.DeliverAsync(
+                deliveryTag: 9911,
+                redelivered: false,
+                exchange: "grabbers.giganews",
+                routingKey: "grabbers.giganews",
+                payload: payload,
+                cancellationToken: CancellationToken.None,
+                correlationId: CorrelationId,
+                messageId: "rmq-4316-id",
+                replyTo: "rpc.reply.queue").ConfigureAwait(false);
+
+            RabbitMqArticleDelivery delivery = Assert.Single(sink.Deliveries);
+            Assert.Equal(9911UL, delivery.DeliveryTag);
+            Assert.Equal("Giganews", delivery.Backbone);
+            Assert.Equal("grabbers.giganews", delivery.Queue);
+            Assert.Equal("grabbers.giganews", delivery.Exchange);
+            Assert.Equal("grabbers.giganews", delivery.RoutingKey);
+            Assert.Equal(expectedSha256, Convert.ToHexString(SHA256.HashData(delivery.Payload.Span)));
+
+            CapturedLogEntry info = Assert.Single(entries, static entry => entry.Level == LogLevel.Information && entry.EventId.Id == 4316);
+            Assert.Contains("RabbitMQ payload diagnostic callback-entry.", info.Message, StringComparison.Ordinal);
+            Assert.Contains("Backbone=Giganews", info.Message, StringComparison.Ordinal);
+            Assert.Contains("SessionKey=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("DeliveryTag=9911", info.Message, StringComparison.Ordinal);
+            Assert.Contains($"CorrelationId={CorrelationId}", info.Message, StringComparison.Ordinal);
+            Assert.Contains("RabbitMqMessageId=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("ReplyTo=", info.Message, StringComparison.Ordinal);
+            Assert.Contains($"PayloadLength={payload.Length}", info.Message, StringComparison.Ordinal);
+            Assert.Contains($"PayloadSha256={expectedSha256}", info.Message, StringComparison.Ordinal);
+            Assert.Equal(payload.Length, Assert.IsType<int>(info.StateValues["PayloadLength"]));
+            Assert.Equal(expectedSha256, Assert.IsType<string>(info.StateValues["PayloadSha256"]));
+            Assert.Contains("Backbone", info.StateValues.Keys);
+            Assert.Contains("SessionKey", info.StateValues.Keys);
+            Assert.Contains("DeliveryTag", info.StateValues.Keys);
+            Assert.Contains("CorrelationId", info.StateValues.Keys);
+            Assert.Contains("RabbitMqMessageId", info.StateValues.Keys);
+            Assert.Contains("ReplyTo", info.StateValues.Keys);
+            Assert.DoesNotContain("PayloadUtf8", info.StateValues.Keys);
+            Assert.DoesNotContain("PayloadHex", info.StateValues.Keys);
+            Assert.DoesNotContain(Convert.ToHexString(payload), info.Message, StringComparison.Ordinal);
 
             await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
@@ -609,6 +688,57 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 Host: "provider.local",
                 Port: 119,
                 UseSsl: false);
+        }
+
+        /// <summary>
+        /// Captures logger entries for structured assertions in RabbitMQ consumer tests.
+        /// </summary>
+        private sealed record CapturedLogEntry(LogLevel Level, EventId EventId, string Message, IReadOnlyDictionary<string, object?> StateValues);
+
+        /// <summary>
+        /// Simple in-memory logger for RabbitMQ consumer diagnostic assertions.
+        /// </summary>
+        private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries) : ILogger<T>
+        {
+            private readonly List<CapturedLogEntry> _entries = entries ?? throw new ArgumentNullException(nameof(entries));
+
+            public IDisposable BeginScope<TState>(TState state)
+                where TState : notnull
+            {
+                return NullScope.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                string message = formatter(state, exception);
+                Dictionary<string, object?> stateValues = [];
+                if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+                {
+                    foreach (KeyValuePair<string, object?> item in structuredState)
+                    {
+                        stateValues[item.Key] = item.Value;
+                    }
+                }
+
+                lock (_entries)
+                {
+                    _entries.Add(new CapturedLogEntry(logLevel, eventId, message, stateValues));
+                }
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                internal static readonly NullScope Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
         }
 
         /// <summary>
@@ -3543,13 +3673,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// <param name="payload">The payload used by this test scenario.</param>
             /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
             /// <returns>The value returned by the deliver async helper.</returns>
-            public async Task DeliverAsync(ulong deliveryTag, bool redelivered, string exchange, string routingKey, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)
+            public async Task DeliverAsync(
+                ulong deliveryTag,
+                bool redelivered,
+                string exchange,
+                string routingKey,
+                ReadOnlyMemory<byte> payload,
+                CancellationToken cancellationToken,
+                string? correlationId = null,
+                string? messageId = null,
+                string? replyTo = null)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (_consumer is null)
                 {
                     throw new InvalidOperationException("No consumer has been registered for this tracking channel.");
                 }
+
+                BasicProperties properties = new();
+                properties.CorrelationId = correlationId;
+                properties.MessageId = messageId;
+                properties.ReplyTo = replyTo;
 
                 string consumerTag = _consumerTag ?? "ctag-0";
                 await _consumer.HandleBasicDeliverAsync(
@@ -3558,7 +3702,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     redelivered,
                     exchange,
                     routingKey,
-                    new BasicProperties(),
+                    properties,
                     payload,
                     cancellationToken).ConfigureAwait(false);
             }

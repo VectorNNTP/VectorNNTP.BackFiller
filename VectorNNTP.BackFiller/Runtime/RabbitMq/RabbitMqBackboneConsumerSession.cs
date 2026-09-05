@@ -6,7 +6,6 @@
 // Implements the rabbit mq backbone consumer session behavior.
 
 using System.Security.Cryptography;
-using System.Text;
 using RabbitMQ.Client.Events;
 using Serilog.Context;
 
@@ -20,7 +19,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Gets the authoritative logical identity for this session.
         /// </summary>
-        private readonly RabbitMqConsumerSessionIdentity _identity;
+        private RabbitMqConsumerSessionIdentity SessionIdentity { get; }
         /// <summary>
         /// Canonical backbone queue name consumed by this session.
         /// </summary>
@@ -127,7 +126,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             ArgumentNullException.ThrowIfNull(deliverySink);
             ArgumentNullException.ThrowIfNull(logger);
 
-            _identity = identity;
+            SessionIdentity = identity;
             _queueName = $"grabbers.{identity.Backbone.Trim().ToLowerInvariant()}";
             _connectionManager = connectionManager;
             _topologyInitializer = topologyInitializer;
@@ -142,9 +141,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <summary>
         /// Gets the authoritative logical identity for this session.
         /// </summary>
-        internal RabbitMqConsumerSessionIdentity Identity => _identity;
+        internal RabbitMqConsumerSessionIdentity Identity => SessionIdentity;
 
-        RabbitMqConsumerSessionIdentity IRabbitMqConsumerSession.Identity => _identity;
+        RabbitMqConsumerSessionIdentity IRabbitMqConsumerSession.Identity => SessionIdentity;
 
         /// <summary>
         /// Gets a value indicating whether the session is actively consuming deliveries.
@@ -284,9 +283,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             await _connectionManager.EnsureConnectedAsync(cancellationToken).ConfigureAwait(false);
-            await _topologyInitializer.InitializeAsync(_identity.ServerId, [_identity.Backbone], cancellationToken).ConfigureAwait(false);
+            await _topologyInitializer.InitializeAsync(SessionIdentity.ServerId, [SessionIdentity.Backbone], cancellationToken).ConfigureAwait(false);
 
-            RabbitMqOwnedChannel owned = await _connectionManager.CreateOwnedChannelAsync($"rabbitmq-consumer:{_identity.SessionKey}", cancellationToken).ConfigureAwait(false);
+            RabbitMqOwnedChannel owned = await _connectionManager.CreateOwnedChannelAsync($"rabbitmq-consumer:{SessionIdentity.SessionKey}", cancellationToken).ConfigureAwait(false);
             _ownedChannel = owned;
             _ = Interlocked.Exchange(ref _activeConnectionGeneration, owned.ConnectionGeneration);
             _sessionCancellation = new CancellationTokenSource();
@@ -294,7 +293,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             if (_prefetchCount.HasValue)
             {
                 await _ownedChannel.Channel.BasicQosAsync(0u, _prefetchCount.Value, false, cancellationToken).ConfigureAwait(false);
-                LogConsumerPrefetchConfigured(_logger, _identity.Backbone, _identity.SessionOrdinal, _prefetchCount.Value);
+                LogConsumerPrefetchConfigured(_logger, Identity.Backbone, Identity.SessionOrdinal, _prefetchCount.Value);
             }
 
             AsyncEventingBasicConsumer consumer = new(owned.Channel.UnderlyingChannel);
@@ -317,7 +316,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _settlementAdmissionAbandoned = false;
                 _drainCompletion = CreateCompletedDrainSource();
                 _admittedDeliveryCount = 0;
-                LogConsumerStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _queueName, ActiveConnectionGeneration, consumerTag);
+                LogConsumerStarted(_logger, Identity.Backbone, Identity.SessionOrdinal, _queueName, ActiveConnectionGeneration, consumerTag);
             }
             catch
             {
@@ -367,7 +366,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     _drainCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
 
-                LogConsumerRetiring(_logger, _identity.Backbone, _identity.SessionOrdinal, _admittedDeliveryCount);
+                LogConsumerRetiring(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, _admittedDeliveryCount);
             }
 
             try
@@ -379,11 +378,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
             catch (Exception ex) when (expectedShutdown)
             {
-                LogConsumerCancelDuringShutdownFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex.Message);
+                LogConsumerCancelDuringShutdownFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex.Message);
             }
             catch (Exception ex)
             {
-                LogConsumerCancellationFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex);
+                LogConsumerCancellationFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex);
                 throw;
             }
 
@@ -397,7 +396,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             Task drainTask = _drainCompletion.Task;
             if (!drainTask.IsCompleted)
             {
-                LogConsumerDrainStarted(_logger, _identity.Backbone, _identity.SessionOrdinal, _admittedDeliveryCount);
+                LogConsumerDrainStarted(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, _admittedDeliveryCount);
             }
 
             _ = _lifecycleGate.Release();
@@ -410,7 +409,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
-            LogConsumerDrainCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal);
+            LogConsumerDrainCompleted(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal);
 
             if (_consumer is not null)
             {
@@ -431,11 +430,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
                 catch (Exception ex) when (expectedShutdown)
                 {
-                    LogConsumerChannelDisposeDuringShutdownFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex.Message);
+                    LogConsumerChannelDisposeDuringShutdownFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex.Message);
                 }
                 catch (Exception ex)
                 {
-                    LogConsumerChannelDisposeFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex);
+                    LogConsumerChannelDisposeFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex);
                     throw;
                 }
             }
@@ -453,7 +452,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             if (expectedShutdown)
             {
-                LogConsumerStopped(_logger, _identity.Backbone, _identity.SessionOrdinal);
+                LogConsumerStopped(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal);
             }
         }
 
@@ -471,7 +470,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             long deliveryGeneration = ActiveConnectionGeneration;
             if (deliveryGeneration <= 0 || _connectionManager.ConnectionGeneration > deliveryGeneration)
             {
-                LogDeliveryIgnoredFromStaleGeneration(_logger, _identity.Backbone, _identity.SessionOrdinal, deliveryGeneration, _connectionManager.ConnectionGeneration);
+                LogDeliveryIgnoredFromStaleGeneration(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, deliveryGeneration, _connectionManager.ConnectionGeneration);
                 return;
             }
 
@@ -506,9 +505,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 LogPayloadDiagnosticAtCallbackEntry(
                     _logger,
                     DateTimeOffset.UtcNow,
-                    _identity.Backbone,
-                    _identity.SessionOrdinal,
-                    _identity.SessionKey,
+                    SessionIdentity.Backbone,
+                    SessionIdentity.SessionOrdinal,
+                    SessionIdentity.SessionKey,
                     args.DeliveryTag,
                     correlationId,
                     rabbitMqMessageId,
@@ -519,10 +518,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             byte[] payloadCopy = args.Body.ToArray();
 
             RabbitMqArticleDelivery delivery = new(
-                Backbone: _identity.Backbone,
+                Backbone: SessionIdentity.Backbone,
                 Queue: _queueName,
                 ConsumerTag: args.ConsumerTag,
-                ConsumerIdentity: _identity.SessionKey,
+                ConsumerIdentity: SessionIdentity.SessionKey,
                 DeliveryTag: args.DeliveryTag,
                 Redelivered: args.Redelivered,
                 RoutingKey: args.RoutingKey,
@@ -561,7 +560,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 return;
             }
 
-            LogConsumerShutdownObserved(_logger, _identity.Backbone, _identity.SessionOrdinal, args.ReplyCode, args.ReplyText, args.Initiator.ToString());
+            LogConsumerShutdownObserved(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, args.ReplyCode, args.ReplyText, args.Initiator.ToString());
 
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
@@ -575,7 +574,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
             catch (Exception ex)
             {
-                LogConsumerRecreationFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex);
+                LogConsumerRecreationFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex);
             }
             finally
             {
@@ -594,7 +593,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
 
             int consumerTagCount = args.ConsumerTags.Length;
-            LogConsumerCancellationObserved(_logger, _identity.Backbone, _identity.SessionOrdinal, consumerTagCount);
+            LogConsumerCancellationObserved(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, consumerTagCount);
 
             await _lifecycleGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
@@ -608,7 +607,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             }
             catch (Exception ex)
             {
-                LogConsumerRecreationFailed(_logger, _identity.Backbone, _identity.SessionOrdinal, ex);
+                LogConsumerRecreationFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex);
             }
             finally
             {
@@ -622,12 +621,12 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         private async Task RecreateConsumerCoreAsync(long requestedGeneration, CancellationToken cancellationToken)
         {
             long previousGeneration = ActiveConnectionGeneration;
-            LogConsumerRecreationStarting(_logger, _identity.Backbone, _identity.SessionOrdinal, previousGeneration, requestedGeneration);
+            LogConsumerRecreationStarting(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, previousGeneration, requestedGeneration);
 
             await StopCoreAsync(expectedShutdown: false, cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await StartCoreAsync(cancellationToken).ConfigureAwait(false);
 
-            LogConsumerRecreationCompleted(_logger, _identity.Backbone, _identity.SessionOrdinal, ActiveConnectionGeneration);
+            LogConsumerRecreationCompleted(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ActiveConnectionGeneration);
         }
 
         /// <summary>
@@ -863,16 +862,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         {
             List<IDisposable> scopes =
             [
-                LogContext.PushProperty("Backbone", _identity.Backbone),
-                LogContext.PushProperty("AccountUsername", _identity.AccountUsername),
-                LogContext.PushProperty("AccountId", _identity.AccountId),
-                LogContext.PushProperty("ServerId", _identity.ServerId),
-                LogContext.PushProperty("ConnectionNumber", _identity.ConnectionNumber),
-                LogContext.PushProperty("ConnectionLimit", _identity.ConnectionLimit),
-                LogContext.PushProperty("ConnectionHost", _identity.Host),
-                LogContext.PushProperty("ConnectionPort", _identity.Port),
-                LogContext.PushProperty("ConnectionUseSsl", _identity.UseSsl),
-                LogContext.PushProperty("ConnectionPrefix", BuildConnectionPrefix(_identity.Backbone, _identity.AccountUsername, _identity.ConnectionNumber, _identity.ConnectionLimit)),
+                LogContext.PushProperty("Backbone", SessionIdentity.Backbone),
+                LogContext.PushProperty("AccountUsername", SessionIdentity.AccountUsername),
+                LogContext.PushProperty("AccountId", SessionIdentity.AccountId),
+                LogContext.PushProperty("ServerId", SessionIdentity.ServerId),
+                LogContext.PushProperty("ConnectionNumber", SessionIdentity.ConnectionNumber),
+                LogContext.PushProperty("ConnectionLimit", SessionIdentity.ConnectionLimit),
+                LogContext.PushProperty("ConnectionHost", SessionIdentity.Host),
+                LogContext.PushProperty("ConnectionPort", SessionIdentity.Port),
+                LogContext.PushProperty("ConnectionUseSsl", SessionIdentity.UseSsl),
+                LogContext.PushProperty("ConnectionPrefix", BuildConnectionPrefix(SessionIdentity.Backbone, SessionIdentity.AccountUsername, SessionIdentity.ConnectionNumber, SessionIdentity.ConnectionLimit)),
             ];
 
             return new CompositeDisposable(scopes);
@@ -1127,8 +1126,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 return;
             }
 
-            string payloadUtf8 = Encoding.UTF8.GetString(payload.Span);
-            string payloadHex = Convert.ToHexString(payload.Span);
             string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
 
             LogPayloadDiagnosticAtCallbackEntryMessage(
@@ -1142,8 +1139,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 rabbitMqMessageId,
                 replyTo,
                 payload.Length,
-                payloadUtf8,
-                payloadHex,
                 payloadSha256);
         }
 
@@ -1160,10 +1155,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <param name="rabbitMqMessageId">RabbitMQ message identifier observed on the delivery.</param>
         /// <param name="replyTo">Reply-to address observed on the delivery.</param>
         /// <param name="payloadLength">Payload length captured from the callback body.</param>
-        /// <param name="payloadUtf8">UTF-8 decoded payload representation used for diagnostics.</param>
-        /// <param name="payloadHex">Hexadecimal payload representation used for diagnostics.</param>
         /// <param name="payloadSha256">SHA-256 digest of the payload used for correlation and triage.</param>
-        [LoggerMessage(EventId = 4316, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic callback-entry. TimestampUtc={TimestampUtc:o} Backbone={Backbone} Session={SessionOrdinal} SessionKey={SessionKey} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}")]
+        [LoggerMessage(EventId = 4316, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic callback-entry. TimestampUtc={TimestampUtc:o} Backbone={Backbone} Session={SessionOrdinal} SessionKey={SessionKey} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}")]
         private static partial void LogPayloadDiagnosticAtCallbackEntryMessage(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -1175,8 +1168,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             string? rabbitMqMessageId,
             string? replyTo,
             int payloadLength,
-            string payloadUtf8,
-            string payloadHex,
             string payloadSha256);
     }
 }
