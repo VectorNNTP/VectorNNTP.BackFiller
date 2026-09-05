@@ -53,10 +53,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private readonly int _workRequestMaxPayloadBytes;
         /// <summary>
-        /// Payload-copy function used for admitted deliveries so tests can observe whether the borrowed body is copied.
-        /// </summary>
-        private readonly Func<ReadOnlyMemory<byte>, byte[]> _payloadCopier;
-        /// <summary>
         /// Gate that serializes start, stop, replacement, and admitted-delivery drain accounting.
         /// </summary>
         private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
@@ -127,8 +123,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             ILogger<RabbitMqBackboneConsumerSession> logger,
             ushort? prefetchCount,
             int workRequestMaxPayloadBytes = 1024,
-            string? diagnosticCorrelationId = null,
-            Func<ReadOnlyMemory<byte>, byte[]>? payloadCopier = null)
+            string? diagnosticCorrelationId = null)
         {
             ArgumentNullException.ThrowIfNull(identity);
             ArgumentNullException.ThrowIfNull(connectionManager);
@@ -144,7 +139,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _logger = logger;
             _prefetchCount = prefetchCount;
             _workRequestMaxPayloadBytes = workRequestMaxPayloadBytes;
-            _payloadCopier = payloadCopier is null ? CopyBody : payloadCopier;
             _diagnosticCorrelationId = string.IsNullOrWhiteSpace(diagnosticCorrelationId)
                 ? null
                 : diagnosticCorrelationId.Trim();
@@ -534,7 +528,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     args.Body);
             }
 
-            byte[] payloadCopy = _payloadCopier(args.Body);
+            byte[] payloadCopy = args.Body.ToArray();
 
             RabbitMqArticleDelivery delivery = new(
                 Backbone: SessionIdentity.Backbone,
@@ -888,15 +882,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             CancellationToken cancellationToken)
         {
             RabbitMqDeliverySettlement settlement = new(this, deliveryTag, deliveryGeneration, admissionTracker);
-            await settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
-        }
-
-        /// <summary>
-        /// Copies the borrowed RabbitMQ body into owned memory for accepted deliveries.
-        /// </summary>
-        private static byte[] CopyBody(ReadOnlyMemory<byte> body)
-        {
-            return body.ToArray();
+            try
+            {
+                await settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                admissionTracker?.MarkSettled();
+            }
         }
 
         /// <summary>

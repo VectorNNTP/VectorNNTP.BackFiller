@@ -115,6 +115,61 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
+        /// Confirms an oversized delivery still releases local drain accounting when the broker NACK fails.
+        /// </summary>
+        [Fact]
+        public async Task Delivery_WhenWorkRequestExceedsConfiguredLimit_StillReleasesAdmissionWhenNackFails()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+            TrackingChannel consumerChannel = null!;
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 8, connectionLimit: 16),
+                manager,
+                topologyInitializer,
+                sink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: null,
+                workRequestMaxPayloadBytes: 8);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            consumerChannel.FailNextNack(new InvalidOperationException("forced nack failure"));
+            byte[] payload = [0x7B, 0x22, 0x78, 0x22, 0x3A, 0x31, 0x7D, 0x20, 0x20];
+
+            try
+            {
+                await consumerChannel.DeliverAsync(
+                    deliveryTag: 9002,
+                    redelivered: false,
+                    exchange: "grabbers.giganews",
+                    routingKey: "grabbers.giganews",
+                    payload: payload,
+                    cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            Assert.Empty(sink.Deliveries);
+            Assert.Equal(0, consumerChannel.AckCallCount);
+            Assert.Equal(1, consumerChannel.NackCallCount);
+            Assert.False(consumerChannel.LastNackRequeue);
+
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(10));
+            await session.StopAsync(cancelAdmittedWork: false, cancellationToken: timeoutCts.Token).ConfigureAwait(false);
+
+            Assert.True(consumerChannel.Disposed);
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Confirms the delivery handoff retains owned payload after source buffer mutation behavior.
         /// </summary>
         [Fact]
@@ -181,7 +236,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
             RecordingDeliverySink sink = new();
             TrackingChannel consumerChannel = null!;
-            bool copyInvoked = false;
 
             RabbitMqBackboneConsumerSession session = new(
                 CreateIdentity("Giganews", connectionNumber: 8, connectionLimit: 16),
@@ -190,12 +244,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 sink,
                 NullLogger<RabbitMqBackboneConsumerSession>.Instance,
                 prefetchCount: null,
-                workRequestMaxPayloadBytes: 8,
-                payloadCopier: body =>
-                {
-                    copyInvoked = true;
-                    return body.ToArray();
-                });
+                workRequestMaxPayloadBytes: 8);
 
             await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
             consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
@@ -210,7 +259,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
             Assert.Empty(sink.Deliveries);
-            Assert.False(copyInvoked);
             Assert.Equal(0, consumerChannel.AckCallCount);
             Assert.Equal(1, consumerChannel.NackCallCount);
             Assert.False(consumerChannel.LastNackRequeue);
@@ -221,7 +269,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         }
 
         /// <summary>
-        /// Confirms a payload exactly at the configured RabbitMQ work-request limit is accepted and copied through the normal path.
+        /// Confirms a payload exactly at the configured RabbitMQ work-request limit is accepted and retained independently of the borrowed buffer.
         /// </summary>
         [Fact]
         public async Task Delivery_WhenWorkRequestMatchesConfiguredLimit_IsAcceptedAndCopied()
@@ -232,7 +280,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
             RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
             RecordingDeliverySink sink = new();
-            bool copyInvoked = false;
 
             RabbitMqBackboneConsumerSession session = new(
                 CreateIdentity("Giganews", connectionNumber: 9, connectionLimit: 16),
@@ -241,12 +288,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 sink,
                 NullLogger<RabbitMqBackboneConsumerSession>.Instance,
                 prefetchCount: null,
-                workRequestMaxPayloadBytes: 8,
-                payloadCopier: body =>
-                {
-                    copyInvoked = true;
-                    return body.ToArray();
-                });
+                workRequestMaxPayloadBytes: 8);
 
             await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
             TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
@@ -261,8 +303,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 payload: payload,
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
+            for (int i = 0; i < payload.Length; i++)
+            {
+                payload[i] ^= 0xFF;
+            }
+
             RabbitMqArticleDelivery delivery = Assert.Single(sink.Deliveries);
-            Assert.True(copyInvoked);
             Assert.Equal(expectedPayload, delivery.Payload.ToArray());
             Assert.Equal(0, consumerChannel.NackCallCount);
             Assert.Equal(0, consumerChannel.AckCallCount);
@@ -284,7 +330,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
             RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
             RecordingDeliverySink sink = new();
-            bool copyInvoked = false;
 
             RabbitMqBackboneConsumerSession session = new(
                 CreateIdentity("Giganews", connectionNumber: 9, connectionLimit: 16),
@@ -293,12 +338,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 sink,
                 NullLogger<RabbitMqBackboneConsumerSession>.Instance,
                 prefetchCount: null,
-                workRequestMaxPayloadBytes: 8,
-                payloadCopier: body =>
-                {
-                    copyInvoked = true;
-                    return body.ToArray();
-                });
+                workRequestMaxPayloadBytes: 8);
 
             await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
             TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
@@ -313,8 +353,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 payload: payload,
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
+            for (int i = 0; i < payload.Length; i++)
+            {
+                payload[i] ^= 0xFF;
+            }
+
             RabbitMqArticleDelivery delivery = Assert.Single(sink.Deliveries);
-            Assert.True(copyInvoked);
             Assert.Equal(expectedPayload, delivery.Payload.ToArray());
             Assert.Equal(0, consumerChannel.NackCallCount);
             Assert.Equal(0, consumerChannel.AckCallCount);
@@ -3499,6 +3543,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// Blocks BasicAckAsync or BasicNackAsync until the test explicitly allows completion.
             /// </summary>
             private TaskCompletionSource<bool>? _ackRelease;
+            /// <summary>
+            /// Supplies a forced NACK failure for the fixture or scenario under test.
+            /// </summary>
+            private Exception? _nackFailure;
 
             /// <summary>
             /// Supplies underlying channel for the fixture or scenario under test.
@@ -3596,6 +3644,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             public void BlockAckUntilReleased()
             {
                 _ackRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            /// <summary>
+            /// Forces the next NACK attempt to fail with the supplied exception.
+            /// </summary>
+            /// <param name="exception">The exception to throw from BasicNackAsync.</param>
+            public void FailNextNack(Exception exception)
+            {
+                _nackFailure = exception ?? throw new ArgumentNullException(nameof(exception));
             }
 
             /// <summary>
@@ -3791,6 +3848,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 NackCallCount++;
                 OperationLog.Add("nack");
                 _ = _ackEntered?.TrySetResult(true);
+                if (_nackFailure is not null)
+                {
+                    Exception failure = _nackFailure;
+                    _nackFailure = null;
+                    throw failure;
+                }
+
                 if (_ackRelease is not null)
                 {
                     await _ackRelease.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
