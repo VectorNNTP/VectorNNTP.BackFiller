@@ -94,6 +94,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Optional collector for timing data emitted by connection staging and completion observation.
         /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
+        /// <summary>
+        /// Optional internal claim-boundary signal for tests that need to observe when a worker is about to enter queue claiming.
+        /// </summary>
+        private readonly Action? _claimBoundaryObserved;
 
         /// <summary>
         /// Monotonic identifier source for newly admitted work items.
@@ -164,6 +168,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="connectionResponseProgressTimeout">Optional watchdog timeout for detecting stalled connection responses during steady-state work.</param>
         /// <param name="connectionResponseProgressCheckInterval">Optional interval used when polling connection response progress.</param>
         /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
+        /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -172,7 +177,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int perConnectionPipelineDepth = DefaultPerConnectionPipelineDepth,
             TimeSpan? connectionResponseProgressTimeout = null,
             TimeSpan? connectionResponseProgressCheckInterval = null,
-            TransitTimingCollector? timingCollector = null)
+            TransitTimingCollector? timingCollector = null,
+            Action? claimBoundaryObserved = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
@@ -192,6 +198,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _timeProvider = timeProvider;
             _logger = logger;
             _timingCollector = timingCollector;
+            _claimBoundaryObserved = claimBoundaryObserved;
             _connectionPoolSize = connectionPoolSize;
             _perConnectionPipelineDepth = perConnectionPipelineDepth;
             _connectionResponseProgressTimeout = connectionResponseProgressTimeout;
@@ -839,6 +846,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         for (int i = 0; i < connection.PipelineDepth; i++)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
+
+                            _claimBoundaryObserved?.Invoke();
 
                             if (connection.CurrentState == TransitConnectionState.Faulted)
                             {

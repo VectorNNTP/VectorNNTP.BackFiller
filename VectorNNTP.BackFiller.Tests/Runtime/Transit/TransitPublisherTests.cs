@@ -2021,12 +2021,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 TransitShutdownDrainInactivityWatchdog: TimeSpan.Zero,
                 TransitShutdownAbsoluteMaximum: TimeSpan.Zero);
 
+            TaskCompletionSource<bool> claimBoundarySignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Action claimBoundaryObserved = () => _ = claimBoundarySignal.TrySetResult(true);
+
             await using TransitPublisher publisher = new(
                 options,
                 TimeProvider.System,
                 NullLogger<TransitPublisher>.Instance,
                 connectionPoolSize: 1,
-                perConnectionPipelineDepth: 1);
+                perConnectionPipelineDepth: 1,
+                claimBoundaryObserved: claimBoundaryObserved);
 
             await publisher.InitializeAsync(CancellationToken.None);
             allowCapabilities.TrySetResult();
@@ -2067,11 +2071,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     new byte[] { (byte)'x', (byte)'\n' },
                     CancellationToken.None).AsTask();
 
-                while (GetQueuedSubmissionCount(publisher) == 0)
-                {
-                    testTimeout.Token.ThrowIfCancellationRequested();
-                    await Task.Yield();
-                }
+                await claimBoundarySignal.Task.WaitAsync(testTimeout.Token);
 
                 Task disposeTask = publisher.DisposeAsync().AsTask();
                 await disposeTask.WaitAsync(testTimeout.Token);
@@ -4193,7 +4193,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             int perConnectionPipelineDepth = 8,
             int transitRetryMaxAttempts = 3,
             TimeSpan? connectionResponseProgressTimeout = null,
-            TimeSpan? connectionResponseProgressCheckInterval = null)
+            TimeSpan? connectionResponseProgressCheckInterval = null,
+            Action? claimBoundaryObserved = null)
         {
             BackFillerRuntimeOptions options = new(
                 CanonicalBackFillerFqdn: "bf.example.com",
@@ -4221,7 +4222,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionPoolSize,
                 perConnectionPipelineDepth,
                 connectionResponseProgressTimeout,
-                connectionResponseProgressCheckInterval);
+                connectionResponseProgressCheckInterval,
+                timingCollector: null,
+                claimBoundaryObserved: claimBoundaryObserved);
         }
 
         /// <summary>
