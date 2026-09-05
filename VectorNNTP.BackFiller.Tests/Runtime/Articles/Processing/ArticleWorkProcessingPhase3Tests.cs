@@ -187,10 +187,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Confirms diagnostic payload logging is bounded while preserving full-payload hashing and parse success behavior.
+        /// Confirms diagnostic payload logging includes only metadata, payload length, and the full-payload SHA-256 digest.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenDiagnosticPayloadLoggingEnabled_LogsBoundedPayloadPreviewsAndFullSha256Async()
+        public async Task ParseAsync_WhenDiagnosticPayloadLoggingEnabled_LogsMetadataAndFullSha256OnlyAsync()
         {
             List<CapturedLogEntry> entries = [];
             ILogger<RabbitMqArticleWorkRequestParser> logger = new CapturingLogger<RabbitMqArticleWorkRequestParser>(entries);
@@ -220,8 +220,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             string payloadSha256 = ExtractStructuredLogValue(info.Message, "PayloadSha256");
             string expectedPayloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
-            string payloadUtf8 = Encoding.UTF8.GetString(delivery.Payload.Span);
-            string payloadHex = Convert.ToHexString(delivery.Payload.Span);
 
             Assert.Equal(expectedPayloadSha256, payloadSha256);
             Assert.Equal(payload.Length, int.Parse(ExtractStructuredLogValue(info.Message, "PayloadLength")));
@@ -233,8 +231,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Contains("ReplyTo=", info.Message, StringComparison.Ordinal);
             Assert.DoesNotContain("PayloadUtf8", info.StateValues.Keys);
             Assert.DoesNotContain("PayloadHex", info.StateValues.Keys);
-            Assert.DoesNotContain(payloadUtf8, info.Message, StringComparison.Ordinal);
-            Assert.DoesNotContain(payloadHex, info.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("PayloadUtf8=", info.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("PayloadHex=", info.Message, StringComparison.Ordinal);
 
             entries.Clear();
             RabbitMqArticleDelivery unmatchedDelivery = CreateDelivery(payload, correlationId: "corr-not-matching", replyTo: "rpc.reply.queue");

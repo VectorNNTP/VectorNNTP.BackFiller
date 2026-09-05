@@ -7,7 +7,6 @@
 // inventing unsupported legacy wire-protocol assumptions.
 
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
@@ -218,22 +217,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 return;
             }
 
-            const int DiagnosticPreviewLength = 256;
-
-            string payloadUtf8Full = Encoding.UTF8.GetString(payload.Span);
-            string payloadUtf8Preview = payloadUtf8Full.Length <= DiagnosticPreviewLength
-                ? payloadUtf8Full
-                : payloadUtf8Full[..DiagnosticPreviewLength];
-            if (payloadUtf8Preview.Length > 0
-                && payloadUtf8Preview.Length < payloadUtf8Full.Length
-                && char.IsHighSurrogate(payloadUtf8Preview[^1]))
-            {
-                payloadUtf8Preview = payloadUtf8Preview[..^1];
-            }
-
-            int hexPreviewByteLength = Math.Min(payload.Length, DiagnosticPreviewLength / 2);
-            string payloadHexPreview = Convert.ToHexString(payload.Span[..hexPreviewByteLength]);
-
             string payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.Span));
 
             LogPayloadDiagnosticParserEntry(
@@ -245,8 +228,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 rabbitMqMessageId,
                 replyTo,
                 payload.Length,
-                payloadUtf8Preview,
-                payloadHexPreview,
                 payloadSha256);
         }
 
@@ -370,7 +351,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// Writes the parser-entry payload diagnostic event.
         /// </summary>
         /// <remarks>
-        /// The event is informational and can be suppressed by log filtering. Structured fields include payload previews plus a SHA-256 of the full body for later correlation without replaying the entire payload.
+        /// The event is informational and can be suppressed by log filtering. Structured fields include delivery metadata,
+        /// payload length, and a SHA-256 digest of the full body for later correlation without replaying the payload contents.
         /// </remarks>
         /// <param name="logger">The logger instance.</param>
         /// <param name="timestampUtc">The timestamp in UTC.</param>
@@ -380,10 +362,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="rabbitMqMessageId">The RabbitMQ message ID.</param>
         /// <param name="replyTo">The reply-to address.</param>
         /// <param name="payloadLength">The payload length.</param>
-        /// <param name="payloadUtf8">The UTF-8 encoded payload.</param>
-        /// <param name="payloadHex">The hexadecimal representation of the payload.</param>
         /// <param name="payloadSha256">The SHA-256 hash of the payload.</param>
-        [LoggerMessage(EventId = 3500, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadUtf8={PayloadUtf8} PayloadHex={PayloadHex} PayloadSha256={PayloadSha256}")]
+        [LoggerMessage(EventId = 3500, Level = LogLevel.Information, Message = "RabbitMQ payload diagnostic parser-entry. TimestampUtc={TimestampUtc} ConsumerIdentity={ConsumerIdentity} DeliveryTag={DeliveryTag} CorrelationId={CorrelationId} RabbitMqMessageId={RabbitMqMessageId} ReplyTo={ReplyTo} PayloadLength={PayloadLength} PayloadSha256={PayloadSha256}")]
         private static partial void LogPayloadDiagnosticParserEntry(
             ILogger logger,
             DateTimeOffset timestampUtc,
@@ -393,8 +373,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             string? rabbitMqMessageId,
             string? replyTo,
             int payloadLength,
-            string payloadUtf8,
-            string payloadHex,
             string payloadSha256);
 
         /// <summary>

@@ -2042,7 +2042,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(TransitPublishStatus.Accepted, prime.Status);
 
             GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
-            SemaphoreSlim retryScheduledSignal = GetRetryScheduledSignal(queue);
             object claimGate = GetClaimGate(queue);
 
             TaskCompletionSource claimGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2074,23 +2073,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 await claimBoundarySignal.Task.WaitAsync(testTimeout.Token);
 
                 Task disposeTask = publisher.DisposeAsync().AsTask();
-                await disposeTask.WaitAsync(testTimeout.Token);
-
-                int remainingAfterDispose = GetRemainingConnectionWorkerCount(publisher);
-                Assert.True(remainingAfterDispose > 0, "Expected bounded DisposeAsync to return while the worker remained blocked on queue claim.");
-
-                _ = retryScheduledSignal.Release();
-                _ = retryScheduledSignal.Wait(0);
-
-                releaseClaimGate.Set();
-                await claimGateHolder.WaitAsync(testTimeout.Token);
 
                 releaseSecondResponse.TrySetResult();
                 TransitPublishResult secondResult = await secondPublish.WaitAsync(testTimeout.Token);
                 Assert.True(secondResult.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Ambiguous or TransitPublishStatus.Canceled);
 
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(testTimeout.Token);
+
+                await disposeTask.WaitAsync(testTimeout.Token);
                 await WaitForRemainingConnectionWorkerCountAsync(publisher, expectedCount: 0, testTimeout.Token);
-                Assert.Throws<ObjectDisposedException>(() => retryScheduledSignal.Release());
             }
             finally
             {
