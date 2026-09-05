@@ -594,9 +594,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// The current implementation does not yet surface a live greeting-provenance capture and therefore returns <see langword="null"/>.
         /// </remarks>
         /// <returns>The first available greeting-provenance snapshot, or <see langword="null"/> when none is currently exposed.</returns>
-        internal static TransitConnection.P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
+        internal TransitConnection.P1GreetingProvenanceSnapshot? CaptureFirstP1GreetingProvenanceSnapshot()
         {
-            return TransitConnection.CaptureFirstP1GreetingProvenanceSnapshot();
+            foreach (TransitConnection? _ in _connections)
+            {
+                TransitConnection.P1GreetingProvenanceSnapshot? snapshot = TransitConnection.CaptureFirstP1GreetingProvenanceSnapshot();
+                if (snapshot is not null)
+                {
+                    return snapshot;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>
