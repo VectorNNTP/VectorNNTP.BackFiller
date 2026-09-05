@@ -774,10 +774,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 return true;
             }
 
+            // Writes the canonical local FQDN followed by the validated existing path components.
             canonicalPath = string.Create(
                 GetPathLength(fqdn, parts),
                 (fqdn, parts),
-                // Writes the canonical local FQDN followed by the validated existing path components.
                 static (span, state) =>
                 {
                     int offset = 0;

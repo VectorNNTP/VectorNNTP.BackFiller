@@ -383,8 +383,8 @@ namespace VectorNNTP.Backfiller.Runtime.Shutdown
                 CancellationTokenSource timeoutCts = new();
                 _gracePeriodCts = timeoutCts;
 
+                // Escalate to forced shutdown when the grace-period timer fires.
                 _ = timeoutCts.Token.Register(
-                    // Escalate to forced shutdown when the grace-period timer fires.
                     static state =>
                     {
                         ((ShutdownCoordinator)state!).SignalForcedShutdownFromGracePeriodTimer();
