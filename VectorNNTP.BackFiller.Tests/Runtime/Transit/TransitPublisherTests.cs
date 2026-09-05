@@ -2078,6 +2078,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 TransitPublishResult secondResult = await secondPublish.WaitAsync(testTimeout.Token);
                 Assert.True(secondResult.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Ambiguous or TransitPublishStatus.Canceled);
 
+                Assert.False(
+                    claimGateHolder.IsCompleted,
+                    "Expected bounded DisposeAsync to return while the worker remained blocked on queue claim.");
+
                 releaseClaimGate.Set();
                 await claimGateHolder.WaitAsync(testTimeout.Token);
 
