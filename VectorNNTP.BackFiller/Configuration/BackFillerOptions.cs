@@ -910,6 +910,24 @@ namespace VectorNNTP.Backfiller.Configuration
                     ValidationSeverity.Error));
             }
 
+            string payloadSetting = $"{settingPrefix}:RabbitMQ:WorkRequestMaxPayloadBytes";
+            if (rabbitMq.WorkRequestMaxPayloadBytes is null)
+            {
+                diagnostics.Add(new RabbitMqValidationResult(
+                    payloadSetting,
+                    "WorkRequestMaxPayloadBytes is required",
+                    ValidationSeverity.Error));
+                return diagnostics;
+            }
+
+            if (rabbitMq.WorkRequestMaxPayloadBytes is < 1 or > 4096)
+            {
+                diagnostics.Add(new RabbitMqValidationResult(
+                    payloadSetting,
+                    "WorkRequestMaxPayloadBytes must be between 1 and 4096",
+                    ValidationSeverity.Error));
+            }
+
             string hostsSetting = $"{settingPrefix}:RabbitMQ:Hosts";
             if (rabbitMq.Hosts is null || rabbitMq.Hosts.Length == 0)
             {

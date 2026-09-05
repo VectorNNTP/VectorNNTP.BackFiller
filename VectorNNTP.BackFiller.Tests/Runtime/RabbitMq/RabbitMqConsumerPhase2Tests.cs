@@ -213,6 +213,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.False(copyInvoked);
             Assert.Equal(0, consumerChannel.AckCallCount);
             Assert.Equal(1, consumerChannel.NackCallCount);
+            Assert.False(consumerChannel.LastNackRequeue);
 
             await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);

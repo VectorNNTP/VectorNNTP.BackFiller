@@ -724,12 +724,77 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
             });
 
+            BackFillerOptions? options = configuration.GetSection("BackFiller").Get<BackFillerOptions>();
+            Assert.NotNull(options);
+            Assert.NotNull(options.RabbitMQ);
+            Assert.Equal(1024, options.RabbitMQ.WorkRequestMaxPayloadBytes);
+
             List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
 
             Assert.DoesNotContain(errors, static e =>
                 e.Setting == "BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
+
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq work-request max payload bytes is accepted at the configured maximum behavior.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenRabbitMqWorkRequestMaxPayloadBytesAtMaximum_IsAccepted()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:Enabled"] = "false",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes"] = "4096",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+
+            Assert.DoesNotContain(errors, static e =>
+                e.Setting == "BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes"
+                && e.Error.Contains("between 1 and 4096", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq work-request max payload bytes is rejected outside the configured range behavior.
+        /// </summary>
+        [Theory]
+        [InlineData("0")]
+        [InlineData("4097")]
+        public void ValidateBackFillerOptions_WhenRabbitMqWorkRequestMaxPayloadBytesOutOfRange_ReturnsError(string workRequestMaxPayloadBytes)
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:Enabled"] = "false",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes"] = workRequestMaxPayloadBytes,
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+
+            Assert.Contains(errors, static e =>
+                e.Setting == "BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes"
+                && e.Error.Contains("between 1 and 4096", StringComparison.OrdinalIgnoreCase));
+        }
+
+
         /// <summary>
         /// Confirms the validate back filler options when rabbit mq port missing uses default without error behavior.
         /// </summary>
