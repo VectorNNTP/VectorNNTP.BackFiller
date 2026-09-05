@@ -3180,13 +3180,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 Assert.Equal(1, afterFirstCloseSnapshot.QueueSnapshot.QueuedItemCount);
                 Assert.Equal(1, GetActiveSubmissionCount(publisher));
 
-                releaseClaimGate.Set();
-
                 TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeReplacementFailureSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
                 Assert.Equal(1, beforeReplacementFailureSnapshot.QueueSnapshot.QueuedItemCount);
                 Assert.Equal(1, GetActiveSubmissionCount(publisher));
                 Assert.False(publishTask.IsCompleted);
                 Assert.False(allowSecondGreeting.Task.IsCompleted);
+
+                releaseClaimGate.Set();
 
                 allowSecondGreeting.TrySetResult();
                 TransitPublishResult result = await publishTask.WaitAsync(timeout.Token);
