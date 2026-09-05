@@ -101,6 +101,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private TcpClient? _tcpClient;
         /// <summary>
+        /// Captured local endpoint for the established transport session.
+        /// </summary>
+        private string? _localEndpoint;
+        /// <summary>
+        /// Captured remote endpoint for the established transport session.
+        /// </summary>
+        private string? _remoteEndpoint;
+        /// <summary>
         /// Currently active base transport stream, either raw network or negotiated TLS.
         /// </summary>
         private Stream? _transportStream;
@@ -537,6 +545,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     token => _tcpClient.ConnectAsync(_host, _port, token).AsTask(),
                     "TCP connect",
                     cancellationToken).ConfigureAwait(false);
+                CaptureEstablishedEndpoints(_tcpClient.Client);
                 _ = Interlocked.Increment(ref _socketOpenCount);
 
                 _transportStream = _tcpClient.GetStream();
@@ -1095,24 +1104,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             long numberOfBatches = Interlocked.Read(ref _batchCount);
             double avgBatch = numberOfBatches == 0 ? 0 : (double)Interlocked.Read(ref _batchSizeTotal) / numberOfBatches;
 
-            string? localEndpoint = null;
-            string? remoteEndpoint = null;
-            TcpClient? tcpClient = _tcpClient;
-            Socket? socket = tcpClient?.Client;
-            if (socket is not null)
-            {
-                try
-                {
-                    localEndpoint = socket.LocalEndPoint?.ToString();
-                    remoteEndpoint = socket.RemoteEndPoint?.ToString();
-                }
-                catch (ObjectDisposedException)
-                {
-                    localEndpoint = null;
-                    remoteEndpoint = null;
-                }
-            }
-
             return new TransitConnectionDiagnosticsSnapshot(
                 ConnectionId: ConnectionId,
                 Host: _host,
@@ -1132,8 +1123,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 MaxConcurrentSubmissions: Volatile.Read(ref _maxConcurrentSubmissions),
                 CurrentConcurrentSubmissions: _pendingByMessageId.Count,
                 CurrentWriteIntentQueueDepth: 0,
-                LocalEndpoint: localEndpoint,
-                RemoteEndpoint: remoteEndpoint,
+                LocalEndpoint: _localEndpoint,
+                RemoteEndpoint: _remoteEndpoint,
                 DiagnosticsSummary: new PipeliningDiagnosticSummary(
                     MaxPendingDepth: Volatile.Read(ref _maxConcurrentSubmissions),
                     MaxWriteQueueDepth: 0,
@@ -1717,6 +1708,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Captures the established socket endpoints for later diagnostics use.
+        /// </summary>
+        /// <param name="socket">Connected socket whose endpoints should be cached.</param>
+        private void CaptureEstablishedEndpoints(Socket socket)
+        {
+            _localEndpoint = socket.LocalEndPoint?.ToString();
+            _remoteEndpoint = socket.RemoteEndPoint?.ToString();
         }
 
         /// <summary>

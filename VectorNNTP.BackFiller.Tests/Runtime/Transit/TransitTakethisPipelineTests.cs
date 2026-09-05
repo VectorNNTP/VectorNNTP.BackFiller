@@ -1111,10 +1111,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
 
+            TransitConnection.TransitConnectionDiagnosticsSnapshot connectedSnapshot = connection.CaptureDiagnosticsSnapshot();
+            Assert.False(string.IsNullOrWhiteSpace(connectedSnapshot.LocalEndpoint));
+            Assert.False(string.IsNullOrWhiteSpace(connectedSnapshot.RemoteEndpoint));
+
             Exception? disposeException = await Record.ExceptionAsync(async () => await connection.DisposeAsync());
             Assert.Null(disposeException);
 
             TransitConnection.TransitConnectionDiagnosticsSnapshot snapshot = connection.CaptureDiagnosticsSnapshot();
+            Assert.Equal(connectedSnapshot.LocalEndpoint, snapshot.LocalEndpoint);
+            Assert.Equal(connectedSnapshot.RemoteEndpoint, snapshot.RemoteEndpoint);
             Assert.Equal(0, snapshot.CurrentConcurrentSubmissions);
             Assert.Equal(0, snapshot.SubmissionsAmbiguous);
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
