@@ -43,6 +43,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="RequestedChannelMax">Requested channel max for AMQP negotiation.</param>
     /// <param name="ConsumerPrefetchCount">Optional RabbitMQ consumer prefetch count; when <see langword="null"/>, channel defaults are preserved.</param>
     /// <param name="DiagnosticPayloadCorrelationId">Optional AMQP CorrelationId used to gate temporary payload diagnostics.</param>
+    /// <param name="WorkRequestMaxPayloadBytes">Maximum RabbitMQ work-request envelope size, in bytes, admitted before copying the broker body.</param>
     internal sealed record RabbitMqRuntimeOptions(
         IReadOnlyList<string> Hosts,
         int Port,
@@ -72,7 +73,8 @@ namespace VectorNNTP.Backfiller.Configuration
         int SocketTimeoutSeconds,
         int RequestedChannelMax,
         ushort? ConsumerPrefetchCount,
-        string? DiagnosticPayloadCorrelationId = null)
+        string? DiagnosticPayloadCorrelationId = null,
+        int WorkRequestMaxPayloadBytes = 1024)
     {
         /// <summary>
         /// Builds the default RabbitMQ client-provided connection name when configuration does not specify one.

@@ -81,6 +81,32 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         /// <summary>
+        /// Confirms a serialized RabbitMQ work-request payload exactly at the configured envelope ceiling is accepted.
+        /// </summary>
+        [Fact]
+        public async Task ParseAsync_WhenPayloadLengthMatchesConfiguredLimit_ReturnsParsedRequestAsync()
+        {
+            RabbitMqArticleWorkRequestParser parser = new();
+            RabbitMqArticleWorkRequest request = new(
+                Version: 1,
+                RequestId: Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa"),
+                MessageId: "<12345@example.invalid>",
+                Backbone: "Giganews");
+
+            byte[] payload = RabbitMqArticleWorkRequestWireProtocol.SerializeV1(request);
+            Assert.True(payload.Length < 1024);
+            RabbitMqArticleDelivery delivery = CreateDelivery(Encoding.UTF8.GetString(payload), backbone: request.Backbone, correlationId: "rpc-limit", replyTo: "rpc.replies");
+
+            RabbitMqArticleWorkParseResult parseResult = await parser.ParseAsync(delivery, CancellationToken.None);
+
+            Assert.True(parseResult.IsSuccess);
+            RabbitMqArticleWorkRequest parsed = Assert.IsType<RabbitMqArticleWorkRequest>(parseResult.Request);
+            Assert.Equal(request.RequestId, parsed.RequestId);
+            Assert.Equal(request.MessageId, parsed.MessageId);
+            Assert.Equal(request.Backbone, parsed.Backbone);
+        }
+
+        /// <summary>
         /// Verifies JSON property ordering and whitespace do not affect parsing.
         /// </summary>
         [Fact]
@@ -166,8 +192,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [Fact]
         public async Task ParseAsync_WhenDiagnosticPayloadLoggingEnabled_LogsBoundedPayloadPreviewsAndFullSha256Async()
         {
-            const int DiagnosticPreviewLength = 256;
-
             List<CapturedLogEntry> entries = [];
             ILogger<RabbitMqArticleWorkRequestParser> logger = new CapturingLogger<RabbitMqArticleWorkRequestParser>(entries);
             const string CorrelationId = "corr-diagnostic-preview";
@@ -194,22 +218,23 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             CapturedLogEntry info = Assert.Single(entries, static entry => entry.Level == LogLevel.Information && entry.Message.Contains("RabbitMQ payload diagnostic parser-entry.", StringComparison.Ordinal));
 
-            string payloadUtf8Preview = ExtractStructuredLogValue(info.Message, "PayloadUtf8");
-            string payloadHexPreview = ExtractStructuredLogValue(info.Message, "PayloadHex");
             string payloadSha256 = ExtractStructuredLogValue(info.Message, "PayloadSha256");
-
-            string expectedPayloadUtf8Preview = payload[..DiagnosticPreviewLength];
-            string fullPayloadHex = Convert.ToHexString(delivery.Payload.Span);
-            string expectedPayloadHexPreview = fullPayloadHex[..DiagnosticPreviewLength];
             string expectedPayloadSha256 = Convert.ToHexString(SHA256.HashData(delivery.Payload.Span));
+            string payloadUtf8 = Encoding.UTF8.GetString(delivery.Payload.Span);
+            string payloadHex = Convert.ToHexString(delivery.Payload.Span);
 
-            Assert.Equal(DiagnosticPreviewLength, payloadUtf8Preview.Length);
-            Assert.Equal(DiagnosticPreviewLength, payloadHexPreview.Length);
-            Assert.Equal(expectedPayloadUtf8Preview, payloadUtf8Preview);
-            Assert.Equal(expectedPayloadHexPreview, payloadHexPreview);
             Assert.Equal(expectedPayloadSha256, payloadSha256);
-            Assert.DoesNotContain($"PayloadUtf8={payload}", info.Message, StringComparison.Ordinal);
-            Assert.DoesNotContain($"PayloadHex={fullPayloadHex}", info.Message, StringComparison.Ordinal);
+            Assert.Equal(payload.Length, int.Parse(ExtractStructuredLogValue(info.Message, "PayloadLength")));
+            Assert.Contains("TimestampUtc=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("ConsumerIdentity=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("DeliveryTag=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("CorrelationId=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("RabbitMqMessageId=", info.Message, StringComparison.Ordinal);
+            Assert.Contains("ReplyTo=", info.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("PayloadUtf8", info.StateValues.Keys);
+            Assert.DoesNotContain("PayloadHex", info.StateValues.Keys);
+            Assert.DoesNotContain(payloadUtf8, info.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(payloadHex, info.Message, StringComparison.Ordinal);
 
             entries.Clear();
             RabbitMqArticleDelivery unmatchedDelivery = CreateDelivery(payload, correlationId: "corr-not-matching", replyTo: "rpc.reply.queue");
@@ -946,14 +971,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// <summary>
         /// Confirms the captured log entry behavior.
         /// </summary>
-        /// <returns>The value returned by the captured log entry helper.</returns>
-        /// <summary>
-        /// Confirms the captured log entry behavior.
-        /// </summary>
         /// <param name="Level">The level used by this test scenario.</param>
         /// <param name="Message">The message used by this test scenario.</param>
-        /// <returns>The value returned by the captured log entry helper.</returns>
-        private sealed record CapturedLogEntry(LogLevel Level, string Message);
+        /// <param name="StateValues">The structured state values used by this test scenario.</param>
+        private sealed record CapturedLogEntry(LogLevel Level, string Message, IReadOnlyDictionary<string, object?> StateValues);
 
         /// <summary>
         /// Confirms the capturing logger behavior.
@@ -994,7 +1015,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
                 string message = formatter(state, exception);
-                _entries.Add(new CapturedLogEntry(logLevel, message));
+                IReadOnlyDictionary<string, object?> stateValues;
+                if (state is IReadOnlyDictionary<string, object?> dictionary)
+                {
+                    stateValues = dictionary;
+                }
+                else if (state is IEnumerable<KeyValuePair<string, object?>> pairs)
+                {
+                    stateValues = pairs.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+                }
+                else
+                {
+                    stateValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+                }
+
+                _entries.Add(new CapturedLogEntry(logLevel, message, stateValues));
             }
 
             /// <summary>

@@ -703,6 +703,33 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 e.Setting == "BackFiller:RabbitMQ:EnableSsl"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
+
+        /// <summary>
+        /// Confirms the validate back filler options when rabbit mq work-request max payload bytes missing uses the default without error behavior.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenRabbitMqWorkRequestMaxPayloadBytesMissing_UsesDefaultWithoutError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:Enabled"] = "false",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+
+            Assert.DoesNotContain(errors, static e =>
+                e.Setting == "BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes"
+                && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
+        }
         /// <summary>
         /// Confirms the validate back filler options when rabbit mq port missing uses default without error behavior.
         /// </summary>

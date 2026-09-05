@@ -52,6 +52,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Optional correlation identifier that enables payload diagnostics for matching deliveries.
         /// </summary>
         private readonly string? _diagnosticCorrelationId;
+        /// <summary>
+        /// Maximum RabbitMQ work-request envelope size allowed before the consumer copies the borrowed broker body.
+        /// </summary>
+        private readonly int _workRequestMaxPayloadBytes;
 
         /// <summary>
         /// Initializes the default factory used to create concrete consumer sessions.
@@ -74,6 +78,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _diagnosticCorrelationId = string.IsNullOrWhiteSpace(rabbitMq.DiagnosticPayloadCorrelationId)
                 ? null
                 : rabbitMq.DiagnosticPayloadCorrelationId.Trim();
+            _workRequestMaxPayloadBytes = rabbitMq.WorkRequestMaxPayloadBytes;
         }
 
         /// <inheritdoc/>
@@ -92,6 +97,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 deliverySink,
                 _loggerFactory.CreateLogger<RabbitMqBackboneConsumerSession>(),
                 prefetchCount,
+                _workRequestMaxPayloadBytes,
                 _diagnosticCorrelationId);
         }
     }
@@ -277,7 +283,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     _ = _sessionRuntimes.Remove(retirement.SessionKey);
                 }
 
-                foreach ((string sessionKey, RetiringSessionRuntimeState retiring) in _retiringSessionRuntimes)
+                foreach ((_, RetiringSessionRuntimeState retiring) in _retiringSessionRuntimes)
                 {
                     if (retiring.Identity.AccountId == accountId && retiring.Identity.ConnectionNumber > retainConnectionCount)
                     {
@@ -723,14 +729,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                         _ = _retiringSessionRuntimes.Remove(operation.SessionKey);
                     }
 
-                    if (failure is null)
-                    {
-                        _ = operation.CompletionSource.TrySetResult(true);
-                    }
-                    else
-                    {
-                        _ = operation.CompletionSource.TrySetException(failure);
-                    }
+                    _ = failure is null ? operation.CompletionSource.TrySetResult(true) : operation.CompletionSource.TrySetException(failure);
                 }
                 finally
                 {
