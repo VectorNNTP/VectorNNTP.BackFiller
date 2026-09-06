@@ -60,6 +60,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(result.Delivery.ReplyTo, channel.LastPublishRoutingKey);
             Assert.Equal(result.Delivery.CorrelationId, channel.LastPublishCorrelationId);
             Assert.Equal(result.Delivery.ConnectionGeneration, publishResult.ConnectionGeneration);
+            Assert.False(string.IsNullOrWhiteSpace(channel.LastPublishMessageId));
+            Assert.True(Guid.TryParse(channel.LastPublishMessageId, out _));
+            Assert.NotEqual(result.Request.RequestId.ToString("D"), channel.LastPublishMessageId);
             Assert.NotNull(channel.LastPublishBody);
             string json = Encoding.UTF8.GetString(channel.LastPublishBody!);
             Assert.Contains("\"requestId\"", json, StringComparison.Ordinal);
@@ -265,7 +268,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.All(results, static publishResult => Assert.Equal(RabbitMqResponsePublishStatus.Confirmed, publishResult.Status));
 
             RecordingBrokerConnection connection = connector.RequireLastConnection();
-            _ = Assert.Single(connection.CreatedChannels);
+            RecordingChannel channel = Assert.Single(connection.CreatedChannels);
+            Assert.Equal(2, channel.PublishedMessageIds.Count);
+            Assert.All(channel.PublishedMessageIds, static messageId => Assert.True(Guid.TryParse(messageId, out _)));
+            Assert.NotEqual(channel.PublishedMessageIds[0], channel.PublishedMessageIds[1]);
 
             await connectionManager.DisposeAsync().ConfigureAwait(false);
             firstResult.Dispose();
@@ -712,6 +718,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             internal string? LastPublishCorrelationId { get; private set; }
 
             /// <summary>
+            /// Supplies last publish message id for the fixture or scenario under test.
+            /// </summary>
+            internal string? LastPublishMessageId { get; private set; }
+
+            /// <summary>
+            /// Supplies all publish message ids for the fixture or scenario under test.
+            /// </summary>
+            internal List<string> PublishedMessageIds { get; } = [];
+
+            /// <summary>
             /// Supplies last publish body for the fixture or scenario under test.
             /// </summary>
             internal byte[]? LastPublishBody { get; private set; }
@@ -892,6 +908,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 cancellationToken.ThrowIfCancellationRequested();
                 LastPublishRoutingKey = routingKey;
                 LastPublishCorrelationId = basicProperties.CorrelationId;
+                LastPublishMessageId = basicProperties.MessageId;
+                if (basicProperties.MessageId is not null)
+                {
+                    PublishedMessageIds.Add(basicProperties.MessageId);
+                }
+
                 LastPublishBody = body.ToArray();
                 _ = exchange;
                 _ = mandatory;
