@@ -139,6 +139,31 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         if (!transitAdmissionResult.IsAccepted)
                         {
                             await result.Delivery.Settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
+                            if (transitAdmissionResult.Status is TransitAdmissionStatus.Failed or TransitAdmissionStatus.Unavailable)
+                            {
+                                LogRabbitMqTransitAdmissionRejectedDropWarning(
+                                    _logger,
+                                    result.Request.RequestId,
+                                    result.CorrelationId,
+                                    result.Request.MessageId,
+                                    result.Request.Backbone,
+                                    result.Delivery.DeliveryTag,
+                                    transitAdmissionResult.Status,
+                                    transitAdmissionResult.Error);
+                            }
+                            else
+                            {
+                                LogRabbitMqTransitAdmissionRejectedDropInformation(
+                                    _logger,
+                                    result.Request.RequestId,
+                                    result.CorrelationId,
+                                    result.Request.MessageId,
+                                    result.Request.Backbone,
+                                    result.Delivery.DeliveryTag,
+                                    transitAdmissionResult.Status,
+                                    transitAdmissionResult.Error);
+                            }
+
                             return;
                         }
                     }
@@ -257,6 +282,60 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             string messageId,
             string backbone,
             RabbitMqResponsePublishStatus publishStatus);
+
+        /// <summary>
+        /// Emits a warning when transit admission rejects a retained success-path article and the delivery is dropped without requeue.
+        /// </summary>
+        /// <param name="logger">Logger receiving the transit-admission rejection warning.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
+        /// <param name="admissionStatus">Transit admission status that rejected ownership transfer.</param>
+        /// <param name="admissionError">Transit admission error detail when available.</param>
+        /// <param name="requeue">Whether the broker was instructed to requeue the delivery.</param>
+        [LoggerMessage(
+            EventId = 3406,
+            Level = LogLevel.Warning,
+            Message = "Transit admission rejected retained success-path article; dropping RabbitMQ delivery with requeue=false. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} TransitAdmissionStatus={AdmissionStatus} TransitAdmissionError={AdmissionError} Requeue={Requeue}")]
+        private static partial void LogRabbitMqTransitAdmissionRejectedDropWarning(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ulong deliveryTag,
+            TransitAdmissionStatus admissionStatus,
+            string? admissionError,
+            bool requeue = false);
+
+        /// <summary>
+        /// Emits an informational transit-admission rejection event for shutdown-expected non-accepted outcomes.
+        /// </summary>
+        /// <param name="logger">Logger receiving the transit-admission rejection informational event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
+        /// <param name="admissionStatus">Transit admission status that rejected ownership transfer.</param>
+        /// <param name="admissionError">Transit admission error detail when available.</param>
+        /// <param name="requeue">Whether the broker was instructed to requeue the delivery.</param>
+        [LoggerMessage(
+            EventId = 3407,
+            Level = LogLevel.Information,
+            Message = "Transit admission rejected retained success-path article; dropping RabbitMQ delivery with requeue=false. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} TransitAdmissionStatus={AdmissionStatus} TransitAdmissionError={AdmissionError} Requeue={Requeue}")]
+        private static partial void LogRabbitMqTransitAdmissionRejectedDropInformation(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ulong deliveryTag,
+            TransitAdmissionStatus admissionStatus,
+            string? admissionError,
+            bool requeue = false);
 
         /// <summary>
         /// Emits the RabbitMQ delivery acknowledged log event after the delivery has been settled successfully.

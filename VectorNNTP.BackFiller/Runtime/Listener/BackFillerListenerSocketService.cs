@@ -121,7 +121,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             {
                 CloseListenSockets();
                 CloseActiveClients();
-                await AwaitActiveConnectionTasksAsync(CancellationToken.None).ConfigureAwait(false);
+
+                try
+                {
+                    await AwaitActiveConnectionTasksAsync(_shutdownCoordinator.ForcedShutdownToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_shutdownCoordinator.ForcedShutdownToken.IsCancellationRequested)
+                {
+                }
+
                 LogListenerStopped(_logger);
             }
         }

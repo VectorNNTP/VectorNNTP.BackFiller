@@ -604,7 +604,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
             catch (OperationCanceledException)
             {
-                return ListenerTransferCompletionStatus.Cancelled;
+                return ListenerTransferCompletionStatus.Canceled;
             }
             catch (IOException)
             {

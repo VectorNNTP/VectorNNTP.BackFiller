@@ -11,6 +11,7 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -580,8 +581,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 Assert.Equal(1, beforeStop.ActiveReaderCount);
                 Assert.Equal(0, beforeStop.ListenerCompletionCount);
 
+                TaskCompletionSource<bool> requestConnectionSlotReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                service.OnConnectionSlotReleasedForTesting = () => requestConnectionSlotReleased.TrySetResult(true);
+
                 shutdown.SignalForcedShutdown();
                 await AwaitRemoteClosureAsync(sslStream).ConfigureAwait(false);
+                await requestConnectionSlotReleased.Task.ConfigureAwait(false);
                 await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
                 await runTask.ConfigureAwait(false);
 
@@ -591,6 +596,141 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
             finally
             {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenGracefulShutdownSignaled_AllowsFinalWaitToDrainAfterActiveConnectionCompletes()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-graceful-drain.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            TaskCompletionSource<bool> blockedConnectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            InjectActiveConnectionTaskForTesting(service, blockedConnectionGate.Task);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                shutdown.SignalGracefulShutdown(TimeSpan.FromMinutes(5));
+
+                Task stopTask = service.StopAsync(CancellationToken.None);
+                await AssertTaskRemainsIncompleteAsync(stopTask).ConfigureAwait(false);
+
+                blockedConnectionGate.TrySetResult(true);
+                await stopTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                blockedConnectionGate.TrySetResult(true);
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenForcedEscalationOccursWhileWaiting_CancelsFinalWaitAndCompletesShutdown()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-forced-escalation.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            TaskCompletionSource<bool> blockedConnectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            InjectActiveConnectionTaskForTesting(service, blockedConnectionGate.Task);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                shutdown.SignalGracefulShutdown(TimeSpan.FromMinutes(5));
+
+                Task stopTask = service.StopAsync(CancellationToken.None);
+                await AssertTaskRemainsIncompleteAsync(stopTask).ConfigureAwait(false);
+
+                shutdown.SignalForcedShutdown();
+                await stopTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                blockedConnectionGate.TrySetResult(true);
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenForcedShutdownAlreadySignaledBeforeFinalWait_CompletesWithoutWaitingForBlockedActiveTask()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-forced-already-signaled.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            TaskCompletionSource<bool> blockedConnectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            InjectActiveConnectionTaskForTesting(service, blockedConnectionGate.Task);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                shutdown.SignalForcedShutdown();
+
+                Task stopTask = service.StopAsync(CancellationToken.None);
+                await stopTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                blockedConnectionGate.TrySetResult(true);
+                shutdown.SignalForcedShutdown();
                 await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
                 await runTask.ConfigureAwait(false);
                 state.Dispose();
@@ -688,6 +828,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 {
                     return;
                 }
+            }
+        }
+
+        private static async Task AssertTaskRemainsIncompleteAsync(Task task)
+        {
+            ArgumentNullException.ThrowIfNull(task);
+
+            await Task.Yield();
+            Assert.False(task.IsCompleted);
+        }
+
+        private static void InjectActiveConnectionTaskForTesting(BackFillerListenerSocketService service, Task connectionTask)
+        {
+            ArgumentNullException.ThrowIfNull(service);
+            ArgumentNullException.ThrowIfNull(connectionTask);
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+
+            FieldInfo gateField = typeof(BackFillerListenerSocketService).GetField("_connectionsGate", flags)
+                ?? throw new InvalidOperationException("Listener test seam field '_connectionsGate' was not found.");
+            FieldInfo tasksField = typeof(BackFillerListenerSocketService).GetField("_activeConnectionTasks", flags)
+                ?? throw new InvalidOperationException("Listener test seam field '_activeConnectionTasks' was not found.");
+
+            object gate = gateField.GetValue(service)
+                ?? throw new InvalidOperationException("Listener connection gate was null.");
+            HashSet<Task> tasks = (HashSet<Task>?)tasksField.GetValue(service)
+                ?? throw new InvalidOperationException("Listener active connection task set was null.");
+
+            lock (gate)
+            {
+                _ = tasks.Add(connectionTask);
             }
         }
 

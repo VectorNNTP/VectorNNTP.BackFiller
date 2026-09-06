@@ -46,7 +46,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// <summary>
         /// Transfer did not finish because cancellation was observed.
         /// </summary>
-        Cancelled = 1,
+        Canceled = 1,
 
         /// <summary>
         /// Transfer stopped due to transport failure.

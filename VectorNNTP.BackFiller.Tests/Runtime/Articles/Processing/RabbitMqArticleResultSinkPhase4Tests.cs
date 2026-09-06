@@ -9,6 +9,7 @@
 using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
@@ -486,6 +487,107 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionFailed_LogsWarningAndNacksWithoutRequeueAsync()
+        {
+            List<CapturedLogEntry> logs = [];
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-warning@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-warning",
+                replyTo: "rpc.responses",
+                deliveryTag: 2202,
+                connectionGeneration: 63,
+                settlement: settlement);
+
+            Guid requestId = Guid.NewGuid();
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-warning@example.com>", "transit-admission-warning-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: requestId,
+                messageId: "<transit-admission-warning@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Failed, "transit enqueue fault");
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                transitAdmissionGateway: transitAdmissionGateway,
+                logger: new CapturingLogger<RabbitMqArticleResultSink>(logs));
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2202UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+
+            CapturedLogEntry warning = Assert.Single(logs, static entry => entry.EventId.Id == 3406);
+            Assert.Equal(LogLevel.Warning, warning.Level);
+            Assert.Equal(requestId, warning.StateValues["RequestId"]);
+            Assert.Equal("corr-transit-admission-warning", warning.StateValues["CorrelationId"]);
+            Assert.Equal("<transit-admission-warning@example.com>", warning.StateValues["MessageId"]);
+            Assert.Equal("BackboneA", warning.StateValues["Backbone"]);
+            Assert.Equal(2202UL, warning.StateValues["DeliveryTag"]);
+            Assert.Equal(TransitAdmissionStatus.Failed, warning.StateValues["AdmissionStatus"]);
+            Assert.Equal("transit enqueue fault", warning.StateValues["AdmissionError"]);
+            Assert.Equal(false, warning.StateValues["Requeue"]);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionFrozen_LogsInformationAndNacksWithoutRequeueAsync()
+        {
+            List<CapturedLogEntry> logs = [];
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-frozen@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-frozen",
+                replyTo: "rpc.responses",
+                deliveryTag: 2203,
+                connectionGeneration: 63,
+                settlement: settlement);
+
+            Guid requestId = Guid.NewGuid();
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-frozen@example.com>", "transit-admission-frozen-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: requestId,
+                messageId: "<transit-admission-frozen@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.AdmissionFrozen, "Global transit queue admission is frozen.");
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                transitAdmissionGateway: transitAdmissionGateway,
+                logger: new CapturingLogger<RabbitMqArticleResultSink>(logs));
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2203UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+
+            CapturedLogEntry info = Assert.Single(logs, static entry => entry.EventId.Id == 3407);
+            Assert.Equal(LogLevel.Information, info.Level);
+            Assert.Equal(requestId, info.StateValues["RequestId"]);
+            Assert.Equal("corr-transit-admission-frozen", info.StateValues["CorrelationId"]);
+            Assert.Equal("<transit-admission-frozen@example.com>", info.StateValues["MessageId"]);
+            Assert.Equal("BackboneA", info.StateValues["Backbone"]);
+            Assert.Equal(2203UL, info.StateValues["DeliveryTag"]);
+            Assert.Equal(TransitAdmissionStatus.AdmissionFrozen, info.StateValues["AdmissionStatus"]);
+            Assert.Equal("Global transit queue admission is frozen.", info.StateValues["AdmissionError"]);
+            Assert.Equal(false, info.StateValues["Requeue"]);
+            Assert.DoesNotContain(logs, static entry => entry.Level == LogLevel.Warning && entry.EventId.Id == 3406);
+        }
+
+        [Fact]
         public async Task OnProcessedAsync_WhenDuplicateMessageIdRedelivery_DoesNotRequeueLoopAndAcknowledgesAsync()
         {
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
@@ -547,18 +649,20 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             IRabbitMqArticleResponsePublisher responsePublisher,
             BackFillerRuntimeOptions? runtimeOptions = null,
             IArticleRetentionAuthority? retentionAuthority = null,
-            ITransitAdmissionGateway? transitAdmissionGateway = null)
+            ITransitAdmissionGateway? transitAdmissionGateway = null,
+            ILogger<RabbitMqArticleResultSink>? logger = null)
         {
             runtimeOptions ??= CreateRuntimeOptions();
             retentionAuthority ??= new ArticleRetentionAuthority(runtimeOptions);
             transitAdmissionGateway ??= new TrackingTransitAdmissionGateway(TransitAdmissionStatus.Accepted);
+            logger ??= NullLogger<RabbitMqArticleResultSink>.Instance;
             return new RabbitMqArticleResultSink(
                 planner: new ArticleWorkDispositionPlanner(),
                 responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: responsePublisher,
                 retentionAuthority: retentionAuthority,
                 transitAdmissionGateway: transitAdmissionGateway,
-                logger: NullLogger<RabbitMqArticleResultSink>.Instance);
+                logger: logger);
         }
 
         private sealed class TrackingTransitAdmissionGateway : ITransitAdmissionGateway
@@ -690,6 +794,53 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
         {
             return $"{{\"version\":1,\"requestId\":\"{requestId}\",\"messageId\":\"{messageId}\",\"backbone\":\"{backbone}\"}}";
+        }
+
+        private sealed record CapturedLogEntry(LogLevel Level, EventId EventId, string Message, IReadOnlyDictionary<string, object?> StateValues);
+
+        private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries) : ILogger<T>
+        {
+            private readonly List<CapturedLogEntry> _entries = entries ?? throw new ArgumentNullException(nameof(entries));
+
+            public IDisposable BeginScope<TState>(TState state)
+                where TState : notnull
+            {
+                return NullScope.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                string message = formatter(state, exception);
+                IReadOnlyDictionary<string, object?> stateValues;
+                if (state is IReadOnlyDictionary<string, object?> dictionary)
+                {
+                    stateValues = dictionary;
+                }
+                else if (state is IEnumerable<KeyValuePair<string, object?>> pairs)
+                {
+                    stateValues = pairs.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+                }
+                else
+                {
+                    stateValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+                }
+
+                _entries.Add(new CapturedLogEntry(logLevel, eventId, message, stateValues));
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                internal static NullScope Instance { get; } = new();
+
+                public void Dispose()
+                {
+                }
+            }
         }
 
         /// <summary>
