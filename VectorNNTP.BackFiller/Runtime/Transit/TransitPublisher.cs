@@ -5,12 +5,15 @@
 // VectorNNTP.Backfiller Runtime / Transit
 // Implements the transit publisher behavior.
 
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
@@ -41,6 +44,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Supplies the logger used by transit publisher.
         /// </summary>
         private readonly ILogger<TransitPublisher> _logger;
+        /// <summary>
+        /// Shared retention authority used to resolve canonical article bytes at send-attempt time.
+        /// </summary>
+        private readonly IArticleRetentionAuthority _retentionAuthority;
         /// <summary>
         /// Configured number of connection slots maintained by the publisher.
         /// </summary>
@@ -163,6 +170,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="runtimeOptions">Validated runtime settings that define queue bounds, retry behavior, and transit endpoint configuration.</param>
         /// <param name="timeProvider">The time provider used to stamp runtime and diagnostic snapshots.</param>
         /// <param name="logger">Structured logger used by the publisher and the connections it creates for lifecycle and diagnostic reporting.</param>
+        /// <param name="retentionAuthority">Shared retention authority that resolves canonical article bytes by Message-ID at actual send time.</param>
         /// <param name="connectionPoolSize">The number of worker slots and slot records to maintain.</param>
         /// <param name="perConnectionPipelineDepth">The maximum number of admitted items each active connection may pipeline.</param>
         /// <param name="connectionResponseProgressTimeout">Optional watchdog timeout for detecting stalled connection responses during steady-state work.</param>
@@ -173,6 +181,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
             ILogger<TransitPublisher> logger,
+            IArticleRetentionAuthority retentionAuthority,
             int connectionPoolSize = 1,
             int perConnectionPipelineDepth = DefaultPerConnectionPipelineDepth,
             TimeSpan? connectionResponseProgressTimeout = null,
@@ -183,6 +192,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
             ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(retentionAuthority);
 
             if (connectionPoolSize <= 0)
             {
@@ -197,6 +207,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _runtimeOptions = runtimeOptions;
             _timeProvider = timeProvider;
             _logger = logger;
+            _retentionAuthority = retentionAuthority;
             _timingCollector = timingCollector;
             _claimBoundaryObserved = claimBoundaryObserved;
             _connectionPoolSize = connectionPoolSize;
@@ -205,8 +216,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _connectionResponseProgressCheckInterval = connectionResponseProgressCheckInterval;
 
             _globalQueue = new GlobalTransitWorkQueue(
-                maxQueuedItemCount: runtimeOptions.TransitQueueMaxItemCount,
-                maxQueuedPayloadBytes: runtimeOptions.TransitQueueMaxPayloadBytes);
+                maxQueuedItemCount: runtimeOptions.TransitQueueMaxItemCount);
 
             _connections = new TransitConnection?[_connectionPoolSize];
             _connectionSlotSnapshotVersions = new long[_connectionPoolSize];
@@ -443,24 +453,28 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Validates one article submission, copies it into publisher-owned storage, admits it to the global queue, and waits for terminal completion.
+        /// Admits one Message-ID for transit scheduling using identity-only work ownership.
+        /// </summary>
+        /// <param name="messageId">The article Message-ID used for protocol framing and response correlation.</param>
+        /// <param name="cancellationToken">Cancellation token applied to admission and to the caller's wait for the terminal result.</param>
+        /// <returns>The terminal publish result for the admitted work item, or an unavailable result if the publisher has not been initialized or is shutting down.</returns>
+        internal ValueTask<TransitPublishResult> PublishAsync(string messageId, CancellationToken cancellationToken)
+        {
+            return PublishCoreAsync(messageId, cancellationToken);
+        }
+
+        /// <summary>
+        /// Compatibility admission path that stages the provided payload into retention before identity-only queue admission.
         /// </summary>
         /// <param name="messageId">The article Message-ID used for protocol framing and response correlation.</param>
         /// <param name="articlePayload">The full article payload; it must end in LF so TAKETHIS framing preserves byte integrity.</param>
-        /// <param name="cancellationToken">Cancellation token applied to admission and to the caller's wait for the terminal result.</param>
-        /// <returns>The terminal publish result for the admitted work item, or an unavailable result if the publisher has not been initialized or is shutting down.</returns>
+        /// <param name="cancellationToken">Cancellation token applied to retention admission and to the caller's wait for the terminal result.</param>
+        /// <returns>The terminal publish result for the admitted work item, or an unavailable result when retention cannot accept/serve the payload.</returns>
         internal async ValueTask<TransitPublishResult> PublishAsync(
             string messageId,
             ReadOnlyMemory<byte> articlePayload,
             CancellationToken cancellationToken)
         {
-            long publishAsyncEnterTick = Stopwatch.GetTimestamp();
-
-            if (string.IsNullOrWhiteSpace(messageId))
-            {
-                throw new ArgumentException("Message-ID is required.", nameof(messageId));
-            }
-
             if (articlePayload.IsEmpty)
             {
                 throw new ArgumentException("Article payload must not be empty.", nameof(articlePayload));
@@ -469,6 +483,82 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             if (articlePayload.Span[^1] != (byte)'\n')
             {
                 throw new ArgumentException("Article payload must end with LF to preserve byte integrity during TAKETHIS framing.", nameof(articlePayload));
+            }
+
+            long publishAsyncEnterTick = Stopwatch.GetTimestamp();
+            if (_disposeRequested || Volatile.Read(ref _initialized) == 0)
+            {
+                return new TransitPublishResult(
+                    MessageId: messageId,
+                    Status: TransitPublishStatus.Unavailable,
+                    ResponseCode: null,
+                    ResponseText: "Transit connection unavailable.",
+                    T0PublishAsyncEnterTick: publishAsyncEnterTick,
+                    T7PublishAsyncCompleteTick: Stopwatch.GetTimestamp(),
+                    Provenance: TransitPublishProvenance.Unavailable,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: Stopwatch.GetTimestamp());
+            }
+
+            long payloadCopyStartTick = Stopwatch.GetTimestamp();
+            byte[] rented = ArrayPool<byte>.Shared.Rent(articlePayload.Length);
+            articlePayload.Span.CopyTo(rented.AsSpan(0, articlePayload.Length));
+            _timingCollector?.RecordPublishPayloadCopy(Stopwatch.GetTimestamp() - payloadCopyStartTick);
+
+            DownloadedArticleBuffer payloadOwner = new(rented, articlePayload.Length);
+            ArticleRetentionAdmissionResult admission;
+            try
+            {
+                admission = _retentionAuthority.TryRetainSuccessArticle(messageId, payloadOwner);
+            }
+            catch
+            {
+                payloadOwner.Dispose();
+                throw;
+            }
+
+            if (admission.Status == ArticleRetentionAdmissionStatus.DuplicateMessageId)
+            {
+                payloadOwner.Dispose();
+            }
+            else if (admission.Status != ArticleRetentionAdmissionStatus.Admitted)
+            {
+                payloadOwner.Dispose();
+                return new TransitPublishResult(
+                    MessageId: messageId,
+                    Status: TransitPublishStatus.Unavailable,
+                    ResponseCode: null,
+                    ResponseText: $"Retained article unavailable for transit send attempt ({admission.Status}).",
+                    T0PublishAsyncEnterTick: publishAsyncEnterTick,
+                    T7PublishAsyncCompleteTick: Stopwatch.GetTimestamp(),
+                    Provenance: TransitPublishProvenance.Unavailable,
+                    ProvenanceConnectionState: _state,
+                    ProvenanceTick: Stopwatch.GetTimestamp());
+            }
+
+            TransitPublishResult result = await PublishCoreAsync(messageId, cancellationToken).ConfigureAwait(false);
+            return result with
+            {
+                T0PublishAsyncEnterTick = publishAsyncEnterTick,
+                T7PublishAsyncCompleteTick = Stopwatch.GetTimestamp(),
+            };
+        }
+
+        /// <summary>
+        /// Performs shared transit admission and completion waiting for identity-first work items.
+        /// </summary>
+        /// <param name="messageId">The article Message-ID used for protocol framing and response correlation.</param>
+        /// <param name="cancellationToken">Cancellation token applied to admission and caller wait.</param>
+        /// <returns>Terminal publish result for the admitted work item.</returns>
+        private async ValueTask<TransitPublishResult> PublishCoreAsync(
+            string messageId,
+            CancellationToken cancellationToken)
+        {
+            long publishAsyncEnterTick = Stopwatch.GetTimestamp();
+
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                throw new ArgumentException("Message-ID is required.", nameof(messageId));
             }
 
             if (_disposeRequested || Volatile.Read(ref _initialized) == 0)
@@ -485,14 +575,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     ProvenanceTick: Stopwatch.GetTimestamp());
             }
 
-            long payloadCopyStartTick = Stopwatch.GetTimestamp();
-            byte[] payloadCopy = articlePayload.ToArray();
-            _timingCollector?.RecordPublishPayloadCopy(Stopwatch.GetTimestamp() - payloadCopyStartTick);
-
             TransitWorkItem workItem = new(
                 workItemId: Interlocked.Increment(ref _nextWorkItemId),
                 messageId: messageId,
-                payload: payloadCopy,
                 maxAttempts: _runtimeOptions.TransitRetryMaxAttempts);
 
             _activeWorkItems[workItem.WorkItemId] = workItem;
@@ -870,38 +955,70 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             continue;
                         }
 
-                        await connection.ProcessBatchAsync(claimed, cancellationToken).ConfigureAwait(false);
-
-                        int remainingCompletions = claimed.Count;
-                        while (remainingCompletions > 0)
+                        List<TransitConnection.TransitSendBatchEntry> sendEntries = [];
+                        List<IArticleRetentionReadLease> activeLeases = [];
+                        try
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
-
-                            while (connection.TryTakeCompleted(out TransitWorkItem completedItem, out TransitPublishResult result))
+                            foreach (TransitWorkItem item in claimed)
                             {
-                                CompleteTerminal(completedItem, result);
-                                remainingCompletions--;
+                                ArticleRetentionReadLeaseResult leaseResult = _retentionAuthority.TryAcquireReadLeaseByMessageId(item.MessageId);
+                                if (leaseResult.IsAcquired && leaseResult.Lease is IArticleRetentionReadLease lease)
+                                {
+                                    activeLeases.Add(lease);
+                                    sendEntries.Add(new TransitConnection.TransitSendBatchEntry(item, lease.Payload));
+                                    continue;
+                                }
+
+                                TransitPublishResult unavailable = new(
+                                    MessageId: item.MessageId,
+                                    Status: TransitPublishStatus.Unavailable,
+                                    ResponseCode: null,
+                                    ResponseText: "Retained article unavailable for transit send attempt.",
+                                    Provenance: TransitPublishProvenance.Unavailable,
+                                    ProvenanceConnectionId: connection.ConnectionId,
+                                    ProvenanceConnectionState: connection.CurrentState,
+                                    ProvenanceSlotIndex: slotIndex,
+                                    ProvenanceTick: Stopwatch.GetTimestamp());
+                                CompleteTerminal(item, unavailable);
+                            }
+
+                            if (sendEntries.Count == 0)
+                            {
+                                continue;
+                            }
+
+                            await connection.ProcessBatchAsync(sendEntries, cancellationToken).ConfigureAwait(false);
+
+                            int remainingCompletions = sendEntries.Count;
+                            while (remainingCompletions > 0)
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+
+                                while (connection.TryTakeCompleted(out TransitWorkItem completedItem, out TransitPublishResult result))
+                                {
+                                    CompleteTerminal(completedItem, result);
+                                    remainingCompletions--;
+                                    if (remainingCompletions == 0)
+                                    {
+                                        break;
+                                    }
+                                }
+
                                 if (remainingCompletions == 0)
                                 {
                                     break;
                                 }
-                            }
 
-                            if (remainingCompletions == 0)
-                            {
-                                break;
-                            }
-
-                            try
-                            {
                                 connection.ThrowIfResponseLoopFaulted();
+                                _ = await connection.WaitForCompletedAsync(cancellationToken).ConfigureAwait(false);
                             }
-                            catch
+                        }
+                        finally
+                        {
+                            foreach (IArticleRetentionReadLease lease in activeLeases)
                             {
-                                throw;
+                                lease.Dispose();
                             }
-
-                            _ = await connection.WaitForCompletedAsync(cancellationToken).ConfigureAwait(false);
                         }
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -1186,6 +1303,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _globalQueue.MarkInFlightTerminal();
             }
 
+            if (ShouldMarkTransitCompleted(result))
+            {
+                _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
+            }
+
             _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
 
             _ = result.Status switch
@@ -1200,6 +1322,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _ => Interlocked.Increment(ref _totalArticlesFailed),
             };
             _ = item.TrySetCompletionResult(result);
+        }
+
+        private static bool ShouldMarkTransitCompleted(TransitPublishResult result)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+
+            return result.Status == TransitPublishStatus.Accepted
+                || (result.Status == TransitPublishStatus.Rejected && result.ResponseCode == 439);
         }
 
         /// <summary>
@@ -1229,7 +1359,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 switch (priorState)
                 {
                     case TransitWorkItemState.Queued:
-                        _globalQueue.MarkQueuedTerminal(item.PayloadBytes);
+                        _globalQueue.MarkQueuedTerminal();
                         break;
                     case TransitWorkItemState.RetryPending:
                         _globalQueue.MarkRetryPendingTerminal();
