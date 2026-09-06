@@ -6,11 +6,15 @@
 // Focused tests for rabbit mq article result sink phase4, covering NNTP article and transport behavior; dependency integration and failure handling.
 // Primary responsibility: documents the executable contracts covered by the rabbit mq article result sink phase 4 test suite.
 
+using System.Buffers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
+using VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using Xunit;
@@ -38,18 +42,28 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 41,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<success-ordering@example.com>", "success-ordering-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<success-ordering@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed, operationLog);
-            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions);
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions, retentionAuthority);
 
             await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            ArticleRetentionReadLeaseResult retainedLease = retentionAuthority.TryAcquireReadLeaseByMessageId("<success-ordering@example.com>");
+            Assert.True(retainedLease.IsAcquired);
+            using (IArticleRetentionReadLease lease = Assert.IsAssignableFrom<IArticleRetentionReadLease>(retainedLease.Lease))
+            {
+                Assert.True(lease.Payload.Length > 0);
+            }
 
             int publishIndex = operationLog.IndexOf("publish");
             int confirmIndex = operationLog.IndexOf("confirm");
@@ -85,12 +99,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 42,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<publish-failure@example.com>", "publish-failure-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<publish-failure@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Failed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -116,12 +132,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 43,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<publish-timeout@example.com>", "publish-timeout-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<publish-timeout@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.TimedOut);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -344,8 +362,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 settlement: settlement);
             RabbitMqArticleDelivery secondDelivery = firstDelivery with { DeliveryTag = 1902 };
 
-            ArticleWorkProcessingResult firstResult = CreateResult(firstDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-1@example.com>", "BackboneA");
-            ArticleWorkProcessingResult secondResult = CreateResult(secondDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-2@example.com>", "BackboneA");
+            NntpArticleGrabberResult firstGrabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<exactly-once-1@example.com>", "exactly-once-payload-1");
+            NntpArticleGrabberResult secondGrabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<exactly-once-2@example.com>", "exactly-once-payload-2");
+            ArticleWorkProcessingResult firstResult = CreateResult(firstDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-1@example.com>", "BackboneA", firstGrabberResult);
+            ArticleWorkProcessingResult secondResult = CreateResult(secondDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-2@example.com>", "BackboneA", secondGrabberResult);
 
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: new TrackingResponsePublisher(RabbitMqResponsePublishStatus.Confirmed));
 
@@ -369,12 +389,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 61,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<shutdown-before-publish@example.com>", "shutdown-before-publish-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<shutdown-before-publish@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.TimedOut);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -383,6 +405,41 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             Assert.Null(settlement.AckDeliveryTag);
             Assert.Equal(2001UL, settlement.NackDeliveryTag);
+            Assert.True(settlement.NackRequeue);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenRetentionAdmissionClosed_DoesNotPublishAndNacksRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<retention-closed@example.com>", "BackboneA"),
+                correlationId: "corr-retention-closed",
+                replyTo: "rpc.responses",
+                deliveryTag: 2101,
+                connectionGeneration: 62,
+                settlement: settlement);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<retention-closed@example.com>", "retention-closed-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<retention-closed@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            retentionAuthority.BeginShutdown();
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions: runtimeOptions, retentionAuthority: retentionAuthority);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2101UL, settlement.NackDeliveryTag);
             Assert.True(settlement.NackRequeue);
         }
 
@@ -395,13 +452,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// </summary>
         /// <param name="responsePublisher">The response publisher used by this test scenario.</param>
         /// <returns>The value returned by the create sink helper.</returns>
-        private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher, BackFillerRuntimeOptions? runtimeOptions = null)
+        private static RabbitMqArticleResultSink CreateSink(
+            IRabbitMqArticleResponsePublisher responsePublisher,
+            BackFillerRuntimeOptions? runtimeOptions = null,
+            IArticleRetentionAuthority? retentionAuthority = null)
         {
             runtimeOptions ??= CreateRuntimeOptions();
+            retentionAuthority ??= new ArticleRetentionAuthority(runtimeOptions);
             return new RabbitMqArticleResultSink(
                 planner: new ArticleWorkDispositionPlanner(),
                 responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: responsePublisher,
+                retentionAuthority: retentionAuthority,
                 logger: NullLogger<RabbitMqArticleResultSink>.Instance);
         }
 
@@ -423,7 +485,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 TransitServerHost: "transit01.usenet.ninja",
                 TransitServerPort: 563,
                 TransitServerUseSsl: true,
-                BindPort: 119);
+                BindPort: 119,
+                ArticleRetention: new ArticleRetentionRuntimeOptions(
+                    MaximumRetainedPayloadBytes: 16 * 1024 * 1024,
+                    RetentionTtl: TimeSpan.FromSeconds(60),
+                    SweepInterval: TimeSpan.FromSeconds(1)));
         }
 
         /// <summary>
@@ -434,7 +500,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingOutcome outcome,
             Guid requestId,
             string messageId,
-            string backbone)
+            string backbone,
+            NntpArticleGrabberResult? grabberResult = null)
         {
             RabbitMqArticleWorkRequest request = new(1, requestId, messageId, backbone);
             return new ArticleWorkProcessingResult(
@@ -442,7 +509,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 Delivery: delivery,
                 Outcome: outcome,
                 Disposition: ArticleWorkDispositionRecommendation.None,
-                GrabberResult: null,
+                GrabberResult: grabberResult,
                 ProviderFailureCode: null,
                 ResponseCode: null,
                 ResponseText: null,

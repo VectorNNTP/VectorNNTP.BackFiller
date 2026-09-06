@@ -16,9 +16,12 @@ using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
+using VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
@@ -1909,10 +1912,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         /// <returns>The configured result sink.</returns>
         private static RabbitMqArticleResultSink CreateArticleResultSinkForSessionRace()
         {
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
             return new RabbitMqArticleResultSink(
                 planner: new ArticleWorkDispositionPlanner(),
-                responseFactory: new ArticleWorkResponseFactory(CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1)),
+                responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: new TrackingRaceResponsePublisher(),
+                retentionAuthority: new ArticleRetentionAuthority(runtimeOptions),
                 logger: NullLogger<RabbitMqArticleResultSink>.Instance);
         }
 
@@ -1926,12 +1931,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         {
             ArgumentNullException.ThrowIfNull(delivery);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<race@example.com>", delivery.Backbone);
+            NntpArticleGrabberResult? grabberResult = outcome == ArticleWorkProcessingOutcome.Success
+                ? ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult(request.MessageId, "session-race-success-payload")
+                : null;
+
             return new ArticleWorkProcessingResult(
                 Request: request,
                 Delivery: delivery,
                 Outcome: outcome,
                 Disposition: ArticleWorkDispositionRecommendation.None,
-                GrabberResult: null,
+                GrabberResult: grabberResult,
                 ProviderFailureCode: null,
                 ResponseCode: null,
                 ResponseText: null,

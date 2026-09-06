@@ -10,6 +10,7 @@ using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
 using VectorNNTP.Backfiller.Runtime.Listener;
@@ -201,6 +202,8 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         internal static void RegisterArticleProcessingServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
+            _ = services.AddSingleton<IArticleRetentionAuthority, ArticleRetentionAuthority>();
+            _ = services.AddHostedService<ArticleRetentionSweepService>();
             _ = services.AddSingleton<NntpArticleGrabberWorkflow>();
             _ = services.AddSingleton<IRabbitMqArticleWorkRequestParser, RabbitMqArticleWorkRequestParser>();
             _ = services.AddSingleton<IBackboneArticleRetriever, BackboneArticleRetriever>();

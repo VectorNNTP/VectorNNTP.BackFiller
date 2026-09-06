@@ -132,6 +132,29 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         internal string? ReplyTo => Delivery.ReplyTo;
 
         /// <summary>
+        /// Attempts to detach ownership of the successful acquired payload for external retention ownership transfer.
+        /// </summary>
+        /// <returns>
+        /// Detached pooled payload owner when this result represents a successful grabber payload that still owns bytes;
+        /// otherwise <see langword="null"/>.
+        /// </returns>
+        internal DownloadedArticleBuffer? TryDetachSuccessfulPayloadOwner()
+        {
+            return GrabberResult?.Success?.TryDetachPayloadOwner();
+        }
+
+        /// <summary>
+        /// Attempts to attach a previously detached successful payload owner back into this result.
+        /// </summary>
+        /// <param name="payloadOwner">Detached payload owner to reattach.</param>
+        /// <returns><see langword="true"/> when ownership was reattached; otherwise <see langword="false"/>.</returns>
+        internal bool TryAttachSuccessfulPayloadOwner(DownloadedArticleBuffer payloadOwner)
+        {
+            ArgumentNullException.ThrowIfNull(payloadOwner);
+            return GrabberResult?.Success?.TryAttachPayloadOwner(payloadOwner) == true;
+        }
+
+        /// <summary>
         /// Disposes any owned success payload held by the optional workflow result.
         /// </summary>
         public void Dispose()

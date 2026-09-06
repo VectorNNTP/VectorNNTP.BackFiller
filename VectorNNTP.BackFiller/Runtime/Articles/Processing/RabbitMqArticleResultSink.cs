@@ -6,6 +6,9 @@
 // Executes RabbitMQ RPC response publishing and final ACK/NACK settlement for processed
 // article-work deliveries.
 
+using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
+
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
@@ -29,6 +32,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly IRabbitMqArticleResponsePublisher _responsePublisher;
         /// <summary>
+        /// Shared in-memory retention authority used to admit successful payload ownership before response publication.
+        /// </summary>
+        private readonly IArticleRetentionAuthority _retentionAuthority;
+        /// <summary>
         /// Supplies the logger used by rabbit mq article result sink.
         /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
@@ -39,16 +46,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="planner">Planner that maps processing outcomes and cancellation into broker actions.</param>
         /// <param name="responseFactory">Factory that builds terminal RPC response payloads when required.</param>
         /// <param name="responsePublisher">Publisher that emits and confirms RPC responses on RabbitMQ.</param>
+        /// <param name="retentionAuthority">Shared in-memory retention authority for successful payload ownership admission.</param>
         /// <param name="logger">Logger used for publication fallback and settlement diagnostics.</param>
         public RabbitMqArticleResultSink(
             IArticleWorkDispositionPlanner planner,
             IArticleWorkResponseFactory responseFactory,
             IRabbitMqArticleResponsePublisher responsePublisher,
+            IArticleRetentionAuthority retentionAuthority,
             ILogger<RabbitMqArticleResultSink> logger)
         {
             _planner = planner ?? throw new ArgumentNullException(nameof(planner));
             _responseFactory = responseFactory ?? throw new ArgumentNullException(nameof(responseFactory));
             _responsePublisher = responsePublisher ?? throw new ArgumentNullException(nameof(responsePublisher));
+            _retentionAuthority = retentionAuthority ?? throw new ArgumentNullException(nameof(retentionAuthority));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -63,9 +73,39 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             ArgumentNullException.ThrowIfNull(result);
 
             RabbitMqDispositionPlan plan = _planner.CreatePlan(result, cancellationToken);
+            DownloadedArticleBuffer? detachedPayloadOwner = null;
 
             try
             {
+                if (result.Outcome is ArticleWorkProcessingOutcome.Success)
+                {
+                    DownloadedArticleBuffer payloadOwner = result.TryDetachSuccessfulPayloadOwner()
+                        ?? throw new InvalidOperationException("Successful article processing result did not provide a retained payload owner for admission.");
+                    detachedPayloadOwner = payloadOwner;
+
+                    ArticleRetentionAdmissionResult admissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner);
+                    if (!admissionResult.IsAdmitted)
+                    {
+                        if (!result.TryAttachSuccessfulPayloadOwner(payloadOwner))
+                        {
+                            payloadOwner.Dispose();
+                        }
+
+                        detachedPayloadOwner = null;
+                        await result.Delivery.Settlement.NackAsync(requeue: true, cancellationToken).ConfigureAwait(false);
+                        LogRabbitMqRetentionAdmissionFailedRequeue(
+                            _logger,
+                            result.Request.RequestId,
+                            result.CorrelationId,
+                            result.Request.MessageId,
+                            result.Request.Backbone,
+                            admissionResult.Status);
+                        return;
+                    }
+
+                    detachedPayloadOwner = null;
+                }
+
                 if (plan.PublishResponse)
                 {
                     RabbitMqArticleWorkResponse response = _responseFactory.CreateResponse(result)
@@ -115,9 +155,31 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
             finally
             {
+                detachedPayloadOwner?.Dispose();
                 result.Dispose();
             }
         }
+
+        /// <summary>
+        /// Emits the retention-admission-failed requeue log event when successful payload ownership could not be admitted.
+        /// </summary>
+        /// <param name="logger">Logger receiving the requeue event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="admissionStatus">Retention admission status that forced requeue semantics.</param>
+        [LoggerMessage(
+            EventId = 3402,
+            Level = LogLevel.Warning,
+            Message = "RabbitMQ success-path retention admission failed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} AdmissionStatus={AdmissionStatus}")]
+        private static partial void LogRabbitMqRetentionAdmissionFailedRequeue(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ArticleRetentionAdmissionStatus admissionStatus);
 
         /// <summary>
         /// Emits the response publish-not-confirmed requeue log event when RabbitMQ refuses confirmation and the delivery must be requeued.

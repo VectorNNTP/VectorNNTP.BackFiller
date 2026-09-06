@@ -192,6 +192,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     internal sealed class NntpArticleAcquisitionResult : IDisposable
     {
         /// <summary>
+        /// Owned article buffer reference that can be detached by the caller exactly once.
+        /// </summary>
+        private DownloadedArticleBuffer? _articleBuffer;
+
+        /// <summary>
         /// Initializes a new acquisition result instance.
         /// </summary>
         /// <param name="failureCode">Typed outcome classification.</param>
@@ -207,7 +212,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             FailureCode = failureCode;
             ResponseCode = responseCode;
             ResponseText = responseText;
-            ArticleBuffer = articleBuffer;
+            _articleBuffer = articleBuffer;
         }
 
         /// <summary>
@@ -238,7 +243,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// Gets the owned article buffer for payload-producing successes.
         /// </summary>
         /// <value>The buffer owner transferred from the receive path, or <see langword="null"/> when no payload was produced.</value>
-        internal DownloadedArticleBuffer? ArticleBuffer { get; }
+        internal DownloadedArticleBuffer? ArticleBuffer => Volatile.Read(ref _articleBuffer);
 
         /// <summary>
         /// Gets the article bytes when a payload was acquired.
@@ -295,11 +300,36 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
+        /// Transfers ownership of the successful article buffer to a caller-managed owner.
+        /// </summary>
+        /// <returns>The transferred article buffer owner when one exists; otherwise <see langword="null"/>.</returns>
+        /// <remarks>
+        /// Ownership transfer is one-way and occurs at most once. After transfer, this result no longer owns
+        /// or exposes the buffer and later disposal becomes a no-op for payload ownership.
+        /// </remarks>
+        internal DownloadedArticleBuffer? TryDetachArticleBuffer()
+        {
+            return Interlocked.Exchange(ref _articleBuffer, null);
+        }
+
+        /// <summary>
+        /// Attempts to attach a detached article buffer owner back to this result.
+        /// </summary>
+        /// <param name="articleBuffer">Buffer owner to reattach.</param>
+        /// <returns><see langword="true"/> when ownership was reattached; otherwise <see langword="false"/>.</returns>
+        internal bool TryAttachArticleBuffer(DownloadedArticleBuffer articleBuffer)
+        {
+            ArgumentNullException.ThrowIfNull(articleBuffer);
+            return Interlocked.CompareExchange(ref _articleBuffer, articleBuffer, null) is null;
+        }
+
+        /// <summary>
         /// Disposes the owned article buffer, if this result currently owns one.
         /// </summary>
         public void Dispose()
         {
-            ArticleBuffer?.Dispose();
+            DownloadedArticleBuffer? owner = Interlocked.Exchange(ref _articleBuffer, null);
+            owner?.Dispose();
         }
     }
 }
