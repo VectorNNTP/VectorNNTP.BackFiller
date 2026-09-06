@@ -279,6 +279,11 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 ValidateArticleRetentionOptions(backFiller.ArticleRetention, errors, physicalSystemMemoryProvider);
             }
 
+            if (backFiller.Listener != null)
+            {
+                errors.AddRange(ValidateAnnotatedObject(backFiller.Listener, "BackFiller:Listener"));
+            }
+
             // Validate graceful shutdown policy constraints.
             if (backFiller.Shutdown != null)
             {

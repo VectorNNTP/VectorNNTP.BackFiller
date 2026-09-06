@@ -146,6 +146,47 @@ namespace VectorNNTP.Backfiller.Configuration
         /// <value>Validated shutdown policy controlling grace-period timing and queued/active work handling.</value>
         [Required(ErrorMessage = "BackFiller:Shutdown is required")]
         public ShutdownOptions Shutdown { get; set; } = new();
+
+        /// <summary>
+        /// Gets or sets Listener resource-safety bounds for parser buffering, receipt-ack lifetime, outbound Found payload pressure, and active connections.
+        /// </summary>
+        /// <value>Validated Listener resource-safety configuration projected into immutable runtime limits.</value>
+        [Required(ErrorMessage = "BackFiller:Listener is required")]
+        public ListenerOptions Listener { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Configuration options for Listener resource-safety and bounded-lifetime controls.
+    /// </summary>
+    internal sealed class ListenerOptions
+    {
+        /// <summary>
+        /// Gets or sets the maximum accumulated incomplete inbound protocol bytes allowed per connection before the session is terminated.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:ParserAccumulationMaxBytes is required")]
+        [Range(32768, int.MaxValue, ErrorMessage = "BackFiller:Listener:ParserAccumulationMaxBytes must be between 32768 and 2147483647")]
+        public int ParserAccumulationMaxBytes { get; set; } = 262144;
+
+        /// <summary>
+        /// Gets or sets the maximum time, in seconds, to wait for ReceiptAck after a Found transfer is fully completed.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds is required")]
+        [Range(1, 300, ErrorMessage = "BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds must be between 1 and 300")]
+        public int AwaitingReceiptAckTimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Gets or sets the maximum bytes of queued/in-flight Found payload references allowed per connection.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:MaxQueuedFoundPayloadBytes is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "BackFiller:Listener:MaxQueuedFoundPayloadBytes must be between 1 and 2147483647")]
+        public int MaxQueuedFoundPayloadBytes { get; set; } = 67108864;
+
+        /// <summary>
+        /// Gets or sets the maximum number of concurrently active accepted Listener connections.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:MaxActiveConnections is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "BackFiller:Listener:MaxActiveConnections must be between 1 and 2147483647")]
+        public int MaxActiveConnections { get; set; } = 1024;
     }
 
     /// <summary>

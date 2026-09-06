@@ -75,6 +75,13 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// Owns the bound listener sockets created for the configured endpoint set.
         /// </summary>
         private readonly List<Socket> _listenSockets = [];
+        private readonly int _maxActiveConnections = runtimeOptions?.EffectiveListener.MaxActiveConnections ?? 1024;
+        private int _activeConnectionCount;
+
+        /// <summary>
+        /// Optional deterministic test seam invoked when one active connection slot is released.
+        /// </summary>
+        internal Action? OnConnectionSlotReleasedForTesting { get; set; }
 
         /// <inheritdoc/>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -155,6 +162,12 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     throw new InvalidOperationException($"Inbound listener accept loop failed for endpoint {listenSocket.LocalEndPoint}.", ex);
                 }
 
+                if (!TryAcquireConnectionSlot())
+                {
+                    acceptedSocket.Dispose();
+                    continue;
+                }
+
                 Task connectionTask = ProcessAcceptedSocketAsync(acceptedSocket, cancellationToken);
                 RegisterConnectionTask(connectionTask);
             }
@@ -201,6 +214,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     ListenerProtocolSession session = new(
                         transport,
                         requestHandler,
+                        _runtimeOptions.EffectiveListener,
                         onAwaitingReceiptAck: null,
                         onTerminalized: requestHandler.OnRequestTerminalized,
                         onFoundTransferTerminal: requestHandler.OnFoundTransferTerminal,
@@ -225,6 +239,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
             finally
             {
+                ReleaseConnectionSlot();
                 if (client is not null)
                 {
                     UnregisterClient(client);
@@ -480,6 +495,36 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 {
                 }
             }
+        }
+
+        /// <summary>
+        /// Attempts to acquire one active connection slot under the configured global cap.
+        /// </summary>
+        /// <returns><see langword="true"/> when a slot was acquired; otherwise <see langword="false"/>.</returns>
+        private bool TryAcquireConnectionSlot()
+        {
+            while (true)
+            {
+                int current = Volatile.Read(ref _activeConnectionCount);
+                if (current >= _maxActiveConnections)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _activeConnectionCount, current + 1, current) == current)
+                {
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Releases one previously acquired active connection slot.
+        /// </summary>
+        private void ReleaseConnectionSlot()
+        {
+            _ = Interlocked.Decrement(ref _activeConnectionCount);
+            OnConnectionSlotReleasedForTesting?.Invoke();
         }
 
         /// <summary>

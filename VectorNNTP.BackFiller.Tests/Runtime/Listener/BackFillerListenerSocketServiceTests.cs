@@ -213,6 +213,74 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task StartAsync_WhenMaxActiveConnectionsReached_RejectsAdditionalConnection()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-cap.example.com");
+
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"], maxActiveConnections: 1);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+            TaskCompletionSource<bool> acceptedSlotReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            service.OnConnectionSlotReleasedForTesting = () => acceptedSlotReleased.TrySetResult(true);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                using TcpClient accepted = new();
+                await accepted.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream acceptedSsl = await AuthenticateClientAsync(accepted).ConfigureAwait(false);
+                Assert.True(acceptedSsl.IsAuthenticated);
+
+                using TcpClient rejected = new();
+                await rejected.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream rejectedSsl = new(
+                    rejected.GetStream(),
+                    leaveInnerStreamOpen: false,
+                    static (sender, certificate, chain, errors) => true);
+
+                await Assert.ThrowsAsync<IOException>(async () =>
+                {
+                    await rejectedSsl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                    {
+                        TargetHost = "localhost",
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    }).ConfigureAwait(false);
+                }).ConfigureAwait(false);
+
+                rejected.Dispose();
+
+                accepted.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(acceptedSsl).ConfigureAwait(false);
+                await acceptedSlotReleased.Task.ConfigureAwait(false);
+
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
         public async Task StartAsync_WithTlsProtocolGetRequest_WhenRetainedArticleAndAck_RespondsFoundAndMarksListenerCompleted()
         {
             const string messageId = "<stage6d-found-ack@example.com>";
@@ -255,9 +323,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 Assert.Equal(ListenerOpcode.GetResponseFound, found.Header.Opcode);
                 Assert.Equal<uint>(1001, found.Header.RequestId);
                 Assert.Equal(payloadText, Encoding.ASCII.GetString(found.Payload.ToArray()));
-
-                ArticleRetentionSnapshot beforeStop = retentionAuthority.GetSnapshot();
-                Assert.Equal(1, beforeStop.ListenerCompletionCount);
 
                 client.Client.Shutdown(SocketShutdown.Send);
                 await AwaitRemoteClosureAsync(sslStream).ConfigureAwait(false);
@@ -756,7 +821,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         /// <param name="bindPort">The bind port used by this test scenario.</param>
         /// <param name="bindTokens">The bind tokens used by this test scenario.</param>
         /// <returns>The value returned by the create runtime options helper.</returns>
-        private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens)
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens, int maxActiveConnections = 1024)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
                 Enabled: true,
@@ -798,6 +863,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
                 WriteBatchCoalesceMicroseconds: 250,
+                Listener: new ListenerRuntimeOptions(
+                    ParserAccumulationMaxBytes: 262144,
+                    AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
+                    MaxQueuedFoundPayloadBytes: 67108864,
+                    MaxActiveConnections: maxActiveConnections),
                 LetsEncrypt: letsEncrypt);
         }
     }

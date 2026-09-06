@@ -308,7 +308,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 ListenerProtocolSession normalSession = new(
                     normalTransport,
                     normalHandler,
-                    requestId => awaitingReceiptAck.TrySetResult(requestId));
+                    listenerOptions: null,
+                    onAwaitingReceiptAck: requestId => awaitingReceiptAck.TrySetResult(requestId));
                 Task normalRunTask = normalSession.RunAsync(CancellationToken.None);
 
                 try
@@ -352,6 +353,161 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             Assert.Single(frames);
             Assert.Equal(ListenerOpcode.GetResponseError, frames[0].Frame!.Value.Header.Opcode);
             Assert.Equal(ListenerProtocolErrorCode.InvalidRequestId, ReadErrorCode(frames[0].Frame.Value.Payload));
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenParserAccumulationAtConfiguredCap_AcceptsFragment()
+        {
+            byte[] fragment = Enumerable.Repeat((byte)'a', 32768).ToArray();
+            TestTransport transport = new([fragment], 65536);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(parserAccumulationMaxBytes: 32768));
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Empty(handler.SeenRequestIds);
+            Assert.Equal(0, session.OutstandingRequestCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenParserAccumulationExceedsConfiguredCap_ForcesSessionShutdownWithoutDispatch()
+        {
+            byte[] fragmentOne = Enumerable.Repeat((byte)'a', 20000).ToArray();
+            byte[] fragmentTwo = Enumerable.Repeat((byte)'b', 20000).ToArray();
+            TestTransport transport = new([fragmentOne, fragmentTwo], 65536);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(parserAccumulationMaxBytes: 32768));
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Empty(handler.SeenRequestIds);
+            Assert.Equal(0, session.OutstandingRequestCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenAwaitingAckTimeoutExpires_ReleasesLeaseWithoutCompletion()
+        {
+            const string messageId = "<listener-await-timeout@example.com>";
+            const string payloadText = "await-timeout-payload";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, payloadText);
+
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(90, messageIdMd5);
+            TestTransport transport = new([request], 4096);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(awaitingReceiptAckTimeoutSeconds: 1),
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            await session.RunAsync(CancellationToken.None);
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+            Assert.Equal(0, snapshot.ListenerCompletionCount);
+            Assert.Equal(0, session.OutstandingRequestCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenFoundByteBudgetExactlyMatchesPayload_AllowsReservationAndReleasesAfterTransfer()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(99, "30edc94157aa16fe644a45a1f1ffe160");
+            byte[] payload = Encoding.ASCII.GetBytes("budget-fit-payload");
+            TestTransport transport = new([request], 4096);
+            BlockingAllRequestsHandler handler = new();
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(maxQueuedFoundPayloadBytes: payload.Length));
+
+            Task runTask = session.RunAsync(CancellationToken.None);
+            try
+            {
+                await handler.WaitForInvocationsAtLeastAsync(1);
+                handler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(payload));
+                await runTask;
+            }
+            finally
+            {
+                handler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(payload));
+                await runTask;
+            }
+
+            IReadOnlyList<ListenerFrameParseResult> frames = ParseAllFrames(transport.GetWrittenBytes());
+            Assert.Single(frames);
+            Assert.Equal(ListenerOpcode.GetResponseFound, frames[0].Frame!.Value.Header.Opcode);
+            Assert.Equal(0, session.ReservedFoundPayloadBytes);
+        }
+
+        [Fact]
+        public void ExceedsParserAccumulationLimit_WhenBufferedAndReadWouldOverflowInt_ReturnsTrue()
+        {
+            Assert.True(ListenerProtocolSession.ExceedsParserAccumulationLimit(int.MaxValue, 1, int.MaxValue));
+        }
+
+        [Fact]
+        public void ExceedsParserAccumulationLimit_WhenReadFitsConfiguredLimit_ReturnsFalse()
+        {
+            Assert.False(ListenerProtocolSession.ExceedsParserAccumulationLimit(32767, 1, 32768));
+        }
+
+        [Fact]
+        public void ExceedsFoundReservationLimit_WhenCurrentPlusPayloadWouldOverflowLong_ReturnsTrue()
+        {
+            Assert.True(ListenerProtocolSession.ExceedsFoundReservationLimit(long.MaxValue, 1, int.MaxValue));
+        }
+
+        [Fact]
+        public void ExceedsFoundReservationLimit_WhenCurrentPlusPayloadEqualsBudget_ReturnsFalse()
+        {
+            Assert.False(ListenerProtocolSession.ExceedsFoundReservationLimit(15, 5, 20));
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenFoundByteBudgetExceeded_EmitsErrorAndDoesNotRetainFoundReservation()
+        {
+            byte[] requestOne = ListenerProtocolEncoder.EncodeGetRequest(100, "30edc94157aa16fe644a45a1f1ffe160");
+            byte[] requestTwo = ListenerProtocolEncoder.EncodeGetRequest(101, "30edc94157aa16fe644a45a1f1ffe161");
+            byte[] coalesced = new byte[requestOne.Length + requestTwo.Length];
+            Buffer.BlockCopy(requestOne, 0, coalesced, 0, requestOne.Length);
+            Buffer.BlockCopy(requestTwo, 0, coalesced, requestOne.Length, requestTwo.Length);
+
+            BlockingAllRequestsHandler handler = new();
+            TestTransport transport = new([coalesced], 4096);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(maxQueuedFoundPayloadBytes: 10));
+
+            Task runTask = session.RunAsync(CancellationToken.None);
+            try
+            {
+                await handler.WaitForInvocationsAtLeastAsync(2);
+                handler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(Encoding.ASCII.GetBytes("payload-exceeds-budget")));
+                await runTask;
+            }
+            finally
+            {
+                handler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(Encoding.ASCII.GetBytes("payload-exceeds-budget")));
+                await runTask;
+            }
+
+            IReadOnlyList<ListenerFrameParseResult> frames = ParseAllFrames(transport.GetWrittenBytes());
+            Assert.Equal(2, frames.Count);
+            Assert.All(frames, static frame => Assert.Equal(ListenerOpcode.GetResponseError, frame.Frame!.Value.Header.Opcode));
+            Assert.Equal(0, session.ReservedFoundPayloadBytes);
+            Assert.Equal(0, session.OutstandingRequestCount);
         }
 
         [Fact]
@@ -614,6 +770,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         private static ArticleRetentionAuthority CreateRetentionAuthority()
         {
             return new ArticleRetentionAuthority(CreateRuntimeOptions(capacityBytes: 128 * 1024));
+        }
+
+        private static ListenerRuntimeOptions CreateListenerOptions(
+            int parserAccumulationMaxBytes = 262144,
+            int awaitingReceiptAckTimeoutSeconds = 30,
+            int maxQueuedFoundPayloadBytes = 67108864,
+            int maxActiveConnections = 1024)
+        {
+            return new ListenerRuntimeOptions(
+                ParserAccumulationMaxBytes: parserAccumulationMaxBytes,
+                AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(awaitingReceiptAckTimeoutSeconds),
+                MaxQueuedFoundPayloadBytes: maxQueuedFoundPayloadBytes,
+                MaxActiveConnections: maxActiveConnections);
         }
 
         private static string RetainArticle(ArticleRetentionAuthority authority, string messageId, string payloadText)

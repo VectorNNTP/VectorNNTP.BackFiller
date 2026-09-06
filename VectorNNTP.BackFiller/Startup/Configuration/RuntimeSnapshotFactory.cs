@@ -101,6 +101,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30),
                     CanonicalBindAddresses: canonicalBindAddresses,
                     ArticleRetention: BuildArticleRetentionRuntimeOptions(backFiller.ArticleRetention),
+                    Listener: BuildListenerRuntimeOptions(backFiller.Listener),
                     LetsEncrypt: letsEncryptRuntimeOptions,
                     RabbitMq: rabbitMqRuntimeOptions);
             }
@@ -128,6 +129,25 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 MaximumRetainedPayloadBytes: maximumRetainedPayloadBytes,
                 RetentionTtl: TimeSpan.FromSeconds(retentionTtlSeconds),
                 SweepInterval: TimeSpan.FromSeconds(sweepIntervalSeconds));
+        }
+
+        /// <summary>
+        /// Builds immutable Listener runtime safety limits from validated BackFiller options.
+        /// </summary>
+        /// <param name="options">Validated BackFiller Listener options.</param>
+        /// <returns>Immutable Listener runtime options represented in bytes and <see cref="TimeSpan"/> values.</returns>
+        private static ListenerRuntimeOptions BuildListenerRuntimeOptions(ListenerOptions? options)
+        {
+            int parserAccumulationMaxBytes = options?.ParserAccumulationMaxBytes ?? 262144;
+            int awaitingReceiptAckTimeoutSeconds = options?.AwaitingReceiptAckTimeoutSeconds ?? 30;
+            int maxQueuedFoundPayloadBytes = options?.MaxQueuedFoundPayloadBytes ?? 67108864;
+            int maxActiveConnections = options?.MaxActiveConnections ?? 1024;
+
+            return new ListenerRuntimeOptions(
+                ParserAccumulationMaxBytes: parserAccumulationMaxBytes,
+                AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(awaitingReceiptAckTimeoutSeconds),
+                MaxQueuedFoundPayloadBytes: maxQueuedFoundPayloadBytes,
+                MaxActiveConnections: maxActiveConnections);
         }
 
         /// <summary>

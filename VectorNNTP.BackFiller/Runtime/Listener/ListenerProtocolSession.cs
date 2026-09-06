@@ -8,6 +8,7 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Runtime.Listener
 {
@@ -38,6 +39,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private readonly Action<uint>? _onTerminalized;
         private readonly Action<ListenerFoundTransferEvent>? _onFoundTransferTerminal;
         private readonly Action<ListenerReceiptAckEvent>? _onReceiptAcknowledged;
+        private readonly ConcurrentDictionary<uint, CancellationTokenSource> _awaitingReceiptAckTimeouts = new();
+        private readonly int _parserAccumulationMaxBytes;
+        private readonly TimeSpan _awaitingReceiptAckTimeout;
+        private readonly int _maxQueuedFoundPayloadBytes;
+        private long _reservedFoundPayloadBytes;
         private CancellationTokenSource? _runCts;
         private Task? _writerTask;
         private Task? _runTask;
@@ -50,6 +56,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         /// <param name="transport">Connected transport owned by the session for the session lifetime.</param>
         /// <param name="requestHandler">Handler used to execute validated GetRequest operations.</param>
+        /// <param name="listenerOptions">Per-session listener safety limits for parser accumulation, receipt-ack lifetime, Found payload pressure, and active connection bounds.</param>
         /// <param name="onAwaitingReceiptAck">Optional callback invoked when a Found response has completed transport write and request transitions to AwaitingReceiptAck.</param>
         /// <param name="onTerminalized">Optional callback invoked when a request is terminalized and removed from outstanding tracking.</param>
         /// <param name="onFoundTransferTerminal">Optional callback invoked when a Found response write reaches a terminal transfer status.</param>
@@ -57,6 +64,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         internal ListenerProtocolSession(
             IListenerProtocolSessionTransport transport,
             IListenerProtocolRequestHandler requestHandler,
+            ListenerRuntimeOptions? listenerOptions = null,
             Action<uint>? onAwaitingReceiptAck = null,
             Action<uint>? onTerminalized = null,
             Action<ListenerFoundTransferEvent>? onFoundTransferTerminal = null,
@@ -64,6 +72,30 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _requestHandler = requestHandler ?? throw new ArgumentNullException(nameof(requestHandler));
+            ListenerRuntimeOptions resolvedListenerOptions = listenerOptions
+                ?? new ListenerRuntimeOptions(
+                    ParserAccumulationMaxBytes: 262144,
+                    AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
+                    MaxQueuedFoundPayloadBytes: 67108864,
+                    MaxActiveConnections: 1024);
+            if (resolvedListenerOptions.ParserAccumulationMaxBytes < 32 * 1024)
+            {
+                throw new ArgumentOutOfRangeException(nameof(listenerOptions), "Parser accumulation max bytes must be at least 32768.");
+            }
+
+            if (resolvedListenerOptions.AwaitingReceiptAckTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(listenerOptions), "Awaiting receipt-ack timeout must be greater than zero.");
+            }
+
+            if (resolvedListenerOptions.MaxQueuedFoundPayloadBytes <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(listenerOptions), "Maximum queued Found payload bytes must be greater than zero.");
+            }
+
+            _parserAccumulationMaxBytes = resolvedListenerOptions.ParserAccumulationMaxBytes;
+            _awaitingReceiptAckTimeout = resolvedListenerOptions.AwaitingReceiptAckTimeout;
+            _maxQueuedFoundPayloadBytes = resolvedListenerOptions.MaxQueuedFoundPayloadBytes;
             _onAwaitingReceiptAck = onAwaitingReceiptAck;
             _onTerminalized = onTerminalized;
             _onFoundTransferTerminal = onFoundTransferTerminal;
@@ -101,6 +133,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// Gets the number of requests awaiting receipt acknowledgement after complete Found transfer.
         /// </summary>
         internal int AwaitingReceiptAckCount => _requests.Values.Count(static value => value.State == ListenerRequestState.AwaitingReceiptAck);
+
+        /// <summary>
+        /// Gets currently reserved queued/in-flight Found payload bytes for this connection session.
+        /// </summary>
+        internal long ReservedFoundPayloadBytes => Volatile.Read(ref _reservedFoundPayloadBytes);
 
         /// <summary>
         /// Runs the session until remote close, cancellation, protocol fatal violation, or shutdown.
@@ -246,6 +283,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 BeginForcedShutdown();
             }
 
+            CancelAwaitingReceiptAckTimeouts();
             TerminalizeOutstandingRequests();
             _requestTasks.Clear();
             _processingLimiter.Dispose();
@@ -273,9 +311,17 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                         break;
                     }
 
-                    if (buffered + bytesRead > parseBuffer.Length)
+                    if (ExceedsParserAccumulationLimit(buffered, bytesRead, _parserAccumulationMaxBytes))
                     {
-                        byte[] bigger = ArrayPool<byte>.Shared.Rent(Math.Max(parseBuffer.Length * 2, buffered + bytesRead));
+                        BeginForcedShutdown();
+                        return;
+                    }
+
+                    int requiredBuffered = buffered + bytesRead;
+
+                    if (requiredBuffered > parseBuffer.Length)
+                    {
+                        byte[] bigger = ArrayPool<byte>.Shared.Rent(Math.Min(_parserAccumulationMaxBytes, Math.Max(parseBuffer.Length * 2, requiredBuffered)));
                         parseBuffer.AsSpan(0, buffered).CopyTo(bigger);
                         ArrayPool<byte>.Shared.Return(parseBuffer);
                         parseBuffer = bigger;
@@ -425,6 +471,8 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 return;
             }
 
+            int reservedFoundPayloadBytes = 0;
+            bool descriptorQueued = false;
             try
             {
                 context.MarkProcessing();
@@ -432,15 +480,37 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     .HandleGetRequestAsync(context.RequestId, context.MessageIdMd5Payload, token)
                     .ConfigureAwait(false);
 
-                OutboundResponseDescriptor descriptor = dispatch.Kind switch
+                OutboundResponseDescriptor descriptor;
+                if (dispatch.Kind == ListenerSessionRequestDispatchKind.Found)
                 {
-                    ListenerSessionRequestDispatchKind.Found => OutboundResponseDescriptor.FromFound(context.RequestId, dispatch.FoundPayload),
-                    ListenerSessionRequestDispatchKind.NotFound => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseNotFound(context.RequestId), ResponseOutcome.NotFound, shouldTerminalizeRequest: true),
-                    ListenerSessionRequestDispatchKind.Error => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseError(context.RequestId, dispatch.ErrorCode), ResponseOutcome.Error, shouldTerminalizeRequest: true),
-                    _ => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseError(context.RequestId, ListenerProtocolErrorCode.InternalError), ResponseOutcome.Error, shouldTerminalizeRequest: true),
-                };
+                    if (!TryReserveFoundPayloadBytes(dispatch.FoundPayload.Length))
+                    {
+                        descriptor = OutboundResponseDescriptor.FromFrame(
+                            context.RequestId,
+                            ListenerProtocolEncoder.EncodeGetResponseError(context.RequestId, ListenerProtocolErrorCode.InternalError),
+                            ResponseOutcome.Error,
+                            shouldTerminalizeRequest: true,
+                            reservedFoundPayloadBytes: 0);
+                    }
+                    else
+                    {
+                        reservedFoundPayloadBytes = dispatch.FoundPayload.Length;
+                        descriptor = OutboundResponseDescriptor.FromFound(context.RequestId, dispatch.FoundPayload);
+                    }
+                }
+                else
+                {
+                    descriptor = dispatch.Kind switch
+                    {
+                        ListenerSessionRequestDispatchKind.Found => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseError(context.RequestId, ListenerProtocolErrorCode.InternalError), ResponseOutcome.Error, shouldTerminalizeRequest: true, reservedFoundPayloadBytes: 0),
+                        ListenerSessionRequestDispatchKind.NotFound => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseNotFound(context.RequestId), ResponseOutcome.NotFound, shouldTerminalizeRequest: true, reservedFoundPayloadBytes: 0),
+                        ListenerSessionRequestDispatchKind.Error => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseError(context.RequestId, dispatch.ErrorCode), ResponseOutcome.Error, shouldTerminalizeRequest: true, reservedFoundPayloadBytes: 0),
+                        _ => OutboundResponseDescriptor.FromFrame(context.RequestId, ListenerProtocolEncoder.EncodeGetResponseError(context.RequestId, ListenerProtocolErrorCode.InternalError), ResponseOutcome.Error, shouldTerminalizeRequest: true, reservedFoundPayloadBytes: 0),
+                    };
+                }
 
                 await _outbound.Writer.WriteAsync(descriptor, token).ConfigureAwait(false);
+                descriptorQueued = true;
             }
             catch (OperationCanceledException)
             {
@@ -452,6 +522,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
             finally
             {
+                if (!descriptorQueued && reservedFoundPayloadBytes > 0)
+                {
+                    ReleaseFoundPayloadBytes(reservedFoundPayloadBytes);
+                }
+
                 _ = _requestTasks.TryRemove(context.RequestId, out _);
                 _ = _processingLimiter.Release();
             }
@@ -484,6 +559,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
 
             if (transition == ListenerReceiptAckTransition.Terminalize)
             {
+                CancelAwaitingReceiptAckTimeout(requestId);
                 Terminalize(requestId);
                 return;
             }
@@ -499,7 +575,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         {
             uint normalizedRequestId = requestId == 0 ? 1u : requestId;
             byte[] frame = ListenerProtocolEncoder.EncodeGetResponseError(normalizedRequestId, errorCode);
-            OutboundResponseDescriptor descriptor = OutboundResponseDescriptor.FromFrame(normalizedRequestId, frame, ResponseOutcome.Error, shouldTerminalizeRequest);
+            OutboundResponseDescriptor descriptor = OutboundResponseDescriptor.FromFrame(normalizedRequestId, frame, ResponseOutcome.Error, shouldTerminalizeRequest, reservedFoundPayloadBytes: 0);
             await _outbound.Writer.WriteAsync(descriptor, cancellationToken).ConfigureAwait(false);
         }
 
@@ -562,6 +638,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 return;
             }
 
+            if (descriptor.ReservedFoundPayloadBytes > 0)
+            {
+                ReleaseFoundPayloadBytes(descriptor.ReservedFoundPayloadBytes);
+            }
+
             if (descriptor.Outcome == ResponseOutcome.Found)
             {
                 _onFoundTransferTerminal?.Invoke(new ListenerFoundTransferEvent(descriptor.RequestId, status));
@@ -583,6 +664,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
 
                 if (context.State == ListenerRequestState.AwaitingReceiptAck)
                 {
+                    StartAwaitingReceiptAckTimeout(descriptor.RequestId);
                     _onAwaitingReceiptAck?.Invoke(descriptor.RequestId);
                 }
 
@@ -597,6 +679,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
 
         private void Terminalize(uint requestId)
         {
+            CancelAwaitingReceiptAckTimeout(requestId);
             if (_requests.TryRemove(requestId, out RequestContext? removed))
             {
                 removed.MarkTerminal();
@@ -610,6 +693,82 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             for (int i = 0; i < requestIds.Count; i++)
             {
                 Terminalize(requestIds[i]);
+            }
+        }
+
+        private bool TryReserveFoundPayloadBytes(int payloadBytes)
+        {
+            while (true)
+            {
+                long currentReserved = Volatile.Read(ref _reservedFoundPayloadBytes);
+                if (ExceedsFoundReservationLimit(currentReserved, payloadBytes, _maxQueuedFoundPayloadBytes))
+                {
+                    return false;
+                }
+
+                long nextReserved = currentReserved + payloadBytes;
+
+                if (Interlocked.CompareExchange(ref _reservedFoundPayloadBytes, nextReserved, currentReserved) == currentReserved)
+                {
+                    return true;
+                }
+            }
+        }
+
+        private void ReleaseFoundPayloadBytes(int payloadBytes)
+        {
+            _ = Interlocked.Add(ref _reservedFoundPayloadBytes, -payloadBytes);
+        }
+
+        internal static bool ExceedsParserAccumulationLimit(int buffered, int bytesRead, int parserAccumulationMaxBytes)
+        {
+            return buffered > parserAccumulationMaxBytes - bytesRead;
+        }
+
+        internal static bool ExceedsFoundReservationLimit(long currentReserved, int payloadBytes, int maxQueuedFoundPayloadBytes)
+        {
+            return currentReserved > (long)maxQueuedFoundPayloadBytes - payloadBytes;
+        }
+
+        private void StartAwaitingReceiptAckTimeout(uint requestId)
+        {
+            CancellationTokenSource timeoutCts = new();
+            if (!_awaitingReceiptAckTimeouts.TryAdd(requestId, timeoutCts))
+            {
+                timeoutCts.Dispose();
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(_awaitingReceiptAckTimeout, timeoutCts.Token).ConfigureAwait(false);
+                    Terminalize(requestId);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            });
+        }
+
+        private void CancelAwaitingReceiptAckTimeout(uint requestId)
+        {
+            if (_awaitingReceiptAckTimeouts.TryRemove(requestId, out CancellationTokenSource? timeoutCts))
+            {
+                timeoutCts.Cancel();
+                timeoutCts.Dispose();
+            }
+        }
+
+        private void CancelAwaitingReceiptAckTimeouts()
+        {
+            List<CancellationTokenSource> timeouts = [.. _awaitingReceiptAckTimeouts.Values];
+            _awaitingReceiptAckTimeouts.Clear();
+            for (int i = 0; i < timeouts.Count; i++)
+            {
+                timeouts[i].Cancel();
+                timeouts[i].Dispose();
             }
         }
 
@@ -717,19 +876,20 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             OutboundDescriptorKind Kind,
             ResponseOutcome Outcome,
             bool ShouldTerminalizeRequest,
+            int ReservedFoundPayloadBytes,
             ReadOnlyMemory<byte> Frame,
             ReadOnlyMemory<byte> FoundHeader,
             ReadOnlyMemory<byte> FoundPayload)
         {
-            internal static OutboundResponseDescriptor FromFrame(uint requestId, ReadOnlyMemory<byte> frame, ResponseOutcome outcome, bool shouldTerminalizeRequest)
+            internal static OutboundResponseDescriptor FromFrame(uint requestId, ReadOnlyMemory<byte> frame, ResponseOutcome outcome, bool shouldTerminalizeRequest, int reservedFoundPayloadBytes)
             {
-                return new OutboundResponseDescriptor(requestId, OutboundDescriptorKind.Frame, outcome, shouldTerminalizeRequest, frame, ReadOnlyMemory<byte>.Empty, ReadOnlyMemory<byte>.Empty);
+                return new OutboundResponseDescriptor(requestId, OutboundDescriptorKind.Frame, outcome, shouldTerminalizeRequest, reservedFoundPayloadBytes, frame, ReadOnlyMemory<byte>.Empty, ReadOnlyMemory<byte>.Empty);
             }
 
             internal static OutboundResponseDescriptor FromFound(uint requestId, ReadOnlyMemory<byte> payload)
             {
                 ListenerFoundResponseFrame encoded = ListenerProtocolEncoder.EncodeGetResponseFound(requestId, payload);
-                return new OutboundResponseDescriptor(requestId, OutboundDescriptorKind.Found, ResponseOutcome.Found, false, ReadOnlyMemory<byte>.Empty, encoded.Header, encoded.Payload);
+                return new OutboundResponseDescriptor(requestId, OutboundDescriptorKind.Found, ResponseOutcome.Found, false, payload.Length, ReadOnlyMemory<byte>.Empty, encoded.Header, encoded.Payload);
             }
         }
     }

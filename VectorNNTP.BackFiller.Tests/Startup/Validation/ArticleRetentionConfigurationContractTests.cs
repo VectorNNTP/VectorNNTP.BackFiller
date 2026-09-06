@@ -137,6 +137,53 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 && e.Error.Contains("between 1 and 60", StringComparison.OrdinalIgnoreCase));
         }
 
+        [Fact]
+        public void ValidateBackFillerOptions_WhenListenerAwaitingReceiptAckTimeoutSecondsEquals300_AcceptsConfiguration()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds"] = "300",
+            });
+            BackFillerOptions options = BindBackFillerOptions(configuration);
+            List<(string Setting, string Message)> warnings = [];
+
+            List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(options, warnings);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds");
+        }
+
+        [Fact]
+        public void ValidateBackFillerOptions_WhenListenerAwaitingReceiptAckTimeoutSecondsEquals301_RejectsConfiguration()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds"] = "301",
+            });
+            BackFillerOptions options = BindBackFillerOptions(configuration);
+            List<(string Setting, string Message)> warnings = [];
+
+            List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(options, warnings);
+
+            Assert.Contains(errors, static e =>
+                e.Setting.EndsWith("AwaitingReceiptAckTimeoutSeconds", StringComparison.Ordinal)
+                && e.Error.Contains("between 1 and 300", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void ValidateBackFillerOptions_WhenListenerMaxActiveConnectionsEqualsIntMax_AcceptsConfiguration()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:Listener:MaxActiveConnections"] = int.MaxValue.ToString(),
+            });
+            BackFillerOptions options = BindBackFillerOptions(configuration);
+            List<(string Setting, string Message)> warnings = [];
+
+            List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(options, warnings);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:Listener:MaxActiveConnections");
+        }
+
         [Theory]
         [InlineData(0)]
         [InlineData(-1)]
