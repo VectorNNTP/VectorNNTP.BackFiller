@@ -245,7 +245,7 @@ jobs:
 
       - name: Upload Linux test hang diagnostics
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: linux-test-hang-diagnostics
           path: TestResults/diagnostics/**
