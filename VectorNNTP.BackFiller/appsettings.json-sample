@@ -1,98 +1,98 @@
 {
-  "BackFiller": {
-	"BindAddress": [
-	  "0.0.0.0",
-	  "::"
-	],
-	"BindPort": 1190,
-	"Name": "backfiller",
-	"Id": 1,
-	"DnsSuffix": "usenet.ninja",
-	"DirLogs": "logs",
-	"DirCerts": "certs",
-	"Listener": {
-	  "ParserAccumulationMaxBytes": 262144,
-	  "AwaitingReceiptAckTimeoutSeconds": 30,
-	  "MaxQueuedFoundPayloadBytes": 67108864,
-	  "MaxActiveConnections": 1024
+	"BackFiller": {
+		"BindAddress": [
+			"0.0.0.0",
+			"::"
+		],
+		"BindPort": 1190,
+		"Name": "backfiller",
+		"Id": 1,
+		"DnsSuffix": "usenet.ninja",
+		"DirLogs": "logs",
+		"DirCerts": "certs",
+		"Listener": {
+			"ParserAccumulationMaxBytes": 262144,
+			"AwaitingReceiptAckTimeoutSeconds": 30,
+			"MaxQueuedFoundPayloadBytes": 67108864,
+			"MaxActiveConnections": 1024
+		},
+		"ArticleRetention": {
+			"MaximumRetainedPayloadGigabytes": 4,
+			"RetentionTtlSeconds": 60,
+			"SweepIntervalSeconds": 1
+		},
+		"LetsEncrypt": {
+			"Enabled": true,
+			"AcmeAccountEmail": "operator@example.invalid",
+			"AcmeAccountKeyPem": "account.key",
+			"AcmeTransientRetryMaxAttempts": 5,
+			"ClockSkewCheckTtlMinutes": 5,
+			"ClockSkewMaxMinutes": 10,
+			"DnsAuthoritativeNsCacheMinutes": 5,
+			"DnsAuthoritativeQuorumRatio": 0.7,
+			"DnsPropagationDelaySeconds": 15,
+			"DnsTxtPollIntervalSeconds": 3,
+			"DnsTxtPollTimeoutSeconds": 600,
+			"DomainNames": null,
+			"PfxExportPassword": "CHANGEME_PFX_PASSWORD_12+",
+			"RenewalCheckIntervalHours": 6,
+			"RenewalJitterRatio": 0.1,
+			"RenewBeforeExpiryDays": 7,
+			"UseStagingDirectory": false,
+			"CloudFlareApiToken": "CHANGEME_CLOUDFLARE_API_TOKEN",
+			"CloudFlareZoneId": "00000000000000000000000000000000"
+		},
+		"RabbitMQ": {
+			"WorkRequestMaxPayloadBytes": 1024,
+			"ChannelLeaseTimeoutSeconds": 60,
+			"RpcTimeoutSeconds": 30,
+			"ConnectionBlockedTimeoutSeconds": 30,
+			"Hosts": [
+				"127.0.0.1"
+			],
+			"Username": "CHANGEME_RABBITMQ_USERNAME",
+			"Password": "CHANGEME_RABBITMQ_PASSWORD",
+			"VirtualHost": "/",
+			"EnableSsl": true,
+			"Port": 5672,
+			"ChannelPoolSize": 512,
+			"MinConnections": 4,
+			"MaxConnections": 16,
+			"MaxConsecutiveRecoveryFailures": 5,
+			"MaxPendingLeaseWaiters": 1024,
+			"ConnectionScaleDownIdleSeconds": 300,
+			"ScaleDownCooldownSeconds": 30,
+			"NetworkRecoveryIntervalSeconds": 5,
+			"PoolReconnectBaseDelayMs": 250,
+			"PoolReconnectMaxDelayMs": 30000,
+			"MinimumConnectionLifetimeSeconds": 300,
+			"PublishConfirmTimeoutSeconds": 10,
+			"MaximumShutdownDrainTimeoutSeconds": 30,
+			"DegradedThreshold": 0.75,
+			"UnhealthyThreshold": 5,
+			"RequestedHeartbeatSeconds": 60,
+			"SocketTimeoutSeconds": 30,
+			"RequestedChannelMax": 2047,
+			"ConsumerPrefetchCount": null,
+			"DiagnosticPayloadCorrelationId": null
+		},
+		"TransitServer": {
+			"Host": "localhost",
+			"Port": 119,
+			"UseSsl": false
+		},
+		"Shutdown": {
+			"GracePeriodSeconds": 30,
+			"DrainQueuedWork": true,
+			"FinishActiveArticles": true
+		}
 	},
-	"ArticleRetention": {
-	  "MaximumRetainedPayloadGigabytes": 4,
-	  "RetentionTtlSeconds": 60,
-	  "SweepIntervalSeconds": 1
+	"ConnectionStrings": {
+		"GrabberDB": "Server=127.0.0.1;User ID=CHANGEME_DB_USERNAME;Password=CHANGEME_DB_PASSWORD;Database=nntp;Minimum Pool Size=1;Maximum Pool Size=3;Connection Idle Timeout=10"
 	},
-	"LetsEncrypt": {
-	  "Enabled": true,
-	  "AcmeAccountEmail": "operator@example.invalid",
-	  "AcmeAccountKeyPem": "account.key",
-	  "AcmeTransientRetryMaxAttempts": 5,
-	  "ClockSkewCheckTtlMinutes": 5,
-	  "ClockSkewMaxMinutes": 10,
-	  "DnsAuthoritativeNsCacheMinutes": 5,
-	  "DnsAuthoritativeQuorumRatio": 0.7,
-	  "DnsPropagationDelaySeconds": 15,
-	  "DnsTxtPollIntervalSeconds": 3,
-	  "DnsTxtPollTimeoutSeconds": 600,
-	  "DomainNames": null,
-	  "PfxExportPassword": "CHANGEME_PFX_PASSWORD_12+",
-	  "RenewalCheckIntervalHours": 6,
-	  "RenewalJitterRatio": 0.1,
-	  "RenewBeforeExpiryDays": 7,
-	  "UseStagingDirectory": false,
-	  "CloudFlareApiToken": "CHANGEME_CLOUDFLARE_API_TOKEN",
-	  "CloudFlareZoneId": "00000000000000000000000000000000"
-	},
-	"RabbitMQ": {
-	  "WorkRequestMaxPayloadBytes": 1024,
-	  "ChannelLeaseTimeoutSeconds": 60,
-	  "RpcTimeoutSeconds": 30,
-	  "ConnectionBlockedTimeoutSeconds": 30,
-	  "Hosts": [
-		"127.0.0.1"
-	  ],
-	  "Username": "CHANGEME_RABBITMQ_USERNAME",
-	  "Password": "CHANGEME_RABBITMQ_PASSWORD",
-	  "VirtualHost": "/",
-	  "EnableSsl": true,
-	  "Port": 5672,
-	  "ChannelPoolSize": 512,
-	  "MinConnections": 4,
-	  "MaxConnections": 16,
-	  "MaxConsecutiveRecoveryFailures": 5,
-	  "MaxPendingLeaseWaiters": 1024,
-	  "ConnectionScaleDownIdleSeconds": 300,
-	  "ScaleDownCooldownSeconds": 30,
-	  "NetworkRecoveryIntervalSeconds": 5,
-	  "PoolReconnectBaseDelayMs": 250,
-	  "PoolReconnectMaxDelayMs": 30000,
-	  "MinimumConnectionLifetimeSeconds": 300,
-	  "PublishConfirmTimeoutSeconds": 10,
-	  "MaximumShutdownDrainTimeoutSeconds": 30,
-	  "DegradedThreshold": 0.75,
-	  "UnhealthyThreshold": 5,
-	  "RequestedHeartbeatSeconds": 60,
-	  "SocketTimeoutSeconds": 30,
-	  "RequestedChannelMax": 2047,
-	  "ConsumerPrefetchCount": null,
-	  "DiagnosticPayloadCorrelationId": null
-	},
-	"TransitServer": {
-	  "Host": "localhost",
-	  "Port": 119,
-	  "UseSsl": false
-	},
-	"Shutdown": {
-	  "GracePeriodSeconds": 30,
-	  "DrainQueuedWork": true,
-	  "FinishActiveArticles": true
+	"Serilog": {
+		"MinimumLevel": {
+			"Default": "Information"
+		}
 	}
-  },
-  "ConnectionStrings": {
-	"GrabberDB": "Server=127.0.0.1;User ID=CHANGEME_DB_USERNAME;Password=CHANGEME_DB_PASSWORD;Database=nntp;Minimum Pool Size=1;Maximum Pool Size=3;Connection Idle Timeout=10"
-  },
-  "Serilog": {
-	"MinimumLevel": {
-	  "Default": "Information"
-	}
-  }
 }

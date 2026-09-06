@@ -5,6 +5,7 @@
 // VectorNNTP.Backfiller Startup / Configuration
 // Resolves total physical system memory using platform-specific mechanisms.
 
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace VectorNNTP.Backfiller.Startup.Configuration
@@ -30,37 +31,61 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// Gets the total physical memory in bytes on Linux by reading the /proc/meminfo file.
         /// </summary>
         /// <returns>The total physical memory in bytes.</returns>
-        /// <exception cref="InvalidOperationException">Thrown if the /proc/meminfo file does not exist or has an unexpected format.</exception>
+        /// <exception cref="PhysicalSystemMemoryDiscoveryException">Thrown when /proc/meminfo cannot be read or does not provide a valid MemTotal value.</exception>
         private static ulong GetLinuxMemTotalBytes()
         {
             if (!File.Exists(ProcMemInfoPath))
             {
-                throw new InvalidOperationException("Unable to determine physical memory: /proc/meminfo does not exist.");
+                throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: file does not exist.");
             }
 
-            foreach (string line in File.ReadLines(ProcMemInfoPath))
+            try
             {
-                if (!line.StartsWith("MemTotal:", StringComparison.Ordinal))
+                foreach (string line in File.ReadLines(ProcMemInfoPath))
                 {
-                    continue;
-                }
+                    if (!line.StartsWith("MemTotal:", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
 
-                string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                return parts.Length < 3 || !parts[2].Equals("kB", StringComparison.Ordinal)
-                    ? throw new InvalidOperationException("Unable to determine physical memory: MemTotal entry in /proc/meminfo has unexpected format.")
-                    : ulong.TryParse(parts[1], out ulong kibibytes)
-                    ? checked(kibibytes * 1024UL)
-                    : throw new InvalidOperationException("Unable to determine physical memory: MemTotal value in /proc/meminfo is not numeric.");
+                    string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 3 || !parts[2].Equals("kB", StringComparison.Ordinal))
+                    {
+                        throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: MemTotal entry format is invalid.");
+                    }
+
+                    if (!ulong.TryParse(parts[1], out ulong kibibytes))
+                    {
+                        throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: MemTotal value is not numeric.");
+                    }
+
+                    try
+                    {
+                        return checked(kibibytes * 1024UL);
+                    }
+                    catch (OverflowException ex)
+                    {
+                        throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: MemTotal value overflowed byte conversion.", ex);
+                    }
+                }
+            }
+            catch (IOException ex)
+            {
+                throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: file could not be read.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: access was denied.", ex);
             }
 
-            throw new InvalidOperationException("Unable to determine physical memory: MemTotal entry was not found in /proc/meminfo.");
+            throw new PhysicalSystemMemoryDiscoveryException("Unable to determine physical system memory from /proc/meminfo: MemTotal entry was not found.");
         }
 
         /// <summary>
         /// Gets the total physical memory in bytes on Windows using the GlobalMemoryStatusEx API.
         /// </summary>
         /// <returns>The total physical memory in bytes.</returns>
-        /// <exception cref="InvalidOperationException">Thrown if the GlobalMemoryStatusEx API call fails.</exception>
+        /// <exception cref="PhysicalSystemMemoryDiscoveryException">Thrown if the GlobalMemoryStatusEx API call fails.</exception>
         private static ulong GetWindowsTotalPhysicalMemoryBytes()
         {
             MEMORYSTATUSEX status = new()
@@ -68,9 +93,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>(),
             };
 
-            return GlobalMemoryStatusEx(ref status)
-                ? status.ullTotalPhys
-                : throw new InvalidOperationException("Unable to determine physical memory: GlobalMemoryStatusEx failed.");
+            if (GlobalMemoryStatusEx(ref status))
+            {
+                return status.ullTotalPhys;
+            }
+
+            int lastError = Marshal.GetLastWin32Error();
+            throw new PhysicalSystemMemoryDiscoveryException(
+                "Unable to determine physical system memory from GlobalMemoryStatusEx.",
+                new Win32Exception(lastError));
         }
 
         /// <summary>

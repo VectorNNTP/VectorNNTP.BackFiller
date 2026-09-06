@@ -109,6 +109,11 @@ This document describes the authoritative externally configurable contract repre
 - `BackFiller:Shutdown:DrainQueuedWork` requires `BackFiller:Shutdown:FinishActiveArticles=true`
 - `BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds < BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds`
 - `BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes` must also be <= 80% of physical memory in GiB on startup host.
+  - Linux authoritative source: `/proc/meminfo` `MemTotal` (kB converted to bytes).
+  - Windows authoritative source: `GlobalMemoryStatusEx().ullTotalPhys`.
+  - `/sys`, cgroup/container memory limits, available/free memory, process memory, and GC-reported memory are not substituted because they represent different resource semantics than physical system memory.
+  - If physical system memory cannot be determined from the authoritative source, startup configuration validation fails so retention capacity is never accepted without the 80% safety boundary.
+  - On Linux, missing/unreadable/malformed `/proc/meminfo` `MemTotal` indicates an unsupported environment for this retention-validation policy.
 - `BackFiller:LetsEncrypt:CloudFlareApiToken` and `BackFiller:LetsEncrypt:CloudFlareZoneId` are required even if `BackFiller:LetsEncrypt:Enabled=false`.
 
 ## Exclusions (intentionally not in sample)

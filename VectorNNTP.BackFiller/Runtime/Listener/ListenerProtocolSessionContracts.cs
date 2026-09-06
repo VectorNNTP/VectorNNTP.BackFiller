@@ -164,7 +164,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// <returns>
         /// A deterministic dispatch result that instructs the session which protocol response to emit.
         /// </returns>
-        public abstract ValueTask<ListenerSessionRequestDispatchResult> HandleGetRequestAsync(
+        public ValueTask<ListenerSessionRequestDispatchResult> HandleGetRequestAsync(
             uint requestId,
             ReadOnlyMemory<byte> messageIdMd5Payload,
             CancellationToken cancellationToken);

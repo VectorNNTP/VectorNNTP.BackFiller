@@ -333,7 +333,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     int consumed = 0;
                     while (consumed < buffered)
                     {
-                        ReadOnlySequence<byte> candidate = new(parseBuffer, consumed, buffered - consumed);
+                        int candidateLength = buffered - consumed;
+                        if (TryGetDeclaredFrameLength(parseBuffer, consumed, candidateLength, out long declaredFrameLength)
+                            && DeclaredFrameExceedsAccumulationLimit(declaredFrameLength, _parserAccumulationMaxBytes))
+                        {
+                            BeginForcedShutdown();
+                            return;
+                        }
+
+                        ReadOnlySequence<byte> candidate = new(parseBuffer, consumed, candidateLength);
                         ListenerFrameParseResult parseResult = ListenerProtocolParser.ParseOneFrame(in candidate);
                         if (parseResult.Status == ListenerFrameParseStatus.Incomplete)
                         {
@@ -723,6 +731,25 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         internal static bool ExceedsParserAccumulationLimit(int buffered, int bytesRead, int parserAccumulationMaxBytes)
         {
             return buffered > parserAccumulationMaxBytes - bytesRead;
+        }
+
+        internal static bool DeclaredFrameExceedsAccumulationLimit(long declaredFrameLength, int parserAccumulationMaxBytes)
+        {
+            return declaredFrameLength > parserAccumulationMaxBytes;
+        }
+
+        internal static bool TryGetDeclaredFrameLength(byte[] parseBuffer, int frameOffset, int candidateLength, out long declaredFrameLength)
+        {
+            declaredFrameLength = 0;
+
+            if (candidateLength < ListenerProtocol.HeaderLengthBytes)
+            {
+                return false;
+            }
+
+            ListenerFrameHeader header = ListenerFrameHeader.ReadFrom(parseBuffer.AsSpan(frameOffset, ListenerProtocol.HeaderLengthBytes));
+            declaredFrameLength = checked((long)ListenerProtocol.HeaderLengthBytes + header.PayloadLength);
+            return true;
         }
 
         internal static bool ExceedsFoundReservationLimit(long currentReserved, int payloadBytes, int maxQueuedFoundPayloadBytes)

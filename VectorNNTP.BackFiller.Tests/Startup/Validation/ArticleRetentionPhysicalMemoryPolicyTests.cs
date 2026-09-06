@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
 using Xunit;
+using static VectorNNTP.BackFiller.Tests.Startup.Validation.ArticleRetentionPhysicalMemoryPolicyTests;
 
 namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 {
@@ -18,6 +19,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     public sealed class ArticleRetentionPhysicalMemoryPolicyTests
     {
         private const ulong BytesPerGibibyte = 1024UL * 1024UL * 1024UL;
+        private const string MaximumRetainedPayloadGigabytesSetting = "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes";
 
         [Fact]
         public void ValidateBackFillerOptions_WhenConfiguredCapacityBelowPolicyCeiling_IsValid()
@@ -129,6 +131,47 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(options, warnings, new FixedPhysicalSystemMemoryProvider(physicalMemoryBytes));
 
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes");
+        }
+
+        [Fact]
+        public void ValidateBackFillerOptions_WhenPhysicalMemoryDiscoveryFails_ReturnsDeterministicRetentionValidationError()
+        {
+            const int configuredGigabytes = 4;
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                [MaximumRetainedPayloadGigabytesSetting] = configuredGigabytes.ToString(),
+            });
+            BackFillerOptions options = BindBackFillerOptions(configuration);
+            List<(string Setting, string Message)> warnings = [];
+
+            List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(
+                options,
+                warnings,
+                new FailingPhysicalSystemMemoryProvider("/proc/meminfo MemTotal could not be read."));
+
+            (string Setting, string Error) error = Assert.Single(errors, static e => e.Setting == MaximumRetainedPayloadGigabytesSetting);
+            Assert.Contains("could not be determined", error.Error, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("could not be read", error.Error, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void ValidateBackFillerOptions_WhenPhysicalMemoryDiscoveryFails_DoesNotBypassEightyPercentSafetyPolicy()
+        {
+            const int configuredGigabytes = 1;
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                [MaximumRetainedPayloadGigabytesSetting] = configuredGigabytes.ToString(),
+            });
+            BackFillerOptions options = BindBackFillerOptions(configuration);
+            List<(string Setting, string Message)> warnings = [];
+
+            List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(
+                options,
+                warnings,
+                new FailingPhysicalSystemMemoryProvider("GlobalMemoryStatusEx failed."));
+
+            Assert.Contains(errors, static e => e.Setting == MaximumRetainedPayloadGigabytesSetting);
+            Assert.DoesNotContain(errors, static e => e.Error.Contains("exceeds the allowed 80% physical-memory ceiling", StringComparison.OrdinalIgnoreCase));
         }
 
         [Theory]
@@ -281,6 +324,16 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             private readonly ulong _totalPhysicalMemoryBytes = totalPhysicalMemoryBytes;
 
             public ulong GetTotalPhysicalMemoryBytes() => _totalPhysicalMemoryBytes;
+        }
+
+        private sealed class FailingPhysicalSystemMemoryProvider(string reason) : IPhysicalSystemMemoryProvider
+        {
+            private readonly string _reason = reason;
+
+            public ulong GetTotalPhysicalMemoryBytes()
+            {
+                throw new PhysicalSystemMemoryDiscoveryException(_reason);
+            }
         }
     }
 }

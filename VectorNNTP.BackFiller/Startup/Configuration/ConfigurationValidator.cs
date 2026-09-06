@@ -503,6 +503,11 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="errors">Collector receiving blocking validation diagnostics.</param>
         /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for policy-ceiling validation.</param>
         /// <exception cref="ArgumentNullException"><paramref name="articleRetention"/>, <paramref name="errors"/>, or <paramref name="physicalSystemMemoryProvider"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// When physical system memory cannot be determined from the authoritative platform source,
+        /// this validator records a blocking configuration error and does not allow startup validation
+        /// to succeed without an established 80% retention safety boundary.
+        /// </remarks>
         private static void ValidateArticleRetentionOptions(
             ArticleRetentionOptions articleRetention,
             List<(string Setting, string Error)> errors,
@@ -520,7 +525,19 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 return;
             }
 
-            ulong totalPhysicalMemoryBytes = physicalSystemMemoryProvider.GetTotalPhysicalMemoryBytes();
+            ulong totalPhysicalMemoryBytes;
+            try
+            {
+                totalPhysicalMemoryBytes = physicalSystemMemoryProvider.GetTotalPhysicalMemoryBytes();
+            }
+            catch (PhysicalSystemMemoryDiscoveryException ex)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes",
+                    $"Unable to validate MaximumRetainedPayloadGigabytes because total physical system memory could not be determined. {ex.Message}"));
+                return;
+            }
+
             ulong maximumPolicyGigabytesUnsigned = totalPhysicalMemoryBytes / 5UL * 4UL / BytesPerGibibyte;
             int maximumPolicyGigabytes = maximumPolicyGigabytesUnsigned >= int.MaxValue
                 ? int.MaxValue

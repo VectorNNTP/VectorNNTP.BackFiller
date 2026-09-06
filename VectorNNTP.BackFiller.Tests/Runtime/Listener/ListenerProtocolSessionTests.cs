@@ -258,6 +258,108 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task RunAsync_WhenHeaderDeclaresFrameLargerThanAccumulationCap_ForcesShutdownBeforeAdditionalReads()
+        {
+            const int parserAccumulationMaxBytes = 32768;
+            uint payloadLength = checked((uint)((parserAccumulationMaxBytes - ListenerProtocol.HeaderLengthBytes) + 1));
+            byte[] oversizedHeader = CreateRawHeader(
+                version: ListenerProtocol.Version1,
+                opcode: ListenerOpcode.GetRequest,
+                requestId: 41,
+                payloadLength: payloadLength,
+                reserved: 0);
+            byte[] trailing = Enumerable.Repeat((byte)'z', 64).ToArray();
+
+            ImmediateNotFoundHandler handler = new();
+            TestTransport transport = new([oversizedHeader, trailing], 4096);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(parserAccumulationMaxBytes: parserAccumulationMaxBytes));
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Empty(handler.SeenRequestIds);
+            Assert.Equal(0, session.OutstandingRequestCount);
+            Assert.Equal(1, transport.ReadCallCount);
+            Assert.Equal(1, transport.RemainingReadFragments);
+            Assert.Empty(transport.GetWrittenBytes());
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenDeclaredFrameEqualsAccumulationCap_IsNotRejectedEarly()
+        {
+            const int parserAccumulationMaxBytes = 32768;
+            int payloadLength = parserAccumulationMaxBytes - ListenerProtocol.HeaderLengthBytes;
+            byte[] payload = Enumerable.Repeat((byte)'f', payloadLength).ToArray();
+            byte[] frame = CreateRawFrame(
+                version: ListenerProtocol.Version1,
+                opcode: ListenerOpcode.GetResponseFound,
+                requestId: 51,
+                payload: payload);
+
+            byte[] headerFragment = frame[..ListenerProtocol.HeaderLengthBytes];
+            byte[] payloadFragment = frame[ListenerProtocol.HeaderLengthBytes..];
+
+            ImmediateNotFoundHandler handler = new();
+            TestTransport transport = new([headerFragment, payloadFragment], 4096);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(parserAccumulationMaxBytes: parserAccumulationMaxBytes));
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Empty(handler.SeenRequestIds);
+            Assert.Equal(3, transport.ReadCallCount);
+
+            IReadOnlyList<ListenerFrameParseResult> frames = ParseAllFrames(transport.GetWrittenBytes());
+            Assert.Single(frames);
+            Assert.Equal(ListenerOpcode.GetResponseError, frames[0].Frame!.Value.Header.Opcode);
+            Assert.Equal(ListenerProtocolErrorCode.UnsupportedOpcode, ReadErrorCode(frames[0].Frame.Value.Payload));
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenValidFrameWithinAccumulationCapArrivesFragmented_ParsesSuccessfully()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(61, "30edc94157aa16fe644a45a1f1ffe160");
+            const int parserAccumulationMaxBytes = 32768;
+            byte[] fragmentA = request[..8];
+            byte[] fragmentB = request[8..20];
+            byte[] fragmentC = request[20..];
+
+            ImmediateNotFoundHandler handler = new();
+            TestTransport transport = new([fragmentA, fragmentB, fragmentC], 4096);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(parserAccumulationMaxBytes: parserAccumulationMaxBytes));
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Single(handler.SeenRequestIds);
+            Assert.Equal<uint>(61, handler.SeenRequestIds[0]);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenHeaderIsIncomplete_WaitsForRemainingHeaderBytes()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(71, "30edc94157aa16fe644a45a1f1ffe160");
+            byte[] first = request[..8];
+            byte[] second = request[8..];
+
+            ImmediateNotFoundHandler handler = new();
+            TestTransport transport = new([first, second], 4096);
+            ListenerProtocolSession session = new(transport, handler);
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Equal(3, transport.ReadCallCount);
+            Assert.Single(handler.SeenRequestIds);
+            Assert.Equal<uint>(71, handler.SeenRequestIds[0]);
+        }
+
+        [Fact]
         public async Task RunAsync_WhenUnsupportedVersion_StopsWithoutDispatchingRequests()
         {
             byte[] payload = Encoding.ASCII.GetBytes("30edc94157aa16fe644a45a1f1ffe160");
@@ -861,6 +963,20 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             return frame;
         }
 
+        private static byte[] CreateRawHeader(byte version, ListenerOpcode opcode, uint requestId, uint payloadLength, uint reserved)
+        {
+            byte[] headerBytes = new byte[ListenerProtocol.HeaderLengthBytes];
+            ListenerFrameHeader header = new(
+                Version: version,
+                Opcode: opcode,
+                HeaderLength: ListenerProtocol.HeaderLengthBytes,
+                RequestId: requestId,
+                PayloadLength: payloadLength,
+                Reserved: reserved);
+            header.WriteTo(headerBytes);
+            return headerBytes;
+        }
+
         private sealed class ImmediateNotFoundHandler : IListenerProtocolRequestHandler
         {
             internal List<uint> SeenRequestIds { get; } = [];
@@ -1424,6 +1540,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             private readonly List<byte> _writes = [];
             private readonly int _maxWriteChunkLength;
             private int _writtenBytes;
+            private int _readCalls;
             private bool _disposed;
 
             internal TestTransport(IEnumerable<byte[]> readFragments, int maxWriteChunkLength)
@@ -1440,6 +1557,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                     throw new ObjectDisposedException(nameof(TestTransport));
                 }
 
+                _ = Interlocked.Increment(ref _readCalls);
                 if (_readFragments.Count == 0)
                 {
                     _eofReached.TrySetResult(true);
@@ -1483,6 +1601,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             {
                 _disposed = true;
                 return ValueTask.CompletedTask;
+            }
+
+            internal int ReadCallCount => Volatile.Read(ref _readCalls);
+
+            internal int RemainingReadFragments
+            {
+                get
+                {
+                    return _readFragments.Count;
+                }
             }
 
             internal byte[] GetWrittenBytes()
