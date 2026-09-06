@@ -149,10 +149,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Wraps one accepted socket in <see cref="TcpClient"/>, performs the TLS handshake, and then idles until disconnect or shutdown.
+        /// Wraps one accepted socket in <see cref="TcpClient"/>, performs TLS handshake, and runs one protocol session until completion.
         /// </summary>
         /// <param name="acceptedSocket">Freshly accepted socket whose ownership transfers to this routine.</param>
-        /// <param name="cancellationToken">Shutdown-aware token that aborts handshake or idle waiting.</param>
+        /// <param name="cancellationToken">Shutdown-aware token that aborts handshake or session processing.</param>
         /// <returns>A task that completes after the connection has been closed and unregistered.</returns>
         private async Task ProcessAcceptedSocketAsync(Socket acceptedSocket, CancellationToken cancellationToken)
         {
@@ -182,7 +182,12 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 string thumbprint = serverCertificate.Thumbprint ?? string.Empty;
                 LogTlsHandshakeSucceeded(_logger, remoteEndpoint, thumbprint);
 
-                await WaitForClientDisconnectAsync(sslStream, cancellationToken).ConfigureAwait(false);
+                StreamListenerProtocolSessionTransport transport = new(sslStream);
+                await using (transport.ConfigureAwait(false))
+                {
+                    ListenerProtocolSession session = new(transport, new ListenerProtocolSessionDefaultHandler());
+                    await session.RunAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -351,28 +356,6 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             return certificate;
         }
 
-        /// <summary>
-        /// Reads and discards post-handshake traffic until the peer disconnects or shutdown cancellation is observed.
-        /// </summary>
-        /// <param name="sslStream">Authenticated TLS stream for one client connection.</param>
-        /// <param name="cancellationToken">Token that aborts the idle wait during shutdown.</param>
-        /// <returns>A task that completes when the stream reaches EOF or cancellation is requested.</returns>
-        /// <remarks>
-        /// The BackFiller inbound application protocol is not yet defined, so payload bytes are intentionally ignored.
-        /// </remarks>
-        private static async Task WaitForClientDisconnectAsync(SslStream sslStream, CancellationToken cancellationToken)
-        {
-            byte[] buffer = GC.AllocateUninitializedArray<byte>(512);
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                int bytesRead = await sslStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-                if (bytesRead == 0)
-                {
-                    return;
-                }
-            }
-        }
 
         /// <summary>
         /// Adds one accepted client to the active-connection set so coordinated shutdown can dispose it later.
