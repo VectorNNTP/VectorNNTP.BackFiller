@@ -176,6 +176,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     headerOutcome.Headers,
                     out string canonicalDate,
                     out ReadOnlyMemory<byte> originalDateValue,
+                    out NntpArticleHeaderName selectedDateHeaderName,
                     out DateParseFailureReason dateFailure))
             {
                 return NntpArticleParseResult.Rejected(
@@ -199,7 +200,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     headers: headerOutcome.Headers,
                     dateFailureReason: DateParseFailureReason.None,
                     canonicalUtcDate: canonicalDate,
-                    originalDateValue: originalDateValue);
+                    originalDateValue: originalDateValue,
+                    selectedDateHeaderName: selectedDateHeaderName);
             }
 
             bool yEncDetected = DetectYEnc(headerOutcome.BodyBytes.Span, _options.YEncDetectionScanBytes);
@@ -220,6 +222,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                         dateFailureReason: DateParseFailureReason.None,
                         canonicalUtcDate: canonicalDate,
                         originalDateValue: originalDateValue,
+                        selectedDateHeaderName: selectedDateHeaderName,
                         canonicalPath: canonicalPath,
                         originalPathValue: originalPathValue,
                         yEncDetected: true,
@@ -242,6 +245,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 DateFailureReason: DateParseFailureReason.None,
                 CanonicalUtcDate: canonicalDate,
                 OriginalDateValue: originalDateValue,
+                SelectedDateHeaderName: selectedDateHeaderName,
                 CanonicalPath: canonicalPath,
                 OriginalPathValue: originalPathValue,
                 YEncDetected: yEncDetected,

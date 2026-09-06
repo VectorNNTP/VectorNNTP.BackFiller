@@ -64,7 +64,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.True(retainedLease.IsAcquired);
             using (IArticleRetentionReadLease lease = Assert.IsAssignableFrom<IArticleRetentionReadLease>(retainedLease.Lease))
             {
-                Assert.True(lease.Payload.Length > 0);
+                string retainedArticle = Encoding.ASCII.GetString(lease.Payload.Span);
+                Assert.Contains("Date: Tue, 10 May 2011 18:48:50 +0000\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains($"Path: {runtimeOptions.CanonicalBackFillerFqdn}!num2.nntp.ams.giganews.com!not-for-mail\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains("\r\n\r\nsuccess-ordering-payload\r\n", retainedArticle, StringComparison.Ordinal);
             }
 
             int admitIndex = operationLog.IndexOf("admit");

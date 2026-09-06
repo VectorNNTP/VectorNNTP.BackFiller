@@ -313,6 +313,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
     /// <param name="DateFailureReason">Date parse classification when date canonicalization fails.</param>
     /// <param name="CanonicalUtcDate">Canonical UTC date string when date canonicalization succeeds.</param>
     /// <param name="OriginalDateValue">Original date-header value bytes used by the date resolver.</param>
+    /// <param name="SelectedDateHeaderName">Known header identity that produced <paramref name="CanonicalUtcDate"/>.</param>
     /// <param name="CanonicalPath">Canonical Path value after deterministic BackFiller FQDN augmentation logic.</param>
     /// <param name="OriginalPathValue">Original Path-header bytes when present.</param>
     /// <param name="YEncDetected">Indicates whether yEnc markers were detected in the body scan.</param>
@@ -328,6 +329,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         DateParseFailureReason DateFailureReason,
         string CanonicalUtcDate,
         ReadOnlyMemory<byte> OriginalDateValue,
+        NntpArticleHeaderName SelectedDateHeaderName,
         string CanonicalPath,
         ReadOnlyMemory<byte> OriginalPathValue,
         bool YEncDetected,
@@ -345,6 +347,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// <param name="dateFailureReason">Date parse failure reason if applicable.</param>
         /// <param name="canonicalUtcDate">Canonical date value if one was produced before rejection.</param>
         /// <param name="originalDateValue">Original date-header value bytes if available.</param>
+        /// <param name="selectedDateHeaderName">Known header identity that produced <paramref name="canonicalUtcDate"/> when available.</param>
         /// <param name="canonicalPath">Canonical path value if available.</param>
         /// <param name="originalPathValue">Original path value bytes if available.</param>
         /// <param name="yEncDetected">Indicates whether yEnc was detected.</param>
@@ -360,6 +363,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             DateParseFailureReason dateFailureReason = DateParseFailureReason.None,
             string canonicalUtcDate = "",
             ReadOnlyMemory<byte> originalDateValue = default,
+            NntpArticleHeaderName selectedDateHeaderName = NntpArticleHeaderName.Unknown,
             string canonicalPath = "",
             ReadOnlyMemory<byte> originalPathValue = default,
             bool yEncDetected = false,
@@ -381,6 +385,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 DateFailureReason: dateFailureReason,
                 CanonicalUtcDate: canonicalUtcDate,
                 OriginalDateValue: originalDateValue,
+                SelectedDateHeaderName: selectedDateHeaderName,
                 CanonicalPath: canonicalPath,
                 OriginalPathValue: originalPathValue,
                 YEncDetected: yEncDetected,

@@ -38,6 +38,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
         /// <param name="headers">Parsed header entries in original wire order.</param>
         /// <param name="canonicalValue">Canonical UTC date string when a candidate parses successfully.</param>
         /// <param name="originalValue">Slice of the original winning header value when resolution succeeds.</param>
+        /// <param name="selectedHeaderName">Known-name identity of the winning date header when resolution succeeds.</param>
         /// <param name="failure">Failure reason reported when no candidate succeeds; the implementation reports <see cref="DateParseFailureReason.ParseFailed"/> after all candidates fail.</param>
         /// <returns><see langword="true"/> when a candidate header produced a canonical value.</returns>
         internal static bool TryGetCanonicalArticleDate(
@@ -45,10 +46,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
             IReadOnlyList<NntpArticleHeaderEntry> headers,
             out string canonicalValue,
             out ReadOnlyMemory<byte> originalValue,
+            out NntpArticleHeaderName selectedHeaderName,
             out DateParseFailureReason failure)
         {
             canonicalValue = string.Empty;
             originalValue = default;
+            selectedHeaderName = NntpArticleHeaderName.Unknown;
             failure = DateParseFailureReason.Empty;
 
             if (headers.Count == 0)
@@ -72,6 +75,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
                     if (NewsDateParser.TryGetCanonicalDateValue(dateValue.AsSpan(), out canonicalValue, out failure))
                     {
                         originalValue = articleBytes.Slice(entry.ValueOffset, entry.ValueLength);
+                        selectedHeaderName = candidate;
                         return true;
                     }
                 }

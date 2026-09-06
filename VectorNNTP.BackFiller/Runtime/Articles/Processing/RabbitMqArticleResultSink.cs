@@ -7,6 +7,7 @@
 // article-work deliveries.
 
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
@@ -98,8 +99,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             {
                 if (result.Outcome is ArticleWorkProcessingOutcome.Success)
                 {
-                    DownloadedArticleBuffer payloadOwner = result.TryDetachSuccessfulPayloadOwner()
+                    NntpArticleParseResult parseResult = result.GrabberResult?.Success?.Parse
+                        ?? throw new InvalidOperationException("Successful article processing result did not provide parser metadata required for canonical materialization.");
+
+                    DownloadedArticleBuffer originalPayloadOwner = result.TryDetachSuccessfulPayloadOwner()
                         ?? throw new InvalidOperationException("Successful article processing result did not provide a retained payload owner for admission.");
+                    detachedPayloadOwner = originalPayloadOwner;
+
+                    DownloadedArticleBuffer payloadOwner = NntpArticleCanonicalMaterializer.Materialize(parseResult);
+                    originalPayloadOwner.Dispose();
                     detachedPayloadOwner = payloadOwner;
 
                     ArticleRetentionAdmissionResult retentionAdmissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner);

@@ -28,27 +28,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention
         /// <returns>Successful grabber result that owns the pooled payload owner through the normal disposal chain.</returns>
         internal static NntpArticleGrabberResult CreateSuccessfulGrabberResult(string messageId, string payloadText)
         {
-            byte[] payloadBytes = Encoding.ASCII.GetBytes(payloadText);
-            byte[] rented = ArrayPool<byte>.Shared.Rent(payloadBytes.Length);
-            Array.Copy(payloadBytes, rented, payloadBytes.Length);
+            string articleText = $"Date: Tue, 10 May 2011 13:48:50 -0500\r\nMessage-ID: {messageId}\r\nNewsgroups: alt.test\r\nFrom: user@example.test\r\nPath: num2.nntp.ams.giganews.com!not-for-mail\r\nX-Test-Header: preserve-me\r\n\r\n{payloadText}\r\n";
+            byte[] articleBytes = Encoding.ASCII.GetBytes(articleText);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(articleBytes.Length);
+            Array.Copy(articleBytes, rented, articleBytes.Length);
 
-            DownloadedArticleBuffer downloaded = new(rented, payloadBytes.Length);
+            DownloadedArticleBuffer downloaded = new(rented, articleBytes.Length);
             NntpArticleAcquisitionResult acquisition = NntpArticleAcquisitionResult.Success(220, "article follows", downloaded);
-            NntpArticleParseResult parse = new(
-                IsAccepted: true,
-                FailureCode: NntpArticleParseFailureCode.None,
-                ArticleType: NntpArticleType.Text,
-                ArticleBytes: downloaded.Memory,
-                HeaderBytes: ReadOnlyMemory<byte>.Empty,
-                BodyBytes: downloaded.Memory,
-                Headers: [],
-                DateFailureReason: DateParseFailureReason.None,
-                CanonicalUtcDate: string.Empty,
-                OriginalDateValue: ReadOnlyMemory<byte>.Empty,
-                CanonicalPath: string.Empty,
-                OriginalPathValue: ReadOnlyMemory<byte>.Empty,
-                YEncDetected: false,
-                YEncValidation: YEncArticleValidationResult.ValidNonYEnc());
+            NntpArticleParser parser = new("backfiller01.usenet.ninja");
+            NntpArticleParseResult parse = parser.Parse(downloaded.Memory);
+            if (!parse.IsAccepted)
+            {
+                throw new InvalidOperationException($"Test fixture article must parse successfully. FailureCode={parse.FailureCode}");
+            }
 
             return NntpArticleGrabberResult.Successful(messageId, acquisition, parse);
         }

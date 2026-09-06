@@ -120,7 +120,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(ListenerOpcode.GetResponseFound, parsed.Frame!.Value.Header.Opcode);
             Assert.Equal<uint>(9001, parsed.Frame.Value.Header.RequestId);
             byte[] foundPayload = parsed.Frame.Value.Payload.ToArray();
-            Assert.Equal(Encoding.ASCII.GetBytes(payloadText), foundPayload);
+            string foundArticle = Encoding.ASCII.GetString(foundPayload);
+            Assert.Contains("Date: Tue, 10 May 2011 18:48:50 +0000\r\n", foundArticle, StringComparison.Ordinal);
+            Assert.Contains($"Path: {runtimeOptions.CanonicalBackFillerFqdn}!num2.nntp.ams.giganews.com!not-for-mail\r\n", foundArticle, StringComparison.Ordinal);
+            Assert.Contains("\r\n\r\nstage7e-success-payload\r\n", foundArticle, StringComparison.Ordinal);
 
             ArticleRetentionSnapshot afterListenerAck = retentionAuthority.GetSnapshot();
             Assert.Equal(0, afterListenerAck.ActiveReaderCount);
@@ -188,7 +191,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.True(retainedAfterFirst.IsAcquired);
             using (IArticleRetentionReadLease lease = Assert.IsAssignableFrom<IArticleRetentionReadLease>(retainedAfterFirst.Lease))
             {
-                Assert.Equal(firstPayloadText, Encoding.ASCII.GetString(lease.Payload.Span));
+                string retainedArticle = Encoding.ASCII.GetString(lease.Payload.Span);
+                Assert.Contains("Date: Tue, 10 May 2011 18:48:50 +0000\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains($"Path: {runtimeOptions.CanonicalBackFillerFqdn}!num2.nntp.ams.giganews.com!not-for-mail\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains($"\r\n\r\n{firstPayloadText}\r\n", retainedArticle, StringComparison.Ordinal);
             }
 
             TrackingDeliverySettlement secondSettlement = new(operationLog);
@@ -221,7 +227,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.True(retainedAfterSecond.IsAcquired);
             using (IArticleRetentionReadLease lease = Assert.IsAssignableFrom<IArticleRetentionReadLease>(retainedAfterSecond.Lease))
             {
-                Assert.Equal(firstPayloadText, Encoding.ASCII.GetString(lease.Payload.Span));
+                string retainedArticle = Encoding.ASCII.GetString(lease.Payload.Span);
+                Assert.Contains("Date: Tue, 10 May 2011 18:48:50 +0000\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains($"Path: {runtimeOptions.CanonicalBackFillerFqdn}!num2.nntp.ams.giganews.com!not-for-mail\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains($"\r\n\r\n{firstPayloadText}\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.DoesNotContain($"\r\n\r\n{secondPayloadText}\r\n", retainedArticle, StringComparison.Ordinal);
             }
 
             ArticleRetentionSnapshot snapshot = retentionAuthority.GetSnapshot();
