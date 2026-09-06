@@ -8,6 +8,7 @@
 
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Retention;
+using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
@@ -36,6 +37,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly IArticleRetentionAuthority _retentionAuthority;
         /// <summary>
+        /// Transit admission gateway used to transfer Message-ID responsibility into bounded transit ownership.
+        /// </summary>
+        private readonly ITransitAdmissionGateway _transitAdmissionGateway;
+        /// <summary>
         /// Supplies the logger used by rabbit mq article result sink.
         /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
@@ -47,18 +52,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="responseFactory">Factory that builds terminal RPC response payloads when required.</param>
         /// <param name="responsePublisher">Publisher that emits and confirms RPC responses on RabbitMQ.</param>
         /// <param name="retentionAuthority">Shared in-memory retention authority for successful payload ownership admission.</param>
+        /// <param name="transitAdmissionGateway">Gateway that admits Message-ID transit responsibility before RabbitMQ success publication/acknowledgement.</param>
         /// <param name="logger">Logger used for publication fallback and settlement diagnostics.</param>
         public RabbitMqArticleResultSink(
             IArticleWorkDispositionPlanner planner,
             IArticleWorkResponseFactory responseFactory,
             IRabbitMqArticleResponsePublisher responsePublisher,
             IArticleRetentionAuthority retentionAuthority,
+            ITransitAdmissionGateway transitAdmissionGateway,
             ILogger<RabbitMqArticleResultSink> logger)
         {
             _planner = planner ?? throw new ArgumentNullException(nameof(planner));
             _responseFactory = responseFactory ?? throw new ArgumentNullException(nameof(responseFactory));
             _responsePublisher = responsePublisher ?? throw new ArgumentNullException(nameof(responsePublisher));
             _retentionAuthority = retentionAuthority ?? throw new ArgumentNullException(nameof(retentionAuthority));
+            _transitAdmissionGateway = transitAdmissionGateway ?? throw new ArgumentNullException(nameof(transitAdmissionGateway));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -83,8 +91,39 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         ?? throw new InvalidOperationException("Successful article processing result did not provide a retained payload owner for admission.");
                     detachedPayloadOwner = payloadOwner;
 
-                    ArticleRetentionAdmissionResult admissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner);
-                    if (!admissionResult.IsAdmitted)
+                    ArticleRetentionAdmissionResult retentionAdmissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner);
+                    bool retainedAvailableForTransit = retentionAdmissionResult.Status switch
+                    {
+                        ArticleRetentionAdmissionStatus.Admitted => true,
+                        ArticleRetentionAdmissionStatus.DuplicateMessageId => true,
+                        ArticleRetentionAdmissionStatus.AdmissionClosed => false,
+                        ArticleRetentionAdmissionStatus.Md5Collision => false,
+                        ArticleRetentionAdmissionStatus.PayloadExceedsCapacity => false,
+                        ArticleRetentionAdmissionStatus.CapacityUnavailable => false,
+                        ArticleRetentionAdmissionStatus.InvalidPayload => false,
+                        _ => false,
+                    };
+
+                    if (retainedAvailableForTransit)
+                    {
+                        if (retentionAdmissionResult.Status is ArticleRetentionAdmissionStatus.DuplicateMessageId)
+                        {
+                            payloadOwner.Dispose();
+                        }
+
+                        detachedPayloadOwner = null;
+
+                        TransitAdmissionResult transitAdmissionResult = await _transitAdmissionGateway
+                            .AdmitAsync(result.Request.MessageId, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (!transitAdmissionResult.IsAccepted)
+                        {
+                            await result.Delivery.Settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
+                            return;
+                        }
+                    }
+                    else
                     {
                         if (!result.TryAttachSuccessfulPayloadOwner(payloadOwner))
                         {
@@ -99,11 +138,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                             result.CorrelationId,
                             result.Request.MessageId,
                             result.Request.Backbone,
-                            admissionResult.Status);
+                            retentionAdmissionResult.Status);
                         return;
                     }
-
-                    detachedPayloadOwner = null;
                 }
 
                 if (plan.PublishResponse)

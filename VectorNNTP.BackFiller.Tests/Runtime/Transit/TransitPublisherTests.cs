@@ -86,6 +86,98 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Null(result.ResponseCode);
         }
 
+        [Fact]
+        public async Task AdmitAsync_WhenNotInitialized_ReturnsUnavailable()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19001, connectionPoolSize: 1);
+
+            TransitAdmissionResult result = await publisher.AdmitAsync("<admit-unavailable@example.com>", CancellationToken.None);
+
+            Assert.Equal(TransitAdmissionStatus.Unavailable, result.Status);
+            Assert.False(result.IsAccepted);
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenInitialized_ReturnsAcceptedWithoutWaitingForTerminalCompletion()
+        {
+            string messageId = "<admit-accepted@example.com>";
+            byte[] payload = [(byte)'A', (byte)'\n'];
+            TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                _ = firstTakethisObserved.TrySetResult();
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            BackFillerRuntimeOptions options = CreatePublisherOptions(server.Port);
+            ArticleRetentionAuthority retention = new(options);
+            DownloadedArticleBuffer retainedPayload = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult retained = retention.TryRetainSuccessArticle(messageId, retainedPayload);
+            Assert.True(retained.IsAdmitted);
+
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                retention,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 1);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitAdmissionResult admission = await publisher.AdmitAsync(messageId, CancellationToken.None);
+
+            Assert.True(admission.IsAccepted);
+            Assert.Equal(TransitAdmissionStatus.Accepted, admission.Status);
+            Assert.Equal(messageId, admission.MessageId);
+            Assert.Equal(1, GetActiveSubmissionCount(publisher));
+
+            using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(10));
+            await firstTakethisObserved.Task.WaitAsync(observedTimeout.Token);
+            Assert.Equal(1, GetActiveSubmissionCount(publisher));
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenAdmissionFrozen_ReturnsAdmissionFrozen()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19002, connectionPoolSize: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(5));
+            await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+            TransitAdmissionResult result = await publisher.AdmitAsync("<admit-frozen@example.com>", CancellationToken.None);
+
+            Assert.Equal(TransitAdmissionStatus.AdmissionFrozen, result.Status);
+            Assert.False(result.IsAccepted);
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenDisposed_ReturnsUnavailable()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19003, connectionPoolSize: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+            await publisher.DisposeAsync();
+
+            TransitAdmissionResult result = await publisher.AdmitAsync("<admit-disposed@example.com>", CancellationToken.None);
+
+            Assert.Equal(TransitAdmissionStatus.Unavailable, result.Status);
+            Assert.False(result.IsAccepted);
+        }
+
         /// <summary>
         /// Confirms initialize async  when no queued work  defers connection until publish and returns to idle after quit behavior.
         /// </summary>

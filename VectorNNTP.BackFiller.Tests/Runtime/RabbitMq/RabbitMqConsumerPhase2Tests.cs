@@ -21,6 +21,7 @@ using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
+using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention;
 using Xunit;
 
@@ -1918,6 +1919,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: new TrackingRaceResponsePublisher(),
                 retentionAuthority: new ArticleRetentionAuthority(runtimeOptions),
+                transitAdmissionGateway: new AlwaysAcceptedTransitAdmissionGateway(),
                 logger: NullLogger<RabbitMqArticleResultSink>.Instance);
         }
 
@@ -1945,6 +1947,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 ResponseCode: null,
                 ResponseText: null,
                 UnexpectedException: null);
+        }
+
+        private sealed class AlwaysAcceptedTransitAdmissionGateway : ITransitAdmissionGateway
+        {
+            public ValueTask<TransitAdmissionResult> AdmitAsync(string messageId, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return ValueTask.FromResult(new TransitAdmissionResult(messageId, TransitAdmissionStatus.Accepted));
+            }
         }
 
         /// <summary>

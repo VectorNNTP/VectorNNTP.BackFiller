@@ -25,7 +25,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// per connection, and exposes the authoritative queue and transport counters used to understand reconnects, retirement, and shutdown.
     /// Connection objects own protocol I/O; the publisher owns slot visibility, lifetime aggregates, and the coordination needed to keep snapshots coherent.
     /// </remarks>
-    internal sealed partial class TransitPublisher : IAsyncDisposable
+    internal sealed partial class TransitPublisher : ITransitAdmissionGateway, IAsyncDisposable
     {
         /// <summary>
         /// Default per-connection pipeline depth used when no override is supplied.
@@ -226,6 +226,42 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 _reconnectGates[i] = new SemaphoreSlim(1, 1);
             }
+        }
+
+        /// <summary>
+        /// Initializes the publisher using compatibility constructor semantics where no external retention authority is supplied.
+        /// </summary>
+        /// <param name="runtimeOptions">Validated runtime settings that define queue bounds, retry behavior, and transit endpoint configuration.</param>
+        /// <param name="timeProvider">The time provider used to stamp runtime and diagnostic snapshots.</param>
+        /// <param name="logger">Structured logger used by the publisher and the connections it creates for lifecycle and diagnostic reporting.</param>
+        /// <param name="connectionPoolSize">The number of worker slots and slot records to maintain.</param>
+        /// <param name="perConnectionPipelineDepth">The maximum number of admitted items each active connection may pipeline.</param>
+        /// <param name="connectionResponseProgressTimeout">Optional watchdog timeout for detecting stalled connection responses during steady-state work.</param>
+        /// <param name="connectionResponseProgressCheckInterval">Optional interval used when polling connection response progress.</param>
+        /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
+        /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
+        public TransitPublisher(
+            BackFillerRuntimeOptions runtimeOptions,
+            TimeProvider timeProvider,
+            ILogger<TransitPublisher> logger,
+            int connectionPoolSize,
+            int perConnectionPipelineDepth = DefaultPerConnectionPipelineDepth,
+            TimeSpan? connectionResponseProgressTimeout = null,
+            TimeSpan? connectionResponseProgressCheckInterval = null,
+            TransitTimingCollector? timingCollector = null,
+            Action? claimBoundaryObserved = null)
+            : this(
+                runtimeOptions,
+                timeProvider,
+                logger,
+                new ArticleRetentionAuthority(runtimeOptions),
+                connectionPoolSize,
+                perConnectionPipelineDepth,
+                connectionResponseProgressTimeout,
+                connectionResponseProgressCheckInterval,
+                timingCollector,
+                claimBoundaryObserved)
+        {
         }
 
         /// <summary>
@@ -453,6 +489,58 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
+        /// Admits one Message-ID into bounded Transit ownership without waiting for terminal network completion.
+        /// </summary>
+        /// <param name="messageId">The article Message-ID used for protocol framing and response correlation.</param>
+        /// <param name="cancellationToken">Cancellation token applied while waiting for bounded queue capacity.</param>
+        /// <returns>An admission-only result that indicates whether bounded Transit ownership transfer succeeded.</returns>
+        public async ValueTask<TransitAdmissionResult> AdmitAsync(string messageId, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(messageId))
+            {
+                throw new ArgumentException("Message-ID is required.", nameof(messageId));
+            }
+
+            if (_disposeRequested || Volatile.Read(ref _initialized) == 0)
+            {
+                return new TransitAdmissionResult(
+                    MessageId: messageId,
+                    Status: TransitAdmissionStatus.Unavailable,
+                    Error: "Transit connection unavailable.");
+            }
+
+            try
+            {
+                _ = await EnqueueWorkItemAsync(messageId, cancellationToken).ConfigureAwait(false);
+                return new TransitAdmissionResult(
+                    MessageId: messageId,
+                    Status: TransitAdmissionStatus.Accepted,
+                    Error: null);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return new TransitAdmissionResult(
+                    MessageId: messageId,
+                    Status: TransitAdmissionStatus.Canceled,
+                    Error: "Transit admission canceled.");
+            }
+            catch (InvalidOperationException ex) when (IsAdmissionFrozenException(ex))
+            {
+                return new TransitAdmissionResult(
+                    MessageId: messageId,
+                    Status: TransitAdmissionStatus.AdmissionFrozen,
+                    Error: ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return new TransitAdmissionResult(
+                    MessageId: messageId,
+                    Status: TransitAdmissionStatus.Failed,
+                    Error: ex.Message);
+            }
+        }
+
+        /// <summary>
         /// Admits one Message-ID for transit scheduling using identity-only work ownership.
         /// </summary>
         /// <param name="messageId">The article Message-ID used for protocol framing and response correlation.</param>
@@ -575,28 +663,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     ProvenanceTick: Stopwatch.GetTimestamp());
             }
 
-            TransitWorkItem workItem = new(
-                workItemId: Interlocked.Increment(ref _nextWorkItemId),
-                messageId: messageId,
-                maxAttempts: _runtimeOptions.TransitRetryMaxAttempts);
-
-            _activeWorkItems[workItem.WorkItemId] = workItem;
-
-            try
-            {
-                await _globalQueue.EnqueueAsync(workItem, cancellationToken).ConfigureAwait(false);
-                _ = Interlocked.Increment(ref _totalArticlesSubmitted);
-            }
-            catch (OperationCanceledException)
-            {
-                _ = _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
-                throw;
-            }
-            catch (Exception)
-            {
-                _ = _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
-                throw;
-            }
+            TransitWorkItem workItem = await EnqueueWorkItemAsync(messageId, cancellationToken).ConfigureAwait(false);
 
             if (!cancellationToken.CanBeCanceled)
             {
@@ -626,6 +693,52 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             workItem.MarkCancelRequested();
             throw new OperationCanceledException("Transit publish canceled.", cancellationToken);
+        }
+
+        /// <summary>
+        /// Creates one transit work item, registers active ownership, and enqueues it into the bounded global queue.
+        /// </summary>
+        /// <param name="messageId">Article Message-ID used for work item identity.</param>
+        /// <param name="cancellationToken">Cancellation token for bounded queue admission waits.</param>
+        /// <returns>The admitted work item now owned by the publisher/queue lifecycle.</returns>
+        /// <exception cref="OperationCanceledException">Admission was canceled before bounded ownership transfer completed.</exception>
+        /// <exception cref="Exception">Admission failed before bounded ownership transfer completed.</exception>
+        private async ValueTask<TransitWorkItem> EnqueueWorkItemAsync(string messageId, CancellationToken cancellationToken)
+        {
+            TransitWorkItem workItem = new(
+                workItemId: Interlocked.Increment(ref _nextWorkItemId),
+                messageId: messageId,
+                maxAttempts: _runtimeOptions.TransitRetryMaxAttempts);
+
+            _activeWorkItems[workItem.WorkItemId] = workItem;
+
+            try
+            {
+                await _globalQueue.EnqueueAsync(workItem, cancellationToken).ConfigureAwait(false);
+                _ = Interlocked.Increment(ref _totalArticlesSubmitted);
+                return workItem;
+            }
+            catch (OperationCanceledException)
+            {
+                _ = _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
+                throw;
+            }
+            catch (Exception)
+            {
+                _ = _activeWorkItems.TryRemove(workItem.WorkItemId, out _);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Determines whether an admission failure represents the queue admission-freeze state.
+        /// </summary>
+        /// <param name="exception">Exception raised by admission work.</param>
+        /// <returns><see langword="true"/> when the exception maps to frozen admission semantics; otherwise, <see langword="false"/>.</returns>
+        private static bool IsAdmissionFrozenException(InvalidOperationException exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+            return string.Equals(exception.Message, "Global transit queue admission is frozen.", StringComparison.Ordinal);
         }
 
         /// <summary>

@@ -157,6 +157,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         {
             ArgumentNullException.ThrowIfNull(services);
             _ = services.AddSingleton<TransitPublisher>();
+            _ = services.AddSingleton<ITransitAdmissionGateway>(static provider => provider.GetRequiredService<TransitPublisher>());
             _ = services.AddHostedService<TransitPublisherStartupInitializer>();
         }
 
