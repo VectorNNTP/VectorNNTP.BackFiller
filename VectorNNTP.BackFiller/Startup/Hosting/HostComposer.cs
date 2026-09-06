@@ -204,6 +204,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         {
             ArgumentNullException.ThrowIfNull(services);
             _ = services.AddSingleton<IArticleRetentionAuthority, ArticleRetentionAuthority>();
+            _ = services.AddSingleton<IArticleProcessingDrainBarrier, ArticleProcessingDrainBarrier>();
             _ = services.AddHostedService<ArticleRetentionSweepService>();
             _ = services.AddSingleton<NntpArticleGrabberWorkflow>();
             _ = services.AddSingleton<IRabbitMqArticleWorkRequestParser, RabbitMqArticleWorkRequestParser>();

@@ -1416,7 +1416,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _globalQueue.MarkInFlightTerminal();
             }
 
-            if (ShouldMarkTransitCompleted(result))
+            if (ShouldMarkTransitCompleted(result, priorState))
             {
                 _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
             }
@@ -1437,12 +1437,32 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _ = item.TrySetCompletionResult(result);
         }
 
-        private static bool ShouldMarkTransitCompleted(TransitPublishResult result)
+        private static bool ShouldMarkTransitCompleted(TransitPublishResult result, TransitWorkItemState priorState)
         {
             ArgumentNullException.ThrowIfNull(result);
 
-            return result.Status == TransitPublishStatus.Accepted
-                || (result.Status == TransitPublishStatus.Rejected && result.ResponseCode == 439);
+            if (result.Status == TransitPublishStatus.Accepted)
+            {
+                return true;
+            }
+
+            if (result.Status == TransitPublishStatus.Rejected && result.ResponseCode == 439)
+            {
+                return true;
+            }
+
+            return result.Status == TransitPublishStatus.Unavailable
+                && IsAdmittedTransitOwnershipState(priorState);
+        }
+
+        private static bool IsAdmittedTransitOwnershipState(TransitWorkItemState priorState)
+        {
+            return priorState is TransitWorkItemState.Queued
+                or TransitWorkItemState.RetryPending
+                or TransitWorkItemState.Claimed
+                or TransitWorkItemState.Staged
+                or TransitWorkItemState.Flushed
+                or TransitWorkItemState.AwaitingResponse;
         }
 
         /// <summary>

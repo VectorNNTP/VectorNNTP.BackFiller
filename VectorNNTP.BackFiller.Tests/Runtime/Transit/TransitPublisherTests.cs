@@ -3579,6 +3579,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
             Assert.Equal(TransitPublishStatus.Unavailable, result.Status);
 
+            ArticleRetentionSnapshot retentionSnapshot = GetRetentionAuthority(publisher).GetSnapshot();
+            Assert.Equal(0, retentionSnapshot.TransitCompletionCount);
+
             TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
             Assert.Equal(0, snapshot.QueueSnapshot.RetryPendingCount);
         }
@@ -3666,6 +3669,47 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             ArticleRetentionSnapshot snapshot = retention.GetSnapshot();
             Assert.Equal(0, snapshot.TransitCompletionCount);
+        }
+
+        /// <summary>
+        /// Verifies admitted publish work that loses retention before claim terminalizes as unavailable and marks transit completion.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenRetentionExpiresAfterAdmissionBeforeClaim_UnavailableInvokesTransitCompletionOnce()
+        {
+            byte[] payload = [(byte)'U', (byte)'\n'];
+            string messageId = "<expired-after-admit@example.com>";
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port: 19047);
+            ArticleRetentionAuthority innerRetention = new(options);
+            TrackingRetentionAuthority retention = new(innerRetention);
+            using DownloadedArticleBuffer retained = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult admission = retention.TryRetainSuccessArticle(messageId, retained, DateTimeOffset.UtcNow.AddDays(-1));
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+
+            _ = retention.ExpireEligibleArticles(DateTimeOffset.UtcNow);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, retentionAuthority: retention);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Unavailable, result.Status);
+            Assert.Equal(1, retention.MarkTransitCompletedCallCount);
+
+            ArticleRetentionSnapshot snapshot = retention.GetSnapshot();
+            Assert.Equal(0, snapshot.TransitCompletionCount);
+            Assert.Equal(0, snapshot.RetainedArticleCount);
         }
 
         /// <summary>
@@ -5126,6 +5170,57 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             TransitConnection connection = GetPrimaryConnection(publisher);
             SetConnectionState(connection, state);
+        }
+
+        private sealed class TrackingRetentionAuthority(IArticleRetentionAuthority inner) : IArticleRetentionAuthority
+        {
+            private readonly IArticleRetentionAuthority _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            private int _markTransitCompletedCallCount;
+
+            public int MarkTransitCompletedCallCount => Volatile.Read(ref _markTransitCompletedCallCount);
+
+            public TimeSpan SweepInterval => _inner.SweepInterval;
+
+            public ArticleRetentionAdmissionResult TryRetainSuccessArticle(string messageId, DownloadedArticleBuffer payloadOwner, DateTimeOffset? insertedUtc = null)
+            {
+                return _inner.TryRetainSuccessArticle(messageId, payloadOwner, insertedUtc);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageId(string messageId)
+            {
+                return _inner.TryAcquireReadLeaseByMessageId(messageId);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageIdMd5(string messageIdMd5)
+            {
+                return _inner.TryAcquireReadLeaseByMessageIdMd5(messageIdMd5);
+            }
+
+            public ArticleRetentionCompletionResult MarkTransitCompleted(string messageId)
+            {
+                _ = Interlocked.Increment(ref _markTransitCompletedCallCount);
+                return _inner.MarkTransitCompleted(messageId);
+            }
+
+            public ArticleRetentionCompletionResult MarkListenerCompleted(string messageId)
+            {
+                return _inner.MarkListenerCompleted(messageId);
+            }
+
+            public long ExpireEligibleArticles(DateTimeOffset nowUtc)
+            {
+                return _inner.ExpireEligibleArticles(nowUtc);
+            }
+
+            public void BeginShutdown()
+            {
+                _inner.BeginShutdown();
+            }
+
+            public ArticleRetentionSnapshot GetSnapshot(DateTimeOffset? nowUtc = null)
+            {
+                return _inner.GetSnapshot(nowUtc);
+            }
         }
 
         /// <summary>

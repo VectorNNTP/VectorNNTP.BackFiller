@@ -352,6 +352,93 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
+    /// Tracks article-processing handoff work and signals when no admitted processing can still enter the result sink.
+    /// </summary>
+    internal interface IArticleProcessingDrainBarrier
+    {
+        /// <summary>
+        /// Registers one processing operation that can still enter result-sink handoff.
+        /// </summary>
+        public void EnterProcessingScope();
+
+        /// <summary>
+        /// Signals one registered processing operation has exited result-sink handoff.
+        /// </summary>
+        public void ExitProcessingScope();
+
+        /// <summary>
+        /// Signals the processing loop has completed reading admitted deliveries.
+        /// </summary>
+        public void SignalProcessingLoopCompleted();
+
+        /// <summary>
+        /// Waits until the processing loop is completed and no registered processing operation remains.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the shutdown wait.</param>
+        /// <returns>A task that completes when processing handoff is drained.</returns>
+        public Task WaitForDrainAsync(CancellationToken cancellationToken);
+    }
+
+    /// <summary>
+    /// Synchronizes shutdown ordering between article processing handoff and retention admission closure.
+    /// </summary>
+    internal sealed class ArticleProcessingDrainBarrier : IArticleProcessingDrainBarrier
+    {
+        private readonly object _gate = new();
+        private readonly TaskCompletionSource<bool> _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _inFlightCount;
+        private bool _processingLoopCompleted;
+
+        /// <inheritdoc/>
+        public void EnterProcessingScope()
+        {
+            lock (_gate)
+            {
+                _inFlightCount++;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void ExitProcessingScope()
+        {
+            lock (_gate)
+            {
+                if (_inFlightCount <= 0)
+                {
+                    return;
+                }
+
+                _inFlightCount--;
+                TrySignalDrainedNoLock();
+            }
+        }
+
+        /// <inheritdoc/>
+        public void SignalProcessingLoopCompleted()
+        {
+            lock (_gate)
+            {
+                _processingLoopCompleted = true;
+                TrySignalDrainedNoLock();
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task WaitForDrainAsync(CancellationToken cancellationToken)
+        {
+            await _drained.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        private void TrySignalDrainedNoLock()
+        {
+            if (_processingLoopCompleted && _inFlightCount == 0)
+            {
+                _ = _drained.TrySetResult(true);
+            }
+        }
+    }
+
+    /// <summary>
     /// Writes completed processing results into a bounded channel for later consumption.
     /// </summary>
     /// <remarks>
