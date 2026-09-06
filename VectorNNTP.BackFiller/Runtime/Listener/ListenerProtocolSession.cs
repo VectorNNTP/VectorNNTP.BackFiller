@@ -36,6 +36,8 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private readonly object _stateGate = new();
         private readonly Action<uint>? _onAwaitingReceiptAck;
         private readonly Action<uint>? _onTerminalized;
+        private readonly Action<ListenerFoundTransferEvent>? _onFoundTransferTerminal;
+        private readonly Action<ListenerReceiptAckEvent>? _onReceiptAcknowledged;
         private CancellationTokenSource? _runCts;
         private Task? _writerTask;
         private Task? _runTask;
@@ -50,16 +52,22 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// <param name="requestHandler">Handler used to execute validated GetRequest operations.</param>
         /// <param name="onAwaitingReceiptAck">Optional callback invoked when a Found response has completed transport write and request transitions to AwaitingReceiptAck.</param>
         /// <param name="onTerminalized">Optional callback invoked when a request is terminalized and removed from outstanding tracking.</param>
+        /// <param name="onFoundTransferTerminal">Optional callback invoked when a Found response write reaches a terminal transfer status.</param>
+        /// <param name="onReceiptAcknowledged">Optional callback invoked when a receipt acknowledgement frame is accepted for a tracked request.</param>
         internal ListenerProtocolSession(
             IListenerProtocolSessionTransport transport,
             IListenerProtocolRequestHandler requestHandler,
             Action<uint>? onAwaitingReceiptAck = null,
-            Action<uint>? onTerminalized = null)
+            Action<uint>? onTerminalized = null,
+            Action<ListenerFoundTransferEvent>? onFoundTransferTerminal = null,
+            Action<ListenerReceiptAckEvent>? onReceiptAcknowledged = null)
         {
             _transport = transport ?? throw new ArgumentNullException(nameof(transport));
             _requestHandler = requestHandler ?? throw new ArgumentNullException(nameof(requestHandler));
             _onAwaitingReceiptAck = onAwaitingReceiptAck;
             _onTerminalized = onTerminalized;
+            _onFoundTransferTerminal = onFoundTransferTerminal;
+            _onReceiptAcknowledged = onReceiptAcknowledged;
             _processingLimiter = new SemaphoreSlim(MaxConcurrentProcessingRequests, MaxConcurrentProcessingRequests);
             _outbound = Channel.CreateBounded<OutboundResponseDescriptor>(new BoundedChannelOptions(MaxOutboundResponses)
             {
@@ -137,7 +145,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 BeginGracefulShutdown();
             }
 
-            await DrainAndStopAsync(cancellationToken).ConfigureAwait(false);
+            await DrainAndStopAsync(CancellationToken.None).ConfigureAwait(false);
 
             if (readFault is not null)
             {
@@ -238,7 +246,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 BeginForcedShutdown();
             }
 
-            _requests.Clear();
+            TerminalizeOutstandingRequests();
             _requestTasks.Clear();
             _processingLimiter.Dispose();
             await _transport.DisposeAsync().ConfigureAwait(false);
@@ -459,7 +467,17 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
 
             ListenerReceiptAckTransition transition = context.RegisterReceiptAcknowledgement();
-            if (transition is ListenerReceiptAckTransition.PendingFoundWrite or ListenerReceiptAckTransition.AlreadyAcknowledged)
+            if (transition == ListenerReceiptAckTransition.AlreadyAcknowledged)
+            {
+                return;
+            }
+
+            if (transition is ListenerReceiptAckTransition.PendingFoundWrite or ListenerReceiptAckTransition.Terminalize)
+            {
+                _onReceiptAcknowledged?.Invoke(new ListenerReceiptAckEvent(requestId));
+            }
+
+            if (transition == ListenerReceiptAckTransition.PendingFoundWrite)
             {
                 return;
             }
@@ -544,6 +562,11 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 return;
             }
 
+            if (descriptor.Outcome == ResponseOutcome.Found)
+            {
+                _onFoundTransferTerminal?.Invoke(new ListenerFoundTransferEvent(descriptor.RequestId, status));
+            }
+
             if (status != ListenerTransferCompletionStatus.Completed)
             {
                 Terminalize(descriptor.RequestId);
@@ -578,6 +601,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             {
                 removed.MarkTerminal();
                 _onTerminalized?.Invoke(requestId);
+            }
+        }
+
+        private void TerminalizeOutstandingRequests()
+        {
+            List<uint> requestIds = [.. _requests.Keys];
+            for (int i = 0; i < requestIds.Count; i++)
+            {
+                Terminalize(requestIds[i]);
             }
         }
 

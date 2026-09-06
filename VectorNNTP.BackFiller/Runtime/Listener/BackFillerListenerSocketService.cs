@@ -11,6 +11,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 
@@ -29,6 +30,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         BackFillerRuntimeOptions runtimeOptions,
         BackFillerCertificateState certificateState,
         ShutdownCoordinator shutdownCoordinator,
+        IArticleRetentionAuthority retentionAuthority,
         ILogger<BackFillerListenerSocketService> logger) : BackgroundService
     {
         /// <summary>
@@ -49,6 +51,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator = shutdownCoordinator ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
         /// <summary>
+        /// Retention authority used by per-connection protocol request handlers for article retrieval lifecycle ownership.
+        /// </summary>
+        private readonly IArticleRetentionAuthority _retentionAuthority = retentionAuthority ?? throw new ArgumentNullException(nameof(retentionAuthority));
+        /// <summary>
         /// Logger receiving listener lifecycle, bind, handshake, and shutdown diagnostics.
         /// </summary>
         private readonly ILogger<BackFillerListenerSocketService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -61,6 +67,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// Tracks accepted clients so shutdown can dispose every live connection.
         /// </summary>
         private readonly HashSet<TcpClient> _activeClients = [];
+        /// <summary>
+        /// Tracks detached per-connection processing tasks so shutdown can await protocol-session completion.
+        /// </summary>
+        private readonly HashSet<Task> _activeConnectionTasks = [];
         /// <summary>
         /// Owns the bound listener sockets created for the configured endpoint set.
         /// </summary>
@@ -104,6 +114,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             {
                 CloseListenSockets();
                 CloseActiveClients();
+                await AwaitActiveConnectionTasksAsync(CancellationToken.None).ConfigureAwait(false);
                 LogListenerStopped(_logger);
             }
         }
@@ -144,7 +155,8 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     throw new InvalidOperationException($"Inbound listener accept loop failed for endpoint {listenSocket.LocalEndPoint}.", ex);
                 }
 
-                _ = ProcessAcceptedSocketAsync(acceptedSocket, cancellationToken);
+                Task connectionTask = ProcessAcceptedSocketAsync(acceptedSocket, cancellationToken);
+                RegisterConnectionTask(connectionTask);
             }
         }
 
@@ -185,7 +197,14 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 StreamListenerProtocolSessionTransport transport = new(sslStream);
                 await using (transport.ConfigureAwait(false))
                 {
-                    ListenerProtocolSession session = new(transport, new ListenerProtocolSessionDefaultHandler());
+                    ListenerProtocolRetentionRequestHandler requestHandler = new(_retentionAuthority);
+                    ListenerProtocolSession session = new(
+                        transport,
+                        requestHandler,
+                        onAwaitingReceiptAck: null,
+                        onTerminalized: requestHandler.OnRequestTerminalized,
+                        onFoundTransferTerminal: requestHandler.OnFoundTransferTerminal,
+                        onReceiptAcknowledged: requestHandler.OnReceiptAcknowledged);
                     await session.RunAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -370,6 +389,38 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
+        /// Adds one detached per-connection processing task to active shutdown tracking.
+        /// </summary>
+        /// <param name="connectionTask">Connection task to track until completion.</param>
+        private void RegisterConnectionTask(Task connectionTask)
+        {
+            ArgumentNullException.ThrowIfNull(connectionTask);
+            lock (_connectionsGate)
+            {
+                _ = _activeConnectionTasks.Add(connectionTask);
+            }
+
+            _ = connectionTask.ContinueWith(
+                static (task, state) => ((BackFillerListenerSocketService)state!).UnregisterConnectionTask(task),
+                this,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        /// <summary>
+        /// Removes one completed detached per-connection task from active shutdown tracking.
+        /// </summary>
+        /// <param name="connectionTask">Completed task to remove.</param>
+        private void UnregisterConnectionTask(Task connectionTask)
+        {
+            lock (_connectionsGate)
+            {
+                _ = _activeConnectionTasks.Remove(connectionTask);
+            }
+        }
+
+        /// <summary>
         /// Removes one client from the active-connection set after its connection handling has completed.
         /// </summary>
         /// <param name="client">Client to remove from shutdown tracking.</param>
@@ -429,6 +480,26 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 {
                 }
             }
+        }
+
+        /// <summary>
+        /// Awaits all currently tracked detached per-connection processing tasks.
+        /// </summary>
+        /// <param name="cancellationToken">Token that bounds shutdown wait for detached connection processing.</param>
+        private async Task AwaitActiveConnectionTasksAsync(CancellationToken cancellationToken)
+        {
+            Task[] snapshot;
+            lock (_connectionsGate)
+            {
+                snapshot = [.. _activeConnectionTasks];
+            }
+
+            if (snapshot.Length == 0)
+            {
+                return;
+            }
+
+            await Task.WhenAll(snapshot).WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>

@@ -7,7 +7,12 @@
 
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using System.Text;
+using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.Listener;
 using Xunit;
 
@@ -347,6 +352,306 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             Assert.Single(frames);
             Assert.Equal(ListenerOpcode.GetResponseError, frames[0].Frame!.Value.Header.Opcode);
             Assert.Equal(ListenerProtocolErrorCode.InvalidRequestId, ReadErrorCode(frames[0].Frame.Value.Payload));
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenRetainedArticleExists_WritesFoundAndMarksListenerCompletedAfterAck()
+        {
+            const string messageId = "<listener-found@example.com>";
+            const string payloadText = "found-from-retention";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, payloadText);
+
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(51, messageIdMd5);
+            byte[] ack = ListenerProtocolEncoder.EncodeGetReceiptAck(51);
+            GatedAckReadTransport transport = new(request, ack, 4096);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            Task runTask = session.RunAsync(CancellationToken.None);
+            try
+            {
+                await transport.WaitForWritesAtLeastAsync(checked((int)(ListenerProtocol.HeaderLengthBytes + payloadText.Length)));
+
+                ArticleRetentionSnapshot beforeAck = authority.GetSnapshot();
+                Assert.Equal(1, beforeAck.ActiveReaderCount);
+                Assert.Equal(0, beforeAck.ListenerCompletionCount);
+
+                transport.ReleaseAcknowledgementRead();
+                await runTask;
+            }
+            finally
+            {
+                transport.ReleaseAcknowledgementRead();
+                await runTask;
+            }
+
+            IReadOnlyList<ListenerFrameParseResult> frames = ParseAllFrames(transport.GetWrittenBytes());
+            Assert.Single(frames);
+            Assert.Equal(ListenerOpcode.GetResponseFound, frames[0].Frame!.Value.Header.Opcode);
+            Assert.Equal<uint>(51, frames[0].Frame.Value.Header.RequestId);
+            Assert.Equal(payloadText, Encoding.ASCII.GetString(frames[0].Frame.Value.Payload.ToArray()));
+
+            ArticleRetentionSnapshot afterAck = authority.GetSnapshot();
+            Assert.Equal(0, afterAck.ActiveReaderCount);
+            Assert.Equal(1, afterAck.ListenerCompletionCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenMd5Missing_WritesNotFoundAndDoesNotMarkListenerCompleted()
+        {
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(63, "30edc94157aa16fe644a45a1f1ffe160");
+            TestTransport transport = new([request], 4096);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            await session.RunAsync(CancellationToken.None);
+
+            IReadOnlyList<ListenerFrameParseResult> frames = ParseAllFrames(transport.GetWrittenBytes());
+            Assert.Single(frames);
+            Assert.Equal(ListenerOpcode.GetResponseNotFound, frames[0].Frame!.Value.Header.Opcode);
+            Assert.Equal<uint>(63, frames[0].Frame.Value.Header.RequestId);
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+            Assert.Equal(0, snapshot.ListenerCompletionCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenFoundWithoutAck_DoesNotMarkListenerCompletedAndReleasesLease()
+        {
+            const string messageId = "<listener-no-ack@example.com>";
+            const string payloadText = "payload-no-ack";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, payloadText);
+
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(77, messageIdMd5);
+            TestTransport transport = new([request], 4096);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            await session.RunAsync(CancellationToken.None);
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+            Assert.Equal(0, snapshot.ListenerCompletionCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenFoundTransferFails_DoesNotMarkListenerCompletedAndReleasesLease()
+        {
+            const string messageId = "<listener-transfer-fail@example.com>";
+            const string payloadText = "payload-transfer-fail";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, payloadText);
+
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(88, messageIdMd5);
+            FailingFoundPayloadTransport transport = new(request);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            await session.RunAsync(CancellationToken.None);
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+            Assert.Equal(0, snapshot.ListenerCompletionCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenFoundTransferCancelled_DoesNotMarkListenerCompletedAndReleasesLease()
+        {
+            const string messageId = "<listener-transfer-cancel@example.com>";
+            const string payloadText = "payload-transfer-cancel";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, payloadText);
+
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(89, messageIdMd5);
+            CancellingFoundPayloadTransport transport = new(request);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            await session.RunAsync(CancellationToken.None);
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+            Assert.Equal(0, snapshot.ListenerCompletionCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WithRetentionBackedHandler_WhenMultipleRequestsFound_ResolvesEachRequestIndependently()
+        {
+            const string messageIdOne = "<listener-multi-1@example.com>";
+            const string messageIdTwo = "<listener-multi-2@example.com>";
+            const string payloadOne = "payload-one";
+            const string payloadTwo = "payload-two";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string md5One = RetainArticle(authority, messageIdOne, payloadOne);
+            string md5Two = RetainArticle(authority, messageIdTwo, payloadTwo);
+
+            byte[] req1 = ListenerProtocolEncoder.EncodeGetRequest(101, md5One);
+            byte[] req2 = ListenerProtocolEncoder.EncodeGetRequest(102, md5Two);
+            byte[] ack2 = ListenerProtocolEncoder.EncodeGetReceiptAck(102);
+            byte[] ack1 = ListenerProtocolEncoder.EncodeGetReceiptAck(101);
+            byte[] coalesced = new byte[req1.Length + req2.Length + ack2.Length + ack1.Length];
+            Buffer.BlockCopy(req1, 0, coalesced, 0, req1.Length);
+            Buffer.BlockCopy(req2, 0, coalesced, req1.Length, req2.Length);
+            Buffer.BlockCopy(ack2, 0, coalesced, req1.Length + req2.Length, ack2.Length);
+            Buffer.BlockCopy(ack1, 0, coalesced, req1.Length + req2.Length + ack2.Length, ack1.Length);
+
+            TestTransport transport = new([coalesced], 4096);
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                onAwaitingReceiptAck: null,
+                onTerminalized: handler.OnRequestTerminalized,
+                onFoundTransferTerminal: handler.OnFoundTransferTerminal,
+                onReceiptAcknowledged: handler.OnReceiptAcknowledged);
+
+            await session.RunAsync(CancellationToken.None);
+
+            IReadOnlyList<ListenerFrameParseResult> frames = ParseAllFrames(transport.GetWrittenBytes());
+            Assert.Equal(2, frames.Count);
+            Assert.All(frames, static frame => Assert.Equal(ListenerOpcode.GetResponseFound, frame.Frame!.Value.Header.Opcode));
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+            Assert.Equal(2, snapshot.ListenerCompletionCount);
+        }
+
+        [Fact]
+        public async Task HandleGetRequestAsync_WithRetentionBackedHandler_RequiresExactLowercaseCanonicalMd5()
+        {
+            const string messageId = "<listener-md5-case@example.com>";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, "payload-case");
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+
+            ListenerSessionRequestDispatchResult uppercase = await handler.HandleGetRequestAsync(
+                201,
+                Encoding.ASCII.GetBytes(messageIdMd5.ToUpperInvariant()),
+                CancellationToken.None);
+            ListenerSessionRequestDispatchResult lowercase = await handler.HandleGetRequestAsync(
+                202,
+                Encoding.ASCII.GetBytes(messageIdMd5),
+                CancellationToken.None);
+
+            Assert.Equal(ListenerSessionRequestDispatchKind.NotFound, uppercase.Kind);
+            Assert.Equal(ListenerSessionRequestDispatchKind.Found, lowercase.Kind);
+
+            handler.OnRequestTerminalized(202);
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+        }
+
+        [Fact]
+        public async Task HandleGetRequestAsync_WithRetentionBackedHandler_UsesLeasePayloadMemoryWithoutCopy()
+        {
+            const string messageId = "<listener-no-copy@example.com>";
+
+            await using ArticleRetentionAuthority authority = CreateRetentionAuthority();
+            string messageIdMd5 = RetainArticle(authority, messageId, "payload-no-copy");
+
+            ArticleRetentionReadLeaseResult baselineLeaseResult = authority.TryAcquireReadLeaseByMessageIdMd5(messageIdMd5);
+            Assert.True(baselineLeaseResult.IsAcquired);
+            using IArticleRetentionReadLease baselineLease = Assert.IsAssignableFrom<IArticleRetentionReadLease>(baselineLeaseResult.Lease);
+
+            ListenerProtocolRetentionRequestHandler handler = new(authority);
+            ListenerSessionRequestDispatchResult dispatch = await handler.HandleGetRequestAsync(
+                301,
+                Encoding.ASCII.GetBytes(messageIdMd5),
+                CancellationToken.None);
+
+            Assert.Equal(ListenerSessionRequestDispatchKind.Found, dispatch.Kind);
+            Assert.True(MemoryMarshal.TryGetArray(baselineLease.Payload, out ArraySegment<byte> baselineSegment));
+            Assert.True(MemoryMarshal.TryGetArray(dispatch.FoundPayload, out ArraySegment<byte> foundSegment));
+            Assert.Same(baselineSegment.Array, foundSegment.Array);
+
+            baselineLease.Dispose();
+            handler.OnRequestTerminalized(301);
+
+            ArticleRetentionSnapshot snapshot = authority.GetSnapshot();
+            Assert.Equal(0, snapshot.ActiveReaderCount);
+        }
+
+        private static ArticleRetentionAuthority CreateRetentionAuthority()
+        {
+            return new ArticleRetentionAuthority(CreateRuntimeOptions(capacityBytes: 128 * 1024));
+        }
+
+        private static string RetainArticle(ArticleRetentionAuthority authority, string messageId, string payloadText)
+        {
+            DownloadedArticleBuffer payload = CreateBuffer(payloadText);
+            ArticleRetentionAdmissionResult admission = authority.TryRetainSuccessArticle(messageId, payload);
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+            Assert.NotNull(admission.MessageIdMd5);
+            return admission.MessageIdMd5!;
+        }
+
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(long capacityBytes)
+        {
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: "backfiller01.usenet.ninja",
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "usenet.ninja",
+                ValidatedLogDirectory: "C:\\logs",
+                ValidatedCertificateDirectory: "C:\\certs",
+                RabbitMqHosts: ["rabbit01.usenet.ninja"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: true,
+                TransitServerHost: "transit01.usenet.ninja",
+                TransitServerPort: 563,
+                TransitServerUseSsl: true,
+                BindPort: 119,
+                ArticleRetention: new ArticleRetentionRuntimeOptions(
+                    MaximumRetainedPayloadBytes: capacityBytes,
+                    RetentionTtl: TimeSpan.FromSeconds(60),
+                    SweepInterval: TimeSpan.FromSeconds(1)));
+        }
+
+        private static DownloadedArticleBuffer CreateBuffer(string payload)
+        {
+            byte[] bytes = Encoding.ASCII.GetBytes(payload);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(bytes.Length);
+            Array.Copy(bytes, rented, bytes.Length);
+            return new DownloadedArticleBuffer(rented, bytes.Length);
         }
 
         private static ListenerProtocolErrorCode ReadErrorCode(ReadOnlySequence<byte> payload)
@@ -820,6 +1125,124 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                         threshold.Value.TrySetResult(true);
                     }
                 }
+            }
+        }
+
+        private sealed class FailingFoundPayloadTransport : IListenerProtocolSessionTransport
+        {
+            private readonly byte[] _request;
+            private int _readStep;
+            private int _writeCalls;
+            private bool _disposed;
+
+            internal FailingFoundPayloadTransport(byte[] request)
+            {
+                _request = request;
+            }
+
+            public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(FailingFoundPayloadTransport));
+                }
+
+                if (Volatile.Read(ref _readStep) == 0)
+                {
+                    if (_request.Length > buffer.Length)
+                    {
+                        throw new InvalidOperationException("Read fragment exceeds provided buffer size.");
+                    }
+
+                    _request.CopyTo(buffer);
+                    _ = Interlocked.Exchange(ref _readStep, 1);
+                    return ValueTask.FromResult(_request.Length);
+                }
+
+                return ValueTask.FromResult(0);
+            }
+
+            public ValueTask<int> WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(FailingFoundPayloadTransport));
+                }
+
+                int call = Interlocked.Increment(ref _writeCalls);
+                if (call == 1)
+                {
+                    return ValueTask.FromResult(buffer.Length);
+                }
+
+                throw new IOException("Simulated payload transfer failure.");
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _disposed = true;
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        private sealed class CancellingFoundPayloadTransport : IListenerProtocolSessionTransport
+        {
+            private readonly byte[] _request;
+            private int _readStep;
+            private int _writeCalls;
+            private bool _disposed;
+
+            internal CancellingFoundPayloadTransport(byte[] request)
+            {
+                _request = request;
+            }
+
+            public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(CancellingFoundPayloadTransport));
+                }
+
+                if (Volatile.Read(ref _readStep) == 0)
+                {
+                    if (_request.Length > buffer.Length)
+                    {
+                        throw new InvalidOperationException("Read fragment exceeds provided buffer size.");
+                    }
+
+                    _request.CopyTo(buffer);
+                    _ = Interlocked.Exchange(ref _readStep, 1);
+                    return ValueTask.FromResult(_request.Length);
+                }
+
+                return ValueTask.FromResult(0);
+            }
+
+            public ValueTask<int> WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(CancellingFoundPayloadTransport));
+                }
+
+                int call = Interlocked.Increment(ref _writeCalls);
+                if (call == 1)
+                {
+                    return ValueTask.FromResult(buffer.Length);
+                }
+
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _disposed = true;
+                return ValueTask.CompletedTask;
             }
         }
 
