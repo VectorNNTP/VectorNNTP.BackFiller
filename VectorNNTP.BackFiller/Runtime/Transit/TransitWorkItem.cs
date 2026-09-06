@@ -34,24 +34,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private readonly TaskCompletionSource<TransitPublishResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>
-        /// Initializes a transit work item for one article payload.
+        /// Initializes a transit work item identified by Message-ID and attempt budget metadata.
         /// </summary>
         /// <param name="workItemId">Unique publisher-assigned work-item identifier.</param>
         /// <param name="messageId">Article Message-ID used for protocol framing and response correlation.</param>
-        /// <param name="payload">Owned payload bytes that remain associated with this work item for its full lifetime.</param>
         /// <param name="maxAttempts">Maximum number of transmission attempts allowed before failure terminalization.</param>
-        internal TransitWorkItem(long workItemId, string messageId, byte[] payload, int maxAttempts = 3)
+        internal TransitWorkItem(long workItemId, string messageId, int maxAttempts = 3)
         {
             if (string.IsNullOrWhiteSpace(messageId))
             {
                 throw new ArgumentException("Message-ID is required.", nameof(messageId));
-            }
-
-            ArgumentNullException.ThrowIfNull(payload);
-
-            if (payload.Length == 0)
-            {
-                throw new ArgumentException("Payload must not be empty.", nameof(payload));
             }
 
             if (maxAttempts <= 0)
@@ -61,8 +53,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             WorkItemId = workItemId;
             MessageId = messageId;
-            Payload = payload;
-            PayloadBytes = payload.Length;
             MaxAttempts = maxAttempts;
             FirstEnqueuedUtc = DateTimeOffset.UtcNow;
             LastEnqueuedUtc = FirstEnqueuedUtc;
@@ -77,16 +67,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Gets the article Message-ID used for correlation and diagnostics.
         /// </summary>
         internal string MessageId { get; }
-
-        /// <summary>
-        /// Gets the owned article payload bytes.
-        /// </summary>
-        internal byte[] Payload { get; }
-
-        /// <summary>
-        /// Gets the payload size in bytes.
-        /// </summary>
-        internal int PayloadBytes { get; }
 
         /// <summary>
         /// Gets how many transmission attempts have been claimed so far.

@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
@@ -107,8 +108,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             HostApplicationBuilder builder = Host.CreateApplicationBuilder();
             _ = builder.Services.AddLogging();
-            _ = builder.Services.AddSingleton(CreateRuntimeOptions(19005));
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(19005);
+            _ = builder.Services.AddSingleton(options);
             _ = builder.Services.AddSingleton(TimeProvider.System);
+            _ = builder.Services.AddSingleton<IArticleRetentionAuthority>(new ArticleRetentionAuthority(options));
             _ = builder.Services.AddSingleton<TransitPublisher>();
             _ = builder.Services.AddHostedService<FailingStartupHostedService>();
 
@@ -133,10 +136,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <returns>The value returned by the create publisher helper.</returns>
         private static TransitPublisher CreatePublisher(int port, int connectionPoolSize)
         {
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(port);
             return new TransitPublisher(
-                CreateRuntimeOptions(port),
+                options,
                 TimeProvider.System,
                 LoggerFactory.Create(static logging => logging.ClearProviders()).CreateLogger<TransitPublisher>(),
+                new ArticleRetentionAuthority(options),
                 connectionPoolSize,
                 perConnectionPipelineDepth: 2);
         }

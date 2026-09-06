@@ -14,7 +14,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// Global bounded transit work queue that tracks queued, retry-pending, and in-flight ownership separately.
     /// </summary>
     /// <remarks>
-    /// Admission is bounded by both item count and payload bytes. Work remains globally owned by the queue until a
+    /// Admission is bounded by item count. Work remains globally owned by the queue until a
     /// connection claims it, and explicit accounting helpers enforce exactly-once transfer between queued,
     /// retry-pending, in-flight, and terminal states.
     /// </remarks>
@@ -55,20 +55,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private readonly int _maxQueuedItemCount;
 
-        /// <summary>
-        /// Maximum aggregate payload bytes allowed to remain queued at once.
-        /// </summary>
-        private readonly long _maxQueuedPayloadBytes;
 
         /// <summary>
         /// Current count of work items still owned by the ready queue.
         /// </summary>
         private long _queuedItemCount;
 
-        /// <summary>
-        /// Current payload-byte total still owned by the ready queue.
-        /// </summary>
-        private long _queuedPayloadBytes;
 
         /// <summary>
         /// Current count of work items waiting for a retry eligibility deadline.
@@ -91,25 +83,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private volatile bool _admissionFrozen;
 
         /// <summary>
-        /// Initializes a global transit work queue with bounded item-count and payload-byte capacity.
+        /// Initializes a global transit work queue with bounded item-count capacity.
         /// </summary>
         /// <param name="maxQueuedItemCount">Maximum number of ready-queue items that may be buffered at once.</param>
-        /// <param name="maxQueuedPayloadBytes">Maximum aggregate payload bytes that may be buffered at once.</param>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when either bound is zero or negative.</exception>
-        internal GlobalTransitWorkQueue(int maxQueuedItemCount, long maxQueuedPayloadBytes)
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the bound is zero or negative.</exception>
+        internal GlobalTransitWorkQueue(int maxQueuedItemCount)
         {
             if (maxQueuedItemCount <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(maxQueuedItemCount), maxQueuedItemCount, "Max queued item count must be greater than zero.");
             }
 
-            if (maxQueuedPayloadBytes <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(maxQueuedPayloadBytes), maxQueuedPayloadBytes, "Max queued payload bytes must be greater than zero.");
-            }
-
             _maxQueuedItemCount = maxQueuedItemCount;
-            _maxQueuedPayloadBytes = maxQueuedPayloadBytes;
             _readyQueue = Channel.CreateUnbounded<TransitWorkItem>(new UnboundedChannelOptions
             {
                 SingleReader = false,
@@ -123,10 +108,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         internal long QueuedItemCount => Interlocked.Read(ref _queuedItemCount);
 
-        /// <summary>
-        /// Gets the number of payload bytes still owned by the ready queue.
-        /// </summary>
-        internal long QueuedPayloadBytes => Interlocked.Read(ref _queuedPayloadBytes);
 
         /// <summary>
         /// Gets the number of work items parked in retry-pending state.
@@ -149,7 +130,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         internal bool IsAdmissionFrozen => _admissionFrozen;
 
         /// <summary>
-        /// Enqueues a work item once item-count and payload-byte capacity are both available.
+        /// Enqueues a work item once item-count capacity is available.
         /// </summary>
         /// <param name="item">Work item to admit into the ready queue.</param>
         /// <param name="cancellationToken">Cancellation token for blocked admission waits.</param>
@@ -177,10 +158,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 bool reserved = false;
                 lock (_admissionGate)
                 {
-                    if (CanAdmit(item.PayloadBytes))
+                    if (CanAdmit())
                     {
                         _ = Interlocked.Increment(ref _queuedItemCount);
-                        _ = Interlocked.Add(ref _queuedPayloadBytes, item.PayloadBytes);
                         reserved = true;
                     }
                 }
@@ -226,7 +206,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
 
                     _ = Interlocked.Decrement(ref _queuedItemCount);
-                    _ = Interlocked.Add(ref _queuedPayloadBytes, -candidate.PayloadBytes);
                     _ = Interlocked.Increment(ref _inFlightCount);
                     item = candidate;
                     return true;
@@ -393,10 +372,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Releases queued ownership for an item that is terminalized before being claimed.
         /// </summary>
-        /// <param name="payloadBytes">Payload-byte contribution previously counted for the queued item.</param>
-        internal void MarkQueuedTerminal(int payloadBytes)
+        internal void MarkQueuedTerminal()
         {
-            DecrementQueuedOwnership(payloadBytes);
+            DecrementQueuedOwnership();
         }
 
         /// <summary>
@@ -423,9 +401,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             return new GlobalTransitWorkQueueSnapshot(
                 MaxQueuedItemCount: _maxQueuedItemCount,
-                MaxQueuedPayloadBytes: _maxQueuedPayloadBytes,
                 QueuedItemCount: Interlocked.Read(ref _queuedItemCount),
-                QueuedPayloadBytes: Interlocked.Read(ref _queuedPayloadBytes),
                 RetryPendingCount: Interlocked.Read(ref _retryPendingCount),
                 InFlightCount: Interlocked.Read(ref _inFlightCount),
                 AdmissionWaitCount: Interlocked.Read(ref _admissionWaitCount),
@@ -433,15 +409,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Determines whether a new item of the specified size can be admitted under current queue bounds.
+        /// Determines whether a new item can be admitted under current queue bounds.
         /// </summary>
-        /// <param name="payloadBytes">Payload-byte contribution of the candidate item.</param>
-        /// <returns><see langword="true"/> when both item-count and payload-byte limits allow admission.</returns>
-        private bool CanAdmit(int payloadBytes)
+        /// <returns><see langword="true"/> when item-count limits allow admission.</returns>
+        private bool CanAdmit()
         {
             long currentCount = Interlocked.Read(ref _queuedItemCount);
-            long currentBytes = Interlocked.Read(ref _queuedPayloadBytes);
-            return currentCount + 1 <= _maxQueuedItemCount && currentBytes + payloadBytes <= _maxQueuedPayloadBytes;
+            return currentCount + 1 <= _maxQueuedItemCount;
         }
 
         /// <summary>
@@ -457,9 +431,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Releases queued ownership counters for one item.
         /// </summary>
-        /// <param name="payloadBytes">Payload-byte contribution previously counted for the item.</param>
-        /// <exception cref="InvalidOperationException">Thrown when queued-item or queued-byte accounting would underflow.</exception>
-        private void DecrementQueuedOwnership(int payloadBytes)
+        /// <exception cref="InvalidOperationException">Thrown when queued-item accounting would underflow.</exception>
+        private void DecrementQueuedOwnership()
         {
             while (true)
             {
@@ -470,20 +443,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 if (Interlocked.CompareExchange(ref _queuedItemCount, observedQueued - 1, observedQueued) == observedQueued)
-                {
-                    break;
-                }
-            }
-
-            while (true)
-            {
-                long observedPayloadBytes = Interlocked.Read(ref _queuedPayloadBytes);
-                if (observedPayloadBytes < payloadBytes)
-                {
-                    throw new InvalidOperationException("Global transit queue queued-payload accounting invariant violated: decrement exceeds queued payload ownership.");
-                }
-
-                if (Interlocked.CompareExchange(ref _queuedPayloadBytes, observedPayloadBytes - payloadBytes, observedPayloadBytes) == observedPayloadBytes)
                 {
                     return;
                 }
@@ -536,18 +495,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// Immutable point-in-time snapshot of global transit queue capacity and ownership counters.
     /// </summary>
     /// <param name="MaxQueuedItemCount">Configured maximum ready-queue item count.</param>
-    /// <param name="MaxQueuedPayloadBytes">Configured maximum ready-queue payload bytes.</param>
     /// <param name="QueuedItemCount">Current number of items in the ready queue.</param>
-    /// <param name="QueuedPayloadBytes">Current number of payload bytes in the ready queue.</param>
     /// <param name="RetryPendingCount">Current number of retry-pending items.</param>
     /// <param name="InFlightCount">Current number of items owned by connections.</param>
     /// <param name="AdmissionWaitCount">Number of admissions that had to wait for capacity.</param>
     /// <param name="IsAdmissionFrozen">Indicates whether new admissions are currently blocked.</param>
     internal sealed record GlobalTransitWorkQueueSnapshot(
         int MaxQueuedItemCount,
-        long MaxQueuedPayloadBytes,
         long QueuedItemCount,
-        long QueuedPayloadBytes,
         long RetryPendingCount,
         long InFlightCount,
         long AdmissionWaitCount,
