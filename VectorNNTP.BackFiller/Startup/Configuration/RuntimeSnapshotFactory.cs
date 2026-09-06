@@ -20,6 +20,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
     /// </remarks>
     internal class RuntimeSnapshotFactory
     {
+        private const long BytesPerGibibyte = 1024L * 1024L * 1024L;
+
         /// <summary>
         /// Attempts to build the immutable runtime-options snapshot from validated startup configuration inputs.
         /// </summary>
@@ -98,6 +100,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     TransitShutdownDrainInactivityWatchdog: TimeSpan.FromSeconds(30),
                     TransitShutdownAbsoluteMaximum: TimeSpan.FromMinutes(30),
                     CanonicalBindAddresses: canonicalBindAddresses,
+                    ArticleRetention: BuildArticleRetentionRuntimeOptions(backFiller.ArticleRetention),
                     LetsEncrypt: letsEncryptRuntimeOptions,
                     RabbitMq: rabbitMqRuntimeOptions);
             }
@@ -106,6 +109,25 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 configErrors.Add(("BackFiller", $"Failed to build runtime options snapshot: {ex.Message}"));
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Builds immutable article-retention runtime settings from external integer configuration values.
+        /// </summary>
+        /// <param name="options">Validated BackFiller article-retention configuration values.</param>
+        /// <returns>Immutable runtime retention options represented in bytes and <see cref="TimeSpan"/> values.</returns>
+        /// <exception cref="OverflowException">Thrown when converting configured gigabytes to bytes exceeds <see cref="long.MaxValue"/>.</exception>
+        private static ArticleRetentionRuntimeOptions BuildArticleRetentionRuntimeOptions(ArticleRetentionOptions? options)
+        {
+            int maximumRetainedPayloadGigabytes = options?.MaximumRetainedPayloadGigabytes ?? 4;
+            long maximumRetainedPayloadBytes = checked(maximumRetainedPayloadGigabytes * BytesPerGibibyte);
+            int retentionTtlSeconds = options?.RetentionTtlSeconds ?? 60;
+            int sweepIntervalSeconds = options?.SweepIntervalSeconds ?? 1;
+
+            return new ArticleRetentionRuntimeOptions(
+                MaximumRetainedPayloadBytes: maximumRetainedPayloadBytes,
+                RetentionTtl: TimeSpan.FromSeconds(retentionTtlSeconds),
+                SweepInterval: TimeSpan.FromSeconds(sweepIntervalSeconds));
         }
 
         /// <summary>

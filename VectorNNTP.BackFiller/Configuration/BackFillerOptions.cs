@@ -134,11 +134,45 @@ namespace VectorNNTP.Backfiller.Configuration
         public TransitServerOptions TransitServer { get; set; } = new();
 
         /// <summary>
+        /// Gets or sets shared in-memory article retention settings used to expose success payloads for downstream consumers.
+        /// </summary>
+        /// <value>Validated retention capacity and expiration policy for retained article payload ownership.</value>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention is required")]
+        public ArticleRetentionOptions ArticleRetention { get; set; } = new();
+
+        /// <summary>
         /// Gets or sets graceful shutdown behavior used when stopping the BackFiller service.
         /// </summary>
         /// <value>Validated shutdown policy controlling grace-period timing and queued/active work handling.</value>
         [Required(ErrorMessage = "BackFiller:Shutdown is required")]
         public ShutdownOptions Shutdown { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Configuration options for shared in-memory article retention ownership and capacity policy.
+    /// </summary>
+    internal sealed class ArticleRetentionOptions
+    {
+        /// <summary>
+        /// Gets or sets the maximum retained article payload capacity in GiB (1 GiB = 1024^3 bytes).
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes must be greater than zero")]
+        public int MaximumRetainedPayloadGigabytes { get; set; } = 4;
+
+        /// <summary>
+        /// Gets or sets the absolute retention TTL in seconds measured from insertion time.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention:RetentionTtlSeconds is required")]
+        [Range(1, 60, ErrorMessage = "BackFiller:ArticleRetention:RetentionTtlSeconds must be between 1 and 60")]
+        public int RetentionTtlSeconds { get; set; } = 60;
+
+        /// <summary>
+        /// Gets or sets the sweep cadence in seconds used to evaluate TTL expiration.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention:SweepIntervalSeconds is required")]
+        [Range(1, 60, ErrorMessage = "BackFiller:ArticleRetention:SweepIntervalSeconds must be between 1 and 60")]
+        public int SweepIntervalSeconds { get; set; } = 1;
     }
 
     /// <summary>

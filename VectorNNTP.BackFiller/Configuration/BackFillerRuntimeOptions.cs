@@ -42,6 +42,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="TransitShutdownDrainInactivityWatchdog">Transit shutdown inactivity watchdog duration.</param>
     /// <param name="TransitShutdownAbsoluteMaximum">Absolute transit shutdown duration ceiling.</param>
     /// <param name="CanonicalBindAddresses">Canonical, deduplicated bind-address set validated at startup.</param>
+    /// <param name="ArticleRetention">Validated immutable article-retention runtime options projected from BackFiller:ArticleRetention.</param>
     /// <param name="LetsEncrypt">Validated immutable Let's Encrypt/ACME runtime options.</param>
     /// <param name="RabbitMq">Validated immutable RabbitMQ runtime options projected from BackFiller:RabbitMQ.</param>
     internal sealed record BackFillerRuntimeOptions(
@@ -71,6 +72,7 @@ namespace VectorNNTP.Backfiller.Configuration
         TimeSpan? TransitShutdownDrainInactivityWatchdog = null,
         TimeSpan? TransitShutdownAbsoluteMaximum = null,
         IReadOnlyList<IPAddress>? CanonicalBindAddresses = null,
+        ArticleRetentionRuntimeOptions? ArticleRetention = null,
         BackFillerLetsEncryptRuntimeOptions? LetsEncrypt = null,
         RabbitMqRuntimeOptions? RabbitMq = null)
     {
@@ -109,6 +111,19 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         /// <value>Original configured bind-address tokens preserved for runtime consumers that need token-level semantics.</value>
         internal IReadOnlyList<string> EffectiveConfiguredBindAddressTokens => ConfiguredBindAddressTokens ?? [];
+
+        /// <summary>
+        /// Gets effective article-retention runtime options for shared in-memory article ownership.
+        /// </summary>
+        /// <value>
+        /// Configured retention runtime options when present; otherwise defaults to a 4 GiB payload budget,
+        /// 60-second insertion TTL, and one-second sweep cadence.
+        /// </value>
+        internal ArticleRetentionRuntimeOptions EffectiveArticleRetention => ArticleRetention
+            ?? new ArticleRetentionRuntimeOptions(
+                MaximumRetainedPayloadBytes: 4L * 1024 * 1024 * 1024,
+                RetentionTtl: TimeSpan.FromSeconds(60),
+                SweepInterval: TimeSpan.FromSeconds(1));
 
         /// <summary>
         /// Gets validated ACME runtime options when Let's Encrypt is enabled.
