@@ -28,6 +28,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
     /// </summary>
     public sealed class Stage7EComposedMegaMergeIntegrationTests
     {
+        /// <summary>
+        /// Verifies the composed success contract: retention admission and transit admission complete before response publication/confirm and RabbitMQ ACK,
+        /// then Listener Found plus ReceiptAck establishes listener completion, and final retention disposal waits for both consumers.
+        /// </summary>
         [Fact]
         public async Task ComposedSuccessFlow_RetainsThenAdmitsTransitThenPublishesUri_ListenerAckMarksCompletionAndFinalDisposal()
         {
@@ -137,6 +141,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.True(finalSnapshot.TotalBytesReleased > 0);
         }
 
+        /// <summary>
+        /// Verifies redelivery safety when first publish confirmation fails: the first attempt requeues, duplicate retention admission preserves the original payload owner,
+        /// and a subsequent confirmed publish converges to a single successful ACK without retention ownership regression.
+        /// </summary>
         [Fact]
         public async Task ComposedRedeliveryFlow_WhenFirstPublishConfirmFails_DuplicateRetentionUsesExistingPayloadAndSecondAttemptAcks()
         {

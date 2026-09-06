@@ -41,7 +41,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly ITransitAdmissionGateway _transitAdmissionGateway;
         /// <summary>
-        /// Supplies the logger used by rabbit mq article result sink.
+        /// Logger that records retention-admission, response-publication, and broker-settlement outcomes.
         /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
 
@@ -73,6 +73,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <summary>
         /// Applies the Phase 4 publication and settlement policy for one completed processing result.
         /// </summary>
+        /// <remarks>
+        /// <para>On <see cref="ArticleWorkProcessingOutcome.Success"/>, the sink detaches the successful payload owner from <paramref name="result"/>, admits that ownership into retention,
+        /// then attempts Transit admission before any success response publication or delivery acknowledgement occurs.</para>
+        /// <para>When retention admission is rejected for non-duplicate reasons, the sink reattaches payload ownership when possible, otherwise disposes it, and negatively acknowledges with requeue.
+        /// Duplicate Message-ID admission keeps existing retained ownership authoritative and disposes the duplicate payload owner.</para>
+        /// <para>If Transit admission is not accepted after retention is available, the sink negatively acknowledges without requeue and does not publish a response.</para>
+        /// <para>When response publication is required, RabbitMQ publish/confirm must succeed before final settlement; non-confirmed publication paths negatively acknowledge with requeue.</para>
+        /// <para>Successful broker settlement acknowledges only after required prior steps complete. Non-success outcomes follow the disposition plan for ACK/NACK and requeue behavior.</para>
+        /// <para>All paths guarantee cleanup in <c>finally</c>: any detached payload owner not transferred is disposed, and <paramref name="result"/> is disposed exactly once.</para>
+        /// <para>Cancellation is observed through the supplied token and is also reflected in the disposition plan used for final settlement behavior.</para>
+        /// </remarks>
         /// <param name="result">Completed result whose response publication and broker settlement must now be finalized.</param>
         /// <param name="cancellationToken">Cancellation token for response publication and settlement operations.</param>
         /// <returns>A value task that completes after the result has been published or settled according to policy.</returns>

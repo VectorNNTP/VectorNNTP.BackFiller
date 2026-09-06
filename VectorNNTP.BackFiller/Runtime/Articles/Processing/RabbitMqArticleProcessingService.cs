@@ -36,7 +36,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
         /// <summary>
-        /// Supplies the logger used by rabbit mq article processing service.
+        /// Logger that records result-forwarding diagnostics for each processed RabbitMQ delivery.
         /// </summary>
         private readonly ILogger<RabbitMqArticleProcessingService> _logger;
         /// <summary>

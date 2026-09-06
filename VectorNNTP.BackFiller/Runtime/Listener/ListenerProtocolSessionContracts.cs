@@ -88,6 +88,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
     /// <summary>
     /// Result contract returned by request dispatch handlers for inbound GetRequest operations.
     /// </summary>
+    /// <param name="Kind">Dispatch category consumed by the session writer to choose Found, NotFound, or Error wire-response handling.</param>
+    /// <param name="FoundPayload">Payload memory returned to the session only when <paramref name="Kind"/> is <see cref="ListenerSessionRequestDispatchKind.Found"/>; ignored for other kinds. The handler must keep this memory valid until Found transfer terminalization callbacks have completed.</param>
+    /// <param name="ErrorCode">Protocol error code used only when <paramref name="Kind"/> is <see cref="ListenerSessionRequestDispatchKind.Error"/>; ignored for Found and NotFound responses.</param>
     /// <remarks>
     /// This contract intentionally excludes retention completion semantics; it only describes which wire response
     /// the session should send and whether receipt acknowledgement tracking is required.

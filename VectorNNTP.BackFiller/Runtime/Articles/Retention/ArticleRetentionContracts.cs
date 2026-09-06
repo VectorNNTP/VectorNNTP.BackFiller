@@ -14,12 +14,39 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Retention
     /// </summary>
     internal enum ArticleRetentionAdmissionStatus
     {
+        /// <summary>
+        /// Admission succeeded and payload ownership transferred into retention.
+        /// </summary>
         Admitted = 0,
+
+        /// <summary>
+        /// Admission was rejected because retention shutdown has closed new admissions; payload ownership does not transfer.
+        /// </summary>
         AdmissionClosed = 1,
+
+        /// <summary>
+        /// Admission was rejected because an entry with the same Message-ID is already retained; existing retained ownership remains authoritative.
+        /// </summary>
         DuplicateMessageId = 2,
+
+        /// <summary>
+        /// Admission was rejected because the canonical Message-ID MD5 collides with a different retained Message-ID.
+        /// </summary>
         Md5Collision = 3,
+
+        /// <summary>
+        /// Admission was rejected because a single payload exceeds total configured retention capacity.
+        /// </summary>
         PayloadExceedsCapacity = 4,
+
+        /// <summary>
+        /// Admission was rejected because capacity could not be recovered, including after pressure-eviction attempts.
+        /// </summary>
         CapacityUnavailable = 5,
+
+        /// <summary>
+        /// Admission was rejected because payload ownership was invalid for retention (for example zero-length payload).
+        /// </summary>
         InvalidPayload = 6,
     }
 
@@ -28,7 +55,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Retention
     /// </summary>
     internal enum ArticleRetentionCompletionStatus
     {
+        /// <summary>
+        /// Completion call was accepted for the requested Message-ID. Logical removal and physical disposal may occur when lifecycle conditions are met.
+        /// </summary>
         Completed = 0,
+
+        /// <summary>
+        /// Completion call did not find a currently retained entry for the requested Message-ID.
+        /// </summary>
         NotFound = 1,
     }
 
@@ -37,8 +71,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Retention
     /// </summary>
     internal enum ArticleRetentionRemovalReason
     {
+        /// <summary>
+        /// Retention marked the entry logically removed after both Transit and Listener completion channels were observed.
+        /// </summary>
         BothConsumersCompleted = 0,
+
+        /// <summary>
+        /// Retention marked the entry logically removed under capacity pressure to recover admission headroom.
+        /// </summary>
         PressureEvicted = 1,
+
+        /// <summary>
+        /// Retention marked the entry logically removed because TTL expiration made it ineligible to remain readable.
+        /// </summary>
         TtlExpired = 2,
     }
 
@@ -56,8 +101,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Retention
     /// </summary>
     internal enum ArticleRetentionReadLeaseStatus
     {
+        /// <summary>
+        /// A read lease was acquired and caller may read payload bytes until the lease is released.
+        /// </summary>
         Acquired = 0,
+
+        /// <summary>
+        /// No retained entry was found for the requested Message-ID identity.
+        /// </summary>
         NotFound = 1,
+
+        /// <summary>
+        /// Entry identity is known but not leasable for new readers (for example logically removed or disposed); physical payload retention may still be deferred by active leases.
+        /// </summary>
         Unavailable = 2,
     }
 
