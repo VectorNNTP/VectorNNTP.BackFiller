@@ -39,7 +39,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private const int ListenBacklog = 512;
 
         /// <summary>
-        /// Validated runtime snapshot that defines listener enablement, bind addresses, and port selection.
+        /// Validated runtime snapshot that defines mandatory TLS listener bind addresses and port selection.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
@@ -86,12 +86,6 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// <inheritdoc/>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            if (!_runtimeOptions.EffectiveLetsEncrypt.Enabled)
-            {
-                LogListenerDisabled(_logger);
-                return;
-            }
-
             using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
                 stoppingToken,
                 _shutdownCoordinator.GracefulShutdownStartedToken,
@@ -666,11 +660,5 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
-        /// <summary>
-        /// Logs that the inbound listener remains disabled because certificate provisioning is not enabled.
-        /// </summary>
-        /// <param name="logger">Logger receiving the disabled-listener event.</param>
-        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
-        private static partial void LogListenerDisabled(ILogger logger);
     }
 }

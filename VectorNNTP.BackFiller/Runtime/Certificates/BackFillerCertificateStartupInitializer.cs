@@ -22,7 +22,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         ILogger<BackFillerCertificateStartupInitializer> logger) : IHostedService
     {
         /// <summary>
-        /// Validated runtime snapshot that determines whether certificate management is enabled.
+        /// Validated runtime snapshot that supplies mandatory certificate-management settings.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
 
@@ -41,17 +41,10 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="cancellationToken">Startup cancellation token propagated into certificate provisioning.</param>
         /// <returns>
-        /// A task that completes after certificate availability has been confirmed or, when Let's Encrypt is disabled,
-        /// immediately after the skip decision is logged.
+        /// A task that completes after certificate availability has been confirmed for mandatory TLS listener startup.
         /// </returns>
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            if (!_runtimeOptions.EffectiveLetsEncrypt.Enabled)
-            {
-                LogCertificateStartupInitializerDisabled(_logger);
-                return;
-            }
-
             LogCertificateStartupInitializerBeginning(_logger);
             await _provisioningService.EnsureCertificateAvailabilityAsync(_runtimeOptions, cancellationToken).ConfigureAwait(false);
             LogCertificateStartupInitializerCompleted(_logger);
@@ -79,10 +72,5 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         [LoggerMessage(EventId = 2601, Level = LogLevel.Information, Message = "Certificate startup initializer completed certificate state activation")]
         private static partial void LogCertificateStartupInitializerCompleted(ILogger logger);
 
-        /// <summary>
-        /// Defines the informational log emitted when startup certificate checks are skipped because ACME management is disabled.
-        /// </summary>
-        [LoggerMessage(EventId = 2602, Level = LogLevel.Information, Message = "Certificate startup initializer skipped because Let's Encrypt is disabled")]
-        private static partial void LogCertificateStartupInitializerDisabled(ILogger logger);
     }
 }

@@ -995,7 +995,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens, int maxActiveConnections = 1024)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
-                Enabled: true,
                 CanonicalCertificateSubjectName: "bf-listener.example.com",
                 AcmeAccountEmail: "security@example.com",
                 AcmeAccountKeyPemPath: Path.Combine(Path.GetTempPath(), "listener-account.key"),

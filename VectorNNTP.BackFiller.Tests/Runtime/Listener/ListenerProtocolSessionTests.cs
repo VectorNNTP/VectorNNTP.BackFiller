@@ -69,6 +69,120 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task RunAsync_CompletesThenDisposeAsync_DoesNotThrow()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(901, "30edc94157aa16fe644a45a1f1ffe160");
+            LifecycleProbeTransport transport = new([request], 4096, disposeException: null, throwOnSecondDispose: true);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            await session.RunAsync(CancellationToken.None);
+
+            Exception? disposeException = await Record.ExceptionAsync(() => session.DisposeAsync().AsTask());
+
+            Assert.Null(disposeException);
+            Assert.Equal(1, transport.DisposeCallCount);
+        }
+
+        [Fact]
+        public async Task DisposeAsync_WhileRunAsyncActive_UsesSingleDrainAndSingleCleanupOwnership()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(902, "30edc94157aa16fe644a45a1f1ffe160");
+            LifecycleProbeTransport transport = new([request], 4096, disposeException: null, throwOnSecondDispose: true);
+            BlockingAllRequestsHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            Task runTask = session.RunAsync(CancellationToken.None);
+            await handler.WaitForInvocationsAtLeastAsync(1);
+
+            Task disposeTask = session.DisposeAsync().AsTask();
+            handler.ReleaseAll(ListenerSessionRequestDispatchResult.NotFound());
+
+            Exception? lifecycleException = await Record.ExceptionAsync(async () => await Task.WhenAll(runTask, disposeTask));
+
+            Assert.Null(lifecycleException);
+            Assert.Equal(1, transport.DisposeCallCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_CleanupFaultLeavesDisposedRunCts_DisposeAsyncDoesNotCancelDisposedCts()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(903, "30edc94157aa16fe644a45a1f1ffe160");
+            InvalidOperationException injectedDisposeFailure = new("Injected transport dispose failure.");
+            LifecycleProbeTransport transport = new([request], 4096, injectedDisposeFailure, throwOnSecondDispose: true);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            Exception? runException = await Record.ExceptionAsync(() => session.RunAsync(CancellationToken.None));
+            Assert.NotNull(runException);
+            Assert.IsType<InvalidOperationException>(runException);
+            Assert.Equal(injectedDisposeFailure.Message, runException.Message);
+
+            Exception? disposeException = await Record.ExceptionAsync(() => session.DisposeAsync().AsTask());
+            Assert.NotNull(disposeException);
+            Assert.IsType<InvalidOperationException>(disposeException);
+            Assert.Equal(injectedDisposeFailure.Message, disposeException.Message);
+            Assert.IsNotType<ObjectDisposedException>(disposeException);
+            Assert.Equal(1, transport.DisposeCallCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenDisposeWinsBeforeStartup_IsRejectedWithoutPublishingRuntimeState()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(904, "30edc94157aa16fe644a45a1f1ffe160");
+            LifecycleProbeTransport transport = new([request], 4096, disposeException: null, throwOnSecondDispose: true);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            await session.DisposeAsync();
+
+            Exception? runException = await Record.ExceptionAsync(() => session.RunAsync(CancellationToken.None));
+
+            Assert.NotNull(runException);
+            Assert.IsType<InvalidOperationException>(runException);
+            Assert.Equal("Session is already running.", runException.Message);
+            Assert.Null(GetPrivateFieldValue<CancellationTokenSource>(session, "_runCts"));
+            Assert.Null(GetPrivateFieldValue<Task>(session, "_runTask"));
+            Assert.Null(GetPrivateFieldValue<Task>(session, "_writerTask"));
+            Assert.Equal(0, transport.ReadCallCount);
+            Assert.Equal(0, transport.WriteCallCount);
+            Assert.Equal(1, transport.DisposeCallCount);
+            Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenContendingWithDispose_HasSingleLifecycleOutcome()
+        {
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(905, "30edc94157aa16fe644a45a1f1ffe160");
+            LifecycleProbeTransport transport = new([request], 4096, disposeException: null, throwOnSecondDispose: true);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+            object stateGate = GetPrivateFieldValue<object>(session, "_stateGate")
+                ?? throw new InvalidOperationException("Session state gate was not available.");
+
+            Task runTask;
+            Task disposeTask;
+            lock (stateGate)
+            {
+                runTask = Task.Run(() => session.RunAsync(CancellationToken.None));
+                disposeTask = Task.Run(() => session.DisposeAsync().AsTask());
+            }
+
+            Exception? runException = await Record.ExceptionAsync(() => runTask);
+            Exception? disposeException = await Record.ExceptionAsync(() => disposeTask);
+
+            Assert.Null(disposeException);
+            if (runException is not null)
+            {
+                Assert.IsType<InvalidOperationException>(runException);
+                Assert.Equal("Session is already running.", runException.Message);
+            }
+
+            Assert.Equal(1, transport.DisposeCallCount);
+            Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
+        }
+
+        [Fact]
         public async Task RunAsync_WhenDuplicateOutstandingRequestId_EmitsDuplicateErrorAndKeepsOriginalActive()
         {
             byte[] first = ListenerProtocolEncoder.EncodeGetRequest(7, "30edc94157aa16fe644a45a1f1ffe160");
@@ -965,6 +1079,32 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             return requestTasks.Count;
         }
 
+        private static TField? GetPrivateFieldValue<TField>(ListenerProtocolSession session, string fieldName)
+            where TField : class
+        {
+            ArgumentNullException.ThrowIfNull(session);
+            if (string.IsNullOrWhiteSpace(fieldName))
+            {
+                throw new ArgumentException("Field name must be provided.", nameof(fieldName));
+            }
+
+            FieldInfo field = typeof(ListenerProtocolSession).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException($"ListenerProtocolSession field '{fieldName}' was not found.");
+
+            object? value = field.GetValue(session);
+            if (value is null)
+            {
+                return null;
+            }
+
+            if (value is not TField typed)
+            {
+                throw new InvalidOperationException($"ListenerProtocolSession field '{fieldName}' did not expose expected type '{typeof(TField).Name}'.");
+            }
+
+            return typed;
+        }
+
         private static IReadOnlyList<ListenerFrameParseResult> ParseAllFrames(byte[] outbound)
         {
             List<ListenerFrameParseResult> result = [];
@@ -1561,6 +1701,97 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             public ValueTask DisposeAsync()
             {
                 _disposed = true;
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        private sealed class LifecycleProbeTransport : IListenerProtocolSessionTransport
+        {
+            private readonly Queue<byte[]> _readFragments;
+            private readonly object _writeGate = new();
+            private readonly List<byte> _writes = [];
+            private readonly int _maxWriteChunkLength;
+            private readonly Exception? _disposeException;
+            private readonly bool _throwOnSecondDispose;
+            private int _disposeCalls;
+            private int _readCalls;
+            private int _writeCalls;
+            private bool _disposed;
+
+            internal LifecycleProbeTransport(IEnumerable<byte[]> readFragments, int maxWriteChunkLength, Exception? disposeException, bool throwOnSecondDispose)
+            {
+                _readFragments = new Queue<byte[]>(readFragments);
+                _maxWriteChunkLength = maxWriteChunkLength;
+                _disposeException = disposeException;
+                _throwOnSecondDispose = throwOnSecondDispose;
+            }
+
+            internal int DisposeCallCount => Volatile.Read(ref _disposeCalls);
+
+            internal int ReadCallCount => Volatile.Read(ref _readCalls);
+
+            internal int WriteCallCount => Volatile.Read(ref _writeCalls);
+
+            public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(LifecycleProbeTransport));
+                }
+
+                _ = Interlocked.Increment(ref _readCalls);
+                if (_readFragments.Count == 0)
+                {
+                    return ValueTask.FromResult(0);
+                }
+
+                byte[] next = _readFragments.Dequeue();
+                if (next.Length > buffer.Length)
+                {
+                    throw new InvalidOperationException("Read fragment exceeds provided buffer size.");
+                }
+
+                next.CopyTo(buffer);
+                return ValueTask.FromResult(next.Length);
+            }
+
+            public ValueTask<int> WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(LifecycleProbeTransport));
+                }
+
+                _ = Interlocked.Increment(ref _writeCalls);
+                int chunkLength = Math.Min(buffer.Length, _maxWriteChunkLength);
+                ReadOnlySpan<byte> span = buffer.Span[..chunkLength];
+                lock (_writeGate)
+                {
+                    for (int i = 0; i < span.Length; i++)
+                    {
+                        _writes.Add(span[i]);
+                    }
+                }
+
+                return ValueTask.FromResult(chunkLength);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                int disposeCalls = Interlocked.Increment(ref _disposeCalls);
+                if (disposeCalls > 1 && _throwOnSecondDispose)
+                {
+                    throw new InvalidOperationException("LifecycleProbeTransport disposed more than once.");
+                }
+
+                _disposed = true;
+                if (_disposeException is not null)
+                {
+                    throw _disposeException;
+                }
+
                 return ValueTask.CompletedTask;
             }
         }

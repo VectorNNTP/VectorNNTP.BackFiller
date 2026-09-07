@@ -184,14 +184,23 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 .GetSection("BackFiller")
                 .Get<BackFillerOptions>();
 
-            return ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider);
+            List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider);
+
+            if (configuration["BackFiller:LetsEncrypt:Enabled"] is not null)
+            {
+                errors.Add((
+                    "BackFiller:LetsEncrypt:Enabled",
+                    "BackFiller:LetsEncrypt:Enabled is no longer supported. TLS listener certificate management is mandatory and this key must be removed."));
+            }
+
+            return errors;
         }
 
         /// <summary>
         /// Validates a bound <see cref="BackFillerOptions"/> instance across identity, transport, shutdown, and Let's Encrypt policy rules.
         /// </summary>
         /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
-        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode and TLS-disabled notices.</param>
+        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode notices.</param>
         /// <returns>
         /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
         /// Severity mapping from validator diagnostics is handled by <c>AddDiagnostics</c> helpers.
@@ -212,7 +221,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// Validates a bound <see cref="BackFillerOptions"/> instance across identity, transport, shutdown, and Let's Encrypt policy rules.
         /// </summary>
         /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
-        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode and TLS-disabled notices.</param>
+        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode notices.</param>
         /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
         /// <returns>
         /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
@@ -299,30 +308,6 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 errors.Add((
                     "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds",
                     "MaximumShutdownDrainTimeoutSeconds must be less than or equal to BackFiller:Shutdown:GracePeriodSeconds to preserve bounded shutdown semantics."));
-            }
-
-            bool letsEncryptEnabled = backFiller.LetsEncrypt?.Enabled ?? true;
-
-            if (!letsEncryptEnabled)
-            {
-                warnings.Add((
-                    "BackFiller:LetsEncrypt:Enabled",
-                    "BackFiller TLS is disabled (BackFiller:LetsEncrypt:Enabled=false). Listener will operate without transport encryption."));
-
-                // Architectural invariant:
-                // Cloudflare remains mandatory even with TLS disabled because BackFiller still
-                // requires DNS/FQDN operational workflows independent of certificate issuance.
-                List<LetsEncryptValidationResult> cloudflareApiTokenDiagnosticsWhenTlsDisabled = LetsEncryptValidator.ValidateCloudFlareApiToken(
-                    backFiller.LetsEncrypt?.CloudFlareApiToken,
-                    "BackFiller:LetsEncrypt");
-                AddDiagnostics(errors, warnings, cloudflareApiTokenDiagnosticsWhenTlsDisabled);
-
-                List<LetsEncryptValidationResult> cloudflareZoneDiagnosticsWhenTlsDisabled = LetsEncryptValidator.ValidateCloudFlareZoneId(
-                    backFiller.LetsEncrypt?.CloudFlareZoneId,
-                    "BackFiller:LetsEncrypt");
-                AddDiagnostics(errors, warnings, cloudflareZoneDiagnosticsWhenTlsDisabled);
-
-                return errors;
             }
 
             bool useStagingDirectory = backFiller.LetsEncrypt?.UseStagingDirectory ?? false;

@@ -17,7 +17,6 @@ namespace VectorNNTP.Backfiller.Configuration
     /// The Cloudflare token and ACME account key are treated as sensitive inputs and are only read from their
     /// configured sources.
     /// </remarks>
-    /// <param name="Enabled">Whether ACME certificate management is enabled.</param>
     /// <param name="CanonicalCertificateSubjectName">Authoritative generated BackFiller FQDN used for certificate identity.</param>
     /// <param name="AcmeAccountEmail">ACME account contact email address.</param>
     /// <param name="AcmeAccountKeyPemPath">Absolute path to PEM-encoded ACME account private key.</param>
@@ -37,7 +36,6 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="CloudFlareApiToken">Cloudflare API token for DNS challenge record lifecycle.</param>
     /// <param name="CloudFlareZoneId">Cloudflare zone identifier for DNS operations.</param>
     internal sealed record BackFillerLetsEncryptRuntimeOptions(
-        bool Enabled,
         string CanonicalCertificateSubjectName,
         string AcmeAccountEmail,
         string AcmeAccountKeyPemPath,

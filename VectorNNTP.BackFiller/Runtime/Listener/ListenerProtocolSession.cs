@@ -47,6 +47,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private CancellationTokenSource? _runCts;
         private Task? _writerTask;
         private Task? _runTask;
+        private Task? _drainTask;
         private int _disposeStarted;
         private int _outboundCompletionSignaled;
         private ListenerProtocolSessionState _state = ListenerProtocolSessionState.Running;
@@ -145,25 +146,31 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// <param name="cancellationToken">Host cancellation token for session termination.</param>
         internal async Task RunAsync(CancellationToken cancellationToken)
         {
+            Task runTask;
+            CancellationToken sessionToken;
+
             lock (_stateGate)
             {
-                if (_runTask is not null)
+                if (_runTask is not null
+                    || Volatile.Read(ref _disposeStarted) != 0
+                    || _drainTask is not null
+                    || _state is ListenerProtocolSessionState.ForcedShutdown or ListenerProtocolSessionState.Completed)
                 {
                     throw new InvalidOperationException("Session is already running.");
                 }
+
+                CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                _runCts = linked;
+                sessionToken = linked.Token;
+                _writerTask = RunWriterAsync(sessionToken);
+                _runTask = RunReadLoopAsync(sessionToken);
+                runTask = _runTask;
             }
-
-            using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _runCts = linked;
-            CancellationToken sessionToken = linked.Token;
-
-            _writerTask = RunWriterAsync(sessionToken);
-            _runTask = RunReadLoopAsync(sessionToken);
 
             Exception? readFault = null;
             try
             {
-                await _runTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (sessionToken.IsCancellationRequested)
             {
@@ -182,7 +189,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 BeginGracefulShutdown();
             }
 
-            await DrainAndStopAsync(CancellationToken.None).ConfigureAwait(false);
+            await EnsureDrainAndStopAsync().ConfigureAwait(false);
 
             if (readFault is not null)
             {
@@ -219,9 +226,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 }
 
                 _state = ListenerProtocolSessionState.ForcedShutdown;
+                _runCts?.Cancel();
             }
 
-            _runCts?.Cancel();
             CompleteOutboundWriter();
         }
 
@@ -242,17 +249,28 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
 
             BeginForcedShutdown();
-            await DrainAndStopAsync(CancellationToken.None).ConfigureAwait(false);
+            await EnsureDrainAndStopAsync().ConfigureAwait(false);
+        }
+
+        private Task EnsureDrainAndStopAsync()
+        {
+            lock (_stateGate)
+            {
+                _drainTask ??= DrainAndStopAsync(CancellationToken.None);
+
+                return _drainTask;
+            }
         }
 
         private async Task DrainAndStopAsync(CancellationToken cancellationToken)
         {
             Task? writerTask = _writerTask;
             List<Task> requestTasks = [.. _requestTasks.Values];
+            ListenerProtocolSessionState state = State;
 
             try
             {
-                if (State == ListenerProtocolSessionState.ForcedShutdown)
+                if (state == ListenerProtocolSessionState.ForcedShutdown)
                 {
                     List<Task> tasksToAwait = [];
                     if (writerTask is not null)
@@ -282,6 +300,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             {
                 BeginForcedShutdown();
             }
+
+            CancellationTokenSource? runCtsToDispose;
+            lock (_stateGate)
+            {
+                runCtsToDispose = _runCts;
+                _runCts = null;
+            }
+
+            runCtsToDispose?.Dispose();
 
             CancelAwaitingReceiptAckTimeouts();
             TerminalizeOutstandingRequests();

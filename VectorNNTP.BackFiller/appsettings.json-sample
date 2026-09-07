@@ -22,7 +22,6 @@
 			"SweepIntervalSeconds": 1
 		},
 		"LetsEncrypt": {
-			"Enabled": true,
 			"AcmeAccountEmail": "operator@example.invalid",
 			"AcmeAccountKeyPem": "account.key",
 			"AcmeTransientRetryMaxAttempts": 5,

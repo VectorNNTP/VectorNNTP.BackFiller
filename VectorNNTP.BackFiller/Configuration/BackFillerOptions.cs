@@ -220,18 +220,11 @@ namespace VectorNNTP.Backfiller.Configuration
     /// Configuration options for BackFiller TLS/ACME and operational Cloudflare DNS workflows.
     /// </summary>
     /// <remarks>
-    /// Cloudflare credentials remain mandatory for BackFiller DNS/FQDN operational workflows,
-    /// even when <see cref="Enabled"/> is <see langword="false"/>.
+    /// TLS listener operation is mandatory. These settings are required for ACME issuance, certificate activation,
+    /// and renewal workflows that keep the inbound listener certificate available.
     /// </remarks>
     internal sealed class LetsEncryptOptions
     {
-        /// <summary>
-        /// Gets or sets a value indicating whether TLS/ACME certificate issuance is enabled for BackFiller listener operations.
-        /// </summary>
-        /// <remarks>
-        /// When disabled, ACME and certificate-renewal settings are not required, but Cloudflare DNS settings remain required.
-        /// </remarks>
-        public bool Enabled { get; set; } = true;
 
         /// <summary>
         /// Gets or sets the ACME account contact email address.
@@ -350,7 +343,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Gets or sets the Cloudflare API token used for DNS management.
         /// </summary>
         /// <remarks>
-        /// Required for BackFiller DNS/FQDN operational workflows regardless of <see cref="Enabled"/>.
+        /// Required for BackFiller DNS/FQDN operational workflows and mandatory TLS certificate issuance.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareApiToken is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareApiToken cannot be empty")]
@@ -360,7 +353,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Gets or sets the Cloudflare Zone ID used for DNS operations.
         /// </summary>
         /// <remarks>
-        /// Required for BackFiller DNS/FQDN operational workflows regardless of <see cref="Enabled"/>.
+        /// Required for BackFiller DNS/FQDN operational workflows and mandatory TLS certificate issuance.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareZoneId is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareZoneId cannot be empty")]

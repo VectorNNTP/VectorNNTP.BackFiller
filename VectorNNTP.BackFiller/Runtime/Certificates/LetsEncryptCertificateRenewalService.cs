@@ -72,11 +72,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = _runtimeOptions.EffectiveLetsEncrypt;
-            if (!letsEncrypt.Enabled)
-            {
-                LogServiceDisabled(_logger);
-                return;
-            }
 
             using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _shutdownCoordinator.GracefulShutdownStartedToken);
             CancellationToken token = linked.Token;

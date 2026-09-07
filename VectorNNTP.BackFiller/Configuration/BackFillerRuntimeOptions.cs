@@ -140,7 +140,7 @@ namespace VectorNNTP.Backfiller.Configuration
                 MaxActiveConnections: 1024);
 
         /// <summary>
-        /// Gets validated ACME runtime options when Let's Encrypt is enabled.
+        /// Gets validated ACME runtime options required by the mandatory TLS listener certificate workflow.
         /// </summary>
         /// <value>Validated ACME runtime options required by certificate-management flows.</value>
         /// <exception cref="InvalidOperationException">Thrown when ACME runtime options are not available.</exception>

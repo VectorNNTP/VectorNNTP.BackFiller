@@ -748,16 +748,6 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Null(options.DomainNames);
         }
         /// <summary>
-        /// Confirms the lets encrypt options defaults enabled to true behavior.
-        /// </summary>
-        [Fact]
-        public void LetsEncryptOptions_DefaultsEnabledToTrue()
-        {
-            LetsEncryptOptions options = new();
-
-            Assert.True(options.Enabled);
-        }
-        /// <summary>
         /// Confirms the validate pfx export password when valid returns no errors behavior.
         /// </summary>
         [Fact]

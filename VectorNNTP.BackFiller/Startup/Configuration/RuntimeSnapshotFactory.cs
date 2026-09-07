@@ -263,7 +263,6 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             string certificatePfxPath = Path.Combine(validatedCertificateDirectory, Runtime.Certificates.CertificateFileConventions.ListenerPfxFileName);
 
             return new BackFillerLetsEncryptRuntimeOptions(
-                Enabled: letsEncrypt.Enabled,
                 CanonicalCertificateSubjectName: canonicalBackFillerFqdn,
                 AcmeAccountEmail: acmeAccountEmail,
                 AcmeAccountKeyPemPath: accountKeyPath,

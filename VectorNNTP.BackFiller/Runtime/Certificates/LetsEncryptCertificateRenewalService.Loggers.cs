@@ -10,12 +10,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     internal sealed partial class LetsEncryptCertificateRenewalService
     {
         /// <summary>
-        /// Defines the informational log emitted when the renewal service exits immediately because ACME management is disabled.
-        /// </summary>
-        [LoggerMessage(EventId = 1203, Level = LogLevel.Information, Message = "Certificate renewal service is disabled by configuration.")]
-        private static partial void LogServiceDisabled(ILogger logger);
-
-        /// <summary>
         /// Defines the informational log emitted after a renewal iteration issued and activated a replacement certificate.
         /// </summary>
         [LoggerMessage(EventId = 1204, Level = LogLevel.Information, Message = "Certificate renewal completed successfully.")]

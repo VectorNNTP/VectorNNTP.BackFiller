@@ -32,25 +32,24 @@ This document describes the authoritative externally configurable contract repre
 | BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes | int | 4 | Yes | >=1; additionally <= 80% of physical memory (in GiB); conversion to bytes must fit long | Retention memory capacity (converted to bytes at startup) | Yes |
 | BackFiller:ArticleRetention:RetentionTtlSeconds | int | 60 | Yes | 1..60 | Absolute retained payload TTL | Yes |
 | BackFiller:ArticleRetention:SweepIntervalSeconds | int | 1 | Yes | 1..60 | TTL sweep cadence | Yes |
-| BackFiller:LetsEncrypt:Enabled | bool | true | Yes (section-level) | boolean | Enables ACME issuance workflow; when false, listener TLS workflow disabled, but Cloudflare values still required | Yes |
-| BackFiller:LetsEncrypt:AcmeAccountEmail | string | security@usenet.ninja | Conditionally required (Enabled=true) | non-empty, no whitespace/control, valid email | ACME account registration/runtime options | Yes |
-| BackFiller:LetsEncrypt:AcmeAccountKeyPem | string | account.key | Conditionally required (Enabled=true) | non-empty filename, not rooted path, valid chars, resolvable under DirCerts, PEM loadability checks | ACME account key path projection | Yes |
-| BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts | int? | 5 | Conditionally required (Enabled=true) | 1..10 | ACME transient retry policy | Yes |
-| BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes | int? | 5 | Conditionally required (Enabled=true) | 1..60 | Clock skew validation cache TTL | Yes |
-| BackFiller:LetsEncrypt:ClockSkewMaxMinutes | int? | 10 | Conditionally required (Enabled=true) | 1..60 | Allowed UTC skew for ACME safety checks | Yes |
-| BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes | int? | 5 | Conditionally required (Enabled=true) | 1..60 | Authoritative NS cache TTL during DNS-01 | Yes |
-| BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio | double? | 0.7 | Conditionally required (Enabled=true) | >0 and <=1; rejects NaN/Infinity | Authoritative DNS TXT quorum success threshold | Yes |
-| BackFiller:LetsEncrypt:DnsPropagationDelaySeconds | int? | 15 | Conditionally required (Enabled=true) | 0..600 | Initial wait before DNS TXT polling starts | Yes |
-| BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds | int? | 3 | Conditionally required (Enabled=true) | 1..60 and must be < DnsTxtPollTimeoutSeconds | DNS TXT polling cadence | Yes |
-| BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds | int? | 600 | Conditionally required (Enabled=true) | 1..3600 and must be > DnsTxtPollIntervalSeconds | Total DNS TXT polling timeout | Yes |
+| BackFiller:LetsEncrypt:AcmeAccountEmail | string | security@usenet.ninja | Yes | non-empty, no whitespace/control, valid email | ACME account registration/runtime options | Yes |
+| BackFiller:LetsEncrypt:AcmeAccountKeyPem | string | account.key | Yes | non-empty filename, not rooted path, valid chars, resolvable under DirCerts, PEM loadability checks | ACME account key path projection | Yes |
+| BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts | int? | 5 | Yes | 1..10 | ACME transient retry policy | Yes |
+| BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes | int? | 5 | Yes | 1..60 | Clock skew validation cache TTL | Yes |
+| BackFiller:LetsEncrypt:ClockSkewMaxMinutes | int? | 10 | Yes | 1..60 | Allowed UTC skew for ACME safety checks | Yes |
+| BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes | int? | 5 | Yes | 1..60 | Authoritative NS cache TTL during DNS-01 | Yes |
+| BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio | double? | 0.7 | Yes | >0 and <=1; rejects NaN/Infinity | Authoritative DNS TXT quorum success threshold | Yes |
+| BackFiller:LetsEncrypt:DnsPropagationDelaySeconds | int? | 15 | Yes | 0..600 | Initial wait before DNS TXT polling starts | Yes |
+| BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds | int? | 3 | Yes | 1..60 and must be < DnsTxtPollTimeoutSeconds | DNS TXT polling cadence | Yes |
+| BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds | int? | 600 | Yes | 1..3600 and must be > DnsTxtPollIntervalSeconds | Total DNS TXT polling timeout | Yes |
 | BackFiller:LetsEncrypt:DomainNames | string[]? | null | No | if provided: non-empty array, valid DNS/wildcard entries | Compatibility-only input; runtime identity uses generated canonical FQDN instead | Yes |
-| BackFiller:LetsEncrypt:PfxExportPassword | string | YOUR_PFX_PASSWORD (template) | Conditionally required (Enabled=true) | non-empty; no whitespace/control; must not equal template placeholder; min length 12 | PFX/PKCS#12 protection password | Yes |
-| BackFiller:LetsEncrypt:RenewalCheckIntervalHours | int? | 6 | Conditionally required (Enabled=true) | 1..168 | Renewal scheduler cadence | Yes |
-| BackFiller:LetsEncrypt:RenewalJitterRatio | double? | 0.1 | Conditionally required (Enabled=true) | >=0 and <1; rejects NaN/Infinity | Renewal jitter spread policy | Yes |
-| BackFiller:LetsEncrypt:RenewBeforeExpiryDays | int? | 7 | Conditionally required (Enabled=true) | 1..60 | Renewal eligibility threshold before expiry | Yes |
+| BackFiller:LetsEncrypt:PfxExportPassword | string | YOUR_PFX_PASSWORD (template) | Yes | non-empty; no whitespace/control; must not equal template placeholder; min length 12 | PFX/PKCS#12 protection password | Yes |
+| BackFiller:LetsEncrypt:RenewalCheckIntervalHours | int? | 6 | Yes | 1..168 | Renewal scheduler cadence | Yes |
+| BackFiller:LetsEncrypt:RenewalJitterRatio | double? | 0.1 | Yes | >=0 and <1; rejects NaN/Infinity | Renewal jitter spread policy | Yes |
+| BackFiller:LetsEncrypt:RenewBeforeExpiryDays | int? | 7 | Yes | 1..60 | Renewal eligibility threshold before expiry | Yes |
 | BackFiller:LetsEncrypt:UseStagingDirectory | bool | false | No | boolean | ACME environment selection (warning if true) | Yes |
-| BackFiller:LetsEncrypt:CloudFlareApiToken | string | YOUR_CLOUDFLARE_API_TOKEN (template) | Yes (even when Enabled=false) | non-empty; no whitespace/control; must not equal template placeholder | Cloudflare DNS operations | Yes |
-| BackFiller:LetsEncrypt:CloudFlareZoneId | string | 5811a29d39a0732afb5f160c9b137c3d (code default) | Yes (even when Enabled=false) | non-empty; must be 32-char lowercase hex | Cloudflare DNS zone targeting | Yes |
+| BackFiller:LetsEncrypt:CloudFlareApiToken | string | YOUR_CLOUDFLARE_API_TOKEN (template) | Yes | non-empty; no whitespace/control; must not equal template placeholder | Cloudflare DNS operations | Yes |
+| BackFiller:LetsEncrypt:CloudFlareZoneId | string | 5811a29d39a0732afb5f160c9b137c3d (code default) | Yes | non-empty; must be 32-char lowercase hex | Cloudflare DNS zone targeting | Yes |
 | BackFiller:RabbitMQ:WorkRequestMaxPayloadBytes | int? | 1024 | Yes | 1..4096 | Max control-plane request envelope bytes before copy/reject behavior | Yes |
 | BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds | int? | 60 | Yes | 1..3600 and >= RpcTimeoutSeconds | RabbitMQ operation-timeout coherence policy | Yes |
 | BackFiller:RabbitMQ:RpcTimeoutSeconds | int? | 30 | Yes | 1..3600 and <= ChannelLeaseTimeoutSeconds and <= ConnectionBlockedTimeoutSeconds | AMQP continuation/handshake timeout | Yes |
@@ -114,7 +113,7 @@ This document describes the authoritative externally configurable contract repre
   - `/sys`, cgroup/container memory limits, available/free memory, process memory, and GC-reported memory are not substituted because they represent different resource semantics than physical system memory.
   - If physical system memory cannot be determined from the authoritative source, startup configuration validation fails so retention capacity is never accepted without the 80% safety boundary.
   - On Linux, missing/unreadable/malformed `/proc/meminfo` `MemTotal` indicates an unsupported environment for this retention-validation policy.
-- `BackFiller:LetsEncrypt:CloudFlareApiToken` and `BackFiller:LetsEncrypt:CloudFlareZoneId` are required even if `BackFiller:LetsEncrypt:Enabled=false`.
+- `BackFiller:LetsEncrypt:CloudFlareApiToken` and `BackFiller:LetsEncrypt:CloudFlareZoneId` are required for mandatory TLS listener certificate provisioning and DNS workflows.
 
 ## Exclusions (intentionally not in sample)
 

@@ -312,7 +312,6 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = certs,
                 ["BackFiller:DirLogs"] = logs,
-                ["BackFiller:LetsEncrypt:Enabled"] = "false",
                 ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",

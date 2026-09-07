@@ -71,8 +71,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Ensures a usable listener certificate exists and is published into runtime state.
         /// </summary>
         /// <remarks>
-        /// When Let's Encrypt is disabled the method logs the skip decision and returns immediately. Otherwise callers
-        /// serialize through <see cref="ProvisionGate"/> so only one evaluation or issuance workflow runs at a time.
+        /// Callers serialize through <see cref="ProvisionGate"/> so only one evaluation or issuance workflow runs at a time.
         /// </remarks>
         /// <param name="runtimeOptions">Validated runtime options snapshot that provides the effective ACME policy.</param>
         /// <param name="cancellationToken">Cancellation token that aborts evaluation or provisioning.</param>
@@ -84,11 +83,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             ArgumentNullException.ThrowIfNull(runtimeOptions);
 
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions = runtimeOptions.EffectiveLetsEncrypt;
-            if (!letsEncryptOptions.Enabled)
-            {
-                LogCertificateProvisioningDisabled(_logger);
-                return;
-            }
 
             await ProvisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -116,10 +110,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             ArgumentNullException.ThrowIfNull(runtimeOptions);
 
             BackFillerLetsEncryptRuntimeOptions letsEncryptOptions = runtimeOptions.EffectiveLetsEncrypt;
-            if (!letsEncryptOptions.Enabled)
-            {
-                return false;
-            }
 
             await ProvisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -284,13 +274,6 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             GC.SuppressFinalize(this);
         }
-
-        /// <summary>
-        /// Emits the warning log indicating certificate provisioning is disabled by configuration.
-        /// </summary>
-        /// <param name="logger">Logger receiving the provisioning-disabled event.</param>
-        [LoggerMessage(EventId = 2711, Level = LogLevel.Warning, Message = "BackFiller TLS certificate provisioning is disabled by configuration.")]
-        private static partial void LogCertificateProvisioningDisabled(ILogger logger);
 
         /// <summary>
         /// Emits the warning log indicating renewal is required but the existing certificate cannot be reused.

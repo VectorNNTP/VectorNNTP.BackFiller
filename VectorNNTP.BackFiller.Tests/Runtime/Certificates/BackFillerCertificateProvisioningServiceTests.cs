@@ -170,7 +170,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         {
             _ = Directory.CreateDirectory(tempDir);
             return new BackFillerLetsEncryptRuntimeOptions(
-                Enabled: true,
                 CanonicalCertificateSubjectName: fqdn,
                 AcmeAccountEmail: "security@example.com",
                 AcmeAccountKeyPemPath: Path.Combine(tempDir, "account.key"),

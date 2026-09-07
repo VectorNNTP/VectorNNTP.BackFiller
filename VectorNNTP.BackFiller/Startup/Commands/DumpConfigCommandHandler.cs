@@ -35,7 +35,6 @@ namespace VectorNNTP.Backfiller.Startup.Commands
             "BackFiller:Id",
             "BackFiller:DnsSuffix",
             "BackFiller:BindPort",
-            "BackFiller:LetsEncrypt:Enabled",
             "BackFiller:LetsEncrypt:UseStagingDirectory"
         };
 
