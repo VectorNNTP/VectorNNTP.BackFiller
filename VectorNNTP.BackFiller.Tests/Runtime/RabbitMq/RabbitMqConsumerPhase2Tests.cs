@@ -782,6 +782,53 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         /// Verifies that direct settlement with an uncanceled caller token is rejected before broker ACK after cancelAdmittedWork abandons settlement admission.
         /// </summary>
         [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionCanceledAndProcessingTokenCanceled_ReachesBrokerNackWithoutRequeue()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(10));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink deliverySink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 11, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                deliverySink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: null);
+
+            await session.StartAsync(timeoutToken).ConfigureAwait(false);
+            TrackingChannel channel = connector.RequireLastConnection().Channels.Single(static c => c.ConsumeCallCount == 1);
+
+            await channel.DeliverAsync(603UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x22 }, cancellationToken: timeoutToken).ConfigureAwait(false);
+            RabbitMqArticleDelivery admitted = Assert.Single(deliverySink.Deliveries);
+
+            TrackingCanceledTransitAdmissionGateway transitAdmissionGateway = new();
+            RabbitMqArticleResultSink resultSink = CreateArticleResultSinkForSessionRace(transitAdmissionGateway);
+            ArticleWorkProcessingResult result = CreateArticleProcessingResultForSessionRace(admitted, ArticleWorkProcessingOutcome.Success);
+
+            using CancellationTokenSource operationCts = new();
+            operationCts.Cancel();
+
+            await resultSink.OnProcessedAsync(result, operationCts.Token).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, channel.AckCallCount);
+            Assert.Equal(1, channel.NackCallCount);
+            Assert.False(channel.LastNackRequeue);
+
+            await session.StopAsync(cancelAdmittedWork: false, cancellationToken: timeoutToken).ConfigureAwait(false);
+            Assert.True(channel.Disposed);
+
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
         public async Task StopAsync_WhenCancelAdmittedWorkTrue_DirectSettlementIsRejectedAfterAbandonment()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
@@ -1911,7 +1958,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         /// Creates a production-equivalent article result sink used by the deterministic settlement race tests.
         /// </summary>
         /// <returns>The configured result sink.</returns>
-        private static RabbitMqArticleResultSink CreateArticleResultSinkForSessionRace()
+        private static RabbitMqArticleResultSink CreateArticleResultSinkForSessionRace(ITransitAdmissionGateway? transitAdmissionGateway = null)
         {
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
             return new RabbitMqArticleResultSink(
@@ -1919,7 +1966,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: new TrackingRaceResponsePublisher(),
                 retentionAuthority: new ArticleRetentionAuthority(runtimeOptions),
-                transitAdmissionGateway: new AlwaysAcceptedTransitAdmissionGateway(),
+                transitAdmissionGateway: transitAdmissionGateway ?? new AlwaysAcceptedTransitAdmissionGateway(),
                 logger: NullLogger<RabbitMqArticleResultSink>.Instance);
         }
 
@@ -1955,6 +2002,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 return ValueTask.FromResult(new TransitAdmissionResult(messageId, TransitAdmissionStatus.Accepted));
+            }
+        }
+
+        private sealed class TrackingCanceledTransitAdmissionGateway : ITransitAdmissionGateway
+        {
+            internal int AdmitCallCount { get; private set; }
+
+            public ValueTask<TransitAdmissionResult> AdmitAsync(string messageId, CancellationToken cancellationToken)
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new InvalidOperationException("Expected a canceled processing token for transit admission cancellation path.");
+                }
+
+                AdmitCallCount++;
+                return ValueTask.FromResult(new TransitAdmissionResult(messageId, TransitAdmissionStatus.Canceled, "Transit admission canceled."));
             }
         }
 

@@ -588,6 +588,46 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionCanceledWithCanceledProcessingToken_NacksWithoutRequeueUsingDeliveryToken()
+        {
+            TrackingDeliverySettlement settlement = new();
+            CancellationTokenSource deliveryCts = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-canceled@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-canceled",
+                replyTo: "rpc.responses",
+                deliveryTag: 2204,
+                connectionGeneration: 63,
+                settlement: settlement,
+                cancellationToken: deliveryCts.Token);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-canceled@example.com>", "transit-admission-canceled-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<transit-admission-canceled@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Canceled, "Transit admission canceled.", throwOnCancellation: false);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, transitAdmissionGateway: transitAdmissionGateway);
+
+            using CancellationTokenSource operationCts = new();
+            operationCts.Cancel();
+
+            await sink.OnProcessedAsync(result, operationCts.Token).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2204UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.False(settlement.NackTokenWasCancellationRequested);
+        }
+
+        [Fact]
         public async Task OnProcessedAsync_WhenDuplicateMessageIdRedelivery_DoesNotRequeueLoopAndAcknowledgesAsync()
         {
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
@@ -670,12 +710,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             private readonly TransitAdmissionStatus _status;
             private readonly string? _error;
             private readonly List<string>? _sharedOperationLog;
+            private readonly bool _throwOnCancellation;
 
-            internal TrackingTransitAdmissionGateway(TransitAdmissionStatus status, string? error = null, List<string>? sharedOperationLog = null)
+            internal TrackingTransitAdmissionGateway(TransitAdmissionStatus status, string? error = null, List<string>? sharedOperationLog = null, bool throwOnCancellation = true)
             {
                 _status = status;
                 _error = error;
                 _sharedOperationLog = sharedOperationLog;
+                _throwOnCancellation = throwOnCancellation;
             }
 
             internal int AdmitCallCount { get; private set; }
@@ -684,7 +726,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             public ValueTask<TransitAdmissionResult> AdmitAsync(string messageId, CancellationToken cancellationToken)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if (_throwOnCancellation)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 AdmitCallCount++;
                 LastMessageId = messageId;
                 _sharedOperationLog?.Add("admit");
@@ -754,7 +800,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             IRabbitMqDeliverySettlement? settlement = null,
             bool redelivered = false,
             string consumerTag = "ctag-phase4",
-            string consumerIdentity = "consumer-phase4")
+            string consumerIdentity = "consumer-phase4",
+            CancellationToken cancellationToken = default)
         {
             settlement ??= new TrackingDeliverySettlement();
             if (settlement is TrackingDeliverySettlement trackingSettlement)
@@ -776,7 +823,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 CorrelationId: correlationId,
                 ReplyTo: replyTo,
                 Payload: Encoding.UTF8.GetBytes(payloadText),
-                CancellationToken: CancellationToken.None,
+                CancellationToken: cancellationToken,
                 Settlement: settlement);
         }
 
@@ -965,6 +1012,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             internal bool NackRequeue { get; private set; }
 
             /// <summary>
+            /// Supplies whether the cancellation token passed to NACK was already canceled.
+            /// </summary>
+            internal bool NackTokenWasCancellationRequested { get; private set; }
+
+            /// <summary>
             /// Supplies operation log for the fixture or scenario under test.
             /// </summary>
             internal List<string> OperationLog { get; } = [];
@@ -1004,6 +1056,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
+                NackTokenWasCancellationRequested = cancellationToken.IsCancellationRequested;
                 cancellationToken.ThrowIfCancellationRequested();
                 if (Interlocked.Exchange(ref _settled, 1) != 0)
                 {

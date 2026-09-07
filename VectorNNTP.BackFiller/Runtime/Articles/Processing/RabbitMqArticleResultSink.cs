@@ -138,7 +138,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
                         if (!transitAdmissionResult.IsAccepted)
                         {
-                            await result.Delivery.Settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
+                            CancellationToken settlementToken = SelectTransitRejectionSettlementToken(
+                                admissionStatus: transitAdmissionResult.Status,
+                                processingToken: cancellationToken,
+                                deliveryToken: result.Delivery.CancellationToken);
+                            await result.Delivery.Settlement.NackAsync(requeue: false, settlementToken).ConfigureAwait(false);
                             if (transitAdmissionResult.Status is TransitAdmissionStatus.Failed or TransitAdmissionStatus.Unavailable)
                             {
                                 LogRabbitMqTransitAdmissionRejectedDropWarning(
@@ -239,6 +243,24 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 detachedPayloadOwner?.Dispose();
                 result.Dispose();
             }
+        }
+
+        private static CancellationToken SelectTransitRejectionSettlementToken(
+            TransitAdmissionStatus admissionStatus,
+            CancellationToken processingToken,
+            CancellationToken deliveryToken)
+        {
+            if (admissionStatus != TransitAdmissionStatus.Canceled)
+            {
+                return processingToken;
+            }
+
+            if (!deliveryToken.CanBeCanceled || deliveryToken.IsCancellationRequested)
+            {
+                return processingToken;
+            }
+
+            return deliveryToken;
         }
 
         /// <summary>
