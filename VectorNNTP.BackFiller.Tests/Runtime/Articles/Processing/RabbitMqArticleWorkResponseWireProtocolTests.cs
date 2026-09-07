@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the rabbit mq article work response wire protocol test suite.
 
 using System.Text;
+using System.Text.Json;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using Xunit;
 
@@ -59,6 +60,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             Assert.Contains("\"error\":\"No article with that message-id\"", json, StringComparison.Ordinal);
             Assert.DoesNotContain("\"uri\"", json, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Confirms success responses with null uri serialize with explicit null for schema-compatibility assertions.
+        /// </summary>
+        [Fact]
+        public void SerializeV1_WhenSuccessUriNull_EmitsExplicitNullUriProperty()
+        {
+            RabbitMqArticleWorkResponse response = new(
+                Version: 1,
+                RequestId: Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa"),
+                MessageId: "<12345@example.invalid>",
+                Backbone: "Giganews",
+                Outcome: nameof(ArticleWorkProcessingOutcome.Success),
+                Uri: null,
+                Error: null);
+
+            byte[] payload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
+            using JsonDocument document = JsonDocument.Parse(payload);
+
+            JsonElement root = document.RootElement;
+            Assert.True(root.TryGetProperty("uri", out JsonElement uri));
+            Assert.Equal(JsonValueKind.Null, uri.ValueKind);
         }
         /// <summary>
         /// Confirms the parse v1 when payload is valid round trips canonical fields behavior.

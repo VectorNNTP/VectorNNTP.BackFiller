@@ -14,7 +14,9 @@ Responses use standard RabbitMQ RPC semantics:
 - Response AMQP `CorrelationId`: incoming request `CorrelationId` property
 - ContentType: `application/json`
 
-`CorrelationId` and `ReplyTo` are transport metadata and are never duplicated in response JSON payloads.
+`CorrelationId`, `ReplyTo`, and AMQP response `MessageId` are transport metadata and are never duplicated in response JSON payloads.
+
+AMQP response `MessageId` is generated as a fresh UUID for each response publication attempt (each call to `PublishAndConfirmAsync`, including retries/republications). It is distinct from JSON `messageId`, JSON `requestId`, and AMQP `CorrelationId`.
 
 JSON Schema: `RabbitMqArticleWorkResponse.v1.schema.json`.
 
@@ -106,6 +108,7 @@ Deterministic vectors used by repository tests:
 - `messageId`: canonical article identity from JSON request body and the identity used to derive `uri`.
 - `requestId`: application work-request identity from JSON request body; not used as article URI identity.
 - `CorrelationId`: AMQP RPC identity from transport properties.
+- `MessageId` (AMQP response property): transport-level response publication identity, generated as a new UUID for each publication attempt.
 - `DeliveryTag`: AMQP delivery-settlement identity.
 - `ConnectionGeneration`: BackFiller infrastructure identity.
 

@@ -35,7 +35,6 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="RabbitMqMaximumShutdownDrainTimeoutSeconds">Validated RabbitMQ shutdown-drain timeout in seconds used by runtime services.</param>
     /// <param name="WriteBatchCoalesceMicroseconds">Configured writer coalescing window in microseconds for transit write batching experiments.</param>
     /// <param name="TransitQueueMaxItemCount">Global transit queue maximum admitted queued work-item count.</param>
-    /// <param name="TransitQueueMaxPayloadBytes">Global transit queue maximum admitted queued payload bytes.</param>
     /// <param name="TransitRetryMaxAttempts">Global transit per-item maximum transmission attempts.</param>
     /// <param name="TransitReconnectInitializationTimeout">Maximum reconnect initialization time when admitted work is outstanding.</param>
     /// <param name="TransitShutdownDrainGracePeriod">Initial transit shutdown drain grace period.</param>
@@ -66,7 +65,6 @@ namespace VectorNNTP.Backfiller.Configuration
         int RabbitMqMaximumShutdownDrainTimeoutSeconds = 30,
         int WriteBatchCoalesceMicroseconds = 250,
         int TransitQueueMaxItemCount = 2048,
-        long TransitQueueMaxPayloadBytes = 536870912,
         int TransitRetryMaxAttempts = 3,
         TimeSpan? TransitReconnectInitializationTimeout = null,
         TimeSpan? TransitShutdownDrainGracePeriod = null,

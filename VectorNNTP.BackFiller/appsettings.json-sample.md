@@ -138,7 +138,6 @@ Potential operator knobs currently hard-coded in runtime snapshot and not extern
 
 - Transit write coalescing microseconds (`WriteBatchCoalesceMicroseconds` = 250)
 - Transit queue maximum item count (`TransitQueueMaxItemCount` = 2048)
-- Transit queue maximum payload bytes (`TransitQueueMaxPayloadBytes` = 536,870,912)
 - Transit retry max attempts (`TransitRetryMaxAttempts` = 3)
 - Transit shutdown timings (`TransitShutdownDrainGracePeriod` = 5 min, inactivity watchdog 30 sec, absolute max 30 min)
 

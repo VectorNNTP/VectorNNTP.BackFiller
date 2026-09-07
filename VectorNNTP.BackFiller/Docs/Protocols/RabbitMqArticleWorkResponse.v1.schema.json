@@ -45,10 +45,7 @@
       "description": "Terminal response outcome emitted to NNRPD."
     },
     "uri": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": "string",
       "description": "Success-only canonical article cache URI in the form cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}, where MessageIdMd5 is the lowercase hexadecimal MD5 digest of the ASCII bytes of the exact messageId string."
     },
     "error": {

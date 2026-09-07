@@ -300,12 +300,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Transfers ownership of the successful article buffer to a caller-managed owner.
+        /// Atomically detaches and returns the currently owned successful article buffer, if present.
         /// </summary>
-        /// <returns>The transferred article buffer owner when one exists; otherwise <see langword="null"/>.</returns>
+        /// <returns>The detached article buffer owner when this instance currently owns one; otherwise <see langword="null"/>.</returns>
         /// <remarks>
-        /// Ownership transfer is one-way and occurs at most once. After transfer, this result no longer owns
-        /// or exposes the buffer and later disposal becomes a no-op for payload ownership.
+        /// This operation transfers ownership for a single state transition from owned to detached. Ownership can later be reattached
+        /// with <see cref="TryAttachArticleBuffer(DownloadedArticleBuffer)"/> when the result is currently detached and still valid.
         /// </remarks>
         internal DownloadedArticleBuffer? TryDetachArticleBuffer()
         {
@@ -313,10 +313,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Attempts to attach a detached article buffer owner back to this result.
+        /// Atomically attaches a detached article buffer owner when this result currently owns no buffer.
         /// </summary>
-        /// <param name="articleBuffer">Buffer owner to reattach.</param>
-        /// <returns><see langword="true"/> when ownership was reattached; otherwise <see langword="false"/>.</returns>
+        /// <param name="articleBuffer">Buffer owner to attach.</param>
+        /// <returns><see langword="true"/> when ownership was attached; otherwise <see langword="false"/> because another owner is already present.</returns>
+        /// <remarks>
+        /// Attach/detach transitions are atomic and may occur multiple times over the result lifetime while callers coordinate ownership transfer.
+        /// Disposal atomically clears ownership and disposes the owner that is attached at disposal time.
+        /// </remarks>
         internal bool TryAttachArticleBuffer(DownloadedArticleBuffer articleBuffer)
         {
             ArgumentNullException.ThrowIfNull(articleBuffer);
