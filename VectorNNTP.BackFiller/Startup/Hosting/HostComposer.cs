@@ -276,11 +276,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             // Register RabbitMQ startup initialization after account load so topology can be scoped per backbone.
             RegisterRabbitMqInfrastructureServices(services);
 
+            // Register transit publisher startup initialization before article processing loops start.
+            RegisterTransitPublisherServices(services);
+
             // Register Phase 3 RabbitMQ article processing/classification services.
             RegisterArticleProcessingServices(services);
-
-            // Register transit publisher startup initialization before control-plane runtime loops start.
-            RegisterTransitPublisherServices(services);
 
             // Register ACME/TLS certificate lifecycle services and periodic renewal loop.
             RegisterCertificateServices(services);
