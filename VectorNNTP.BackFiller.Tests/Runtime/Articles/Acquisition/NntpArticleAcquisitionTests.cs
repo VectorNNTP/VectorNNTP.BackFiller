@@ -6,6 +6,7 @@
 // Focused tests for nntp article acquisition, covering NNTP article and transport behavior.
 // Primary responsibility: documents the executable contracts covered by the nntp article acquisition test suite.
 
+using System.Buffers;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -195,6 +196,85 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 Assert.Null(result.ArticleBuffer);
                 Assert.False(result.IsSuccess);
             }
+        }
+
+        /// <summary>
+        /// Confirms attach is rejected after terminal disposal and failed attach ownership remains with the caller.
+        /// </summary>
+        [Fact]
+        public void TryAttachArticleBuffer_WhenDisposed_ReturnsFalseAndCallerRetainsOwnership()
+        {
+            NntpArticleAcquisitionResult result = NntpArticleAcquisitionResult.StatusSuccess(111, "status");
+            result.Dispose();
+
+            DownloadedArticleBuffer detachedOwner = CreateDownloadedArticleBuffer("payload-after-dispose");
+            bool attached = result.TryAttachArticleBuffer(detachedOwner);
+
+            Assert.False(attached);
+            Assert.Null(result.TryDetachArticleBuffer());
+
+            detachedOwner.Dispose();
+            _ = Assert.Throws<ObjectDisposedException>(() =>
+            {
+                _ = detachedOwner.Memory;
+            });
+        }
+
+        /// <summary>
+        /// Confirms detached ownership can be reattached and detached again while the result remains valid.
+        /// </summary>
+        [Fact]
+        public void TryAttachArticleBuffer_WhenValid_SupportsDetachAttachDetachLifecycle()
+        {
+            using NntpArticleAcquisitionResult result = NntpArticleAcquisitionResult.StatusSuccess(111, "status");
+            using DownloadedArticleBuffer firstOwner = CreateDownloadedArticleBuffer("first-payload");
+            using DownloadedArticleBuffer secondOwner = CreateDownloadedArticleBuffer("second-payload");
+
+            Assert.True(result.TryAttachArticleBuffer(firstOwner));
+            DownloadedArticleBuffer detachedFirst = Assert.IsType<DownloadedArticleBuffer>(result.TryDetachArticleBuffer());
+            Assert.Same(firstOwner, detachedFirst);
+
+            Assert.True(result.TryAttachArticleBuffer(secondOwner));
+            DownloadedArticleBuffer detachedSecond = Assert.IsType<DownloadedArticleBuffer>(result.TryDetachArticleBuffer());
+            Assert.Same(secondOwner, detachedSecond);
+        }
+
+        /// <summary>
+        /// Confirms concurrent attach and dispose produce one terminal ownership outcome without payload leaks.
+        /// </summary>
+        [Fact]
+        public async Task TryAttachArticleBuffer_WhenConcurrentWithDispose_PreservesTerminalOwnershipContractAsync()
+        {
+            NntpArticleAcquisitionResult result = NntpArticleAcquisitionResult.StatusSuccess(111, "status");
+            DownloadedArticleBuffer candidateOwner = CreateDownloadedArticleBuffer("candidate-payload");
+            Barrier barrier = new(2);
+
+            Task disposeTask = Task.Run(() =>
+            {
+                barrier.SignalAndWait();
+                result.Dispose();
+            });
+
+            Task<bool> attachTask = Task.Run(() =>
+            {
+                barrier.SignalAndWait();
+                return result.TryAttachArticleBuffer(candidateOwner);
+            });
+
+            await Task.WhenAll(disposeTask, attachTask).ConfigureAwait(false);
+
+            bool attached = attachTask.Result;
+            Assert.Null(result.TryDetachArticleBuffer());
+
+            if (!attached)
+            {
+                candidateOwner.Dispose();
+            }
+
+            _ = Assert.Throws<ObjectDisposedException>(() =>
+            {
+                _ = candidateOwner.Memory;
+            });
         }
 
         /// <summary>
@@ -1056,6 +1136,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         private static byte[] BuildArticleBytes(string messageId, string body)
         {
             return BuildArticleBytes(messageId, Encoding.ASCII.GetBytes(body));
+        }
+
+        private static DownloadedArticleBuffer CreateDownloadedArticleBuffer(string payload)
+        {
+            byte[] payloadBytes = Encoding.ASCII.GetBytes(payload);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(payloadBytes.Length);
+            Buffer.BlockCopy(payloadBytes, 0, rented, 0, payloadBytes.Length);
+            return new DownloadedArticleBuffer(rented, payloadBytes.Length);
         }
 
         /// <summary>

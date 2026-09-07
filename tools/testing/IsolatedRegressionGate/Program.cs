@@ -336,7 +336,9 @@ internal static class Program
         string projectName = Path.GetFileNameWithoutExtension(projectPath);
 
         string[] candidates = Directory.GetFiles(projectDir, projectName + ".dll", SearchOption.AllDirectories)
-            .Where(p => p.Contains(Path.Combine("bin", "Debug", "net8.0"), StringComparison.OrdinalIgnoreCase)
+            .Where(p => p.Contains(Path.Combine("bin", "x64", "Debug", "net8.0"), StringComparison.OrdinalIgnoreCase)
+                     || p.Contains(Path.Combine("bin", "x64", "Release", "net8.0"), StringComparison.OrdinalIgnoreCase)
+                     || p.Contains(Path.Combine("bin", "Debug", "net8.0"), StringComparison.OrdinalIgnoreCase)
                      || p.Contains(Path.Combine("bin", "Release", "net8.0"), StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .ToArray();

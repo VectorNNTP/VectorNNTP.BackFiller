@@ -192,9 +192,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     internal sealed class NntpArticleAcquisitionResult : IDisposable
     {
         /// <summary>
-        /// Owned article buffer reference that can be detached by the caller exactly once.
+        /// Sentinel object representing terminal disposal for this acquisition result.
         /// </summary>
-        private DownloadedArticleBuffer? _articleBuffer;
+        private static readonly object DisposedArticleBufferSentinel = new();
+
+        /// <summary>
+        /// Owned article buffer state: detached (<see langword="null"/>), owned (<see cref="DownloadedArticleBuffer"/>), or terminal disposal sentinel.
+        /// </summary>
+        private object? _articleBuffer;
 
         /// <summary>
         /// Initializes a new acquisition result instance.
@@ -242,8 +247,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <summary>
         /// Gets the owned article buffer for payload-producing successes.
         /// </summary>
-        /// <value>The buffer owner transferred from the receive path, or <see langword="null"/> when no payload was produced.</value>
-        internal DownloadedArticleBuffer? ArticleBuffer => Volatile.Read(ref _articleBuffer);
+        /// <value>The buffer owner transferred from the receive path, or <see langword="null"/> when no payload is currently attached.</value>
+        internal DownloadedArticleBuffer? ArticleBuffer => Volatile.Read(ref _articleBuffer) as DownloadedArticleBuffer;
 
         /// <summary>
         /// Gets the article bytes when a payload was acquired.
@@ -305,35 +310,63 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// <returns>The detached article buffer owner when this instance currently owns one; otherwise <see langword="null"/>.</returns>
         /// <remarks>
         /// This operation transfers ownership for a single state transition from owned to detached. Ownership can later be reattached
-        /// with <see cref="TryAttachArticleBuffer(DownloadedArticleBuffer)"/> when the result is currently detached and still valid.
+        /// with <see cref="TryAttachArticleBuffer(DownloadedArticleBuffer)"/> when the result is currently detached and not yet terminally disposed.
         /// </remarks>
         internal DownloadedArticleBuffer? TryDetachArticleBuffer()
         {
-            return Interlocked.Exchange(ref _articleBuffer, null);
+            while (true)
+            {
+                object? current = Volatile.Read(ref _articleBuffer);
+                if (current is null || ReferenceEquals(current, DisposedArticleBufferSentinel))
+                {
+                    return null;
+                }
+
+                if (Interlocked.CompareExchange(ref _articleBuffer, null, current) == current)
+                {
+                    return (DownloadedArticleBuffer)current;
+                }
+            }
         }
 
         /// <summary>
-        /// Atomically attaches a detached article buffer owner when this result currently owns no buffer.
+        /// Atomically attaches a detached article buffer owner when this result currently owns no buffer and has not reached terminal disposal.
         /// </summary>
         /// <param name="articleBuffer">Buffer owner to attach.</param>
-        /// <returns><see langword="true"/> when ownership was attached; otherwise <see langword="false"/> because another owner is already present.</returns>
+        /// <returns><see langword="true"/> when ownership was attached; otherwise <see langword="false"/>.</returns>
         /// <remarks>
         /// Attach/detach transitions are atomic and may occur multiple times over the result lifetime while callers coordinate ownership transfer.
-        /// Disposal atomically clears ownership and disposes the owner that is attached at disposal time.
+        /// Once terminal disposal begins, all future attach attempts are rejected. When this method returns <see langword="false"/>, ownership remains with the caller.
         /// </remarks>
         internal bool TryAttachArticleBuffer(DownloadedArticleBuffer articleBuffer)
         {
             ArgumentNullException.ThrowIfNull(articleBuffer);
-            return Interlocked.CompareExchange(ref _articleBuffer, articleBuffer, null) is null;
+
+            while (true)
+            {
+                object? current = Volatile.Read(ref _articleBuffer);
+                if (ReferenceEquals(current, DisposedArticleBufferSentinel) || current is not null)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _articleBuffer, articleBuffer, null) is null)
+                {
+                    return true;
+                }
+            }
         }
 
         /// <summary>
-        /// Disposes the owned article buffer, if this result currently owns one.
+        /// Transitions this result to terminal disposal and disposes the currently attached article buffer, if any.
         /// </summary>
         public void Dispose()
         {
-            DownloadedArticleBuffer? owner = Interlocked.Exchange(ref _articleBuffer, null);
-            owner?.Dispose();
+            object? prior = Interlocked.Exchange(ref _articleBuffer, DisposedArticleBufferSentinel);
+            if (prior is DownloadedArticleBuffer owner)
+            {
+                owner.Dispose();
+            }
         }
     }
 }
