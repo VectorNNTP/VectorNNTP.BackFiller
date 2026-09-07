@@ -287,12 +287,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 return processingToken;
             }
 
-            if (!deliveryToken.CanBeCanceled || deliveryToken.IsCancellationRequested)
+            if (!deliveryToken.IsCancellationRequested)
             {
-                return processingToken;
+                return deliveryToken;
             }
 
-            return deliveryToken;
+            return processingToken;
         }
 
         /// <summary>
@@ -326,7 +326,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
         /// <param name="admissionStatus">Retention admission status that forced requeue semantics.</param>
         [LoggerMessage(
-            EventId = 3402,
+            EventId = 3409,
             Level = LogLevel.Warning,
             Message = "RabbitMQ success-path retention admission failed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} AdmissionStatus={AdmissionStatus}")]
         private static partial void LogRabbitMqRetentionAdmissionFailedRequeue(

@@ -461,6 +461,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
 
             Task processingTask = ProcessRequestAsync(context, cancellationToken);
             _requestTasks[requestId] = processingTask;
+            if (processingTask.IsCompleted)
+            {
+                _ = _requestTasks.TryRemove(requestId, out _);
+            }
         }
 
         private async Task ProcessRequestAsync(RequestContext context, CancellationToken callerToken)

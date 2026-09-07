@@ -676,6 +676,45 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionCanceledWithCanceledProcessingAndNonCancelableDeliveryToken_NacksWithoutRequeue()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-canceled-noncancelable@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-canceled-noncancelable",
+                replyTo: "rpc.responses",
+                deliveryTag: 2205,
+                connectionGeneration: 63,
+                settlement: settlement,
+                cancellationToken: CancellationToken.None);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-canceled-noncancelable@example.com>", "transit-admission-canceled-noncancelable-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<transit-admission-canceled-noncancelable@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Canceled, "Transit admission canceled.", throwOnCancellation: false);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, transitAdmissionGateway: transitAdmissionGateway);
+
+            using CancellationTokenSource operationCts = new();
+            operationCts.Cancel();
+
+            await sink.OnProcessedAsync(result, operationCts.Token).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2205UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.False(settlement.NackTokenWasCancellationRequested);
+        }
+
+        [Fact]
         public async Task OnProcessedAsync_WhenDuplicateMessageIdRedelivery_DoesNotRequeueLoopAndAcknowledgesAsync()
         {
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();

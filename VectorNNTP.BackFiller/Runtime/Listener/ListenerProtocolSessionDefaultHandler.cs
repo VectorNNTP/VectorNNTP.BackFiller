@@ -8,11 +8,11 @@
 namespace VectorNNTP.Backfiller.Runtime.Listener
 {
     /// <summary>
-    /// Default Listener protocol request handler used before retention integration is implemented.
+    /// Default Listener protocol request handler that intentionally returns NotFound for every validated request.
     /// </summary>
     /// <remarks>
-    /// This handler intentionally returns NotFound for every validated request so the per-connection session behavior
-    /// can be exercised without fabricating article payloads or integrating retention ownership flows.
+    /// This inert fallback is useful for tests and non-retention session wiring that only needs protocol/lifecycle behavior.
+    /// Production listener socket wiring uses <see cref="ListenerProtocolRetentionRequestHandler"/> to integrate shared retention lookups and completion callbacks.
     /// </remarks>
     internal sealed class ListenerProtocolSessionDefaultHandler : IListenerProtocolRequestHandler
     {

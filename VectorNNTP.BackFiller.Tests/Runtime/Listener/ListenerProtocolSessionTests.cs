@@ -7,6 +7,7 @@
 
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using VectorNNTP.Backfiller.Configuration;
@@ -45,6 +46,26 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             Assert.Equal(ListenerOpcode.GetResponseNotFound, frame.Frame!.Value.Header.Opcode);
             Assert.Equal<uint>(1, frame.Frame.Value.Header.RequestId);
             Assert.Equal(0, session.OutstandingRequestCount);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenRequestsCompleteSynchronously_DoesNotRetainCompletedRequestTasks()
+        {
+            List<byte[]> frames = [];
+            for (uint i = 1; i <= 3; i++)
+            {
+                frames.Add(ListenerProtocolEncoder.EncodeGetRequest(i, "30edc94157aa16fe644a45a1f1ffe160"));
+            }
+
+            TestTransport transport = new(frames, 4096);
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            await session.RunAsync(CancellationToken.None);
+
+            Assert.Equal(3, handler.SeenRequestIds.Count);
+            Assert.Equal(0, session.OutstandingRequestCount);
+            Assert.Equal(0, GetTrackedRequestTaskCount(session));
         }
 
         [Fact]
@@ -929,6 +950,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         {
             byte[] bytes = payload.ToArray();
             return (ListenerProtocolErrorCode)((bytes[0] << 8) | bytes[1]);
+        }
+
+        private static int GetTrackedRequestTaskCount(ListenerProtocolSession session)
+        {
+            FieldInfo field = typeof(ListenerProtocolSession).GetField("_requestTasks", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("ListenerProtocolSession request-task field was not found.");
+
+            if (field.GetValue(session) is not ConcurrentDictionary<uint, Task> requestTasks)
+            {
+                throw new InvalidOperationException("ListenerProtocolSession request-task field did not expose the expected dictionary type.");
+            }
+
+            return requestTasks.Count;
         }
 
         private static IReadOnlyList<ListenerFrameParseResult> ParseAllFrames(byte[] outbound)

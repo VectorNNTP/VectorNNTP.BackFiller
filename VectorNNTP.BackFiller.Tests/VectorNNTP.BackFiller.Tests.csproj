@@ -31,6 +31,11 @@
 	</PackageReference>
 	<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
 	<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+	<PackageReference Include="NJsonSchema" Version="11.5.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+	<None Include="..\VectorNNTP.BackFiller\Docs\Protocols\RabbitMqArticleWorkResponse.v1.schema.json" Link="Docs\Protocols\RabbitMqArticleWorkResponse.v1.schema.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

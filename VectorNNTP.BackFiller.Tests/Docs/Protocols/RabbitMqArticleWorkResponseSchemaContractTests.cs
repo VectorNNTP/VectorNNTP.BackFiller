@@ -5,7 +5,8 @@
 // VectorNNTP.Backfiller Tests / Docs / Protocols
 // Focused schema contract tests for RabbitMQ article-work response JSON examples.
 
-using System.Text.Json;
+using NJsonSchema;
+using NJsonSchema.Validation;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
@@ -15,10 +16,12 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
     /// </summary>
     public sealed class RabbitMqArticleWorkResponseSchemaContractTests
     {
+        private static readonly Lazy<JsonSchema> ResponseSchema = new(LoadSchema);
+
         [Fact]
         public void Schema_WhenOutcomeSuccessWithConcreteUri_IsValid()
         {
-            using JsonDocument payload = Parse("""
+            ICollection<ValidationError> errors = Validate("""
                 {
                   "version": 1,
                   "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
@@ -29,13 +32,13 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
                 }
                 """);
 
-            AssertValidV1Contract(payload.RootElement);
+            Assert.Empty(errors);
         }
 
         [Fact]
         public void Schema_WhenOutcomeSuccessWithNullUri_IsInvalid()
         {
-            using JsonDocument payload = Parse("""
+            ICollection<ValidationError> errors = Validate("""
                 {
                   "version": 1,
                   "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
@@ -46,13 +49,17 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
                 }
                 """);
 
-            Assert.Throws<InvalidOperationException>(() => AssertValidV1Contract(payload.RootElement));
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                string.Equals(error.Path, "#.uri", StringComparison.Ordinal)
+                || string.Equals(error.Path, "uri", StringComparison.Ordinal)
+                || error.ToString().Contains("uri", StringComparison.OrdinalIgnoreCase));
         }
 
         [Fact]
         public void Schema_WhenOutcomeFailureWithErrorAndNoUri_IsValid()
         {
-            using JsonDocument payload = Parse("""
+            ICollection<ValidationError> errors = Validate("""
                 {
                   "version": 1,
                   "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
@@ -63,69 +70,29 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
                 }
                 """);
 
-            AssertValidV1Contract(payload.RootElement);
+            Assert.Empty(errors);
         }
 
-        private static JsonDocument Parse(string json)
+        private static ICollection<ValidationError> Validate(string json)
         {
-            return JsonDocument.Parse(json);
+            return ResponseSchema.Value.Validate(json);
         }
 
-        private static void AssertValidV1Contract(JsonElement root)
+        private static JsonSchema LoadSchema()
         {
-            if (root.ValueKind != JsonValueKind.Object)
+            string schemaPath = Path.Combine(
+                AppContext.BaseDirectory,
+                "Docs",
+                "Protocols",
+                "RabbitMqArticleWorkResponse.v1.schema.json");
+
+            if (!File.Exists(schemaPath))
             {
-                throw new InvalidOperationException("Response must be a JSON object.");
+                throw new FileNotFoundException($"Schema file was not found at '{schemaPath}'.", schemaPath);
             }
 
-            bool hasVersion = root.TryGetProperty("version", out JsonElement version) && version.ValueKind == JsonValueKind.Number && version.GetInt32() == 1;
-            bool hasRequestId = root.TryGetProperty("requestId", out JsonElement requestId) && requestId.ValueKind == JsonValueKind.String && Guid.TryParse(requestId.GetString(), out _);
-            bool hasMessageId = root.TryGetProperty("messageId", out JsonElement messageId) && messageId.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(messageId.GetString());
-            bool hasBackbone = root.TryGetProperty("backbone", out JsonElement backbone) && backbone.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(backbone.GetString());
-            bool hasOutcome = root.TryGetProperty("outcome", out JsonElement outcome) && outcome.ValueKind == JsonValueKind.String;
-
-            if (!hasVersion || !hasRequestId || !hasMessageId || !hasBackbone || !hasOutcome)
-            {
-                throw new InvalidOperationException("Response is missing required base contract properties.");
-            }
-
-            string outcomeText = outcome.GetString()!;
-            bool hasUri = root.TryGetProperty("uri", out JsonElement uri);
-            bool hasError = root.TryGetProperty("error", out JsonElement error);
-
-            switch (outcomeText)
-            {
-                case "Success":
-                    if (!hasUri || uri.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(uri.GetString()))
-                    {
-                        throw new InvalidOperationException("Success outcome requires non-null string uri.");
-                    }
-
-                    if (hasError)
-                    {
-                        throw new InvalidOperationException("Success outcome must not contain error.");
-                    }
-
-                    break;
-
-                case "ArticleNotFound":
-                case "InvalidArticle":
-                case "InvalidRequest":
-                    if (!hasError || error.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(error.GetString()))
-                    {
-                        throw new InvalidOperationException("Terminal failure outcome requires non-empty error.");
-                    }
-
-                    if (hasUri)
-                    {
-                        throw new InvalidOperationException("Terminal failure outcome must not contain uri.");
-                    }
-
-                    break;
-
-                default:
-                    throw new InvalidOperationException($"Unsupported outcome '{outcomeText}'.");
-            }
+            string schemaJson = File.ReadAllText(schemaPath);
+            return JsonSchema.FromJsonAsync(schemaJson).GetAwaiter().GetResult();
         }
     }
 }

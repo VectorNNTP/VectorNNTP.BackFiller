@@ -289,7 +289,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Emits the warning log indicating certificate provisioning is disabled by configuration.
         /// </summary>
         /// <param name="logger">Logger receiving the provisioning-disabled event.</param>
-        [LoggerMessage(EventId = 2700, Level = LogLevel.Warning, Message = "BackFiller TLS certificate provisioning is disabled by configuration.")]
+        [LoggerMessage(EventId = 2711, Level = LogLevel.Warning, Message = "BackFiller TLS certificate provisioning is disabled by configuration.")]
         private static partial void LogCertificateProvisioningDisabled(ILogger logger);
 
         /// <summary>
@@ -297,7 +297,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="logger">Logger receiving the renewal-required event.</param>
         /// <param name="reason">Reason the existing certificate cannot be reused.</param>
-        [LoggerMessage(EventId = 2701, Level = LogLevel.Warning, Message = "Certificate renewal required with unusable certificate: {Reason}")]
+        [LoggerMessage(EventId = 2712, Level = LogLevel.Warning, Message = "Certificate renewal required with unusable certificate: {Reason}")]
         private static partial void LogCertificateRenewalRequiredWithUnusableCertificate(ILogger logger, string reason);
 
         /// <summary>
@@ -305,7 +305,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="logger">Logger receiving the renewal-failed event.</param>
         /// <param name="exception">Exception describing the renewal failure.</param>
-        [LoggerMessage(EventId = 2702, Level = LogLevel.Warning, Message = "Certificate renewal failed; continuing with active valid certificate.")]
+        [LoggerMessage(EventId = 2713, Level = LogLevel.Warning, Message = "Certificate renewal failed; continuing with active valid certificate.")]
         private static partial void LogCertificateRenewalFailedUsingExistingCertificate(ILogger logger, Exception exception);
 
         /// <summary>
@@ -313,14 +313,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="logger">Logger receiving the reuse event.</param>
         /// <param name="reason">Reason the existing listener certificate is being reused.</param>
-        [LoggerMessage(EventId = 2703, Level = LogLevel.Information, Message = "Using existing listener certificate: {Reason}")]
+        [LoggerMessage(EventId = 2714, Level = LogLevel.Information, Message = "Using existing listener certificate: {Reason}")]
         private static partial void LogUsingExistingListenerCertificate(ILogger logger, string reason);
 
         /// <summary>
         /// Emits the informational log indicating renewal is about to be attempted inside the renewal window.
         /// </summary>
         /// <param name="logger">Logger receiving the renewal-window event.</param>
-        [LoggerMessage(EventId = 2704, Level = LogLevel.Information, Message = "Listener certificate inside renewal window; attempting renewal.")]
+        [LoggerMessage(EventId = 2715, Level = LogLevel.Information, Message = "Listener certificate inside renewal window; attempting renewal.")]
         private static partial void LogListenerCertificateInsideRenewalWindow(ILogger logger);
 
         /// <summary>
@@ -328,7 +328,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="logger">Logger receiving the retained-certificate event.</param>
         /// <param name="exception">Exception describing the renewal failure.</param>
-        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Certificate renewal failed; retaining existing valid certificate.")]
+        [LoggerMessage(EventId = 2716, Level = LogLevel.Warning, Message = "Certificate renewal failed; retaining existing valid certificate.")]
         private static partial void LogCertificateRenewalFailedRetainingExistingCertificate(ILogger logger, Exception exception);
 
         /// <summary>
@@ -336,7 +336,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// </summary>
         /// <param name="logger">Logger receiving the ACME-provisioning event.</param>
         /// <param name="reason">Reason the current listener certificate cannot be reused.</param>
-        [LoggerMessage(EventId = 2706, Level = LogLevel.Information, Message = "Listener certificate unavailable or unusable: {Reason}. Starting ACME provisioning.")]
+        [LoggerMessage(EventId = 2717, Level = LogLevel.Information, Message = "Listener certificate unavailable or unusable: {Reason}. Starting ACME provisioning.")]
         private static partial void LogListenerCertificateUnavailableOrUnusable(ILogger logger, string reason);
 
         /// <summary>
@@ -345,7 +345,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="logger">Logger receiving the activation event.</param>
         /// <param name="subject">Subject name of the activated listener certificate.</param>
         /// <param name="notAfterUtc">UTC expiration timestamp of the activated listener certificate.</param>
-        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}")]
+        [LoggerMessage(EventId = 2718, Level = LogLevel.Information, Message = "Listener certificate activated successfully; Subject={Subject}; NotAfterUtc={NotAfterUtc}")]
         private static partial void LogListenerCertificateActivatedSuccessfully(ILogger logger, string subject, DateTimeOffset notAfterUtc);
 
         /// <summary>
@@ -356,7 +356,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="certificatePfxPath">Output path for the generated PFX artifact.</param>
         /// <param name="certificatePrivateKeyPemPath">Output path for the generated private-key PEM artifact.</param>
         /// <param name="exception">Exception captured from the ACME issuance failure path.</param>
-        [LoggerMessage(EventId = 2708, Level = LogLevel.Error, Message = "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
+        [LoggerMessage(EventId = 2719, Level = LogLevel.Error, Message = "ACME certificate issuance failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
         private static partial void LogCertificateIssuanceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception);
 
         /// <summary>
@@ -367,7 +367,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="certificatePfxPath">Output path for the generated PFX artifact.</param>
         /// <param name="certificatePrivateKeyPemPath">Output path for the generated private-key PEM artifact.</param>
         /// <param name="exception">Exception captured from the persistence failure path.</param>
-        [LoggerMessage(EventId = 2709, Level = LogLevel.Error, Message = "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
+        [LoggerMessage(EventId = 2720, Level = LogLevel.Error, Message = "ACME certificate persistence failed; Fqdn={Fqdn}; CertificatePfxPath={CertificatePfxPath}; CertificatePrivateKeyPemPath={CertificatePrivateKeyPemPath}")]
         private static partial void LogCertificatePersistenceFailed(ILogger logger, string fqdn, string certificatePfxPath, string certificatePrivateKeyPemPath, Exception exception);
 
         /// <summary>
