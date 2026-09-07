@@ -56,20 +56,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             HeaderInsert? pathInsert = null;
             if (!pathHeader.HasValue)
             {
-                int separatorStart = GetHeaderSeparatorStart(source, parseResult.HeaderBytes.Length);
-                ReadOnlySpan<byte> newline = source[separatorStart] == (byte)'\r'
-                    ? "\r\n"u8
-                    : "\n"u8;
+                HeaderSeparator separator = ResolveHeaderSeparator(source, parseResult.HeaderBytes.Length);
 
-                int lineLength = "Path: "u8.Length + canonicalPathBytes.Length + newline.Length;
+                int lineLength = "Path: "u8.Length + canonicalPathBytes.Length + separator.LineTerminator.Length;
                 byte[] lineBytes = new byte[lineLength];
                 int offset = 0;
                 "Path: "u8.CopyTo(lineBytes.AsSpan(offset));
                 offset += "Path: "u8.Length;
                 canonicalPathBytes.AsSpan().CopyTo(lineBytes.AsSpan(offset));
                 offset += canonicalPathBytes.Length;
-                newline.CopyTo(lineBytes.AsSpan(offset));
-                pathInsert = new HeaderInsert(separatorStart, lineBytes);
+                separator.LineTerminator.CopyTo(lineBytes.AsSpan(offset));
+                pathInsert = new HeaderInsert(separator.StartOffset, lineBytes);
             }
 
             int lengthDelta = canonicalDateBytes.Length - dateEdit.RemovedLength;
@@ -190,24 +187,33 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Locates the start offset of the header/body separator terminator within the header section.
+        /// Resolves the header/body separator boundary and line-terminator style preserved by parser-accepted header bytes.
         /// </summary>
         /// <param name="source">Complete original article bytes.</param>
         /// <param name="headerLength">Header-section byte length from parser output.</param>
-        /// <returns>Offset where the blank-line terminator sequence begins.</returns>
-        /// <exception cref="InvalidOperationException">Thrown when header bytes do not end with a valid line terminator sequence.</exception>
-        private static int GetHeaderSeparatorStart(ReadOnlySpan<byte> source, int headerLength)
+        /// <returns>Separator metadata used for Path insertion while preserving source separator style.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when header bytes do not end with an accepted blank-line terminator sequence.</exception>
+        private static HeaderSeparator ResolveHeaderSeparator(ReadOnlySpan<byte> source, int headerLength)
         {
-            if (headerLength <= 0 || headerLength > source.Length)
-            {
-                throw new InvalidOperationException("Accepted parse result does not contain a valid header section boundary for Path insertion.");
-            }
+            _ = headerLength <= 0 || headerLength > source.Length
+                ? throw new InvalidOperationException("Accepted parse result does not contain a valid header section boundary for Path insertion.")
+                : 0;
 
-            return headerLength >= 2 && source[headerLength - 2] == (byte)'\r' && source[headerLength - 1] == (byte)'\n'
-                ? headerLength - 2
-                : source[headerLength - 1] == (byte)'\n'
-                    ? headerLength - 1
-                    : throw new InvalidOperationException("Accepted parse result header section does not terminate with LF/CRLF and cannot be safely materialized.");
+            return headerLength >= 4
+                && source[headerLength - 4] == (byte)'\r'
+                && source[headerLength - 3] == (byte)'\n'
+                && source[headerLength - 2] == (byte)'\r'
+                && source[headerLength - 1] == (byte)'\n'
+                ? new HeaderSeparator(headerLength - 2, "\r\n"u8.ToArray())
+                : headerLength >= 2
+                && source[headerLength - 2] == (byte)'\n'
+                && source[headerLength - 1] == (byte)'\n'
+                ? new HeaderSeparator(headerLength - 1, "\n"u8.ToArray())
+                : headerLength >= 2
+                && source[headerLength - 2] == (byte)'\r'
+                && source[headerLength - 1] == (byte)'\r'
+                ? new HeaderSeparator(headerLength - 1, "\r"u8.ToArray())
+                : throw new InvalidOperationException("Accepted parse result header section does not terminate with an accepted separator style and cannot be safely materialized.");
         }
 
         /// <summary>
@@ -261,6 +267,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="RemovedLength">Number of source bytes removed from the replacement range.</param>
         /// <param name="Replacement">Replacement bytes written at <paramref name="StartOffset"/>.</param>
         private readonly record struct HeaderEdit(int StartOffset, int RemovedLength, byte[] Replacement);
+
+        /// <summary>
+        /// Describes header/body separator metadata used for style-preserving Path insertion.
+        /// </summary>
+        /// <param name="StartOffset">Start offset of the blank-line terminator that begins the body boundary.</param>
+        /// <param name="LineTerminator">Header line terminator style to preserve for inserted lines.</param>
+        private readonly record struct HeaderSeparator(int StartOffset, byte[] LineTerminator);
 
         /// <summary>
         /// Describes one insertion edit over the source article bytes.

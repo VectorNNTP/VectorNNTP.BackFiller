@@ -121,6 +121,90 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         [Fact]
+        public void Materialize_WhenCrOnlyAndPathMissing_InsertsPathWithCrOnlyAndPreservesBodyBoundary()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] originalArticle = BuildArticle(
+                [
+                    "Date: Tue, 10 May 2011 13:48:50 -0500",
+                    "Message-ID: <materialize-cr-only-path-missing@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Subject: keep",
+                ],
+                "body-cr-only\r",
+                "\r");
+
+            NntpArticleParseResult parse = parser.Parse(originalArticle);
+            Assert.True(parse.IsAccepted);
+
+            using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+            string article = Encoding.ASCII.GetString(materialized.Memory.Span);
+
+            Assert.Contains($"Path: {LocalFqdn}\r", article, StringComparison.Ordinal);
+            Assert.Contains("Date: Tue, 10 May 2011 18:48:50 +0000\r", article, StringComparison.Ordinal);
+            Assert.Contains("\r\rbody-cr-only\r", article, StringComparison.Ordinal);
+            Assert.DoesNotContain("\r\n", article, StringComparison.Ordinal);
+            Assert.Equal(parse.BodyBytes.ToArray(), GetBodyBytes(materialized.Memory.Span, "\r"));
+        }
+
+        [Fact]
+        public void Materialize_WhenCrOnlyAndPathPresent_RewritesPathAndPreservesCrOnlySeparators()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] originalArticle = BuildArticle(
+                [
+                    "Date: Tue, 10 May 2011 13:48:50 -0500",
+                    "Message-ID: <materialize-cr-only-path-present@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Path: news.example.org!feed2",
+                ],
+                "body-cr-only-path\r",
+                "\r");
+
+            NntpArticleParseResult parse = parser.Parse(originalArticle);
+            Assert.True(parse.IsAccepted);
+
+            using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+            string article = Encoding.ASCII.GetString(materialized.Memory.Span);
+
+            Assert.Contains($"Path: {LocalFqdn}!news.example.org!feed2\r", article, StringComparison.Ordinal);
+            Assert.DoesNotContain("\r\n", article, StringComparison.Ordinal);
+            Assert.Equal(parse.BodyBytes.ToArray(), GetBodyBytes(materialized.Memory.Span, "\r"));
+        }
+
+        [Theory]
+        [InlineData("\r\n")]
+        [InlineData("\n")]
+        [InlineData("\r")]
+        public void Materialize_PreservesHeaderSeparatorStyleAndBodyBytesAcrossSupportedSeparators(string separator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] originalArticle = BuildArticle(
+                [
+                    "Date: Tue, 10 May 2011 13:48:50 -0500",
+                    "Message-ID: <materialize-separator-variant@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Subject: separator-variant",
+                ],
+                $"body-{separator.Length}x{((int)separator[0]).ToString()}\r",
+                separator);
+
+            NntpArticleParseResult parse = parser.Parse(originalArticle);
+            Assert.True(parse.IsAccepted);
+
+            using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+            string article = Encoding.ASCII.GetString(materialized.Memory.Span);
+
+            Assert.Contains($"Path: {LocalFqdn}{separator}", article, StringComparison.Ordinal);
+            Assert.Contains($"Date: Tue, 10 May 2011 18:48:50 +0000{separator}", article, StringComparison.Ordinal);
+            Assert.Contains($"{separator}{separator}", article, StringComparison.Ordinal);
+            Assert.Equal(parse.BodyBytes.ToArray(), GetBodyBytes(materialized.Memory.Span, separator));
+        }
+
+        [Fact]
         public void Materialize_WhenArticleIsRejected_ThrowsAndDoesNotBypassValidation()
         {
             NntpArticleParser parser = new(LocalFqdn);
@@ -169,15 +253,25 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             return BuildArticle(headers, Encoding.ASCII.GetBytes(body));
         }
 
+        private static byte[] BuildArticle(IReadOnlyList<string> headers, string body, string separator)
+        {
+            return BuildArticle(headers, Encoding.ASCII.GetBytes(body), separator);
+        }
+
         private static byte[] BuildArticle(IReadOnlyList<string> headers, byte[] body)
+        {
+            return BuildArticle(headers, body, "\r\n");
+        }
+
+        private static byte[] BuildArticle(IReadOnlyList<string> headers, byte[] body, string separator)
         {
             StringBuilder builder = new();
             for (int i = 0; i < headers.Count; i++)
             {
-                _ = builder.Append(headers[i]).Append("\r\n");
+                _ = builder.Append(headers[i]).Append(separator);
             }
 
-            _ = builder.Append("\r\n");
+            _ = builder.Append(separator);
             byte[] headerBytes = Encoding.ASCII.GetBytes(builder.ToString());
             byte[] article = new byte[headerBytes.Length + body.Length];
             Buffer.BlockCopy(headerBytes, 0, article, 0, headerBytes.Length);
@@ -187,17 +281,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
         private static string GetHeaderText(ReadOnlySpan<byte> article)
         {
-            int headerEnd = FindHeaderSeparator(article);
+            int headerEnd = FindHeaderSeparator(article, out _);
             return Encoding.ASCII.GetString(article[..headerEnd]);
         }
 
         private static byte[] GetBodyBytes(ReadOnlySpan<byte> article)
         {
-            int headerEnd = FindHeaderSeparator(article);
-            return article[(headerEnd + 4)..].ToArray();
+            return GetBodyBytes(article, "\r\n");
         }
 
-        private static int FindHeaderSeparator(ReadOnlySpan<byte> article)
+        private static byte[] GetBodyBytes(ReadOnlySpan<byte> article, string separator)
+        {
+            int headerEnd = FindHeaderSeparator(article, out int separatorLength);
+            if (separatorLength != separator.Length)
+            {
+                throw new InvalidOperationException($"Expected separator length {separator.Length} but found {separatorLength}.");
+            }
+
+            return article[(headerEnd + separatorLength + separatorLength)..].ToArray();
+        }
+
+        private static int FindHeaderSeparator(ReadOnlySpan<byte> article, out int separatorLength)
         {
             for (int i = 0; i <= article.Length - 4; i++)
             {
@@ -206,11 +310,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                     && article[i + 2] == (byte)'\r'
                     && article[i + 3] == (byte)'\n')
                 {
+                    separatorLength = 2;
                     return i;
                 }
             }
 
-            throw new InvalidOperationException("Article did not contain CRLF header separator.");
+            for (int i = 0; i <= article.Length - 2; i++)
+            {
+                if (article[i] == (byte)'\n' && article[i + 1] == (byte)'\n')
+                {
+                    separatorLength = 1;
+                    return i;
+                }
+
+                if (article[i] == (byte)'\r' && article[i + 1] == (byte)'\r')
+                {
+                    separatorLength = 1;
+                    return i;
+                }
+            }
+
+            throw new InvalidOperationException("Article did not contain an accepted header separator.");
         }
 
         private static int CountOccurrences(string source, string value)

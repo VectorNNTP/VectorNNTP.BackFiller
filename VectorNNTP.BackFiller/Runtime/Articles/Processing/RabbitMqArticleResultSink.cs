@@ -102,6 +102,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     NntpArticleParseResult parseResult = result.GrabberResult?.Success?.Parse
                         ?? throw new InvalidOperationException("Successful article processing result did not provide parser metadata required for canonical materialization.");
 
+                    if (!MessageIdMatchesRequestIdentity(parseResult, result.Request.MessageId))
+                    {
+                        await result.Delivery.Settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
+                        LogRabbitMqArticleMessageIdMismatchRejected(
+                            _logger,
+                            result.Request.RequestId,
+                            result.CorrelationId,
+                            result.Request.MessageId,
+                            result.Request.Backbone,
+                            result.Delivery.DeliveryTag);
+                        return;
+                    }
+
                     DownloadedArticleBuffer originalPayloadOwner = result.TryDetachSuccessfulPayloadOwner()
                         ?? throw new InvalidOperationException("Successful article processing result did not provide a retained payload owner for admission.");
                     detachedPayloadOwner = originalPayloadOwner;
@@ -245,6 +258,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
         }
 
+        private static bool MessageIdMatchesRequestIdentity(NntpArticleParseResult parseResult, string requestedMessageId)
+        {
+            ReadOnlySpan<byte> parsedMessageId = parseResult.OriginalMessageIdValue.Span;
+            if (parsedMessageId.Length != requestedMessageId.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < parsedMessageId.Length; i++)
+            {
+                if (parsedMessageId[i] != requestedMessageId[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private static CancellationToken SelectTransitRejectionSettlementToken(
             TransitAdmissionStatus admissionStatus,
             CancellationToken processingToken,
@@ -262,6 +294,27 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
             return deliveryToken;
         }
+
+        /// <summary>
+        /// Emits an invalid-article drop event when the parsed article Message-ID does not match the requested Message-ID identity.
+        /// </summary>
+        /// <param name="logger">Logger receiving the mismatch rejection event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="requestedMessageId">Requested canonical Message-ID identity from the RabbitMQ work request.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
+        [LoggerMessage(
+            EventId = 3408,
+            Level = LogLevel.Warning,
+            Message = "RabbitMQ success-path article identity mismatch rejected. RequestId={RequestId} CorrelationId={CorrelationId} RequestedMessageId={RequestedMessageId} Backbone={Backbone} DeliveryTag={DeliveryTag}")]
+        private static partial void LogRabbitMqArticleMessageIdMismatchRejected(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string requestedMessageId,
+            string backbone,
+            ulong deliveryTag);
 
         /// <summary>
         /// Emits the retention-admission-failed requeue log event when successful payload ownership could not be admitted.

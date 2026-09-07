@@ -92,6 +92,54 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(expectedUri, successResponse.Uri);
             Assert.Null(successResponse.Error);
         }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenSuccessArticleMessageIdDiffersFromRequest_DropsBeforeRetentionTransitAndPublicationAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            string requestedMessageId = "<requested-identity@example.com>";
+            string articleMessageId = "<actual-provider-identity@example.com>";
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), requestedMessageId, "BackboneA"),
+                correlationId: "corr-message-id-mismatch",
+                replyTo: "rpc.responses",
+                deliveryTag: 881,
+                connectionGeneration: 41,
+                settlement: settlement);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult(
+                requestMessageId: requestedMessageId,
+                articleMessageId: articleMessageId,
+                payloadText: "mismatch-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: requestedMessageId,
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted);
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions: runtimeOptions, retentionAuthority: retentionAuthority, transitAdmissionGateway: transitAdmissionGateway);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(881UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Equal(0, transitAdmissionGateway.AdmitCallCount);
+
+            ArticleRetentionReadLeaseResult requestedLease = retentionAuthority.TryAcquireReadLeaseByMessageId(requestedMessageId);
+            Assert.False(requestedLease.IsAcquired);
+            ArticleRetentionReadLeaseResult requestedMd5Lease = retentionAuthority.TryAcquireReadLeaseByMessageIdMd5(MessageIdHashing.ComputeCanonicalMd5Hex(requestedMessageId));
+            Assert.False(requestedMd5Lease.IsAcquired);
+            ArticleRetentionReadLeaseResult actualLease = retentionAuthority.TryAcquireReadLeaseByMessageId(articleMessageId);
+            Assert.False(actualLease.IsAcquired);
+        }
         /// <summary>
         /// Confirms the on processed async when publish fails does not ack and nacks requeue true async behavior.
         /// </summary>

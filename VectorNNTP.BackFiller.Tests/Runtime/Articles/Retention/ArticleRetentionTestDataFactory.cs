@@ -28,7 +28,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention
         /// <returns>Successful grabber result that owns the pooled payload owner through the normal disposal chain.</returns>
         internal static NntpArticleGrabberResult CreateSuccessfulGrabberResult(string messageId, string payloadText)
         {
-            string articleText = $"Date: Tue, 10 May 2011 13:48:50 -0500\r\nMessage-ID: {messageId}\r\nNewsgroups: alt.test\r\nFrom: user@example.test\r\nPath: num2.nntp.ams.giganews.com!not-for-mail\r\nX-Test-Header: preserve-me\r\n\r\n{payloadText}\r\n";
+            return CreateSuccessfulGrabberResult(messageId, messageId, payloadText);
+        }
+
+        /// <summary>
+        /// Creates a successful grabber result where request identity and article Message-ID can be controlled independently.
+        /// </summary>
+        /// <param name="requestMessageId">Message-ID assigned to the workflow/result identity.</param>
+        /// <param name="articleMessageId">Message-ID written into the article header bytes.</param>
+        /// <param name="payloadText">ASCII payload text copied into a rented pooled buffer.</param>
+        /// <returns>Successful grabber result that owns the pooled payload owner through the normal disposal chain.</returns>
+        internal static NntpArticleGrabberResult CreateSuccessfulGrabberResult(string requestMessageId, string articleMessageId, string payloadText)
+        {
+            string articleText = $"Date: Tue, 10 May 2011 13:48:50 -0500\r\nMessage-ID: {articleMessageId}\r\nNewsgroups: alt.test\r\nFrom: user@example.test\r\nPath: num2.nntp.ams.giganews.com!not-for-mail\r\nX-Test-Header: preserve-me\r\n\r\n{payloadText}\r\n";
             byte[] articleBytes = Encoding.ASCII.GetBytes(articleText);
             byte[] rented = ArrayPool<byte>.Shared.Rent(articleBytes.Length);
             Array.Copy(articleBytes, rented, articleBytes.Length);
@@ -42,7 +54,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention
                 throw new InvalidOperationException($"Test fixture article must parse successfully. FailureCode={parse.FailureCode}");
             }
 
-            return NntpArticleGrabberResult.Successful(messageId, acquisition, parse);
+            return NntpArticleGrabberResult.Successful(requestMessageId, acquisition, parse);
         }
     }
 }

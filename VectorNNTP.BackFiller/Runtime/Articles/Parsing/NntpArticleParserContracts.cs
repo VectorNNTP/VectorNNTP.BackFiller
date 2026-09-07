@@ -316,6 +316,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
     /// <param name="SelectedDateHeaderName">Known header identity that produced <paramref name="CanonicalUtcDate"/>.</param>
     /// <param name="CanonicalPath">Canonical Path value after deterministic BackFiller FQDN augmentation logic.</param>
     /// <param name="OriginalPathValue">Original Path-header bytes when present.</param>
+    /// <param name="OriginalMessageIdValue">Original Message-ID header value bytes parsed from the accepted or partially accepted article.</param>
     /// <param name="YEncDetected">Indicates whether yEnc markers were detected in the body scan.</param>
     /// <param name="YEncValidation">yEnc validation result when yEnc was detected; non-yEnc success when not detected.</param>
     internal readonly record struct NntpArticleParseResult(
@@ -332,6 +333,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         NntpArticleHeaderName SelectedDateHeaderName,
         string CanonicalPath,
         ReadOnlyMemory<byte> OriginalPathValue,
+        ReadOnlyMemory<byte> OriginalMessageIdValue,
         bool YEncDetected,
         YEncArticleValidationResult YEncValidation)
     {
@@ -350,6 +352,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// <param name="selectedDateHeaderName">Known header identity that produced <paramref name="canonicalUtcDate"/> when available.</param>
         /// <param name="canonicalPath">Canonical path value if available.</param>
         /// <param name="originalPathValue">Original path value bytes if available.</param>
+        /// <param name="originalMessageIdValue">Original Message-ID value bytes if available.</param>
         /// <param name="yEncDetected">Indicates whether yEnc was detected.</param>
         /// <param name="yEncValidation">yEnc validation result.</param>
         /// <returns>Rejected parse result.</returns>
@@ -366,6 +369,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             NntpArticleHeaderName selectedDateHeaderName = NntpArticleHeaderName.Unknown,
             string canonicalPath = "",
             ReadOnlyMemory<byte> originalPathValue = default,
+            ReadOnlyMemory<byte> originalMessageIdValue = default,
             bool yEncDetected = false,
             YEncArticleValidationResult yEncValidation = default)
         {
@@ -388,6 +392,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 SelectedDateHeaderName: selectedDateHeaderName,
                 CanonicalPath: canonicalPath,
                 OriginalPathValue: originalPathValue,
+                OriginalMessageIdValue: originalMessageIdValue,
                 YEncDetected: yEncDetected,
                 YEncValidation: yEncValidation);
         }

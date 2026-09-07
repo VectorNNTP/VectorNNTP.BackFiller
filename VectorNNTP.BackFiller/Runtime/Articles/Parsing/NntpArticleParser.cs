@@ -138,7 +138,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     headers: headerOutcome.Headers);
             }
 
-            if (!TryValidateMessageId(articleSpan, headerOutcome, out _, out NntpArticleParseFailureCode messageIdFailure))
+            if (!TryValidateMessageId(articleSpan, headerOutcome, out ReadOnlyMemory<byte> originalMessageIdValue, out NntpArticleParseFailureCode messageIdFailure))
             {
                 return NntpArticleParseResult.Rejected(
                     failureCode: messageIdFailure,
@@ -146,7 +146,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     articleBytes: articleBytes,
                     headerBytes: headerOutcome.HeaderBytes,
                     bodyBytes: headerOutcome.BodyBytes,
-                    headers: headerOutcome.Headers);
+                    headers: headerOutcome.Headers,
+                    originalMessageIdValue: originalMessageIdValue);
             }
 
             if (!TryValidateNewsgroups(articleSpan, headerOutcome, out NntpArticleParseFailureCode newsgroupsFailure))
@@ -186,7 +187,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     headerBytes: headerOutcome.HeaderBytes,
                     bodyBytes: headerOutcome.BodyBytes,
                     headers: headerOutcome.Headers,
-                    dateFailureReason: dateFailure);
+                    dateFailureReason: dateFailure,
+                    originalMessageIdValue: originalMessageIdValue);
             }
 
             if (!TryCanonicalizePath(articleSpan, headerOutcome, _canonicalBackFillerFqdn, out string canonicalPath, out ReadOnlyMemory<byte> originalPathValue, out NntpArticleParseFailureCode pathFailure))
@@ -201,7 +203,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     dateFailureReason: DateParseFailureReason.None,
                     canonicalUtcDate: canonicalDate,
                     originalDateValue: originalDateValue,
-                    selectedDateHeaderName: selectedDateHeaderName);
+                    selectedDateHeaderName: selectedDateHeaderName,
+                    originalMessageIdValue: originalMessageIdValue);
             }
 
             bool yEncDetected = DetectYEnc(headerOutcome.BodyBytes.Span, _options.YEncDetectionScanBytes);
@@ -225,6 +228,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                         selectedDateHeaderName: selectedDateHeaderName,
                         canonicalPath: canonicalPath,
                         originalPathValue: originalPathValue,
+                        originalMessageIdValue: originalMessageIdValue,
                         yEncDetected: true,
                         yEncValidation: yEncValidation);
                 }
@@ -248,6 +252,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 SelectedDateHeaderName: selectedDateHeaderName,
                 CanonicalPath: canonicalPath,
                 OriginalPathValue: originalPathValue,
+                OriginalMessageIdValue: originalMessageIdValue,
                 YEncDetected: yEncDetected,
                 YEncValidation: yEncValidation);
         }
