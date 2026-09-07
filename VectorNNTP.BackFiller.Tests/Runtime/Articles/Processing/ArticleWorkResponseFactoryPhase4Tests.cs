@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the article work response factory phase 4 test suite.
 
 using System.Text;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using Xunit;
@@ -31,7 +32,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [InlineData(6, false, false)]
         public void CreateResponse_MapsOutcomeToCanonicalPayload(int outcomeValue, bool expectUriField, bool expectError)
         {
-            ArticleWorkResponseFactory factory = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleWorkResponseFactory factory = new(runtimeOptions);
             ArticleWorkProcessingOutcome outcome = (ArticleWorkProcessingOutcome)outcomeValue;
             Guid requestId = Guid.NewGuid();
             ArticleWorkProcessingResult result = CreateResult(
@@ -58,9 +60,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             if (expectUriField)
             {
+                string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/8e1e9feab1d82da2884b52ee6b0a078d";
                 byte[] json = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(payload);
                 string text = Encoding.UTF8.GetString(json);
-                Assert.Contains("\"uri\":null", text, StringComparison.Ordinal);
+                Assert.Equal(expectedUri, payload.Uri);
+                Assert.Contains($"\"uri\":\"{expectedUri}\"", text, StringComparison.Ordinal);
                 Assert.Null(payload.Error);
             }
 
@@ -69,6 +73,90 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 Assert.False(string.IsNullOrWhiteSpace(payload.Error));
                 Assert.Null(payload.Uri);
             }
+        }
+
+        /// <summary>
+        /// Confirms request identity does not affect canonical success URI identity.
+        /// </summary>
+        [Fact]
+        public void CreateResponse_WhenRequestIdDiffersAndMessageIdMatches_ProducesSameUri()
+        {
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleWorkResponseFactory factory = new(runtimeOptions);
+            const string messageId = "<abc@example.invalid>";
+
+            ArticleWorkProcessingResult first = CreateResult(
+                ArticleWorkProcessingOutcome.Success,
+                Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                messageId,
+                "BackboneA",
+                responseText: string.Empty);
+            ArticleWorkProcessingResult second = CreateResult(
+                ArticleWorkProcessingOutcome.Success,
+                Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                messageId,
+                "BackboneA",
+                responseText: string.Empty);
+
+            RabbitMqArticleWorkResponse firstPayload = Assert.IsType<RabbitMqArticleWorkResponse>(factory.CreateResponse(first));
+            RabbitMqArticleWorkResponse secondPayload = Assert.IsType<RabbitMqArticleWorkResponse>(factory.CreateResponse(second));
+
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/de438dc83d64b1fa9206cf4da9eed5cc";
+            Assert.Equal(expectedUri, firstPayload.Uri);
+            Assert.Equal(expectedUri, secondPayload.Uri);
+        }
+
+        /// <summary>
+        /// Confirms different Message-ID values produce different canonical success URI identities.
+        /// </summary>
+        [Fact]
+        public void CreateResponse_WhenMessageIdDiffers_ProducesDifferentUri()
+        {
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleWorkResponseFactory factory = new(runtimeOptions);
+
+            ArticleWorkProcessingResult first = CreateResult(
+                ArticleWorkProcessingOutcome.Success,
+                Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "<12345@example.invalid>",
+                "BackboneA",
+                responseText: string.Empty);
+            ArticleWorkProcessingResult second = CreateResult(
+                ArticleWorkProcessingOutcome.Success,
+                Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                "<abc@example.invalid>",
+                "BackboneA",
+                responseText: string.Empty);
+
+            RabbitMqArticleWorkResponse firstPayload = Assert.IsType<RabbitMqArticleWorkResponse>(factory.CreateResponse(first));
+            RabbitMqArticleWorkResponse secondPayload = Assert.IsType<RabbitMqArticleWorkResponse>(factory.CreateResponse(second));
+
+            string expectedFirst = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/30edc94157aa16fe644a45a1f1ffe160";
+            string expectedSecond = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/de438dc83d64b1fa9206cf4da9eed5cc";
+            Assert.Equal(expectedFirst, firstPayload.Uri);
+            Assert.Equal(expectedSecond, secondPayload.Uri);
+            Assert.NotEqual(firstPayload.Uri, secondPayload.Uri);
+        }
+
+        /// <summary>
+        /// Creates deterministic runtime options for URI contract assertions.
+        /// </summary>
+        /// <returns>Runtime options with canonical BackFiller endpoint identity.</returns>
+        private static BackFillerRuntimeOptions CreateRuntimeOptions()
+        {
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: "backfiller01.usenet.ninja",
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "usenet.ninja",
+                ValidatedLogDirectory: "C:\\logs",
+                ValidatedCertificateDirectory: "C:\\certs",
+                RabbitMqHosts: ["rabbit01.usenet.ninja"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: true,
+                TransitServerHost: "transit01.usenet.ninja",
+                TransitServerPort: 563,
+                TransitServerUseSsl: true,
+                BindPort: 119);
         }
 
         /// <summary>

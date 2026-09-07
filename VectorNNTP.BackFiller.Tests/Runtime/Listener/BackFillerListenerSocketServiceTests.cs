@@ -6,14 +6,20 @@
 // Focused tests for back filler listener socket service, covering configuration, runtime, and failure-handling contracts exercised by the tests.
 // Primary responsibility: documents the executable contracts covered by the back filler listener socket service test suite.
 
+using System.Buffers;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Listener;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
@@ -36,6 +42,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             using X509Certificate2 certA = CreateServerCertificate("bf-listener-a.example.com");
 
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
             BackFillerCertificateState state = new();
             state.Publish(new BackFillerCertificateBundle(CloneForState(certA), "memory", DateTimeOffset.UtcNow));
 
@@ -44,6 +51,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 runtime,
                 state,
                 shutdown,
+                retentionAuthority,
                 NullLogger<BackFillerListenerSocketService>.Instance);
 
             using CancellationTokenSource runCts = new();
@@ -85,6 +93,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             using X509Certificate2 certB = CreateServerCertificate("bf-listener-b.example.com");
 
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
             BackFillerCertificateState state = new();
             state.Publish(new BackFillerCertificateBundle(CloneForState(certA), "memory", DateTimeOffset.UtcNow));
 
@@ -93,6 +102,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 runtime,
                 state,
                 shutdown,
+                retentionAuthority,
                 NullLogger<BackFillerListenerSocketService>.Instance);
 
             using CancellationTokenSource runCts = new();
@@ -122,6 +132,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         {
             int port = ReserveEphemeralTcpPort();
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
             BackFillerCertificateState state = new();
 
             ShutdownCoordinator shutdown = new();
@@ -129,6 +140,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 runtime,
                 state,
                 shutdown,
+                retentionAuthority,
                 NullLogger<BackFillerListenerSocketService>.Instance);
 
             using CancellationTokenSource runCts = new();
@@ -175,6 +187,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             using X509Certificate2 certA = CreateServerCertificate("bf-listener-wildcard.example.com");
 
             BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["*"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
             BackFillerCertificateState state = new();
             state.Publish(new BackFillerCertificateBundle(CloneForState(certA), "memory", DateTimeOffset.UtcNow));
 
@@ -183,6 +196,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 runtime,
                 state,
                 shutdown,
+                retentionAuthority,
                 NullLogger<BackFillerListenerSocketService>.Instance);
 
             using CancellationTokenSource runCts = new();
@@ -197,6 +211,531 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             state.Dispose();
             shutdown.Dispose();
+        }
+
+        [Fact]
+        public async Task StartAsync_WhenMaxActiveConnectionsReached_RejectsAdditionalConnection()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-cap.example.com");
+
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"], maxActiveConnections: 1);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+            TaskCompletionSource<bool> acceptedSlotReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            service.OnConnectionSlotReleasedForTesting = () => acceptedSlotReleased.TrySetResult(true);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                using TcpClient accepted = new();
+                await accepted.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream acceptedSsl = await AuthenticateClientAsync(accepted).ConfigureAwait(false);
+                Assert.True(acceptedSsl.IsAuthenticated);
+
+                using TcpClient rejected = new();
+                await rejected.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream rejectedSsl = new(
+                    rejected.GetStream(),
+                    leaveInnerStreamOpen: false,
+                    static (sender, certificate, chain, errors) => true);
+
+                await Assert.ThrowsAsync<IOException>(async () =>
+                {
+                    await rejectedSsl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                    {
+                        TargetHost = "localhost",
+                        EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                    }).ConfigureAwait(false);
+                }).ConfigureAwait(false);
+
+                rejected.Dispose();
+
+                accepted.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(acceptedSsl).ConfigureAwait(false);
+                await acceptedSlotReleased.Task.ConfigureAwait(false);
+
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WithTlsProtocolGetRequest_WhenRetainedArticleAndAck_RespondsFoundAndMarksListenerCompleted()
+        {
+            const string messageId = "<stage6d-found-ack@example.com>";
+            const string payloadText = "stage6d-found-payload";
+
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-protocol.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            string messageIdMd5 = RetainArticle(retentionAuthority, messageId, payloadText);
+
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                using TcpClient client = new();
+                await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+
+                using SslStream sslStream = await AuthenticateClientAsync(client).ConfigureAwait(false);
+
+                byte[] request = ListenerProtocolEncoder.EncodeGetRequest(1001, messageIdMd5);
+                byte[] ack = ListenerProtocolEncoder.EncodeGetReceiptAck(1001);
+                byte[] requestAndAck = new byte[request.Length + ack.Length];
+                Buffer.BlockCopy(request, 0, requestAndAck, 0, request.Length);
+                Buffer.BlockCopy(ack, 0, requestAndAck, request.Length, ack.Length);
+                await sslStream.WriteAsync(requestAndAck).ConfigureAwait(false);
+
+                ListenerParsedFrame found = await ReadSingleFrameAsync(sslStream, maxPayloadBytes: payloadText.Length + 1024).ConfigureAwait(false);
+                Assert.Equal(ListenerOpcode.GetResponseFound, found.Header.Opcode);
+                Assert.Equal<uint>(1001, found.Header.RequestId);
+                Assert.Equal(payloadText, Encoding.ASCII.GetString(found.Payload.ToArray()));
+
+                client.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(sslStream).ConfigureAwait(false);
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+
+                ArticleRetentionSnapshot after = retentionAuthority.GetSnapshot();
+                Assert.Equal(0, after.ActiveReaderCount);
+                Assert.Equal(1, after.ListenerCompletionCount);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WithTlsProtocolGetRequest_WhenArticleMissing_RespondsNotFoundAndDoesNotMarkCompletion()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-notfound.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                using TcpClient client = new();
+                await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+
+                using SslStream sslStream = await AuthenticateClientAsync(client).ConfigureAwait(false);
+
+                byte[] request = ListenerProtocolEncoder.EncodeGetRequest(1101, "30edc94157aa16fe644a45a1f1ffe160");
+                await sslStream.WriteAsync(request).ConfigureAwait(false);
+
+                ListenerParsedFrame response = await ReadSingleFrameAsync(sslStream, maxPayloadBytes: 8).ConfigureAwait(false);
+                Assert.Equal(ListenerOpcode.GetResponseNotFound, response.Header.Opcode);
+                Assert.Equal<uint>(1101, response.Header.RequestId);
+                Assert.Equal(1u, response.Header.PayloadLength);
+                Assert.Equal(ListenerProtocol.NotFoundReasonUnavailable, response.Payload.First.Span[0]);
+
+                client.Client.Shutdown(SocketShutdown.Send);
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+
+                ArticleRetentionSnapshot snapshot = retentionAuthority.GetSnapshot();
+                Assert.Equal(0, snapshot.ListenerCompletionCount);
+                Assert.Equal(0, snapshot.ActiveReaderCount);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WithTlsProtocolGetRequest_WhenClientDisconnectsBeforeAck_DoesNotMarkCompletionAndReleasesLease()
+        {
+            const string messageId = "<stage6d-no-ack-disconnect@example.com>";
+            const string payloadText = "stage6d-no-ack-payload";
+
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-no-ack.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            string messageIdMd5 = RetainArticle(retentionAuthority, messageId, payloadText);
+
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                using TcpClient client = new();
+                await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+
+                using SslStream sslStream = await AuthenticateClientAsync(client).ConfigureAwait(false);
+                byte[] request = ListenerProtocolEncoder.EncodeGetRequest(1201, messageIdMd5);
+                await sslStream.WriteAsync(request).ConfigureAwait(false);
+
+                ListenerParsedFrame found = await ReadSingleFrameAsync(sslStream, maxPayloadBytes: payloadText.Length + 1024).ConfigureAwait(false);
+                Assert.Equal(ListenerOpcode.GetResponseFound, found.Header.Opcode);
+                Assert.Equal<uint>(1201, found.Header.RequestId);
+                Assert.Equal(payloadText, Encoding.ASCII.GetString(found.Payload.ToArray()));
+
+                ArticleRetentionSnapshot beforeDisconnect = retentionAuthority.GetSnapshot();
+                Assert.Equal(1, beforeDisconnect.ActiveReaderCount);
+                Assert.Equal(0, beforeDisconnect.ListenerCompletionCount);
+
+                client.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(sslStream).ConfigureAwait(false);
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+
+                ArticleRetentionSnapshot after = retentionAuthority.GetSnapshot();
+                Assert.Equal(0, after.ActiveReaderCount);
+                Assert.Equal(0, after.ListenerCompletionCount);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WithTlsProtocolGetRequests_WhenMultiplexedOutOfOrderAck_CorrelatesAndCompletesIndependently()
+        {
+            const string messageIdOne = "<stage6d-multiplex-1@example.com>";
+            const string messageIdTwo = "<stage6d-multiplex-2@example.com>";
+            const string payloadOne = "stage6d-payload-one";
+            const string payloadTwo = "stage6d-payload-two";
+
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-multiplex.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            string md5One = RetainArticle(retentionAuthority, messageIdOne, payloadOne);
+            string md5Two = RetainArticle(retentionAuthority, messageIdTwo, payloadTwo);
+
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                using TcpClient client = new();
+                await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+
+                using SslStream sslStream = await AuthenticateClientAsync(client).ConfigureAwait(false);
+
+                byte[] reqOne = ListenerProtocolEncoder.EncodeGetRequest(1301, md5One);
+                byte[] reqTwo = ListenerProtocolEncoder.EncodeGetRequest(1302, md5Two);
+                byte[] ackTwo = ListenerProtocolEncoder.EncodeGetReceiptAck(1302);
+                byte[] ackOne = ListenerProtocolEncoder.EncodeGetReceiptAck(1301);
+
+                byte[] coalescedFrames = new byte[reqOne.Length + reqTwo.Length + ackTwo.Length + ackOne.Length];
+                Buffer.BlockCopy(reqOne, 0, coalescedFrames, 0, reqOne.Length);
+                Buffer.BlockCopy(reqTwo, 0, coalescedFrames, reqOne.Length, reqTwo.Length);
+                Buffer.BlockCopy(ackTwo, 0, coalescedFrames, reqOne.Length + reqTwo.Length, ackTwo.Length);
+                Buffer.BlockCopy(ackOne, 0, coalescedFrames, reqOne.Length + reqTwo.Length + ackTwo.Length, ackOne.Length);
+                await sslStream.WriteAsync(coalescedFrames).ConfigureAwait(false);
+
+                ListenerParsedFrame responseA = await ReadSingleFrameAsync(sslStream, maxPayloadBytes: payloadOne.Length + payloadTwo.Length + 2048).ConfigureAwait(false);
+                ListenerParsedFrame responseB = await ReadSingleFrameAsync(sslStream, maxPayloadBytes: payloadOne.Length + payloadTwo.Length + 2048).ConfigureAwait(false);
+
+                Assert.Equal(ListenerOpcode.GetResponseFound, responseA.Header.Opcode);
+                Assert.Equal(ListenerOpcode.GetResponseFound, responseB.Header.Opcode);
+                Assert.NotEqual(responseA.Header.RequestId, responseB.Header.RequestId);
+
+                Dictionary<uint, string> payloadByRequestId = new()
+                {
+                    [responseA.Header.RequestId] = Encoding.ASCII.GetString(responseA.Payload.ToArray()),
+                    [responseB.Header.RequestId] = Encoding.ASCII.GetString(responseB.Payload.ToArray()),
+                };
+
+                Assert.Equal(payloadOne, payloadByRequestId[1301]);
+                Assert.Equal(payloadTwo, payloadByRequestId[1302]);
+
+                client.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(sslStream).ConfigureAwait(false);
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+
+                ArticleRetentionSnapshot snapshot = retentionAuthority.GetSnapshot();
+                Assert.Equal(0, snapshot.ActiveReaderCount);
+                Assert.Equal(2, snapshot.ListenerCompletionCount);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WithTlsProtocolGetRequest_WhenForcedShutdownBeforeAck_DoesNotMarkCompletionAndReleasesLease()
+        {
+            const string messageId = "<stage6d-forced-shutdown@example.com>";
+            const string payloadText = "stage6d-forced-payload";
+
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-forced.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            string messageIdMd5 = RetainArticle(retentionAuthority, messageId, payloadText);
+
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                using TcpClient client = new();
+                await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+
+                using SslStream sslStream = await AuthenticateClientAsync(client).ConfigureAwait(false);
+                byte[] request = ListenerProtocolEncoder.EncodeGetRequest(1401, messageIdMd5);
+                await sslStream.WriteAsync(request).ConfigureAwait(false);
+
+                ListenerParsedFrame found = await ReadSingleFrameAsync(sslStream, maxPayloadBytes: payloadText.Length + 1024).ConfigureAwait(false);
+                Assert.Equal(ListenerOpcode.GetResponseFound, found.Header.Opcode);
+                Assert.Equal<uint>(1401, found.Header.RequestId);
+
+                ArticleRetentionSnapshot beforeStop = retentionAuthority.GetSnapshot();
+                Assert.Equal(1, beforeStop.ActiveReaderCount);
+                Assert.Equal(0, beforeStop.ListenerCompletionCount);
+
+                TaskCompletionSource<bool> requestConnectionSlotReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                service.OnConnectionSlotReleasedForTesting = () => requestConnectionSlotReleased.TrySetResult(true);
+
+                shutdown.SignalForcedShutdown();
+                await AwaitRemoteClosureAsync(sslStream).ConfigureAwait(false);
+                await requestConnectionSlotReleased.Task.ConfigureAwait(false);
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+
+                ArticleRetentionSnapshot afterStop = retentionAuthority.GetSnapshot();
+                Assert.Equal(0, afterStop.ActiveReaderCount);
+                Assert.Equal(0, afterStop.ListenerCompletionCount);
+            }
+            finally
+            {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenGracefulShutdownSignaled_AllowsFinalWaitToDrainAfterActiveConnectionCompletes()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-graceful-drain.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            TaskCompletionSource<bool> blockedConnectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            InjectActiveConnectionTaskForTesting(service, blockedConnectionGate.Task);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                shutdown.SignalGracefulShutdown(TimeSpan.FromMinutes(5));
+
+                Task stopTask = service.StopAsync(CancellationToken.None);
+                await AssertTaskRemainsIncompleteAsync(stopTask).ConfigureAwait(false);
+
+                blockedConnectionGate.TrySetResult(true);
+                await stopTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                blockedConnectionGate.TrySetResult(true);
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenForcedEscalationOccursWhileWaiting_CancelsFinalWaitAndCompletesShutdown()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-forced-escalation.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            TaskCompletionSource<bool> blockedConnectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            InjectActiveConnectionTaskForTesting(service, blockedConnectionGate.Task);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                shutdown.SignalGracefulShutdown(TimeSpan.FromMinutes(5));
+
+                Task stopTask = service.StopAsync(CancellationToken.None);
+                await AssertTaskRemainsIncompleteAsync(stopTask).ConfigureAwait(false);
+
+                shutdown.SignalForcedShutdown();
+                await stopTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                blockedConnectionGate.TrySetResult(true);
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenForcedShutdownAlreadySignaledBeforeFinalWait_CompletesWithoutWaitingForBlockedActiveTask()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-forced-already-signaled.example.com");
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            TaskCompletionSource<bool> blockedConnectionGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            InjectActiveConnectionTaskForTesting(service, blockedConnectionGate.Task);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                shutdown.SignalForcedShutdown();
+
+                Task stopTask = service.StopAsync(CancellationToken.None);
+                await stopTask.ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                blockedConnectionGate.TrySetResult(true);
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
         }
 
         /// <summary>
@@ -229,6 +768,115 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             X509Certificate? remote = sslStream.RemoteCertificate;
             Assert.NotNull(remote);
             return remote.GetCertHashString(HashAlgorithmName.SHA256);
+        }
+
+        private static async Task<SslStream> AuthenticateClientAsync(TcpClient client)
+        {
+            SslStream sslStream = new(
+                client.GetStream(),
+                leaveInnerStreamOpen: false,
+                static (sender, certificate, chain, errors) => true);
+
+            await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+            {
+                TargetHost = "localhost",
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+            }).ConfigureAwait(false);
+
+            return sslStream;
+        }
+
+        private static async Task<ListenerParsedFrame> ReadSingleFrameAsync(SslStream sslStream, int maxPayloadBytes)
+        {
+            byte[] headerBytes = await ReadExactlyAsync(sslStream, ListenerProtocol.HeaderLengthBytes).ConfigureAwait(false);
+            ListenerFrameHeader header = ListenerFrameHeader.ReadFrom(headerBytes);
+            Assert.True(header.PayloadLength <= (uint)maxPayloadBytes);
+
+            byte[] payload = header.PayloadLength == 0
+                ? []
+                : await ReadExactlyAsync(sslStream, checked((int)header.PayloadLength)).ConfigureAwait(false);
+
+            return new ListenerParsedFrame(header, new ReadOnlySequence<byte>(payload));
+        }
+
+        private static async Task<byte[]> ReadExactlyAsync(SslStream sslStream, int length)
+        {
+            byte[] buffer = new byte[length];
+            int read = 0;
+            while (read < length)
+            {
+                int received = await sslStream.ReadAsync(buffer.AsMemory(read, length - read)).ConfigureAwait(false);
+                if (received == 0)
+                {
+                    throw new IOException("Unexpected EOF while reading protocol frame.");
+                }
+
+                read += received;
+            }
+
+            return buffer;
+        }
+
+        private static async Task AwaitRemoteClosureAsync(SslStream sslStream)
+        {
+            byte[] single = new byte[1];
+            while (true)
+            {
+                int read = await sslStream.ReadAsync(single.AsMemory(0, 1)).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    return;
+                }
+            }
+        }
+
+        private static async Task AssertTaskRemainsIncompleteAsync(Task task)
+        {
+            ArgumentNullException.ThrowIfNull(task);
+
+            await Task.Yield();
+            Assert.False(task.IsCompleted);
+        }
+
+        private static void InjectActiveConnectionTaskForTesting(BackFillerListenerSocketService service, Task connectionTask)
+        {
+            ArgumentNullException.ThrowIfNull(service);
+            ArgumentNullException.ThrowIfNull(connectionTask);
+
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+
+            FieldInfo gateField = typeof(BackFillerListenerSocketService).GetField("_connectionsGate", flags)
+                ?? throw new InvalidOperationException("Listener test seam field '_connectionsGate' was not found.");
+            FieldInfo tasksField = typeof(BackFillerListenerSocketService).GetField("_activeConnectionTasks", flags)
+                ?? throw new InvalidOperationException("Listener test seam field '_activeConnectionTasks' was not found.");
+
+            object gate = gateField.GetValue(service)
+                ?? throw new InvalidOperationException("Listener connection gate was null.");
+            HashSet<Task> tasks = (HashSet<Task>?)tasksField.GetValue(service)
+                ?? throw new InvalidOperationException("Listener active connection task set was null.");
+
+            lock (gate)
+            {
+                _ = tasks.Add(connectionTask);
+            }
+        }
+
+        private static string RetainArticle(ArticleRetentionAuthority authority, string messageId, string payloadText)
+        {
+            DownloadedArticleBuffer payload = CreateBuffer(payloadText);
+            ArticleRetentionAdmissionResult admission = authority.TryRetainSuccessArticle(messageId, payload);
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+            Assert.NotNull(admission.MessageIdMd5);
+            return admission.MessageIdMd5!;
+        }
+
+        private static DownloadedArticleBuffer CreateBuffer(string payload)
+        {
+            byte[] bytes = Encoding.ASCII.GetBytes(payload);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(bytes.Length);
+            Array.Copy(bytes, rented, bytes.Length);
+            return new DownloadedArticleBuffer(rented, bytes.Length);
         }
 
         /// <summary>
@@ -344,10 +992,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         /// <param name="bindPort">The bind port used by this test scenario.</param>
         /// <param name="bindTokens">The bind tokens used by this test scenario.</param>
         /// <returns>The value returned by the create runtime options helper.</returns>
-        private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens)
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens, int maxActiveConnections = 1024)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
-                Enabled: true,
                 CanonicalCertificateSubjectName: "bf-listener.example.com",
                 AcmeAccountEmail: "security@example.com",
                 AcmeAccountKeyPemPath: Path.Combine(Path.GetTempPath(), "listener-account.key"),
@@ -386,6 +1033,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
                 WriteBatchCoalesceMicroseconds: 250,
+                Listener: new ListenerRuntimeOptions(
+                    ParserAccumulationMaxBytes: 262144,
+                    AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
+                    MaxQueuedFoundPayloadBytes: 67108864,
+                    MaxActiveConnections: maxActiveConnections),
                 LetsEncrypt: letsEncrypt);
         }
     }

@@ -159,7 +159,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(string tempDir)
         {
             return new BackFillerLetsEncryptRuntimeOptions(
-                Enabled: true,
                 CanonicalCertificateSubjectName: RecoveryScenario.Fqdn,
                 AcmeAccountEmail: "security@example.com",
                 AcmeAccountKeyPemPath: Path.Combine(tempDir, "account.key"),

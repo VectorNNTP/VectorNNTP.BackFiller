@@ -14,7 +14,9 @@ Responses use standard RabbitMQ RPC semantics:
 - Response AMQP `CorrelationId`: incoming request `CorrelationId` property
 - ContentType: `application/json`
 
-`CorrelationId` and `ReplyTo` are transport metadata and are never duplicated in response JSON payloads.
+`CorrelationId`, `ReplyTo`, and AMQP response `MessageId` are transport metadata and are never duplicated in response JSON payloads.
+
+AMQP response `MessageId` is generated as a fresh UUID for each response publication attempt (each call to `PublishAndConfirmAsync`, including retries/republications). It is distinct from JSON `messageId`, JSON `requestId`, and AMQP `CorrelationId`.
 
 JSON Schema: `RabbitMqArticleWorkResponse.v1.schema.json`.
 
@@ -32,7 +34,7 @@ Response JSON includes exactly these fields:
 Canonical success response payload:
 
 ```json
-{"version":1,"requestId":"7c1cb8a0-95f9-4c13-8e53-339773e3afaa","messageId":"<12345@example.invalid>","backbone":"Giganews","outcome":"Success","uri":null}
+{"version":1,"requestId":"7c1cb8a0-95f9-4c13-8e53-339773e3afaa","messageId":"<12345@example.invalid>","backbone":"Giganews","outcome":"Success","uri":"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"}
 ```
 
 Canonical terminal failure response payload:
@@ -49,13 +51,13 @@ Canonical terminal failure response payload:
 | `messageId` | String | Yes | Original Message-ID from request JSON body. |
 | `backbone` | String | Yes | Original backbone from request JSON body. |
 | `outcome` | String | Yes | Terminal outcome classification string. |
-| `uri` | String | No | Optional retrieval location. Omitted when no stable URI contract exists. |
+| `uri` | String | No | Success-only canonical article cache URI: `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` where `MessageIdMd5` is lowercase hexadecimal MD5 of ASCII bytes of the exact `messageId` string. |
 | `error` | String | No | Optional terminal error detail for response-carrying non-success outcomes. |
 
 ## Outcome and Disposition Matrix
 | Processing Outcome | RPC Response | RabbitMQ Disposition | Requeue |
 |---|---|---|---:|
-| Success | Yes (required): `outcome=Success`, `uri` present (`null` when no stable location exists) | ACK | N/A |
+| Success | Yes (required): `outcome=Success`, `uri` present and formatted as `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` | ACK | N/A |
 | ArticleNotFound | Yes (required terminal failure): `outcome=ArticleNotFound`, `error` present | NACK | false |
 | InvalidArticle | Yes (required terminal failure): `outcome=InvalidArticle`, `error` present | NACK | false |
 | InvalidRequest | Yes (required terminal failure): `outcome=InvalidRequest`, `error` present | NACK | false |
@@ -81,11 +83,34 @@ If response publish fails or confirm times out:
 - request is NACKed with `requeue=true`
 - message remains retryable
 
+## Canonical Success URI Contract
+For `outcome=Success`, `uri` is normative and MUST use this grammar:
+
+`cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}`
+
+Where:
+- `CanonicalBackFillerFqdn`: exact authoritative `BackFillerRuntimeOptions.CanonicalBackFillerFqdn` value.
+- `BindPort`: exact authoritative `BackFillerRuntimeOptions.BindPort` value.
+- `MessageIdMd5`: lowercase hexadecimal MD5 digest (exactly 32 hexadecimal characters) of the ASCII bytes of the exact `messageId` string from the request payload.
+
+Hashing input and transform rules:
+- Input is the exact `messageId` string already accepted by BackFiller request validation.
+- Do not lowercase `messageId`.
+- Do not trim or strip whitespace.
+- Do not remove angle brackets (`<` and `>`).
+- Do not apply any additional normalization before hashing.
+
+Deterministic vectors used by repository tests:
+- `<12345@example.invalid>` -> `30edc94157aa16fe644a45a1f1ffe160`
+- `<abc@example.invalid>` -> `de438dc83d64b1fa9206cf4da9eed5cc`
+
 ## Identity and Redelivery Semantics
-- `requestId`: application identity from JSON request body
-- `CorrelationId`: AMQP RPC identity from transport properties
-- `DeliveryTag`: AMQP delivery-settlement identity
-- `ConnectionGeneration`: BackFiller infrastructure identity
+- `messageId`: canonical article identity from JSON request body and the identity used to derive `uri`.
+- `requestId`: application work-request identity from JSON request body; not used as article URI identity.
+- `CorrelationId`: AMQP RPC identity from transport properties.
+- `MessageId` (AMQP response property): transport-level response publication identity, generated as a new UUID for each publication attempt.
+- `DeliveryTag`: AMQP delivery-settlement identity.
+- `ConnectionGeneration`: BackFiller infrastructure identity.
 
 Redelivery preserves `requestId` and `CorrelationId`; `DeliveryTag`, `ConsumerIdentity`, and `ConnectionGeneration` may change.
 

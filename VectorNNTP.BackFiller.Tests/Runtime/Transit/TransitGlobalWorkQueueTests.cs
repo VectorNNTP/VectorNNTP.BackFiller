@@ -22,13 +22,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public async Task EnqueueAndClaim_WhenCapacityAvailable_UpdatesQueueAndInFlightAccounting()
         {
-            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 4, maxQueuedPayloadBytes: 1024);
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 4);
             TransitWorkItem item = CreateItem(1, "<queue-claim@example.com>", 128);
 
             await queue.EnqueueAsync(item, CancellationToken.None);
 
             Assert.Equal(1, queue.QueuedItemCount);
-            Assert.Equal(128, queue.QueuedPayloadBytes);
             Assert.Equal(0, queue.InFlightCount);
 
             bool claimed = queue.TryClaim("conn-1", out TransitWorkItem? claimedItem);
@@ -37,7 +36,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.NotNull(claimedItem);
             Assert.Equal(item.WorkItemId, claimedItem!.WorkItemId);
             Assert.Equal(0, queue.QueuedItemCount);
-            Assert.Equal(0, queue.QueuedPayloadBytes);
             Assert.Equal(1, queue.InFlightCount);
         }
         /// <summary>
@@ -46,7 +44,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public async Task EnqueueAsync_WhenItemCapacityReached_WaitsUntilClaimFreesCapacity()
         {
-            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 1, maxQueuedPayloadBytes: 4096);
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 1);
             TransitWorkItem first = CreateItem(1, "<wait-item-1@example.com>", 64);
             TransitWorkItem second = CreateItem(2, "<wait-item-2@example.com>", 64);
 
@@ -60,29 +58,23 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             await blockedEnqueue;
             Assert.Equal(1, queue.QueuedItemCount);
-            Assert.Equal(64, queue.QueuedPayloadBytes);
         }
         /// <summary>
-        /// Confirms the enqueue async when payload byte capacity reached waits until claim frees bytes behavior.
+        /// Confirms identity-only queue admission does not block on payload-size differences while item capacity remains available.
         /// </summary>
         [Fact]
-        public async Task EnqueueAsync_WhenPayloadByteCapacityReached_WaitsUntilClaimFreesBytes()
+        public async Task EnqueueAsync_WhenPayloadSizesDiffer_DoesNotAffectIdentityOnlyAdmissionCapacity()
         {
-            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 10, maxQueuedPayloadBytes: 128);
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 10);
             TransitWorkItem first = CreateItem(1, "<wait-bytes-1@example.com>", 128);
             TransitWorkItem second = CreateItem(2, "<wait-bytes-2@example.com>", 1);
 
             await queue.EnqueueAsync(first, CancellationToken.None);
 
             Task blockedEnqueue = queue.EnqueueAsync(second, CancellationToken.None).AsTask();
-            await Task.Delay(50);
-            Assert.False(blockedEnqueue.IsCompleted);
-
-            Assert.True(queue.TryClaim("conn-1", out _));
-
             await blockedEnqueue;
-            Assert.Equal(1, queue.QueuedItemCount);
-            Assert.Equal(1, queue.QueuedPayloadBytes);
+
+            Assert.Equal(2, queue.QueuedItemCount);
         }
         /// <summary>
         /// Confirms the schedule retry async when attempt budget remaining requeues after delay behavior.
@@ -90,7 +82,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public async Task ScheduleRetryAsync_WhenAttemptBudgetRemaining_RequeuesAfterDelay()
         {
-            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 4, maxQueuedPayloadBytes: 1024);
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 4);
             TransitWorkItem item = CreateItem(1, "<retry@example.com>", 64);
 
             await queue.EnqueueAsync(item, CancellationToken.None);
@@ -187,32 +179,23 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         [Fact]
         public void MarkInFlightTerminal_WhenNoInFlightOwnership_ThrowsInvariantViolation()
         {
-            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 2, maxQueuedPayloadBytes: 1024);
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 2);
 
             InvalidOperationException exception = Assert.Throws<InvalidOperationException>(queue.MarkInFlightTerminal);
             Assert.Contains("in-flight accounting invariant", exception.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
-        /// Confirms the create item behavior.
+        /// Creates an identity-only transit work item for queue ownership and retry tests.
         /// </summary>
-        /// <returns>The value returned by the create item helper.</returns>
-        /// <summary>
-        /// Confirms the create item behavior.
-        /// </summary>
-        /// <param name="id">The id used by this test scenario.</param>
-        /// <param name="messageId">The message id used by this test scenario.</param>
-        /// <param name="payloadSize">The payload size used by this test scenario.</param>
-        /// <returns>The value returned by the create item helper.</returns>
+        /// <param name="id">The synthetic work-item identifier for the test case.</param>
+        /// <param name="messageId">The Message-ID identity associated with the work item.</param>
+        /// <param name="payloadSize">Unused compatibility parameter retained only to preserve existing call-site shape.</param>
+        /// <returns>A queued transit work item containing identity and attempt metadata only.</returns>
         private static TransitWorkItem CreateItem(long id, string messageId, int payloadSize)
         {
-            byte[] payload = new byte[payloadSize];
-            if (payloadSize > 0)
-            {
-                payload[^1] = (byte)'\n';
-            }
-
-            return new TransitWorkItem(id, messageId, payload, maxAttempts: 3);
+            _ = payloadSize;
+            return new TransitWorkItem(id, messageId, maxAttempts: 3);
         }
     }
 }

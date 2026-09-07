@@ -123,6 +123,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     {
                         ContentType = "application/json",
                         CorrelationId = result.CorrelationId,
+                        MessageId = Guid.NewGuid().ToString("D"),
                         DeliveryMode = DeliveryModes.Transient,
                     };
 

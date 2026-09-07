@@ -109,6 +109,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         NntpArticleParseResult Parse) : IDisposable
     {
         /// <summary>
+        /// Transfers ownership of the successful acquisition payload buffer, if present, to a caller-managed owner.
+        /// </summary>
+        /// <returns>The detached payload owner when transfer succeeds; otherwise <see langword="null"/>.</returns>
+        internal DownloadedArticleBuffer? TryDetachPayloadOwner()
+        {
+            return Acquisition.TryDetachArticleBuffer();
+        }
+
+        /// <summary>
+        /// Attempts to attach a detached payload owner back to the underlying acquisition result.
+        /// </summary>
+        /// <param name="payloadOwner">Detached payload owner to reattach.</param>
+        /// <returns><see langword="true"/> when the payload owner was reattached; otherwise <see langword="false"/>.</returns>
+        internal bool TryAttachPayloadOwner(DownloadedArticleBuffer payloadOwner)
+        {
+            return Acquisition.TryAttachArticleBuffer(payloadOwner);
+        }
+
+        /// <summary>
         /// Disposes the acquisition-owned buffer after downstream processing is complete.
         /// </summary>
         public void Dispose()

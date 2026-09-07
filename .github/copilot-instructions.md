@@ -49,3 +49,7 @@ Builds enable .NET analyzers, code style, and generated documentation. Completio
 - Use structured source-generated logging where the existing project pattern applies; guard expensive disabled-level work and never log secrets.
 - Treat documentation as useful engineering-contract guidance, not XML tag counting: meaningfully document public, protected, and internal symbols where appropriate, and document private helpers or tests when they contain non-obvious intent such as behavior, contracts, invariants, lifecycle, concurrency, validation, performance, or logging. Do not blindly document private helpers or add boilerplate merely to satisfy warning or coverage counts; preserve accurate useful documentation, improve vague, incomplete, misleading, or technically incorrect documentation, and keep documentation passes behavior-preserving. Valid XML syntax alone is not sufficient. Every `.cs` file needs the repository header and required attribution: `Copyright © Chris Knipe cknipe@opticnetworks.net`.
 - Keep behavior/API changes narrowly scoped, add regression coverage for behavior changes, and update related documentation/history when an architectural decision or measured result changes.
+
+## Additional Instructions
+
+- Follow repository instruction files for C#/.NET, documentation, and performance changes: `.github/instructions/csharp.instructions.md`, `documentation.instructions.md`, and `performance.instructions.md`.

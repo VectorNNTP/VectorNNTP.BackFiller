@@ -723,10 +723,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Stages and flushes a batch of claimed work items to the active transport and marks them awaiting responses.
         /// </summary>
-        /// <param name="items">Claimed work items to register as pending and serialize as TAKETHIS frames.</param>
+        /// <param name="entries">Claimed work items paired with send-attempt payload bytes to register as pending and serialize as TAKETHIS frames.</param>
         /// <param name="cancellationToken">Token used to cancel admission, write-gate wait, and flush operations.</param>
-        /// <returns>A value task that completes after all items are staged, flushed, and registered for response correlation.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="items"/> is <see langword="null"/>.</exception>
+        /// <returns>A value task that completes after all entries are staged, flushed, and registered for response correlation.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="entries"/> is <see langword="null"/>.</exception>
         /// <exception cref="InvalidOperationException">
         /// Thrown when the connection is not in a publishing-ready state or when duplicate Message-IDs are submitted in flight.
         /// </exception>
@@ -737,11 +737,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Pending registration and frame writes are serialized with <c>_writeGate</c>. When tokenless correlation mode is active,
         /// admission and send-order mutation are additionally protected by <c>_tokenlessCorrelationGate</c>.
         /// </remarks>
-        internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitWorkItem> items, CancellationToken cancellationToken)
+        internal async ValueTask ProcessBatchAsync(IReadOnlyList<TransitSendBatchEntry> entries, CancellationToken cancellationToken)
         {
-            ArgumentNullException.ThrowIfNull(items);
+            ArgumentNullException.ThrowIfNull(entries);
 
-            if (items.Count == 0)
+            if (entries.Count == 0)
             {
                 return;
             }
@@ -759,8 +759,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             try
             {
-                foreach (TransitWorkItem item in items)
+                foreach (TransitSendBatchEntry entry in entries)
                 {
+                    TransitWorkItem item = entry.WorkItem;
                     PendingOwnedWork pending = new(item);
                     if (!_pendingByMessageId.TryAdd(item.MessageId, pending))
                     {
@@ -784,10 +785,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                     try
                     {
-                        foreach (TransitWorkItem item in items)
+                        foreach (TransitSendBatchEntry entry in entries)
                         {
+                            TransitWorkItem item = entry.WorkItem;
                             item.MarkStaged();
-                            batchBytesStaged += StageTakethisFrame(writer, item.MessageId, item.Payload);
+                            batchBytesStaged += StageTakethisFrame(writer, item.MessageId, entry.ArticlePayload);
                             item.MarkFlushed();
                         }
 
@@ -811,8 +813,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     _ = Interlocked.Add(ref _bytesTransmitted, batchBytesStaged);
                     long stageEndTick = Stopwatch.GetTimestamp();
 
-                    foreach (TransitWorkItem item in items)
+                    foreach (TransitSendBatchEntry entry in entries)
                     {
+                        TransitWorkItem item = entry.WorkItem;
                         item.MarkAwaitingResponse();
                         if (_pendingByMessageId.TryGetValue(item.MessageId, out PendingOwnedWork? pending))
                         {
@@ -828,8 +831,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 _ = Interlocked.Increment(ref _batchCount);
-                _ = Interlocked.Add(ref _batchSizeTotal, items.Count);
-                UpdateMaxBatchSize(items.Count);
+                _ = Interlocked.Add(ref _batchSizeTotal, entries.Count);
+                UpdateMaxBatchSize(entries.Count);
             }
             finally
             {
@@ -951,7 +954,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             byte[] payloadCopy = articlePayload.ToArray();
-            TransitWorkItem item = new(Interlocked.Increment(ref _sendSequence), messageId, payloadCopy, maxAttempts: 3);
+            TransitWorkItem item = new(Interlocked.Increment(ref _sendSequence), messageId, maxAttempts: 3);
             item.MarkClaimed(ConnectionId, DateTimeOffset.UtcNow);
 
             TaskCompletionSource<TransitPublishResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -961,7 +964,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 try
                 {
-                    await ProcessBatchAsync([item], cancellationToken).ConfigureAwait(false);
+                    await ProcessBatchAsync([new TransitSendBatchEntry(item, payloadCopy)], cancellationToken).ConfigureAwait(false);
                 }
                 catch (InvalidOperationException ex) when (string.Equals(ex.Message, "Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal))
                 {
@@ -2263,6 +2266,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             /// </summary>
             internal long SendSequence;
         }
+
+        /// <summary>
+        /// Immutable send-batch entry pairing one claimed work item identity with the payload bytes for the current send attempt.
+        /// </summary>
+        internal sealed record TransitSendBatchEntry(TransitWorkItem WorkItem, ReadOnlyMemory<byte> ArticlePayload);
 
         /// <summary>
         /// Immutable completion tuple pairing a settled work item with its publish result.

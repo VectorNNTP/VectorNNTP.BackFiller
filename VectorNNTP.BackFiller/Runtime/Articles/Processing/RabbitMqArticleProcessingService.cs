@@ -36,9 +36,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly IArticleWorkResultSink _resultSink;
         /// <summary>
-        /// Supplies the logger used by rabbit mq article processing service.
+        /// Logger that records result-forwarding diagnostics for each processed RabbitMQ delivery.
         /// </summary>
         private readonly ILogger<RabbitMqArticleProcessingService> _logger;
+        /// <summary>
+        /// Shared shutdown barrier that tracks in-flight processing able to enter result-sink handoff.
+        /// </summary>
+        private readonly IArticleProcessingDrainBarrier _drainBarrier;
 
         /// <summary>
         /// Initializes the hosted processing loop and its Phase 3/Phase 4 collaborators.
@@ -47,18 +51,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="requestParser">Parser that validates the JSON application payload and required AMQP RPC properties.</param>
         /// <param name="processor">Processor that executes backbone retrieval and outcome classification for valid requests.</param>
         /// <param name="resultSink">Sink that receives completed results for RPC publication and final broker settlement.</param>
+        /// <param name="drainBarrier">Shutdown barrier that tracks whether admitted processing can still enter result-sink handoff.</param>
         /// <param name="logger">Logger used for per-delivery forwarding diagnostics.</param>
         public RabbitMqArticleProcessingService(
             RabbitMqConsumerService consumerService,
             IRabbitMqArticleWorkRequestParser requestParser,
             IArticleWorkProcessor processor,
             IArticleWorkResultSink resultSink,
+            IArticleProcessingDrainBarrier drainBarrier,
             ILogger<RabbitMqArticleProcessingService> logger)
         {
             _consumerService = consumerService ?? throw new ArgumentNullException(nameof(consumerService));
             _requestParser = requestParser ?? throw new ArgumentNullException(nameof(requestParser));
             _processor = processor ?? throw new ArgumentNullException(nameof(processor));
             _resultSink = resultSink ?? throw new ArgumentNullException(nameof(resultSink));
+            _drainBarrier = drainBarrier ?? throw new ArgumentNullException(nameof(drainBarrier));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -69,44 +76,60 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <returns>A task that completes after admitted deliveries stop being consumed.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (await _consumerService.DeliveryReader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
+            try
             {
-                while (_consumerService.DeliveryReader.TryRead(out RabbitMqArticleDelivery? delivery))
+                while (await _consumerService.DeliveryReader.WaitToReadAsync(stoppingToken).ConfigureAwait(false))
                 {
-                    stoppingToken.ThrowIfCancellationRequested();
-                    if (delivery.CancellationToken.IsCancellationRequested)
+                    while (_consumerService.DeliveryReader.TryRead(out RabbitMqArticleDelivery? delivery))
                     {
-                        continue;
+                        stoppingToken.ThrowIfCancellationRequested();
+                        if (delivery.CancellationToken.IsCancellationRequested)
+                        {
+                            continue;
+                        }
+
+                        _drainBarrier.EnterProcessingScope();
+
+                        try
+                        {
+                            using CancellationTokenSource? linkedCts = CreateLinkedTokenSource(stoppingToken, delivery.CancellationToken);
+                            CancellationToken operationToken = linkedCts?.Token ?? stoppingToken;
+
+                            RabbitMqArticleWorkParseResult parseResult = await _requestParser
+                                .ParseAsync(delivery, operationToken)
+                                .ConfigureAwait(false);
+
+                            ArticleWorkProcessingResult result;
+                            if (parseResult.IsSuccess)
+                            {
+                                result = await _processor.ProcessAsync(parseResult.Request!, delivery, operationToken).ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                result = parseResult.Failure ?? throw new InvalidOperationException("Parse failure result was not provided.");
+                            }
+
+                            await _resultSink.OnProcessedAsync(result, operationToken).ConfigureAwait(false);
+                            LogArticleProcessingResultForwarded(
+                                _logger,
+                                result.Request.RequestId,
+                                result.CorrelationId,
+                                result.Request.MessageId,
+                                result.Request.Backbone,
+                                result.Outcome,
+                                result.Disposition,
+                                result.Delivery.Redelivered);
+                        }
+                        finally
+                        {
+                            _drainBarrier.ExitProcessingScope();
+                        }
                     }
-
-                    using CancellationTokenSource? linkedCts = CreateLinkedTokenSource(stoppingToken, delivery.CancellationToken);
-                    CancellationToken operationToken = linkedCts?.Token ?? stoppingToken;
-
-                    RabbitMqArticleWorkParseResult parseResult = await _requestParser
-                        .ParseAsync(delivery, operationToken)
-                        .ConfigureAwait(false);
-
-                    ArticleWorkProcessingResult result;
-                    if (parseResult.IsSuccess)
-                    {
-                        result = await _processor.ProcessAsync(parseResult.Request!, delivery, operationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        result = parseResult.Failure ?? throw new InvalidOperationException("Parse failure result was not provided.");
-                    }
-
-                    await _resultSink.OnProcessedAsync(result, operationToken).ConfigureAwait(false);
-                    LogArticleProcessingResultForwarded(
-                        _logger,
-                        result.Request.RequestId,
-                        result.CorrelationId,
-                        result.Request.MessageId,
-                        result.Request.Backbone,
-                        result.Outcome,
-                        result.Disposition,
-                        result.Delivery.Redelivered);
                 }
+            }
+            finally
+            {
+                _drainBarrier.SignalProcessingLoopCompleted();
             }
         }
 

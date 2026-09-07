@@ -15,7 +15,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// Defines the canonical JSON body contract for RabbitMQ article-work responses.
     /// </summary>
     /// <remarks>
-    /// Success responses always emit an explicit <c>uri</c> property, which is currently <see langword="null"/> in this runtime, while failure responses omit <c>uri</c> and include <c>error</c> only when text is available.
+    /// Success responses always emit an explicit <c>uri</c> property using the canonical cache URI contract,
+    /// while failure responses omit <c>uri</c> and include <c>error</c> only when text is available.
     /// </remarks>
     internal static class RabbitMqArticleWorkResponseWireProtocol
     {

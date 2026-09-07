@@ -10,6 +10,7 @@ using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
 using VectorNNTP.Backfiller.Runtime.Listener;
@@ -156,6 +157,7 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         {
             ArgumentNullException.ThrowIfNull(services);
             _ = services.AddSingleton<TransitPublisher>();
+            _ = services.AddSingleton<ITransitAdmissionGateway>(static provider => provider.GetRequiredService<TransitPublisher>());
             _ = services.AddHostedService<TransitPublisherStartupInitializer>();
         }
 
@@ -201,6 +203,9 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
         internal static void RegisterArticleProcessingServices(IServiceCollection services)
         {
             ArgumentNullException.ThrowIfNull(services);
+            _ = services.AddSingleton<IArticleRetentionAuthority, ArticleRetentionAuthority>();
+            _ = services.AddSingleton<IArticleProcessingDrainBarrier, ArticleProcessingDrainBarrier>();
+            _ = services.AddHostedService<ArticleRetentionSweepService>();
             _ = services.AddSingleton<NntpArticleGrabberWorkflow>();
             _ = services.AddSingleton<IRabbitMqArticleWorkRequestParser, RabbitMqArticleWorkRequestParser>();
             _ = services.AddSingleton<IBackboneArticleRetriever, BackboneArticleRetriever>();
@@ -271,11 +276,11 @@ namespace VectorNNTP.Backfiller.Startup.Hosting
             // Register RabbitMQ startup initialization after account load so topology can be scoped per backbone.
             RegisterRabbitMqInfrastructureServices(services);
 
+            // Register transit publisher startup initialization before article processing loops start.
+            RegisterTransitPublisherServices(services);
+
             // Register Phase 3 RabbitMQ article processing/classification services.
             RegisterArticleProcessingServices(services);
-
-            // Register transit publisher startup initialization before control-plane runtime loops start.
-            RegisterTransitPublisherServices(services);
 
             // Register ACME/TLS certificate lifecycle services and periodic renewal loop.
             RegisterCertificateServices(services);

@@ -53,6 +53,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             Assert.Equal(NntpArticleType.Text, result.ArticleType);
             Assert.Equal("Fri, 23 Aug 2024 05:30:10 +0000", result.CanonicalUtcDate);
             Assert.Equal(LocalFqdn, result.CanonicalPath);
+            Assert.Equal("<m1@example.test>", Encoding.ASCII.GetString(result.OriginalMessageIdValue.Span));
             Assert.False(result.YEncDetected);
             Assert.Equal(YEncArticleValidationStatus.ValidNonYEnc, result.YEncValidation.Status);
         }
@@ -759,6 +760,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
 
             Assert.False(result.IsAccepted);
             Assert.Equal(NntpArticleParseFailureCode.InvalidMessageId, result.FailureCode);
+            Assert.True(result.OriginalMessageIdValue.IsEmpty);
         }
 
         /// <summary>

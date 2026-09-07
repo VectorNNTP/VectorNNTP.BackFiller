@@ -64,7 +64,6 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         private static BackFillerRuntimeOptions CreateRuntimeOptions(string certDir)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
-                Enabled: true,
                 CanonicalCertificateSubjectName: "backfiller-01.usenet.ninja",
                 AcmeAccountEmail: "security@usenet.ninja",
                 AcmeAccountKeyPemPath: Path.Combine(certDir, "missing-account.key"),

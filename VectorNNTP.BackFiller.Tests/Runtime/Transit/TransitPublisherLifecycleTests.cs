@@ -11,7 +11,10 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
@@ -107,8 +110,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             HostApplicationBuilder builder = Host.CreateApplicationBuilder();
             _ = builder.Services.AddLogging();
-            _ = builder.Services.AddSingleton(CreateRuntimeOptions(19005));
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(19005);
+            _ = builder.Services.AddSingleton(options);
             _ = builder.Services.AddSingleton(TimeProvider.System);
+            _ = builder.Services.AddSingleton<IArticleRetentionAuthority>(new ArticleRetentionAuthority(options));
             _ = builder.Services.AddSingleton<TransitPublisher>();
             _ = builder.Services.AddHostedService<FailingStartupHostedService>();
 
@@ -119,6 +124,94 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             Exception? disposeException = await Record.ExceptionAsync(() => ((IAsyncDisposable)host).DisposeAsync().AsTask());
             Assert.Null(disposeException);
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenProcessingDrainInFlight_WaitsBeforeDisposingTransitPublisher()
+        {
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(19006);
+            ArticleRetentionAuthority retentionAuthority = new(options);
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                retentionAuthority,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 2);
+
+            ArticleProcessingDrainBarrier barrier = new();
+            barrier.EnterProcessingScope();
+            TransitPublisherStartupInitializer initializer = new(publisher, barrier, NullLogger<TransitPublisherStartupInitializer>.Instance);
+
+            using CancellationTokenSource stopTimeout = new(TimeSpan.FromSeconds(10));
+            Task stopTask = initializer.StopAsync(stopTimeout.Token);
+            await Task.Yield();
+
+            Assert.False(stopTask.IsCompleted);
+            Assert.False(GetDisposeRequestedForTesting(publisher));
+
+            barrier.SignalProcessingLoopCompleted();
+            barrier.ExitProcessingScope();
+
+            await stopTask.WaitAsync(stopTimeout.Token).ConfigureAwait(false);
+            Assert.True(GetDisposeRequestedForTesting(publisher));
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenDrainDoesNotCompleteBeforeCancellation_DoesNotDisposeTransitPublisher()
+        {
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(19007);
+            ArticleRetentionAuthority retentionAuthority = new(options);
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                retentionAuthority,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 2);
+
+            ArticleProcessingDrainBarrier barrier = new();
+            TransitPublisherStartupInitializer initializer = new(publisher, barrier, NullLogger<TransitPublisherStartupInitializer>.Instance);
+
+            using CancellationTokenSource stopTimeout = new();
+            stopTimeout.Cancel();
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => initializer.StopAsync(stopTimeout.Token));
+            Assert.False(GetDisposeRequestedForTesting(publisher));
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenProcessingDrainInFlight_TransitAdmissionRemainsAvailableUntilDrainCompletes()
+        {
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(19008);
+            ArticleRetentionAuthority retentionAuthority = new(options);
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                retentionAuthority,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 2);
+
+            await publisher.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
+
+            ArticleProcessingDrainBarrier barrier = new();
+            barrier.EnterProcessingScope();
+            TransitPublisherStartupInitializer initializer = new(publisher, barrier, NullLogger<TransitPublisherStartupInitializer>.Instance);
+
+            using CancellationTokenSource stopTimeout = new(TimeSpan.FromSeconds(10));
+            Task stopTask = initializer.StopAsync(stopTimeout.Token);
+            await Task.Yield();
+
+            TransitAdmissionResult duringDrain = await publisher.AdmitAsync("<drain-active@example.com>", CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(TransitAdmissionStatus.Accepted, duringDrain.Status);
+
+            barrier.SignalProcessingLoopCompleted();
+            barrier.ExitProcessingScope();
+            await stopTask.WaitAsync(stopTimeout.Token).ConfigureAwait(false);
+
+            TransitAdmissionResult afterStop = await publisher.AdmitAsync("<post-stop@example.com>", CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(TransitAdmissionStatus.Unavailable, afterStop.Status);
         }
 
         /// <summary>
@@ -133,10 +226,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <returns>The value returned by the create publisher helper.</returns>
         private static TransitPublisher CreatePublisher(int port, int connectionPoolSize)
         {
+            BackFillerRuntimeOptions options = CreateRuntimeOptions(port);
             return new TransitPublisher(
-                CreateRuntimeOptions(port),
+                options,
                 TimeProvider.System,
                 LoggerFactory.Create(static logging => logging.ClearProviders()).CreateLogger<TransitPublisher>(),
+                new ArticleRetentionAuthority(options),
                 connectionPoolSize,
                 perConnectionPipelineDepth: 2);
         }
@@ -169,6 +264,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
                 WriteBatchCoalesceMicroseconds: 250);
+        }
+
+        private static bool GetDisposeRequestedForTesting(TransitPublisher publisher)
+        {
+            FieldInfo disposeRequestedField = typeof(TransitPublisher).GetField("_disposeRequested", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("_disposeRequested field was not found.");
+
+            object? value = disposeRequestedField.GetValue(publisher);
+            return value is true;
         }
 
         /// <summary>

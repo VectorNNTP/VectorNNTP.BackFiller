@@ -35,13 +35,14 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="RabbitMqMaximumShutdownDrainTimeoutSeconds">Validated RabbitMQ shutdown-drain timeout in seconds used by runtime services.</param>
     /// <param name="WriteBatchCoalesceMicroseconds">Configured writer coalescing window in microseconds for transit write batching experiments.</param>
     /// <param name="TransitQueueMaxItemCount">Global transit queue maximum admitted queued work-item count.</param>
-    /// <param name="TransitQueueMaxPayloadBytes">Global transit queue maximum admitted queued payload bytes.</param>
     /// <param name="TransitRetryMaxAttempts">Global transit per-item maximum transmission attempts.</param>
     /// <param name="TransitReconnectInitializationTimeout">Maximum reconnect initialization time when admitted work is outstanding.</param>
     /// <param name="TransitShutdownDrainGracePeriod">Initial transit shutdown drain grace period.</param>
     /// <param name="TransitShutdownDrainInactivityWatchdog">Transit shutdown inactivity watchdog duration.</param>
     /// <param name="TransitShutdownAbsoluteMaximum">Absolute transit shutdown duration ceiling.</param>
     /// <param name="CanonicalBindAddresses">Canonical, deduplicated bind-address set validated at startup.</param>
+    /// <param name="ArticleRetention">Validated immutable article-retention runtime options projected from BackFiller:ArticleRetention.</param>
+    /// <param name="Listener">Validated immutable Listener runtime options projected from BackFiller:Listener.</param>
     /// <param name="LetsEncrypt">Validated immutable Let's Encrypt/ACME runtime options.</param>
     /// <param name="RabbitMq">Validated immutable RabbitMQ runtime options projected from BackFiller:RabbitMQ.</param>
     internal sealed record BackFillerRuntimeOptions(
@@ -64,13 +65,14 @@ namespace VectorNNTP.Backfiller.Configuration
         int RabbitMqMaximumShutdownDrainTimeoutSeconds = 30,
         int WriteBatchCoalesceMicroseconds = 250,
         int TransitQueueMaxItemCount = 2048,
-        long TransitQueueMaxPayloadBytes = 536870912,
         int TransitRetryMaxAttempts = 3,
         TimeSpan? TransitReconnectInitializationTimeout = null,
         TimeSpan? TransitShutdownDrainGracePeriod = null,
         TimeSpan? TransitShutdownDrainInactivityWatchdog = null,
         TimeSpan? TransitShutdownAbsoluteMaximum = null,
         IReadOnlyList<IPAddress>? CanonicalBindAddresses = null,
+        ArticleRetentionRuntimeOptions? ArticleRetention = null,
+        ListenerRuntimeOptions? Listener = null,
         BackFillerLetsEncryptRuntimeOptions? LetsEncrypt = null,
         RabbitMqRuntimeOptions? RabbitMq = null)
     {
@@ -111,7 +113,34 @@ namespace VectorNNTP.Backfiller.Configuration
         internal IReadOnlyList<string> EffectiveConfiguredBindAddressTokens => ConfiguredBindAddressTokens ?? [];
 
         /// <summary>
-        /// Gets validated ACME runtime options when Let's Encrypt is enabled.
+        /// Gets effective article-retention runtime options for shared in-memory article ownership.
+        /// </summary>
+        /// <value>
+        /// Configured retention runtime options when present; otherwise defaults to a 4 GiB payload budget,
+        /// 60-second insertion TTL, and one-second sweep cadence.
+        /// </value>
+        internal ArticleRetentionRuntimeOptions EffectiveArticleRetention => ArticleRetention
+            ?? new ArticleRetentionRuntimeOptions(
+                MaximumRetainedPayloadBytes: 4L * 1024 * 1024 * 1024,
+                RetentionTtl: TimeSpan.FromSeconds(60),
+                SweepInterval: TimeSpan.FromSeconds(1));
+
+        /// <summary>
+        /// Gets effective Listener runtime options for parser bounds, receipt-ack deadline, Found payload pressure, and active connection cap.
+        /// </summary>
+        /// <value>
+        /// Configured Listener runtime options when present; otherwise defaults to a 256 KiB parser accumulation limit,
+        /// 30-second receipt-ack timeout, 64 MiB queued/in-flight Found payload budget per connection, and 1024 active connections.
+        /// </value>
+        internal ListenerRuntimeOptions EffectiveListener => Listener
+            ?? new ListenerRuntimeOptions(
+                ParserAccumulationMaxBytes: 262144,
+                AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
+                MaxQueuedFoundPayloadBytes: 67108864,
+                MaxActiveConnections: 1024);
+
+        /// <summary>
+        /// Gets validated ACME runtime options required by the mandatory TLS listener certificate workflow.
         /// </summary>
         /// <value>Validated ACME runtime options required by certificate-management flows.</value>
         /// <exception cref="InvalidOperationException">Thrown when ACME runtime options are not available.</exception>

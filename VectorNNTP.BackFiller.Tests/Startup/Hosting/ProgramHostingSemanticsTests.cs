@@ -14,6 +14,7 @@ using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Lifecycle;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
@@ -365,6 +366,79 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 .Single(static service => service is RabbitMqArticleProcessingService);
             Assert.IsType<RabbitMqArticleProcessingService>(processingHostedService);
         }
+        [Fact]
+        public void ConfigureHostServices_RegistersTransitInitializerBeforeArticleProcessingHostedServices()
+        {
+            HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptionsForTesting();
+
+            HostComposer.ConfigureHostServices(builder, runtimeOptions, new ServiceLifecycle(TimeProvider.System));
+
+            List<Type> hostedServiceImplementationTypes = [.. builder.Services
+                .Where(static descriptor => descriptor.ServiceType == typeof(IHostedService) && descriptor.ImplementationType is not null)
+                .Select(static descriptor => descriptor.ImplementationType!)];
+
+            int transitIndex = hostedServiceImplementationTypes.IndexOf(typeof(TransitPublisherStartupInitializer));
+            int processingIndex = hostedServiceImplementationTypes.IndexOf(typeof(RabbitMqArticleProcessingService));
+            int retentionSweepIndex = hostedServiceImplementationTypes.IndexOf(typeof(ArticleRetentionSweepService));
+
+            Assert.True(transitIndex >= 0);
+            Assert.True(processingIndex >= 0);
+            Assert.True(retentionSweepIndex >= 0);
+            Assert.True(transitIndex < processingIndex);
+            Assert.True(transitIndex < retentionSweepIndex);
+        }
+
+        [Fact]
+        public async Task GenericHost_StopOrder_WhenProcessingRegisteredBeforeTransitInitializer_StallsUntilDrainExternallySignaled()
+        {
+            HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+            ArticleProcessingDrainBarrier barrier = new();
+            ShutdownOrderingProbe probe = new();
+
+            _ = builder.Services.AddSingleton<IArticleProcessingDrainBarrier>(barrier);
+            _ = builder.Services.AddSingleton(probe);
+            _ = builder.Services.AddHostedService<ProcessingDrainSignalingHostedService>();
+            _ = builder.Services.AddHostedService<TransitDrainWaitingHostedService>();
+
+            using IHost host = builder.Build();
+            await host.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Task stopTask = host.StopAsync(CancellationToken.None);
+            await probe.TransitStopEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+            Assert.False(probe.ProcessingStopEntered.Task.IsCompleted);
+            Assert.False(stopTask.IsCompleted);
+
+            barrier.ExitProcessingScope();
+            barrier.SignalProcessingLoopCompleted();
+
+            await stopTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            Assert.True(probe.ProcessingStopEntered.Task.IsCompleted);
+        }
+
+        [Fact]
+        public async Task GenericHost_StopOrder_WhenTransitRegisteredBeforeProcessing_DrainsAndStopsWithoutExternalSignal()
+        {
+            HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+            ArticleProcessingDrainBarrier barrier = new();
+            ShutdownOrderingProbe probe = new();
+
+            _ = builder.Services.AddSingleton<IArticleProcessingDrainBarrier>(barrier);
+            _ = builder.Services.AddSingleton(probe);
+            _ = builder.Services.AddHostedService<TransitDrainWaitingHostedService>();
+            _ = builder.Services.AddHostedService<ProcessingDrainSignalingHostedService>();
+
+            using IHost host = builder.Build();
+            await host.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Task stopTask = host.StopAsync(CancellationToken.None);
+            await probe.ProcessingStopEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            await stopTask.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+            Assert.True(probe.TransitStopEntered.Task.IsCompleted);
+        }
+
         /// <summary>
         /// Confirms the should publish readiness when application stopping already signaled returns false behavior.
         /// </summary>
@@ -506,6 +580,48 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 SocketTimeoutSeconds: 30,
                 RequestedChannelMax: 2047,
                 ConsumerPrefetchCount: null);
+        }
+
+        private sealed class ShutdownOrderingProbe
+        {
+            internal TaskCompletionSource<bool> TransitStopEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            internal TaskCompletionSource<bool> ProcessingStopEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        private sealed class TransitDrainWaitingHostedService(
+            IArticleProcessingDrainBarrier barrier,
+            ShutdownOrderingProbe probe) : IHostedService
+        {
+            public Task StartAsync(CancellationToken cancellationToken)
+            {
+                return Task.CompletedTask;
+            }
+
+            public async Task StopAsync(CancellationToken cancellationToken)
+            {
+                _ = probe.TransitStopEntered.TrySetResult(true);
+                await barrier.WaitForDrainAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        private sealed class ProcessingDrainSignalingHostedService(
+            IArticleProcessingDrainBarrier barrier,
+            ShutdownOrderingProbe probe) : IHostedService
+        {
+            public Task StartAsync(CancellationToken cancellationToken)
+            {
+                barrier.EnterProcessingScope();
+                return Task.CompletedTask;
+            }
+
+            public Task StopAsync(CancellationToken cancellationToken)
+            {
+                _ = probe.ProcessingStopEntered.TrySetResult(true);
+                barrier.ExitProcessingScope();
+                barrier.SignalProcessingLoopCompleted();
+                return Task.CompletedTask;
+            }
         }
 
         /// <summary>

@@ -8,6 +8,68 @@
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
+    /// Admission-only status values for one Message-ID handoff into bounded Transit work ownership.
+    /// </summary>
+    internal enum TransitAdmissionStatus
+    {
+        /// <summary>
+        /// Transit accepted ownership of the Message-ID into its bounded in-memory work lifecycle.
+        /// </summary>
+        Accepted = 0,
+
+        /// <summary>
+        /// Transit is not initialized or is otherwise unavailable for new admission.
+        /// </summary>
+        Unavailable = 1,
+
+        /// <summary>
+        /// Transit queue admission has been frozen because shutdown or preemption is in progress.
+        /// </summary>
+        AdmissionFrozen = 2,
+
+        /// <summary>
+        /// Caller cancellation interrupted admission before bounded ownership transfer completed.
+        /// </summary>
+        Canceled = 3,
+
+        /// <summary>
+        /// Admission failed due to an unexpected local error.
+        /// </summary>
+        Failed = 4,
+    }
+
+    /// <summary>
+    /// Immutable result for one admission-only Message-ID handoff attempt.
+    /// </summary>
+    /// <param name="MessageId">Article Message-ID associated with the admission attempt.</param>
+    /// <param name="Status">Admission outcome status.</param>
+    /// <param name="Error">Optional human-readable detail for non-accepted outcomes.</param>
+    internal sealed record TransitAdmissionResult(
+        string MessageId,
+        TransitAdmissionStatus Status,
+        string? Error = null)
+    {
+        /// <summary>
+        /// Gets a value indicating whether bounded Transit ownership was accepted.
+        /// </summary>
+        internal bool IsAccepted => Status == TransitAdmissionStatus.Accepted;
+    }
+
+    /// <summary>
+    /// Admits Message-IDs into bounded Transit ownership without waiting for terminal network completion.
+    /// </summary>
+    internal interface ITransitAdmissionGateway
+    {
+        /// <summary>
+        /// Attempts to admit one Message-ID into bounded Transit ownership.
+        /// </summary>
+        /// <param name="messageId">Article Message-ID to admit.</param>
+        /// <param name="cancellationToken">Cancellation token used while waiting for bounded queue capacity.</param>
+        /// <returns>An admission-only result that does not imply network send or terminal completion.</returns>
+        public ValueTask<TransitAdmissionResult> AdmitAsync(string messageId, CancellationToken cancellationToken);
+    }
+
+    /// <summary>
     /// Terminal and intermediate status values for one outbound transit publish submission.
     /// </summary>
     internal enum TransitPublishStatus

@@ -6,11 +6,19 @@
 // Focused tests for rabbit mq article result sink phase4, covering NNTP article and transport behavior; dependency integration and failure handling.
 // Primary responsibility: documents the executable contracts covered by the rabbit mq article result sink phase 4 test suite.
 
+using System.Buffers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
+using VectorNNTP.BackFiller.Tests.Runtime.Articles.Retention;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
+using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
@@ -36,22 +44,39 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 41,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<success-ordering@example.com>", "success-ordering-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<success-ordering@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed, operationLog);
-            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted, sharedOperationLog: operationLog);
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions: runtimeOptions, retentionAuthority: retentionAuthority, transitAdmissionGateway: transitAdmissionGateway);
 
             await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
 
+            ArticleRetentionReadLeaseResult retainedLease = retentionAuthority.TryAcquireReadLeaseByMessageId("<success-ordering@example.com>");
+            Assert.True(retainedLease.IsAcquired);
+            using (IArticleRetentionReadLease lease = Assert.IsAssignableFrom<IArticleRetentionReadLease>(retainedLease.Lease))
+            {
+                string retainedArticle = Encoding.ASCII.GetString(lease.Payload.Span);
+                Assert.Contains("Date: Tue, 10 May 2011 18:48:50 +0000\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains($"Path: {runtimeOptions.CanonicalBackFillerFqdn}!num2.nntp.ams.giganews.com!not-for-mail\r\n", retainedArticle, StringComparison.Ordinal);
+                Assert.Contains("\r\n\r\nsuccess-ordering-payload\r\n", retainedArticle, StringComparison.Ordinal);
+            }
+
+            int admitIndex = operationLog.IndexOf("admit");
             int publishIndex = operationLog.IndexOf("publish");
             int confirmIndex = operationLog.IndexOf("confirm");
             int ackIndex = operationLog.IndexOf("ack");
-            Assert.True(publishIndex >= 0);
+            Assert.True(admitIndex >= 0);
+            Assert.True(publishIndex > admitIndex);
             Assert.True(confirmIndex > publishIndex);
             Assert.True(ackIndex > confirmIndex);
             Assert.Equal(812UL, settlement.AckDeliveryTag);
@@ -63,8 +88,57 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.DoesNotContain("replyTo", publisher.LastResponseJson!, StringComparison.OrdinalIgnoreCase);
             RabbitMqArticleWorkResponse successResponse = RabbitMqArticleWorkResponseWireProtocol.ParseV1(publisher.LastResponsePayload!);
             Assert.Equal(nameof(ArticleWorkProcessingOutcome.Success), successResponse.Outcome);
-            Assert.Null(successResponse.Uri);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            Assert.Equal(expectedUri, successResponse.Uri);
             Assert.Null(successResponse.Error);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenSuccessArticleMessageIdDiffersFromRequest_DropsBeforeRetentionTransitAndPublicationAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            string requestedMessageId = "<requested-identity@example.com>";
+            string articleMessageId = "<actual-provider-identity@example.com>";
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), requestedMessageId, "BackboneA"),
+                correlationId: "corr-message-id-mismatch",
+                replyTo: "rpc.responses",
+                deliveryTag: 881,
+                connectionGeneration: 41,
+                settlement: settlement);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult(
+                requestMessageId: requestedMessageId,
+                articleMessageId: articleMessageId,
+                payloadText: "mismatch-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: requestedMessageId,
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted);
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions: runtimeOptions, retentionAuthority: retentionAuthority, transitAdmissionGateway: transitAdmissionGateway);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(881UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Equal(0, transitAdmissionGateway.AdmitCallCount);
+
+            ArticleRetentionReadLeaseResult requestedLease = retentionAuthority.TryAcquireReadLeaseByMessageId(requestedMessageId);
+            Assert.False(requestedLease.IsAcquired);
+            ArticleRetentionReadLeaseResult requestedMd5Lease = retentionAuthority.TryAcquireReadLeaseByMessageIdMd5(MessageIdHashing.ComputeCanonicalMd5Hex(requestedMessageId));
+            Assert.False(requestedMd5Lease.IsAcquired);
+            ArticleRetentionReadLeaseResult actualLease = retentionAuthority.TryAcquireReadLeaseByMessageId(articleMessageId);
+            Assert.False(actualLease.IsAcquired);
         }
         /// <summary>
         /// Confirms the on processed async when publish fails does not ack and nacks requeue true async behavior.
@@ -81,12 +155,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 42,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<publish-failure@example.com>", "publish-failure-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<publish-failure@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Failed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -112,12 +188,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 43,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<publish-timeout@example.com>", "publish-timeout-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<publish-timeout@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.TimedOut);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -340,8 +418,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 settlement: settlement);
             RabbitMqArticleDelivery secondDelivery = firstDelivery with { DeliveryTag = 1902 };
 
-            ArticleWorkProcessingResult firstResult = CreateResult(firstDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-1@example.com>", "BackboneA");
-            ArticleWorkProcessingResult secondResult = CreateResult(secondDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-2@example.com>", "BackboneA");
+            NntpArticleGrabberResult firstGrabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<exactly-once-1@example.com>", "exactly-once-payload-1");
+            NntpArticleGrabberResult secondGrabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<exactly-once-2@example.com>", "exactly-once-payload-2");
+            ArticleWorkProcessingResult firstResult = CreateResult(firstDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-1@example.com>", "BackboneA", firstGrabberResult);
+            ArticleWorkProcessingResult secondResult = CreateResult(secondDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<exactly-once-2@example.com>", "BackboneA", secondGrabberResult);
 
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: new TrackingResponsePublisher(RabbitMqResponsePublishStatus.Confirmed));
 
@@ -365,12 +445,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 connectionGeneration: 61,
                 settlement: settlement);
 
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<shutdown-before-publish@example.com>", "shutdown-before-publish-payload");
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.Success,
                 requestId: Guid.NewGuid(),
                 messageId: "<shutdown-before-publish@example.com>",
-                backbone: "BackboneA");
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.TimedOut);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -382,6 +464,305 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.True(settlement.NackRequeue);
         }
 
+        [Fact]
+        public async Task OnProcessedAsync_WhenRetentionAdmissionClosed_DoesNotPublishAndNacksRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<retention-closed@example.com>", "BackboneA"),
+                correlationId: "corr-retention-closed",
+                replyTo: "rpc.responses",
+                deliveryTag: 2101,
+                connectionGeneration: 62,
+                settlement: settlement);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<retention-closed@example.com>", "retention-closed-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<retention-closed@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            retentionAuthority.BeginShutdown();
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, runtimeOptions: runtimeOptions, retentionAuthority: retentionAuthority);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2101UL, settlement.NackDeliveryTag);
+            Assert.True(settlement.NackRequeue);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionNotAccepted_DoesNotPublishAndNacksWithoutRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-failed@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-failed",
+                replyTo: "rpc.responses",
+                deliveryTag: 2201,
+                connectionGeneration: 63,
+                settlement: settlement);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-failed@example.com>", "transit-admission-failed-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<transit-admission-failed@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Unavailable, "transit unavailable");
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, transitAdmissionGateway: transitAdmissionGateway);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal("<transit-admission-failed@example.com>", transitAdmissionGateway.LastMessageId);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2201UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionFailed_LogsWarningAndNacksWithoutRequeueAsync()
+        {
+            List<CapturedLogEntry> logs = [];
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-warning@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-warning",
+                replyTo: "rpc.responses",
+                deliveryTag: 2202,
+                connectionGeneration: 63,
+                settlement: settlement);
+
+            Guid requestId = Guid.NewGuid();
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-warning@example.com>", "transit-admission-warning-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: requestId,
+                messageId: "<transit-admission-warning@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Failed, "transit enqueue fault");
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                transitAdmissionGateway: transitAdmissionGateway,
+                logger: new CapturingLogger<RabbitMqArticleResultSink>(logs));
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2202UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+
+            CapturedLogEntry warning = Assert.Single(logs, static entry => entry.EventId.Id == 3406);
+            Assert.Equal(LogLevel.Warning, warning.Level);
+            Assert.Equal(requestId, warning.StateValues["RequestId"]);
+            Assert.Equal("corr-transit-admission-warning", warning.StateValues["CorrelationId"]);
+            Assert.Equal("<transit-admission-warning@example.com>", warning.StateValues["MessageId"]);
+            Assert.Equal("BackboneA", warning.StateValues["Backbone"]);
+            Assert.Equal(2202UL, warning.StateValues["DeliveryTag"]);
+            Assert.Equal(TransitAdmissionStatus.Failed, warning.StateValues["AdmissionStatus"]);
+            Assert.Equal("transit enqueue fault", warning.StateValues["AdmissionError"]);
+            Assert.Equal(false, warning.StateValues["Requeue"]);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionFrozen_LogsInformationAndNacksWithoutRequeueAsync()
+        {
+            List<CapturedLogEntry> logs = [];
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-frozen@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-frozen",
+                replyTo: "rpc.responses",
+                deliveryTag: 2203,
+                connectionGeneration: 63,
+                settlement: settlement);
+
+            Guid requestId = Guid.NewGuid();
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-frozen@example.com>", "transit-admission-frozen-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: requestId,
+                messageId: "<transit-admission-frozen@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.AdmissionFrozen, "Global transit queue admission is frozen.");
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                transitAdmissionGateway: transitAdmissionGateway,
+                logger: new CapturingLogger<RabbitMqArticleResultSink>(logs));
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2203UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+
+            CapturedLogEntry info = Assert.Single(logs, static entry => entry.EventId.Id == 3407);
+            Assert.Equal(LogLevel.Information, info.Level);
+            Assert.Equal(requestId, info.StateValues["RequestId"]);
+            Assert.Equal("corr-transit-admission-frozen", info.StateValues["CorrelationId"]);
+            Assert.Equal("<transit-admission-frozen@example.com>", info.StateValues["MessageId"]);
+            Assert.Equal("BackboneA", info.StateValues["Backbone"]);
+            Assert.Equal(2203UL, info.StateValues["DeliveryTag"]);
+            Assert.Equal(TransitAdmissionStatus.AdmissionFrozen, info.StateValues["AdmissionStatus"]);
+            Assert.Equal("Global transit queue admission is frozen.", info.StateValues["AdmissionError"]);
+            Assert.Equal(false, info.StateValues["Requeue"]);
+            Assert.DoesNotContain(logs, static entry => entry.Level == LogLevel.Warning && entry.EventId.Id == 3406);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionCanceledWithCanceledProcessingToken_NacksWithoutRequeueUsingDeliveryToken()
+        {
+            TrackingDeliverySettlement settlement = new();
+            CancellationTokenSource deliveryCts = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-canceled@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-canceled",
+                replyTo: "rpc.responses",
+                deliveryTag: 2204,
+                connectionGeneration: 63,
+                settlement: settlement,
+                cancellationToken: deliveryCts.Token);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-canceled@example.com>", "transit-admission-canceled-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<transit-admission-canceled@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Canceled, "Transit admission canceled.", throwOnCancellation: false);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, transitAdmissionGateway: transitAdmissionGateway);
+
+            using CancellationTokenSource operationCts = new();
+            operationCts.Cancel();
+
+            await sink.OnProcessedAsync(result, operationCts.Token).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2204UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.False(settlement.NackTokenWasCancellationRequested);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenTransitAdmissionCanceledWithCanceledProcessingAndNonCancelableDeliveryToken_NacksWithoutRequeue()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<transit-admission-canceled-noncancelable@example.com>", "BackboneA"),
+                correlationId: "corr-transit-admission-canceled-noncancelable",
+                replyTo: "rpc.responses",
+                deliveryTag: 2205,
+                connectionGeneration: 63,
+                settlement: settlement,
+                cancellationToken: CancellationToken.None);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<transit-admission-canceled-noncancelable@example.com>", "transit-admission-canceled-noncancelable-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<transit-admission-canceled-noncancelable@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Canceled, "Transit admission canceled.", throwOnCancellation: false);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, transitAdmissionGateway: transitAdmissionGateway);
+
+            using CancellationTokenSource operationCts = new();
+            operationCts.Cancel();
+
+            await sink.OnProcessedAsync(result, operationCts.Token).ConfigureAwait(false);
+
+            Assert.Equal(1, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2205UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.False(settlement.NackTokenWasCancellationRequested);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenDuplicateMessageIdRedelivery_DoesNotRequeueLoopAndAcknowledgesAsync()
+        {
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleRetentionAuthority retentionAuthority = new(runtimeOptions);
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted);
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                runtimeOptions: runtimeOptions,
+                retentionAuthority: retentionAuthority,
+                transitAdmissionGateway: transitAdmissionGateway);
+
+            TrackingDeliverySettlement firstSettlement = new();
+            RabbitMqArticleDelivery firstDelivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<duplicate-redelivery@example.com>", "BackboneA"),
+                correlationId: "corr-duplicate-first",
+                replyTo: "rpc.responses",
+                deliveryTag: 2301,
+                connectionGeneration: 64,
+                settlement: firstSettlement);
+
+            TrackingDeliverySettlement secondSettlement = new();
+            RabbitMqArticleDelivery secondDelivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<duplicate-redelivery@example.com>", "BackboneA"),
+                correlationId: "corr-duplicate-second",
+                replyTo: "rpc.responses",
+                deliveryTag: 2302,
+                connectionGeneration: 64,
+                settlement: secondSettlement,
+                redelivered: true);
+
+            NntpArticleGrabberResult firstGrabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<duplicate-redelivery@example.com>", "duplicate-redelivery-payload-first");
+            NntpArticleGrabberResult secondGrabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<duplicate-redelivery@example.com>", "duplicate-redelivery-payload-second");
+
+            ArticleWorkProcessingResult firstResult = CreateResult(firstDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<duplicate-redelivery@example.com>", "BackboneA", firstGrabberResult);
+            ArticleWorkProcessingResult secondResult = CreateResult(secondDelivery, ArticleWorkProcessingOutcome.Success, Guid.NewGuid(), "<duplicate-redelivery@example.com>", "BackboneA", secondGrabberResult);
+
+            await sink.OnProcessedAsync(firstResult, CancellationToken.None).ConfigureAwait(false);
+            await sink.OnProcessedAsync(secondResult, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(2, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(2, publisher.PublishCallCount);
+            Assert.Equal(2301UL, firstSettlement.AckDeliveryTag);
+            Assert.Equal(2302UL, secondSettlement.AckDeliveryTag);
+            Assert.Null(firstSettlement.NackDeliveryTag);
+            Assert.Null(secondSettlement.NackDeliveryTag);
+        }
+
         /// <summary>
         /// Confirms the create sink behavior.
         /// </summary>
@@ -391,13 +772,82 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// </summary>
         /// <param name="responsePublisher">The response publisher used by this test scenario.</param>
         /// <returns>The value returned by the create sink helper.</returns>
-        private static RabbitMqArticleResultSink CreateSink(IRabbitMqArticleResponsePublisher responsePublisher)
+        private static RabbitMqArticleResultSink CreateSink(
+            IRabbitMqArticleResponsePublisher responsePublisher,
+            BackFillerRuntimeOptions? runtimeOptions = null,
+            IArticleRetentionAuthority? retentionAuthority = null,
+            ITransitAdmissionGateway? transitAdmissionGateway = null,
+            ILogger<RabbitMqArticleResultSink>? logger = null)
         {
+            runtimeOptions ??= CreateRuntimeOptions();
+            retentionAuthority ??= new ArticleRetentionAuthority(runtimeOptions);
+            transitAdmissionGateway ??= new TrackingTransitAdmissionGateway(TransitAdmissionStatus.Accepted);
+            logger ??= NullLogger<RabbitMqArticleResultSink>.Instance;
             return new RabbitMqArticleResultSink(
                 planner: new ArticleWorkDispositionPlanner(),
-                responseFactory: new ArticleWorkResponseFactory(),
+                responseFactory: new ArticleWorkResponseFactory(runtimeOptions),
                 responsePublisher: responsePublisher,
-                logger: NullLogger<RabbitMqArticleResultSink>.Instance);
+                retentionAuthority: retentionAuthority,
+                transitAdmissionGateway: transitAdmissionGateway,
+                logger: logger);
+        }
+
+        private sealed class TrackingTransitAdmissionGateway : ITransitAdmissionGateway
+        {
+            private readonly TransitAdmissionStatus _status;
+            private readonly string? _error;
+            private readonly List<string>? _sharedOperationLog;
+            private readonly bool _throwOnCancellation;
+
+            internal TrackingTransitAdmissionGateway(TransitAdmissionStatus status, string? error = null, List<string>? sharedOperationLog = null, bool throwOnCancellation = true)
+            {
+                _status = status;
+                _error = error;
+                _sharedOperationLog = sharedOperationLog;
+                _throwOnCancellation = throwOnCancellation;
+            }
+
+            internal int AdmitCallCount { get; private set; }
+
+            internal string? LastMessageId { get; private set; }
+
+            public ValueTask<TransitAdmissionResult> AdmitAsync(string messageId, CancellationToken cancellationToken)
+            {
+                if (_throwOnCancellation)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                AdmitCallCount++;
+                LastMessageId = messageId;
+                _sharedOperationLog?.Add("admit");
+                return ValueTask.FromResult(new TransitAdmissionResult(messageId, _status, _error));
+            }
+        }
+
+        /// <summary>
+        /// Creates deterministic runtime options for success URI contract assertions.
+        /// </summary>
+        /// <returns>Runtime options with canonical BackFiller endpoint identity.</returns>
+        private static BackFillerRuntimeOptions CreateRuntimeOptions()
+        {
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: "backfiller01.usenet.ninja",
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "usenet.ninja",
+                ValidatedLogDirectory: "C:\\logs",
+                ValidatedCertificateDirectory: "C:\\certs",
+                RabbitMqHosts: ["rabbit01.usenet.ninja"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: true,
+                TransitServerHost: "transit01.usenet.ninja",
+                TransitServerPort: 563,
+                TransitServerUseSsl: true,
+                BindPort: 119,
+                ArticleRetention: new ArticleRetentionRuntimeOptions(
+                    MaximumRetainedPayloadBytes: 16 * 1024 * 1024,
+                    RetentionTtl: TimeSpan.FromSeconds(60),
+                    SweepInterval: TimeSpan.FromSeconds(1)));
         }
 
         /// <summary>
@@ -408,7 +858,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingOutcome outcome,
             Guid requestId,
             string messageId,
-            string backbone)
+            string backbone,
+            NntpArticleGrabberResult? grabberResult = null)
         {
             RabbitMqArticleWorkRequest request = new(1, requestId, messageId, backbone);
             return new ArticleWorkProcessingResult(
@@ -416,7 +867,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 Delivery: delivery,
                 Outcome: outcome,
                 Disposition: ArticleWorkDispositionRecommendation.None,
-                GrabberResult: null,
+                GrabberResult: grabberResult,
                 ProviderFailureCode: null,
                 ResponseCode: null,
                 ResponseText: null,
@@ -436,7 +887,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             IRabbitMqDeliverySettlement? settlement = null,
             bool redelivered = false,
             string consumerTag = "ctag-phase4",
-            string consumerIdentity = "consumer-phase4")
+            string consumerIdentity = "consumer-phase4",
+            CancellationToken cancellationToken = default)
         {
             settlement ??= new TrackingDeliverySettlement();
             if (settlement is TrackingDeliverySettlement trackingSettlement)
@@ -458,7 +910,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 CorrelationId: correlationId,
                 ReplyTo: replyTo,
                 Payload: Encoding.UTF8.GetBytes(payloadText),
-                CancellationToken: CancellationToken.None,
+                CancellationToken: cancellationToken,
                 Settlement: settlement);
         }
 
@@ -476,6 +928,53 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
         {
             return $"{{\"version\":1,\"requestId\":\"{requestId}\",\"messageId\":\"{messageId}\",\"backbone\":\"{backbone}\"}}";
+        }
+
+        private sealed record CapturedLogEntry(LogLevel Level, EventId EventId, string Message, IReadOnlyDictionary<string, object?> StateValues);
+
+        private sealed class CapturingLogger<T>(List<CapturedLogEntry> entries) : ILogger<T>
+        {
+            private readonly List<CapturedLogEntry> _entries = entries ?? throw new ArgumentNullException(nameof(entries));
+
+            public IDisposable BeginScope<TState>(TState state)
+                where TState : notnull
+            {
+                return NullScope.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                string message = formatter(state, exception);
+                IReadOnlyDictionary<string, object?> stateValues;
+                if (state is IReadOnlyDictionary<string, object?> dictionary)
+                {
+                    stateValues = dictionary;
+                }
+                else if (state is IEnumerable<KeyValuePair<string, object?>> pairs)
+                {
+                    stateValues = pairs.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal);
+                }
+                else
+                {
+                    stateValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+                }
+
+                _entries.Add(new CapturedLogEntry(logLevel, eventId, message, stateValues));
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                internal static NullScope Instance { get; } = new();
+
+                public void Dispose()
+                {
+                }
+            }
         }
 
         /// <summary>
@@ -600,6 +1099,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             internal bool NackRequeue { get; private set; }
 
             /// <summary>
+            /// Supplies whether the cancellation token passed to NACK was already canceled.
+            /// </summary>
+            internal bool NackTokenWasCancellationRequested { get; private set; }
+
+            /// <summary>
             /// Supplies operation log for the fixture or scenario under test.
             /// </summary>
             internal List<string> OperationLog { get; } = [];
@@ -639,6 +1143,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// <returns>The value returned by the nack async helper.</returns>
             public ValueTask NackAsync(bool requeue, CancellationToken cancellationToken)
             {
+                NackTokenWasCancellationRequested = cancellationToken.IsCancellationRequested;
                 cancellationToken.ThrowIfCancellationRequested();
                 if (Interlocked.Exchange(ref _settled, 1) != 0)
                 {

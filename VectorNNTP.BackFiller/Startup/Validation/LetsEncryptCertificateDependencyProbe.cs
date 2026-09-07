@@ -31,8 +31,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <param name="runtimeOptions">Validated runtime options snapshot that provides effective ACME configuration.</param>
         /// <param name="cancellationToken">Startup cancellation token propagated to certificate provisioning.</param>
         /// <returns>
-        /// A task that completes with a dependency-validation snapshot. When Let’s Encrypt is disabled, the result is
-        /// immediately successful; otherwise, probe failures are returned as a single dependency failure entry.
+        /// A task that completes with a dependency-validation snapshot. Probe failures are returned as a single
+        /// dependency failure entry.
         /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="runtimeOptions"/> is <see langword="null"/>.</exception>
         /// <exception cref="OperationCanceledException">The operation is canceled via <paramref name="cancellationToken"/>.</exception>
@@ -45,12 +45,6 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
-
-            BackFillerLetsEncryptRuntimeOptions letsEncryptOptions = runtimeOptions.EffectiveLetsEncrypt;
-            if (!letsEncryptOptions.Enabled)
-            {
-                return DependencyValidationResult.Success();
-            }
 
             List<(string Dependency, string Reason)> failures = [];
             List<(string Category, string Message)> warnings = [];

@@ -6,6 +6,7 @@
 // Focused tests for transit publisher, covering NNTP article and transport behavior.
 // Primary responsibility: documents the executable contracts covered by the transit publisher test suite.
 
+using System.Buffers;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Net;
@@ -15,6 +16,8 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
@@ -81,6 +84,98 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             Assert.Equal(TransitPublishStatus.Unavailable, result.Status);
             Assert.Null(result.ResponseCode);
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenNotInitialized_ReturnsUnavailable()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19001, connectionPoolSize: 1);
+
+            TransitAdmissionResult result = await publisher.AdmitAsync("<admit-unavailable@example.com>", CancellationToken.None);
+
+            Assert.Equal(TransitAdmissionStatus.Unavailable, result.Status);
+            Assert.False(result.IsAccepted);
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenInitialized_ReturnsAcceptedWithoutWaitingForTerminalCompletion()
+        {
+            string messageId = "<admit-accepted@example.com>";
+            byte[] payload = [(byte)'A', (byte)'\n'];
+            TaskCompletionSource firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                _ = firstTakethisObserved.TrySetResult();
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            BackFillerRuntimeOptions options = CreatePublisherOptions(server.Port);
+            ArticleRetentionAuthority retention = new(options);
+            DownloadedArticleBuffer retainedPayload = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult retained = retention.TryRetainSuccessArticle(messageId, retainedPayload);
+            Assert.True(retained.IsAdmitted);
+
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                retention,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 1);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitAdmissionResult admission = await publisher.AdmitAsync(messageId, CancellationToken.None);
+
+            Assert.True(admission.IsAccepted);
+            Assert.Equal(TransitAdmissionStatus.Accepted, admission.Status);
+            Assert.Equal(messageId, admission.MessageId);
+            Assert.Equal(1, GetActiveSubmissionCount(publisher));
+
+            using CancellationTokenSource observedTimeout = new(TimeSpan.FromSeconds(10));
+            await firstTakethisObserved.Task.WaitAsync(observedTimeout.Token);
+            Assert.Equal(1, GetActiveSubmissionCount(publisher));
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenAdmissionFrozen_ReturnsAdmissionFrozen()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19002, connectionPoolSize: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource preemptTimeout = new(TimeSpan.FromSeconds(5));
+            await publisher.PreemptSubmissionProcessingAsync(preemptTimeout.Token);
+
+            TransitAdmissionResult result = await publisher.AdmitAsync("<admit-frozen@example.com>", CancellationToken.None);
+
+            Assert.Equal(TransitAdmissionStatus.AdmissionFrozen, result.Status);
+            Assert.False(result.IsAccepted);
+        }
+
+        [Fact]
+        public async Task AdmitAsync_WhenDisposed_ReturnsUnavailable()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19003, connectionPoolSize: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+            await publisher.DisposeAsync();
+
+            TransitAdmissionResult result = await publisher.AdmitAsync("<admit-disposed@example.com>", CancellationToken.None);
+
+            Assert.Equal(TransitAdmissionStatus.Unavailable, result.Status);
+            Assert.False(result.IsAccepted);
         }
 
         /// <summary>
@@ -2028,6 +2123,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 options,
                 TimeProvider.System,
                 NullLogger<TransitPublisher>.Instance,
+                new ArticleRetentionAuthority(options),
                 connectionPoolSize: 1,
                 perConnectionPipelineDepth: 1,
                 claimBoundaryObserved: claimBoundaryObserved);
@@ -2970,6 +3066,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             TransitPublishResult firstResult = await firstPublish.WaitAsync(timeout.Token);
             Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
+            ArticleRetentionSnapshot afterAmbiguousSnapshot = GetRetentionAuthority(publisher).GetSnapshot();
+            Assert.Equal(0, afterAmbiguousSnapshot.TransitCompletionCount);
 
             TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterFirstSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
             Assert.DoesNotContain(afterFirstSnapshot.Connections.SelectMany(static entry => entry.Snapshot.OutstandingOperations),
@@ -3000,6 +3098,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(239, secondResult.ResponseCode);
             Assert.Equal(secondMessageId, secondResult.MessageId);
             Assert.Equal(TransitConnectionState.Ready, publisher.CurrentState);
+
+            ArticleRetentionSnapshot afterAcceptedSnapshot = GetRetentionAuthority(publisher).GetSnapshot();
+            Assert.Equal(1, afterAcceptedSnapshot.TransitCompletionCount);
         }
 
         /// <summary>
@@ -3291,6 +3392,324 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             using CancellationTokenSource completionTimeout = new(TimeSpan.FromSeconds(10));
             await Task.WhenAll(admittedSubmissions).WaitAsync(completionTimeout.Token);
+        }
+
+        /// <summary>
+        /// Verifies identity-only transit admission creates queued work metadata without attaching payload ownership to transit work items.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenIdentityOnlyAdmission_QueuesMetadataWithoutPayloadOwnership()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19042, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+            object claimGate = GetClaimGate(queue);
+            TaskCompletionSource claimGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            using ManualResetEventSlim releaseClaimGate = new(false);
+            Task claimGateHolder = Task.Run(() =>
+            {
+                Monitor.Enter(claimGate);
+                try
+                {
+                    claimGateHeld.TrySetResult();
+                    releaseClaimGate.Wait();
+                }
+                finally
+                {
+                    Monitor.Exit(claimGate);
+                }
+            }, CancellationToken.None);
+
+            try
+            {
+                using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+                await claimGateHeld.Task.WaitAsync(timeout.Token);
+
+                Task<TransitPublishResult> pending = publisher.PublishAsync("<identity-only@example.com>", CancellationToken.None).AsTask();
+
+                while (publisher.CaptureConnectionDiagnosticsSnapshot().QueueSnapshot.QueuedItemCount == 0)
+                {
+                    await Task.Yield();
+                }
+
+                TransitWorkItem[] active = GetActiveWorkItems(publisher);
+                TransitWorkItem workItem = Assert.Single(active);
+                Assert.Equal("<identity-only@example.com>", workItem.MessageId);
+
+                releaseClaimGate.Set();
+
+                TransitPublishResult result = await pending.WaitAsync(timeout.Token);
+                Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
+            }
+            finally
+            {
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(CancellationToken.None);
+                await publisher.DisposeAsync();
+            }
+        }
+
+        /// <summary>
+        /// Verifies identity-only admission keeps active transit work identity-only at admission time.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenIdentityOnlyAdmission_DoesNotAttachPayloadAtAdmission()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19043, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+            object claimGate = GetClaimGate(queue);
+            TaskCompletionSource claimGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            using ManualResetEventSlim releaseClaimGate = new(false);
+            Task claimGateHolder = Task.Run(() =>
+            {
+                Monitor.Enter(claimGate);
+                try
+                {
+                    claimGateHeld.TrySetResult();
+                    releaseClaimGate.Wait();
+                }
+                finally
+                {
+                    Monitor.Exit(claimGate);
+                }
+            }, CancellationToken.None);
+
+            try
+            {
+                using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+                await claimGateHeld.Task.WaitAsync(timeout.Token);
+
+                Task<TransitPublishResult> pending = publisher.PublishAsync("<identity-no-payload@example.com>", CancellationToken.None).AsTask();
+
+                while (publisher.CaptureConnectionDiagnosticsSnapshot().QueueSnapshot.QueuedItemCount == 0)
+                {
+                    await Task.Yield();
+                }
+
+                TransitWorkItem[] active = GetActiveWorkItems(publisher);
+                TransitWorkItem workItem = Assert.Single(active);
+                Assert.Equal("<identity-no-payload@example.com>", workItem.MessageId);
+
+                releaseClaimGate.Set();
+
+                TransitPublishResult result = await pending.WaitAsync(timeout.Token);
+                Assert.Equal(TransitPublishStatus.Ambiguous, result.Status);
+            }
+            finally
+            {
+                releaseClaimGate.Set();
+                await claimGateHolder.WaitAsync(CancellationToken.None);
+                await publisher.DisposeAsync();
+            }
+        }
+
+        /// <summary>
+        /// Verifies leases are acquired only when a claimed item enters send-attempt processing and released after terminal completion.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenRetainedPayloadExists_LeaseActivatesAtSendAttemptAndReleasesOnCompletion()
+        {
+            byte[] payload = [(byte)'L', (byte)'\n'];
+            string messageId = "<lease-attempt@example.com>";
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port: 19044);
+            ArticleRetentionAuthority retention = new(options);
+            using DownloadedArticleBuffer retained = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult admission = retention.TryRetainSuccessArticle(messageId, retained);
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                byte[] receivedPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                Assert.Equal(payload, receivedPayload);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, retentionAuthority: retention);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            ArticleRetentionSnapshot beforePublish = retention.GetSnapshot();
+            Assert.Equal(0, beforePublish.ActiveReaderCount);
+            Assert.Equal(0, beforePublish.TransitCompletionCount);
+
+            TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+
+            ArticleRetentionSnapshot afterPublish = retention.GetSnapshot();
+            Assert.Equal(0, afterPublish.ActiveReaderCount);
+            Assert.Equal(1, afterPublish.TransitCompletionCount);
+            Assert.True(afterPublish.RetainedArticleCount >= 1);
+        }
+
+        /// <summary>
+        /// Verifies send-time retention lookup failure terminalizes as unavailable and does not schedule retry.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenRetentionLookupMissingAtSendTime_ReturnsUnavailableWithoutRetry()
+        {
+            string messageId = "<missing-retained@example.com>";
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Unavailable, result.Status);
+
+            ArticleRetentionSnapshot retentionSnapshot = GetRetentionAuthority(publisher).GetSnapshot();
+            Assert.Equal(0, retentionSnapshot.TransitCompletionCount);
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot snapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.Equal(0, snapshot.QueueSnapshot.RetryPendingCount);
+        }
+
+        /// <summary>
+        /// Verifies definitive duplicate rejection marks transit completion and does not introduce retry-pending ownership.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenTransitReportsDuplicate439_MarksRetentionTransitCompletedWithoutRetry()
+        {
+            byte[] payload = [(byte)'Q', (byte)'\n'];
+            string messageId = "<duplicate-439@example.com>";
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port: 19045);
+            ArticleRetentionAuthority retention = new(options);
+            using DownloadedArticleBuffer retained = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult admission = retention.TryRetainSuccessArticle(messageId, retained);
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"439 {messageId} duplicate");
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, retentionAuthority: retention);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Rejected, result.Status);
+            Assert.Equal(439, result.ResponseCode);
+
+            ArticleRetentionSnapshot snapshot = retention.GetSnapshot();
+            Assert.Equal(1, snapshot.TransitCompletionCount);
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot publisherSnapshot = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.Equal(0, publisherSnapshot.QueueSnapshot.RetryPendingCount);
+        }
+
+        /// <summary>
+        /// Verifies non-definitive rejection does not mark transit completion.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenTransitRejects431_DoesNotMarkRetentionTransitCompleted()
+        {
+            byte[] payload = [(byte)'R', (byte)'\n'];
+            string messageId = "<reject-431@example.com>";
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port: 19046);
+            ArticleRetentionAuthority retention = new(options);
+            using DownloadedArticleBuffer retained = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult admission = retention.TryRetainSuccessArticle(messageId, retained);
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"431 {messageId} deferred");
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, retentionAuthority: retention);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Rejected, result.Status);
+            Assert.Equal(431, result.ResponseCode);
+
+            ArticleRetentionSnapshot snapshot = retention.GetSnapshot();
+            Assert.Equal(0, snapshot.TransitCompletionCount);
+        }
+
+        /// <summary>
+        /// Verifies admitted publish work that loses retention before claim terminalizes as unavailable and marks transit completion.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenRetentionExpiresAfterAdmissionBeforeClaim_UnavailableInvokesTransitCompletionOnce()
+        {
+            byte[] payload = [(byte)'U', (byte)'\n'];
+            string messageId = "<expired-after-admit@example.com>";
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port: 19047);
+            ArticleRetentionAuthority innerRetention = new(options);
+            TrackingRetentionAuthority retention = new(innerRetention);
+            using DownloadedArticleBuffer retained = CreateDownloadedBuffer(payload);
+            ArticleRetentionAdmissionResult admission = retention.TryRetainSuccessArticle(messageId, retained, DateTimeOffset.UtcNow.AddDays(-1));
+            Assert.Equal(ArticleRetentionAdmissionStatus.Admitted, admission.Status);
+
+            _ = retention.ExpireEligibleArticles(DateTimeOffset.UtcNow);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, retentionAuthority: retention);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            TransitPublishResult result = await publisher.PublishAsync(messageId, CancellationToken.None);
+            Assert.Equal(TransitPublishStatus.Unavailable, result.Status);
+            Assert.Equal(1, retention.MarkTransitCompletedCallCount);
+
+            ArticleRetentionSnapshot snapshot = retention.GetSnapshot();
+            Assert.Equal(0, snapshot.TransitCompletionCount);
+            Assert.Equal(0, snapshot.RetainedArticleCount);
         }
 
         /// <summary>
@@ -4190,9 +4609,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             int transitRetryMaxAttempts = 3,
             TimeSpan? connectionResponseProgressTimeout = null,
             TimeSpan? connectionResponseProgressCheckInterval = null,
-            Action? claimBoundaryObserved = null)
+            Action? claimBoundaryObserved = null,
+            IArticleRetentionAuthority? retentionAuthority = null)
         {
-            BackFillerRuntimeOptions options = new(
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port, transitRetryMaxAttempts);
+
+            return new TransitPublisher(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                retentionAuthority ?? new ArticleRetentionAuthority(options),
+                connectionPoolSize,
+                perConnectionPipelineDepth,
+                connectionResponseProgressTimeout,
+                connectionResponseProgressCheckInterval,
+                timingCollector: null,
+                claimBoundaryObserved: claimBoundaryObserved);
+        }
+
+        /// <summary>
+        /// Creates baseline runtime options used by transit publisher tests.
+        /// </summary>
+        /// <param name="port">Transit server port for the synthetic publisher instance.</param>
+        /// <param name="transitRetryMaxAttempts">Retry-attempt budget to embed in runtime options.</param>
+        /// <returns>Runtime options configured for deterministic transit publisher test scenarios.</returns>
+        private static BackFillerRuntimeOptions CreatePublisherOptions(int port, int transitRetryMaxAttempts = 3)
+        {
+            return new BackFillerRuntimeOptions(
                 CanonicalBackFillerFqdn: "bf.example.com",
                 BackFillerId: 42,
                 CanonicalDnsSuffix: "example.com",
@@ -4210,17 +4653,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
                 WriteBatchCoalesceMicroseconds: 250,
                 TransitRetryMaxAttempts: transitRetryMaxAttempts);
-
-            return new TransitPublisher(
-                options,
-                TimeProvider.System,
-                NullLogger<TransitPublisher>.Instance,
-                connectionPoolSize,
-                perConnectionPipelineDepth,
-                connectionResponseProgressTimeout,
-                connectionResponseProgressCheckInterval,
-                timingCollector: null,
-                claimBoundaryObserved: claimBoundaryObserved);
         }
 
         /// <summary>
@@ -4251,6 +4683,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <returns>The value returned by the get active submission count helper.</returns>
         private static int GetActiveSubmissionCount(TransitPublisher publisher)
         {
+            return GetActiveWorkItems(publisher).Length;
+        }
+
+        /// <summary>
+        /// Reads the publisher's active work-item dictionary through reflection and returns a stable snapshot of values.
+        /// </summary>
+        /// <param name="publisher">Publisher whose active items are inspected.</param>
+        /// <returns>Snapshot array of currently tracked active transit work items.</returns>
+        private static TransitWorkItem[] GetActiveWorkItems(TransitPublisher publisher)
+        {
             ArgumentNullException.ThrowIfNull(publisher);
 
             FieldInfo? field = typeof(TransitPublisher).GetField("_activeWorkItems", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -4260,7 +4702,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.NotNull(raw);
 
             IDictionary activeSubmissions = Assert.IsAssignableFrom<IDictionary>(raw);
-            return activeSubmissions.Count;
+            return activeSubmissions.Values.Cast<TransitWorkItem>().ToArray();
         }
 
         /// <summary>
@@ -4667,6 +5109,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Reads the publisher retention authority through reflection so tests can assert retention completion side effects.
+        /// </summary>
+        /// <param name="publisher">Publisher whose retention authority is inspected.</param>
+        /// <returns>The retention authority instance used by the publisher.</returns>
+        private static ArticleRetentionAuthority GetRetentionAuthority(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            FieldInfo? field = typeof(TransitPublisher).GetField("_retentionAuthority", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? value = field.GetValue(publisher);
+            return Assert.IsType<ArticleRetentionAuthority>(value);
+        }
+
+        /// <summary>
         /// Reads the queue-owned retry-signal semaphore through reflection for lifecycle assertions.
         /// </summary>
         /// <param name="queue">Queue whose retry signal is inspected.</param>
@@ -4714,6 +5172,57 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             SetConnectionState(connection, state);
         }
 
+        private sealed class TrackingRetentionAuthority(IArticleRetentionAuthority inner) : IArticleRetentionAuthority
+        {
+            private readonly IArticleRetentionAuthority _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            private int _markTransitCompletedCallCount;
+
+            public int MarkTransitCompletedCallCount => Volatile.Read(ref _markTransitCompletedCallCount);
+
+            public TimeSpan SweepInterval => _inner.SweepInterval;
+
+            public ArticleRetentionAdmissionResult TryRetainSuccessArticle(string messageId, DownloadedArticleBuffer payloadOwner, DateTimeOffset? insertedUtc = null)
+            {
+                return _inner.TryRetainSuccessArticle(messageId, payloadOwner, insertedUtc);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageId(string messageId)
+            {
+                return _inner.TryAcquireReadLeaseByMessageId(messageId);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageIdMd5(string messageIdMd5)
+            {
+                return _inner.TryAcquireReadLeaseByMessageIdMd5(messageIdMd5);
+            }
+
+            public ArticleRetentionCompletionResult MarkTransitCompleted(string messageId)
+            {
+                _ = Interlocked.Increment(ref _markTransitCompletedCallCount);
+                return _inner.MarkTransitCompleted(messageId);
+            }
+
+            public ArticleRetentionCompletionResult MarkListenerCompleted(string messageId)
+            {
+                return _inner.MarkListenerCompleted(messageId);
+            }
+
+            public long ExpireEligibleArticles(DateTimeOffset nowUtc)
+            {
+                return _inner.ExpireEligibleArticles(nowUtc);
+            }
+
+            public void BeginShutdown()
+            {
+                _inner.BeginShutdown();
+            }
+
+            public ArticleRetentionSnapshot GetSnapshot(DateTimeOffset? nowUtc = null)
+            {
+                return _inner.GetSnapshot(nowUtc);
+            }
+        }
+
         /// <summary>
         /// Creates a test publisher using a caller-supplied <see cref="ILogger{TCategoryName}"/> implementation.
         /// </summary>
@@ -4726,7 +5235,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// Confirms the create publisher with logger behavior.
         /// </summary>
         /// <returns>The value returned by the create publisher with logger helper.</returns>
-        private static TransitPublisher CreatePublisherWithLogger(int port, int connectionPoolSize, ILogger<TransitPublisher> logger, int perConnectionPipelineDepth = 8)
+        private static TransitPublisher CreatePublisherWithLogger(int port, int connectionPoolSize, ILogger<TransitPublisher> logger, int perConnectionPipelineDepth = 8, IArticleRetentionAuthority? retentionAuthority = null)
         {
             BackFillerRuntimeOptions options = new(
                 CanonicalBackFillerFqdn: "bf.example.com",
@@ -4746,7 +5255,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
                 WriteBatchCoalesceMicroseconds: 250);
 
-            return new TransitPublisher(options, TimeProvider.System, logger, connectionPoolSize, perConnectionPipelineDepth);
+            return new TransitPublisher(options, TimeProvider.System, logger, retentionAuthority ?? new ArticleRetentionAuthority(options), connectionPoolSize, perConnectionPipelineDepth);
+        }
+
+        private static DownloadedArticleBuffer CreateDownloadedBuffer(ReadOnlyMemory<byte> payload)
+        {
+            byte[] rented = ArrayPool<byte>.Shared.Rent(payload.Length);
+            payload.Span.CopyTo(rented.AsSpan(0, payload.Length));
+            return new DownloadedArticleBuffer(rented, payload.Length);
         }
 
         /// <summary>

@@ -11,6 +11,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Articles.Retention;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Runtime.Shutdown;
 
@@ -29,6 +30,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         BackFillerRuntimeOptions runtimeOptions,
         BackFillerCertificateState certificateState,
         ShutdownCoordinator shutdownCoordinator,
+        IArticleRetentionAuthority retentionAuthority,
         ILogger<BackFillerListenerSocketService> logger) : BackgroundService
     {
         /// <summary>
@@ -37,7 +39,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private const int ListenBacklog = 512;
 
         /// <summary>
-        /// Validated runtime snapshot that defines listener enablement, bind addresses, and port selection.
+        /// Validated runtime snapshot that defines mandatory TLS listener bind addresses and port selection.
         /// </summary>
         private readonly BackFillerRuntimeOptions _runtimeOptions = runtimeOptions ?? throw new ArgumentNullException(nameof(runtimeOptions));
         /// <summary>
@@ -48,6 +50,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// Shutdown coordinator whose tokens stop accept loops and active connection handling.
         /// </summary>
         private readonly ShutdownCoordinator _shutdownCoordinator = shutdownCoordinator ?? throw new ArgumentNullException(nameof(shutdownCoordinator));
+        /// <summary>
+        /// Retention authority used by per-connection protocol request handlers for article retrieval lifecycle ownership.
+        /// </summary>
+        private readonly IArticleRetentionAuthority _retentionAuthority = retentionAuthority ?? throw new ArgumentNullException(nameof(retentionAuthority));
         /// <summary>
         /// Logger receiving listener lifecycle, bind, handshake, and shutdown diagnostics.
         /// </summary>
@@ -62,19 +68,24 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         private readonly HashSet<TcpClient> _activeClients = [];
         /// <summary>
+        /// Tracks detached per-connection processing tasks so shutdown can await protocol-session completion.
+        /// </summary>
+        private readonly HashSet<Task> _activeConnectionTasks = [];
+        /// <summary>
         /// Owns the bound listener sockets created for the configured endpoint set.
         /// </summary>
         private readonly List<Socket> _listenSockets = [];
+        private readonly int _maxActiveConnections = runtimeOptions?.EffectiveListener.MaxActiveConnections ?? 1024;
+        private int _activeConnectionCount;
+
+        /// <summary>
+        /// Optional deterministic test seam invoked when one active connection slot is released.
+        /// </summary>
+        internal Action? OnConnectionSlotReleasedForTesting { get; set; }
 
         /// <inheritdoc/>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            if (!_runtimeOptions.EffectiveLetsEncrypt.Enabled)
-            {
-                LogListenerDisabled(_logger);
-                return;
-            }
-
             using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
                 stoppingToken,
                 _shutdownCoordinator.GracefulShutdownStartedToken,
@@ -104,6 +115,15 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             {
                 CloseListenSockets();
                 CloseActiveClients();
+
+                try
+                {
+                    await AwaitActiveConnectionTasksAsync(_shutdownCoordinator.ForcedShutdownToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_shutdownCoordinator.ForcedShutdownToken.IsCancellationRequested)
+                {
+                }
+
                 LogListenerStopped(_logger);
             }
         }
@@ -144,15 +164,22 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     throw new InvalidOperationException($"Inbound listener accept loop failed for endpoint {listenSocket.LocalEndPoint}.", ex);
                 }
 
-                _ = ProcessAcceptedSocketAsync(acceptedSocket, cancellationToken);
+                if (!TryAcquireConnectionSlot())
+                {
+                    acceptedSocket.Dispose();
+                    continue;
+                }
+
+                Task connectionTask = ProcessAcceptedSocketAsync(acceptedSocket, cancellationToken);
+                RegisterConnectionTask(connectionTask);
             }
         }
 
         /// <summary>
-        /// Wraps one accepted socket in <see cref="TcpClient"/>, performs the TLS handshake, and then idles until disconnect or shutdown.
+        /// Wraps one accepted socket in <see cref="TcpClient"/>, performs TLS handshake, and runs one protocol session until completion.
         /// </summary>
         /// <param name="acceptedSocket">Freshly accepted socket whose ownership transfers to this routine.</param>
-        /// <param name="cancellationToken">Shutdown-aware token that aborts handshake or idle waiting.</param>
+        /// <param name="cancellationToken">Shutdown-aware token that aborts handshake or session processing.</param>
         /// <returns>A task that completes after the connection has been closed and unregistered.</returns>
         private async Task ProcessAcceptedSocketAsync(Socket acceptedSocket, CancellationToken cancellationToken)
         {
@@ -182,7 +209,20 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 string thumbprint = serverCertificate.Thumbprint ?? string.Empty;
                 LogTlsHandshakeSucceeded(_logger, remoteEndpoint, thumbprint);
 
-                await WaitForClientDisconnectAsync(sslStream, cancellationToken).ConfigureAwait(false);
+                StreamListenerProtocolSessionTransport transport = new(sslStream);
+                await using (transport.ConfigureAwait(false))
+                {
+                    ListenerProtocolRetentionRequestHandler requestHandler = new(_retentionAuthority);
+                    ListenerProtocolSession session = new(
+                        transport,
+                        requestHandler,
+                        _runtimeOptions.EffectiveListener,
+                        onAwaitingReceiptAck: null,
+                        onTerminalized: requestHandler.OnRequestTerminalized,
+                        onFoundTransferTerminal: requestHandler.OnFoundTransferTerminal,
+                        onReceiptAcknowledged: requestHandler.OnReceiptAcknowledged);
+                    await session.RunAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -201,6 +241,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
             finally
             {
+                ReleaseConnectionSlot();
                 if (client is not null)
                 {
                     UnregisterClient(client);
@@ -351,28 +392,6 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             return certificate;
         }
 
-        /// <summary>
-        /// Reads and discards post-handshake traffic until the peer disconnects or shutdown cancellation is observed.
-        /// </summary>
-        /// <param name="sslStream">Authenticated TLS stream for one client connection.</param>
-        /// <param name="cancellationToken">Token that aborts the idle wait during shutdown.</param>
-        /// <returns>A task that completes when the stream reaches EOF or cancellation is requested.</returns>
-        /// <remarks>
-        /// The BackFiller inbound application protocol is not yet defined, so payload bytes are intentionally ignored.
-        /// </remarks>
-        private static async Task WaitForClientDisconnectAsync(SslStream sslStream, CancellationToken cancellationToken)
-        {
-            byte[] buffer = GC.AllocateUninitializedArray<byte>(512);
-
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                int bytesRead = await sslStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-                if (bytesRead == 0)
-                {
-                    return;
-                }
-            }
-        }
 
         /// <summary>
         /// Adds one accepted client to the active-connection set so coordinated shutdown can dispose it later.
@@ -383,6 +402,38 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             lock (_connectionsGate)
             {
                 _ = _activeClients.Add(client);
+            }
+        }
+
+        /// <summary>
+        /// Adds one detached per-connection processing task to active shutdown tracking.
+        /// </summary>
+        /// <param name="connectionTask">Connection task to track until completion.</param>
+        private void RegisterConnectionTask(Task connectionTask)
+        {
+            ArgumentNullException.ThrowIfNull(connectionTask);
+            lock (_connectionsGate)
+            {
+                _ = _activeConnectionTasks.Add(connectionTask);
+            }
+
+            _ = connectionTask.ContinueWith(
+                static (task, state) => ((BackFillerListenerSocketService)state!).UnregisterConnectionTask(task),
+                this,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        /// <summary>
+        /// Removes one completed detached per-connection task from active shutdown tracking.
+        /// </summary>
+        /// <param name="connectionTask">Completed task to remove.</param>
+        private void UnregisterConnectionTask(Task connectionTask)
+        {
+            lock (_connectionsGate)
+            {
+                _ = _activeConnectionTasks.Remove(connectionTask);
             }
         }
 
@@ -446,6 +497,56 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 {
                 }
             }
+        }
+
+        /// <summary>
+        /// Attempts to acquire one active connection slot under the configured global cap.
+        /// </summary>
+        /// <returns><see langword="true"/> when a slot was acquired; otherwise <see langword="false"/>.</returns>
+        private bool TryAcquireConnectionSlot()
+        {
+            while (true)
+            {
+                int current = Volatile.Read(ref _activeConnectionCount);
+                if (current >= _maxActiveConnections)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _activeConnectionCount, current + 1, current) == current)
+                {
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Releases one previously acquired active connection slot.
+        /// </summary>
+        private void ReleaseConnectionSlot()
+        {
+            _ = Interlocked.Decrement(ref _activeConnectionCount);
+            OnConnectionSlotReleasedForTesting?.Invoke();
+        }
+
+        /// <summary>
+        /// Awaits all currently tracked detached per-connection processing tasks.
+        /// </summary>
+        /// <param name="cancellationToken">Token that bounds shutdown wait for detached connection processing.</param>
+        private async Task AwaitActiveConnectionTasksAsync(CancellationToken cancellationToken)
+        {
+            Task[] snapshot;
+            lock (_connectionsGate)
+            {
+                snapshot = [.. _activeConnectionTasks];
+            }
+
+            if (snapshot.Length == 0)
+            {
+                return;
+            }
+
+            await Task.WhenAll(snapshot).WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -559,11 +660,5 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
-        /// <summary>
-        /// Logs that the inbound listener remains disabled because certificate provisioning is not enabled.
-        /// </summary>
-        /// <param name="logger">Logger receiving the disabled-listener event.</param>
-        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener is disabled because Let's Encrypt is not enabled")]
-        private static partial void LogListenerDisabled(ILogger logger);
     }
 }

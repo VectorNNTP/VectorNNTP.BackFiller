@@ -134,29 +134,97 @@ namespace VectorNNTP.Backfiller.Configuration
         public TransitServerOptions TransitServer { get; set; } = new();
 
         /// <summary>
+        /// Gets or sets shared in-memory article retention settings used to expose success payloads for downstream consumers.
+        /// </summary>
+        /// <value>Validated retention capacity and expiration policy for retained article payload ownership.</value>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention is required")]
+        public ArticleRetentionOptions ArticleRetention { get; set; } = new();
+
+        /// <summary>
         /// Gets or sets graceful shutdown behavior used when stopping the BackFiller service.
         /// </summary>
         /// <value>Validated shutdown policy controlling grace-period timing and queued/active work handling.</value>
         [Required(ErrorMessage = "BackFiller:Shutdown is required")]
         public ShutdownOptions Shutdown { get; set; } = new();
+
+        /// <summary>
+        /// Gets or sets Listener resource-safety bounds for parser buffering, receipt-ack lifetime, outbound Found payload pressure, and active connections.
+        /// </summary>
+        /// <value>Validated Listener resource-safety configuration projected into immutable runtime limits.</value>
+        [Required(ErrorMessage = "BackFiller:Listener is required")]
+        public ListenerOptions Listener { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Configuration options for Listener resource-safety and bounded-lifetime controls.
+    /// </summary>
+    internal sealed class ListenerOptions
+    {
+        /// <summary>
+        /// Gets or sets the maximum accumulated incomplete inbound protocol bytes allowed per connection before the session is terminated.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:ParserAccumulationMaxBytes is required")]
+        [Range(32768, int.MaxValue, ErrorMessage = "BackFiller:Listener:ParserAccumulationMaxBytes must be between 32768 and 2147483647")]
+        public int ParserAccumulationMaxBytes { get; set; } = 262144;
+
+        /// <summary>
+        /// Gets or sets the maximum time, in seconds, to wait for ReceiptAck after a Found transfer is fully completed.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds is required")]
+        [Range(1, 300, ErrorMessage = "BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds must be between 1 and 300")]
+        public int AwaitingReceiptAckTimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Gets or sets the maximum bytes of queued/in-flight Found payload references allowed per connection.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:MaxQueuedFoundPayloadBytes is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "BackFiller:Listener:MaxQueuedFoundPayloadBytes must be between 1 and 2147483647")]
+        public int MaxQueuedFoundPayloadBytes { get; set; } = 67108864;
+
+        /// <summary>
+        /// Gets or sets the maximum number of concurrently active accepted Listener connections.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:MaxActiveConnections is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "BackFiller:Listener:MaxActiveConnections must be between 1 and 2147483647")]
+        public int MaxActiveConnections { get; set; } = 1024;
+    }
+
+    /// <summary>
+    /// Configuration options for shared in-memory article retention ownership and capacity policy.
+    /// </summary>
+    internal sealed class ArticleRetentionOptions
+    {
+        /// <summary>
+        /// Gets or sets the maximum retained article payload capacity in GiB (1 GiB = 1024^3 bytes).
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes is required")]
+        [Range(1, int.MaxValue, ErrorMessage = "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes must be greater than zero")]
+        public int MaximumRetainedPayloadGigabytes { get; set; } = 4;
+
+        /// <summary>
+        /// Gets or sets the absolute retention TTL in seconds measured from insertion time.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention:RetentionTtlSeconds is required")]
+        [Range(1, 60, ErrorMessage = "BackFiller:ArticleRetention:RetentionTtlSeconds must be between 1 and 60")]
+        public int RetentionTtlSeconds { get; set; } = 60;
+
+        /// <summary>
+        /// Gets or sets the sweep cadence in seconds used to evaluate TTL expiration.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:ArticleRetention:SweepIntervalSeconds is required")]
+        [Range(1, 60, ErrorMessage = "BackFiller:ArticleRetention:SweepIntervalSeconds must be between 1 and 60")]
+        public int SweepIntervalSeconds { get; set; } = 1;
     }
 
     /// <summary>
     /// Configuration options for BackFiller TLS/ACME and operational Cloudflare DNS workflows.
     /// </summary>
     /// <remarks>
-    /// Cloudflare credentials remain mandatory for BackFiller DNS/FQDN operational workflows,
-    /// even when <see cref="Enabled"/> is <see langword="false"/>.
+    /// TLS listener operation is mandatory. These settings are required for ACME issuance, certificate activation,
+    /// and renewal workflows that keep the inbound listener certificate available.
     /// </remarks>
     internal sealed class LetsEncryptOptions
     {
-        /// <summary>
-        /// Gets or sets a value indicating whether TLS/ACME certificate issuance is enabled for BackFiller listener operations.
-        /// </summary>
-        /// <remarks>
-        /// When disabled, ACME and certificate-renewal settings are not required, but Cloudflare DNS settings remain required.
-        /// </remarks>
-        public bool Enabled { get; set; } = true;
 
         /// <summary>
         /// Gets or sets the ACME account contact email address.
@@ -275,7 +343,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Gets or sets the Cloudflare API token used for DNS management.
         /// </summary>
         /// <remarks>
-        /// Required for BackFiller DNS/FQDN operational workflows regardless of <see cref="Enabled"/>.
+        /// Required for BackFiller DNS/FQDN operational workflows and mandatory TLS certificate issuance.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareApiToken is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareApiToken cannot be empty")]
@@ -285,7 +353,7 @@ namespace VectorNNTP.Backfiller.Configuration
         /// Gets or sets the Cloudflare Zone ID used for DNS operations.
         /// </summary>
         /// <remarks>
-        /// Required for BackFiller DNS/FQDN operational workflows regardless of <see cref="Enabled"/>.
+        /// Required for BackFiller DNS/FQDN operational workflows and mandatory TLS certificate issuance.
         /// </remarks>
         [Required(ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareZoneId is required")]
         [MinLength(1, ErrorMessage = "BackFiller:LetsEncrypt:CloudFlareZoneId cannot be empty")]

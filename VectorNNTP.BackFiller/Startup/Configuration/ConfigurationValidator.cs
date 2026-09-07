@@ -22,6 +22,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
     /// </remarks>
     internal class ConfigurationValidator
     {
+        private const long BytesPerGibibyte = 1024L * 1024L * 1024L;
+
         /// <summary>
         /// Runs DataAnnotations validation for an options instance and projects each validation result into
         /// <c>(Setting, Error)</c> tuples.
@@ -132,6 +134,23 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         }
 
         /// <summary>
+        /// Validates the <c>BackFiller</c> section and returns only blocking diagnostics using the specified physical-memory provider.
+        /// </summary>
+        /// <param name="configuration">The application configuration root.</param>
+        /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <returns>
+        /// A list of blocking <c>(Setting, Error)</c> tuples for <c>BackFiller</c> configuration.
+        /// Non-blocking warnings are evaluated but not returned by this overload.
+        /// </returns>
+        internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
+            IConfiguration configuration,
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+        {
+            List<(string Setting, string Message)> warnings = [];
+            return ValidateBackFillerOptions(configuration, warnings, physicalSystemMemoryProvider);
+        }
+
+        /// <summary>
         /// Binds and validates the <c>BackFiller</c> section, appending non-blocking diagnostics to the supplied warning collector.
         /// </summary>
         /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
@@ -141,18 +160,47 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
         {
+            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider());
+        }
+
+        /// <summary>
+        /// Binds and validates the <c>BackFiller</c> section, appending non-blocking diagnostics to the supplied warning collector,
+        /// using the specified physical-memory provider for retention capacity policy checks.
+        /// </summary>
+        /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
+        /// <param name="warnings">Collector that receives non-blocking configuration diagnostics.</param>
+        /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <returns>A list of blocking <c>(Setting, Error)</c> tuples produced during BackFiller validation.</returns>
+        internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
+            IConfiguration configuration,
+            List<(string Setting, string Message)> warnings,
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+        {
+            ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentNullException.ThrowIfNull(warnings);
+            ArgumentNullException.ThrowIfNull(physicalSystemMemoryProvider);
+
             BackFillerOptions? backFiller = configuration
                 .GetSection("BackFiller")
                 .Get<BackFillerOptions>();
 
-            return ValidateBackFillerOptions(backFiller, warnings);
+            List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider);
+
+            if (configuration["BackFiller:LetsEncrypt:Enabled"] is not null)
+            {
+                errors.Add((
+                    "BackFiller:LetsEncrypt:Enabled",
+                    "BackFiller:LetsEncrypt:Enabled is no longer supported. TLS listener certificate management is mandatory and this key must be removed."));
+            }
+
+            return errors;
         }
 
         /// <summary>
         /// Validates a bound <see cref="BackFillerOptions"/> instance across identity, transport, shutdown, and Let's Encrypt policy rules.
         /// </summary>
         /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
-        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode and TLS-disabled notices.</param>
+        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode notices.</param>
         /// <returns>
         /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
         /// Severity mapping from validator diagnostics is handled by <c>AddDiagnostics</c> helpers.
@@ -166,6 +214,32 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings)
         {
+            return ValidateBackFillerOptions(backFiller, warnings, new PhysicalSystemMemoryProvider());
+        }
+
+        /// <summary>
+        /// Validates a bound <see cref="BackFillerOptions"/> instance across identity, transport, shutdown, and Let's Encrypt policy rules.
+        /// </summary>
+        /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
+        /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode notices.</param>
+        /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <returns>
+        /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
+        /// Severity mapping from validator diagnostics is handled by <c>AddDiagnostics</c> helpers.
+        /// </returns>
+        /// <remarks>
+        /// This method converts validation findings into data collections for the startup validation pipeline rather than
+        /// throwing on ordinary invalid user configuration. It logs one informational message when canonical FQDN
+        /// generation succeeds and captures FQDN generation failures as returned validation errors.
+        /// </remarks>
+        internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
+            BackFillerOptions? backFiller,
+            List<(string Setting, string Message)> warnings,
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+        {
+            ArgumentNullException.ThrowIfNull(warnings);
+            ArgumentNullException.ThrowIfNull(physicalSystemMemoryProvider);
+
             List<(string Setting, string Error)> errors = [];
 
             // Use DataAnnotations validation for required fields and ranges
@@ -208,6 +282,17 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
 
             AddDiagnostics(errors, warnings, transitServerDiagnostics);
 
+            if (backFiller.ArticleRetention != null)
+            {
+                errors.AddRange(ValidateAnnotatedObject(backFiller.ArticleRetention, "BackFiller:ArticleRetention"));
+                ValidateArticleRetentionOptions(backFiller.ArticleRetention, errors, physicalSystemMemoryProvider);
+            }
+
+            if (backFiller.Listener != null)
+            {
+                errors.AddRange(ValidateAnnotatedObject(backFiller.Listener, "BackFiller:Listener"));
+            }
+
             // Validate graceful shutdown policy constraints.
             if (backFiller.Shutdown != null)
             {
@@ -223,30 +308,6 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 errors.Add((
                     "BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds",
                     "MaximumShutdownDrainTimeoutSeconds must be less than or equal to BackFiller:Shutdown:GracePeriodSeconds to preserve bounded shutdown semantics."));
-            }
-
-            bool letsEncryptEnabled = backFiller.LetsEncrypt?.Enabled ?? true;
-
-            if (!letsEncryptEnabled)
-            {
-                warnings.Add((
-                    "BackFiller:LetsEncrypt:Enabled",
-                    "BackFiller TLS is disabled (BackFiller:LetsEncrypt:Enabled=false). Listener will operate without transport encryption."));
-
-                // Architectural invariant:
-                // Cloudflare remains mandatory even with TLS disabled because BackFiller still
-                // requires DNS/FQDN operational workflows independent of certificate issuance.
-                List<LetsEncryptValidationResult> cloudflareApiTokenDiagnosticsWhenTlsDisabled = LetsEncryptValidator.ValidateCloudFlareApiToken(
-                    backFiller.LetsEncrypt?.CloudFlareApiToken,
-                    "BackFiller:LetsEncrypt");
-                AddDiagnostics(errors, warnings, cloudflareApiTokenDiagnosticsWhenTlsDisabled);
-
-                List<LetsEncryptValidationResult> cloudflareZoneDiagnosticsWhenTlsDisabled = LetsEncryptValidator.ValidateCloudFlareZoneId(
-                    backFiller.LetsEncrypt?.CloudFlareZoneId,
-                    "BackFiller:LetsEncrypt");
-                AddDiagnostics(errors, warnings, cloudflareZoneDiagnosticsWhenTlsDisabled);
-
-                return errors;
             }
 
             bool useStagingDirectory = backFiller.LetsEncrypt?.UseStagingDirectory ?? false;
@@ -418,6 +479,87 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             AddDiagnostics(errors, warnings, cloudflareZoneDiagnostics);
 
             return errors;
+        }
+
+        /// <summary>
+        /// Validates article-retention semantic constraints that require explicit cross-field and conversion checks.
+        /// </summary>
+        /// <param name="articleRetention">Bound article-retention options to validate.</param>
+        /// <param name="errors">Collector receiving blocking validation diagnostics.</param>
+        /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for policy-ceiling validation.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="articleRetention"/>, <paramref name="errors"/>, or <paramref name="physicalSystemMemoryProvider"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// When physical system memory cannot be determined from the authoritative platform source,
+        /// this validator records a blocking configuration error and does not allow startup validation
+        /// to succeed without an established 80% retention safety boundary.
+        /// </remarks>
+        private static void ValidateArticleRetentionOptions(
+            ArticleRetentionOptions articleRetention,
+            List<(string Setting, string Error)> errors,
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+        {
+            ArgumentNullException.ThrowIfNull(articleRetention);
+            ArgumentNullException.ThrowIfNull(errors);
+            ArgumentNullException.ThrowIfNull(physicalSystemMemoryProvider);
+
+            if (articleRetention.MaximumRetainedPayloadGigabytes <= 0)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes",
+                    "MaximumRetainedPayloadGigabytes must be greater than zero."));
+                return;
+            }
+
+            ulong totalPhysicalMemoryBytes;
+            try
+            {
+                totalPhysicalMemoryBytes = physicalSystemMemoryProvider.GetTotalPhysicalMemoryBytes();
+            }
+            catch (PhysicalSystemMemoryDiscoveryException ex)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes",
+                    $"Unable to validate MaximumRetainedPayloadGigabytes because total physical system memory could not be determined. {ex.Message}"));
+                return;
+            }
+
+            ulong maximumPolicyGigabytesUnsigned = totalPhysicalMemoryBytes / 5UL * 4UL / BytesPerGibibyte;
+            int maximumPolicyGigabytes = maximumPolicyGigabytesUnsigned >= int.MaxValue
+                ? int.MaxValue
+                : (int)maximumPolicyGigabytesUnsigned;
+
+            if (articleRetention.MaximumRetainedPayloadGigabytes > maximumPolicyGigabytes)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes",
+                    $"MaximumRetainedPayloadGigabytes ({articleRetention.MaximumRetainedPayloadGigabytes}) exceeds the allowed 80% physical-memory ceiling ({maximumPolicyGigabytes} GiB of {totalPhysicalMemoryBytes} bytes total physical memory)."));
+                return;
+            }
+
+            long maxSupportedGigabytes = long.MaxValue / BytesPerGibibyte;
+            if (articleRetention.MaximumRetainedPayloadGigabytes > maxSupportedGigabytes)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:MaximumRetainedPayloadGigabytes",
+                    $"MaximumRetainedPayloadGigabytes must be less than or equal to {maxSupportedGigabytes} to fit runtime long byte accounting."));
+                return;
+            }
+
+            _ = checked(articleRetention.MaximumRetainedPayloadGigabytes * BytesPerGibibyte);
+
+            if (articleRetention.RetentionTtlSeconds is < 1 or > 60)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:RetentionTtlSeconds",
+                    "RetentionTtlSeconds must be between 1 and 60 seconds."));
+            }
+
+            if (articleRetention.SweepIntervalSeconds is < 1 or > 60)
+            {
+                errors.Add((
+                    "BackFiller:ArticleRetention:SweepIntervalSeconds",
+                    "SweepIntervalSeconds must be between 1 and 60 seconds."));
+            }
         }
 
         /// <summary>

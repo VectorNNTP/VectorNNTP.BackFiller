@@ -5,6 +5,8 @@
 // VectorNNTP.Backfiller Runtime / Transit
 // Implements the transit publisher startup initializer behavior.
 
+using VectorNNTP.Backfiller.Runtime.Articles.Processing;
+
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
@@ -12,12 +14,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     /// </summary>
     internal sealed partial class TransitPublisherStartupInitializer(
         TransitPublisher transitPublisher,
+        IArticleProcessingDrainBarrier processingDrainBarrier,
         ILogger<TransitPublisherStartupInitializer> logger) : IHostedService
     {
         /// <summary>
         /// Transit publisher whose connection workers are initialized during startup.
         /// </summary>
         private readonly TransitPublisher _transitPublisher = transitPublisher ?? throw new ArgumentNullException(nameof(transitPublisher));
+
+        /// <summary>
+        /// Shared shutdown barrier that signals when admitted article processing can no longer enter result-sink transit admission.
+        /// </summary>
+        private readonly IArticleProcessingDrainBarrier _processingDrainBarrier = processingDrainBarrier ?? throw new ArgumentNullException(nameof(processingDrainBarrier));
 
         /// <summary>
         /// Logger for transit startup lifecycle events.
@@ -37,12 +45,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Disposes the transit publisher during host shutdown.
+        /// Drains admitted article processing handoff before disposing the transit publisher during host shutdown.
         /// </summary>
-        /// <param name="cancellationToken">Shutdown cancellation token.</param>
-        /// <returns>A task that completes after publisher teardown finishes.</returns>
+        /// <param name="cancellationToken">Shutdown cancellation token that bounds drain wait and teardown.</param>
+        /// <returns>A task that completes after processing handoff drain and publisher teardown finish.</returns>
         public async Task StopAsync(CancellationToken cancellationToken)
         {
+            await _processingDrainBarrier.WaitForDrainAsync(cancellationToken).ConfigureAwait(false);
             await _transitPublisher.DisposeAsync().ConfigureAwait(false);
         }
 

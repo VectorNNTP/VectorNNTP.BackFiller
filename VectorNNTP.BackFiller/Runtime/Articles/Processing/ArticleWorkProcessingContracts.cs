@@ -132,6 +132,29 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         internal string? ReplyTo => Delivery.ReplyTo;
 
         /// <summary>
+        /// Attempts to detach ownership of the successful acquired payload for external retention ownership transfer.
+        /// </summary>
+        /// <returns>
+        /// Detached pooled payload owner when this result represents a successful grabber payload that still owns bytes;
+        /// otherwise <see langword="null"/>.
+        /// </returns>
+        internal DownloadedArticleBuffer? TryDetachSuccessfulPayloadOwner()
+        {
+            return GrabberResult?.Success?.TryDetachPayloadOwner();
+        }
+
+        /// <summary>
+        /// Attempts to attach a previously detached successful payload owner back into this result.
+        /// </summary>
+        /// <param name="payloadOwner">Detached payload owner to reattach.</param>
+        /// <returns><see langword="true"/> when ownership was reattached; otherwise <see langword="false"/>.</returns>
+        internal bool TryAttachSuccessfulPayloadOwner(DownloadedArticleBuffer payloadOwner)
+        {
+            ArgumentNullException.ThrowIfNull(payloadOwner);
+            return GrabberResult?.Success?.TryAttachPayloadOwner(payloadOwner) == true;
+        }
+
+        /// <summary>
         /// Disposes any owned success payload held by the optional workflow result.
         /// </summary>
         public void Dispose()
@@ -326,6 +349,93 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="cancellationToken">Cancellation token for the sink's asynchronous work.</param>
         /// <returns>A value task representing the asynchronous operation.</returns>
         public ValueTask OnProcessedAsync(ArticleWorkProcessingResult result, CancellationToken cancellationToken);
+    }
+
+    /// <summary>
+    /// Tracks article-processing handoff work and signals when no admitted processing can still enter the result sink.
+    /// </summary>
+    internal interface IArticleProcessingDrainBarrier
+    {
+        /// <summary>
+        /// Registers one processing operation that can still enter result-sink handoff.
+        /// </summary>
+        public void EnterProcessingScope();
+
+        /// <summary>
+        /// Signals one registered processing operation has exited result-sink handoff.
+        /// </summary>
+        public void ExitProcessingScope();
+
+        /// <summary>
+        /// Signals the processing loop has completed reading admitted deliveries.
+        /// </summary>
+        public void SignalProcessingLoopCompleted();
+
+        /// <summary>
+        /// Waits until the processing loop is completed and no registered processing operation remains.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token for the shutdown wait.</param>
+        /// <returns>A task that completes when processing handoff is drained.</returns>
+        public Task WaitForDrainAsync(CancellationToken cancellationToken);
+    }
+
+    /// <summary>
+    /// Synchronizes shutdown ordering between article processing handoff and retention admission closure.
+    /// </summary>
+    internal sealed class ArticleProcessingDrainBarrier : IArticleProcessingDrainBarrier
+    {
+        private readonly object _gate = new();
+        private readonly TaskCompletionSource<bool> _drained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _inFlightCount;
+        private bool _processingLoopCompleted;
+
+        /// <inheritdoc/>
+        public void EnterProcessingScope()
+        {
+            lock (_gate)
+            {
+                _inFlightCount++;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void ExitProcessingScope()
+        {
+            lock (_gate)
+            {
+                if (_inFlightCount <= 0)
+                {
+                    return;
+                }
+
+                _inFlightCount--;
+                TrySignalDrainedNoLock();
+            }
+        }
+
+        /// <inheritdoc/>
+        public void SignalProcessingLoopCompleted()
+        {
+            lock (_gate)
+            {
+                _processingLoopCompleted = true;
+                TrySignalDrainedNoLock();
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task WaitForDrainAsync(CancellationToken cancellationToken)
+        {
+            await _drained.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        private void TrySignalDrainedNoLock()
+        {
+            if (_processingLoopCompleted && _inFlightCount == 0)
+            {
+                _ = _drained.TrySetResult(true);
+            }
+        }
     }
 
     /// <summary>

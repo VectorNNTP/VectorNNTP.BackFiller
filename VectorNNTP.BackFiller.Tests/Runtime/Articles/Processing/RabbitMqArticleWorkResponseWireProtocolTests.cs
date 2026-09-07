@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the rabbit mq article work response wire protocol test suite.
 
 using System.Text;
+using System.Text.Json;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using Xunit;
 
@@ -18,10 +19,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
     public sealed class RabbitMqArticleWorkResponseWireProtocolTests
     {
         /// <summary>
-        /// Confirms the serialize v1 when success contains canonical fields and uri null behavior.
+        /// Confirms the serialize v1 when success contains canonical fields and concrete uri behavior.
         /// </summary>
         [Fact]
-        public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndUriNull()
+        public void SerializeV1_WhenSuccess_ContainsCanonicalFieldsAndConcreteUri()
         {
             RabbitMqArticleWorkResponse response = new(
                 Version: 1,
@@ -29,13 +30,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 MessageId: "<12345@example.invalid>",
                 Backbone: "Giganews",
                 Outcome: nameof(ArticleWorkProcessingOutcome.Success),
-                Uri: null,
+                Uri: "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160",
                 Error: null);
 
             byte[] payload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
             string json = Encoding.UTF8.GetString(payload);
 
-            Assert.Equal("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<12345@example.invalid>\",\"backbone\":\"Giganews\",\"outcome\":\"Success\",\"uri\":null}", json);
+            Assert.Equal("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<12345@example.invalid>\",\"backbone\":\"Giganews\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}", json);
             Assert.DoesNotContain("correlationId", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("replyTo", json, StringComparison.OrdinalIgnoreCase);
         }
@@ -59,6 +60,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             Assert.Contains("\"error\":\"No article with that message-id\"", json, StringComparison.Ordinal);
             Assert.DoesNotContain("\"uri\"", json, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Confirms success responses with null uri serialize with explicit null for schema-compatibility assertions.
+        /// </summary>
+        [Fact]
+        public void SerializeV1_WhenSuccessUriNull_EmitsExplicitNullUriProperty()
+        {
+            RabbitMqArticleWorkResponse response = new(
+                Version: 1,
+                RequestId: Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa"),
+                MessageId: "<12345@example.invalid>",
+                Backbone: "Giganews",
+                Outcome: nameof(ArticleWorkProcessingOutcome.Success),
+                Uri: null,
+                Error: null);
+
+            byte[] payload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
+            using JsonDocument document = JsonDocument.Parse(payload);
+
+            JsonElement root = document.RootElement;
+            Assert.True(root.TryGetProperty("uri", out JsonElement uri));
+            Assert.Equal(JsonValueKind.Null, uri.ValueKind);
         }
         /// <summary>
         /// Confirms the parse v1 when payload is valid round trips canonical fields behavior.
