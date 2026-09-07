@@ -73,9 +73,55 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
             Assert.Empty(errors);
         }
 
+        [Theory]
+        [InlineData("cache://backfiller01.usenet.ninja:1/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja:65535/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://bf01.example:443/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+        public void Schema_WhenOutcomeSuccessWithCanonicalUriVariants_IsValid(string uri)
+        {
+            ICollection<ValidationError> errors = Validate(BuildSuccessPayload(uri));
+            Assert.Empty(errors);
+        }
+
+        [Theory]
+        [InlineData("cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe16")]
+        [InlineData("cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe1600")]
+        [InlineData("cache://backfiller01.usenet.ninja:119/30EDC94157AA16FE644A45A1F1FFE160")]
+        [InlineData("cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe16g")]
+        [InlineData("cache://backfiller01.usenet.ninja:0/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja:65536/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja:01/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja:/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01..usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://-backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01-.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://backfiller01.usenet.ninja:119:120/30edc94157aa16fe644a45a1f1ffe160")]
+        [InlineData("cache://user@backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]
+        public void Schema_WhenOutcomeSuccessWithMalformedUri_IsInvalid(string uri)
+        {
+            ICollection<ValidationError> errors = Validate(BuildSuccessPayload(uri));
+            Assert.NotEmpty(errors);
+        }
+
         private static ICollection<ValidationError> Validate(string json)
         {
             return ResponseSchema.Value.Validate(json);
+        }
+
+        private static string BuildSuccessPayload(string uri)
+        {
+            return $$"""
+                {
+                  "version": 1,
+                  "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                  "messageId": "<12345@example.invalid>",
+                  "backbone": "Giganews",
+                  "outcome": "Success",
+                  "uri": "{{uri}}"
+                }
+                """;
         }
 
         private static JsonSchema LoadSchema()

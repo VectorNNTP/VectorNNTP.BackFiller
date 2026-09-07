@@ -46,7 +46,8 @@
     },
     "uri": {
       "type": "string",
-      "description": "Success-only canonical article cache URI in the form cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}, where MessageIdMd5 is the lowercase hexadecimal MD5 digest of the ASCII bytes of the exact messageId string."
+      "pattern": "^cache://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?:(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3})/[0-9a-f]{32}$",
+      "description": "Success-only canonical article cache URI in the form cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}, where CanonicalBackFillerFqdn is a DNS hostname and MessageIdMd5 is the 32-character lowercase hexadecimal MD5 digest of the ASCII bytes of the exact messageId string."
     },
     "error": {
       "type": "string",
