@@ -1851,6 +1851,152 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Verifies that a definitive response updates response-progress visibility before terminal settlement completes, so a blocked retention completion cannot create a false timeout.
+        /// </summary>
+        /// <param name="responseCode">The definitive NNTP status code used by the server response sequence.</param>
+        [Theory]
+        [InlineData(239)]
+        [InlineData(439)]
+        public async Task PublishAsync_WhenDefinitiveResponseSettlesWhileTransitCompletionIsBlocked_DoesNotFault(int responseCode)
+        {
+            TimeSpan responseProgressTimeout = TimeSpan.FromMilliseconds(150);
+            TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
+            byte[] payload = [(byte)'B', (byte)'\n'];
+            string firstMessageId = $"<watchdog-blocked-{responseCode}-1@example.com>";
+            string secondMessageId = $"<watchdog-blocked-{responseCode}-2@example.com>";
+            TaskCompletionSource<bool> firstResponseSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                byte[] firstPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                Assert.Equal(payload, firstPayload);
+
+                string secondTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {secondMessageId}", secondTakethis);
+                byte[] secondPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                Assert.Equal(payload, secondPayload);
+
+                await FakePublisherServer.WriteLineAsync(stream, $"{responseCode} {firstMessageId} first");
+                firstResponseSent.TrySetResult(true);
+                await allowSecondResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"{responseCode} {secondMessageId} second");
+            });
+
+            BackFillerRuntimeOptions options = CreatePublisherOptions(server.Port);
+            BlockingRetentionAuthority blockingRetention = new(new ArticleRetentionAuthority(options));
+
+            await using TransitPublisher publisher = CreatePublisher(
+                server.Port,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 2,
+                connectionResponseProgressTimeout: responseProgressTimeout,
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval,
+                retentionAuthority: blockingRetention);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            Task<TransitPublishResult> first = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
+            Task<TransitPublishResult> second = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
+
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
+            await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
+            await blockingRetention.MarkTransitCompletedEntered.Task.WaitAsync(observationTimeout.Token);
+
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            long progressTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, progressTick);
+
+            allowSecondResponse.TrySetResult(true);
+            blockingRetention.AllowMarkTransitCompleted.TrySetResult(true);
+
+            TransitPublishResult[] results = await Task.WhenAll(first, second).WaitAsync(observationTimeout.Token);
+            Assert.All(results, result => Assert.Equal(responseCode, result.ResponseCode));
+            Assert.Equal(responseCode == 239 ? TransitPublishStatus.Accepted : TransitPublishStatus.Rejected, results[0].Status);
+            Assert.Equal(responseCode == 239 ? TransitPublishStatus.Accepted : TransitPublishStatus.Rejected, results[1].Status);
+            Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
+        }
+
+        /// <summary>
+        /// Verifies that a non-definitive response does not advance the watchdog clock even while another submission remains outstanding.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenNonDefinitiveResponseArrives_DoesNotAdvanceDefinitiveProgressTick()
+        {
+            TimeSpan responseProgressTimeout = TimeSpan.FromSeconds(2);
+            TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
+            byte[] payload = [(byte)'N', (byte)'\n'];
+            string firstMessageId = "<watchdog-nondefinitive-first@example.com>";
+            string secondMessageId = "<watchdog-nondefinitive-second@example.com>";
+            TaskCompletionSource<bool> firstResponseSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> firstCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                byte[] firstPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                Assert.Equal(payload, firstPayload);
+
+                string secondTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {secondMessageId}", secondTakethis);
+                byte[] secondPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                Assert.Equal(payload, secondPayload);
+
+                await FakePublisherServer.WriteLineAsync(stream, $"400 {firstMessageId} temporary");
+                firstResponseSent.TrySetResult(true);
+                await firstCompleted.Task.WaitAsync(cancellationToken);
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(
+                server.Port,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 2,
+                connectionResponseProgressTimeout: responseProgressTimeout,
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            Task<TransitPublishResult> first = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
+            Task<TransitPublishResult> second = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
+
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            long initialTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, initialTick);
+
+            await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
+            TransitPublishResult firstResult = await first.WaitAsync(observationTimeout.Token);
+            firstCompleted.TrySetResult(true);
+
+            long tickAfterNonDefinitiveResponse = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.Equal(initialTick, tickAfterNonDefinitiveResponse);
+            Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
+            Assert.Equal(400, firstResult.ResponseCode);
+
+            _ = second;
+        }
+
+        /// <summary>
         /// Verifies that disposing an initialized publisher with no outstanding submission work does not create a reconnect loop.
         /// </summary>
         /// <remarks>
@@ -4988,6 +5134,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Reads the connection's last definitive response-progress tick through reflection for watchdog boundary assertions.
+        /// </summary>
+        /// <param name="connection">The connection whose progress tick is inspected.</param>
+        /// <returns>The raw stopwatch tick of the last definitive response progress.</returns>
+        private static long GetConnectionDefinitiveResponseProgressTick(TransitConnection connection)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+
+            FieldInfo? field = typeof(TransitConnection).GetField("_lastDefinitiveResponseProgressTick", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? value = field.GetValue(connection);
+            return Assert.IsType<long>(value);
+        }
+
+        /// <summary>
         /// Retrieves the private write gate from a transit connection for tests that need to synchronize against connection write ownership.
         /// </summary>
         /// <param name="connection">The connection whose write gate is inspected.</param>
@@ -5199,6 +5361,59 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             public ArticleRetentionCompletionResult MarkTransitCompleted(string messageId)
             {
                 _ = Interlocked.Increment(ref _markTransitCompletedCallCount);
+                return _inner.MarkTransitCompleted(messageId);
+            }
+
+            public ArticleRetentionCompletionResult MarkListenerCompleted(string messageId)
+            {
+                return _inner.MarkListenerCompleted(messageId);
+            }
+
+            public long ExpireEligibleArticles(DateTimeOffset nowUtc)
+            {
+                return _inner.ExpireEligibleArticles(nowUtc);
+            }
+
+            public void BeginShutdown()
+            {
+                _inner.BeginShutdown();
+            }
+
+            public ArticleRetentionSnapshot GetSnapshot(DateTimeOffset? nowUtc = null)
+            {
+                return _inner.GetSnapshot(nowUtc);
+            }
+        }
+
+        private sealed class BlockingRetentionAuthority(IArticleRetentionAuthority inner) : IArticleRetentionAuthority
+        {
+            private readonly IArticleRetentionAuthority _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+
+            public TaskCompletionSource<bool> MarkTransitCompletedEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TaskCompletionSource<bool> AllowMarkTransitCompleted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TimeSpan SweepInterval => _inner.SweepInterval;
+
+            public ArticleRetentionAdmissionResult TryRetainSuccessArticle(string messageId, DownloadedArticleBuffer payloadOwner, DateTimeOffset? insertedUtc = null)
+            {
+                return _inner.TryRetainSuccessArticle(messageId, payloadOwner, insertedUtc);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageId(string messageId)
+            {
+                return _inner.TryAcquireReadLeaseByMessageId(messageId);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageIdMd5(string messageIdMd5)
+            {
+                return _inner.TryAcquireReadLeaseByMessageIdMd5(messageIdMd5);
+            }
+
+            public ArticleRetentionCompletionResult MarkTransitCompleted(string messageId)
+            {
+                _ = MarkTransitCompletedEntered.TrySetResult(true);
+                _ = AllowMarkTransitCompleted.Task.GetAwaiter().GetResult();
                 return _inner.MarkTransitCompleted(messageId);
             }
 

@@ -1441,18 +1441,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             ArgumentNullException.ThrowIfNull(result);
 
-            if (result.Status == TransitPublishStatus.Accepted)
-            {
-                return true;
-            }
-
-            if (result.Status == TransitPublishStatus.Rejected && result.ResponseCode == 439)
-            {
-                return true;
-            }
-
-            return result.Status == TransitPublishStatus.Unavailable
-                && IsAdmittedTransitOwnershipState(priorState);
+            return result.Status == TransitPublishStatus.Accepted
+                || (result.Status == TransitPublishStatus.Rejected && result.ResponseCode == 439)
+                || (result.Status == TransitPublishStatus.Unavailable && IsAdmittedTransitOwnershipState(priorState));
         }
 
         private static bool IsAdmittedTransitOwnershipState(TransitWorkItemState priorState)

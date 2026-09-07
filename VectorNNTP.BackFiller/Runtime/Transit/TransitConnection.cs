@@ -516,6 +516,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             // Intentionally no-op in global queue architecture.
         }
 
+
+
         /// <summary>
         /// Establishes transport connectivity and negotiates protocol readiness for TAKETHIS publishing.
         /// </summary>
@@ -767,6 +769,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     {
                         throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
                     }
+
 
                     _pendingBySendOrder.Enqueue(item.MessageId);
                     _ = Interlocked.Increment(ref _submissionsStarted);
@@ -1189,21 +1192,28 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    if (_pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate) && pendingCandidate is not null)
+                    bool removed = _pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
+                    if (removed && pendingCandidate is not null)
                     {
                         pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
-                        _timingCollector?.RecordResponseCorrelation(
-                            elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
-                            responseAvailableTick: responseAvailableTick,
-                            correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
-                            definitive: mapped.ResponseCode is 239 or 439);
-                        AcknowledgeSendOrder(mapped.MessageId);
                         TransitPublishResult correlatedResult = mapped with
                         {
                             T2SocketWriteBeginTick = pendingCandidate.T2SocketWriteBeginTick,
                             T3SocketWriteEndTick = pendingCandidate.T3SocketWriteEndTick,
                             T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
+
+                        if (correlatedResult.ResponseCode is 239 or 439)
+                        {
+                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, pendingCandidate.T6ResponseCorrelatedTick);
+                        }
+
+                        _timingCollector?.RecordResponseCorrelation(
+                            elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
+                            responseAvailableTick: responseAvailableTick,
+                            correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
+                            definitive: mapped.ResponseCode is 239 or 439);
+                        AcknowledgeSendOrder(mapped.MessageId);
 
                         RecordSubmissionResult(correlatedResult.Status);
                         if (_timingCollector is not null)
@@ -1213,11 +1223,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                         _ = _completedQueue.Writer.TryWrite(new CompletedWork(pendingCandidate.WorkItem, correlatedResult));
                         TryCompleteDirectSubmit(pendingCandidate.WorkItem.WorkItemId, correlatedResult);
-
-                        if (correlatedResult.ResponseCode is 239 or 439)
-                        {
-                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
-                        }
                     }
                 }
             }
@@ -1269,7 +1274,19 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    TimeoutException timeout = new($"Transit response progress timeout exceeded for connection {ConnectionId} after {elapsed.TotalSeconds:F3}s with {_pendingByMessageId.Count} outstanding work items.");
+                    long recheckedProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
+                    if (recheckedProgressTick != lastProgressTick)
+                    {
+                        continue;
+                    }
+
+                    TimeSpan recheckedElapsed = Stopwatch.GetElapsedTime(recheckedProgressTick);
+                    if (recheckedElapsed <= _responseProgressTimeout)
+                    {
+                        continue;
+                    }
+
+                    TimeoutException timeout = new($"Transit response progress timeout exceeded for connection {ConnectionId} after {recheckedElapsed.TotalSeconds:F3}s with {_pendingByMessageId.Count} outstanding work items.");
                     TrySignalResponseLoopFault(timeout, cancelResponseLoop: true);
                     return;
                 }
@@ -2349,5 +2366,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
         private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
+
     }
 }
