@@ -1,10 +1,10 @@
 # Forensic Engineering Review — VectorNNTP.BackFiller
 
-**Review date:** 2026-09-07  
-**Repository:** VectorNNTP/VectorNNTP.BackFiller  
-**Reviewed source commit:** `b0f00e67a6b27590ee278c56d46eafc8608658f0`  
-**Review checkout:** `/home/runner/work/VectorNNTP.BackFiller/VectorNNTP.BackFiller`  
-**Deliverable:** Report only; this document does not implement any proposed remediation.
+- **Review date:** 2026-09-07
+- **Repository:** VectorNNTP/VectorNNTP.BackFiller
+- **Reviewed source commit:** `b0f00e67a6b27590ee278c56d46eafc8608658f0`
+- **Review checkout:** `/home/runner/work/VectorNNTP.BackFiller/VectorNNTP.BackFiller`
+- **Deliverable:** Report only; this document does not implement any proposed remediation.
 
 The original investigation was read-only. The user subsequently authorized committing this report and opening a documentation-only PR.
 Source, tests, configuration, workflows, dependencies, and existing documentation were not changed to implement findings.
