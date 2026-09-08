@@ -123,7 +123,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         catch (OperationCanceledException) when (IsGenerationLocalCancellation(stoppingToken, delivery.CancellationToken))
                         {
                         }
-                        catch (InvalidOperationException) when (IsGenerationLocalCancellation(stoppingToken, delivery.CancellationToken))
+                        catch (RabbitMqBackboneConsumerSession.RabbitMqStaleDeliverySettlementException) when (IsGenerationLocalCancellation(stoppingToken, delivery.CancellationToken))
                         {
                         }
                         finally

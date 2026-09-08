@@ -860,7 +860,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Task settlementTask = admitted.Settlement.AckAsync(CancellationToken.None).AsTask();
             channel.ReleaseCancel();
 
-            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => settlementTask).ConfigureAwait(false);
+            RabbitMqBackboneConsumerSession.RabbitMqStaleDeliverySettlementException exception = await Assert.ThrowsAsync<RabbitMqBackboneConsumerSession.RabbitMqStaleDeliverySettlementException>(() => settlementTask).ConfigureAwait(false);
             await stopTask.ConfigureAwait(false);
 
             Assert.Equal("RabbitMQ delivery settlement was abandoned during consumer shutdown.", exception.Message);
@@ -1034,6 +1034,58 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         }
 
         /// <summary>
+        /// Verifies generation-local cancellation does not suppress an unrelated processor <see cref="InvalidOperationException"/>.
+        /// </summary>
+        [Fact]
+        public async Task ArticleProcessingService_WhenGenerationCancellationIsActiveAndProcessorThrowsInvalidOperation_PropagatesFatalException()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(20));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: null, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RabbitMqConsumerSessionFactory sessionFactory = new(manager, topologyInitializer, NullLoggerFactory.Instance, runtimeOptions);
+            RabbitMqConsumerService consumerService = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            CancellationAwareThrowingArticleWorkProcessor processor = new();
+            CapturingResultSink capturingResultSink = new();
+            RabbitMqArticleProcessingService processingService = new(
+                consumerService,
+                new DeterministicWorkRequestParser(),
+                processor,
+                capturingResultSink,
+                new ArticleProcessingDrainBarrier(),
+                NullLogger<RabbitMqArticleProcessingService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+            await consumerService.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            TrackingConnection firstConnection = connector.RequireLastConnection();
+            TrackingChannel firstChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            firstChannel.EnableDeterministicShutdownRaceHooks();
+
+            await processingService.StartAsync(timeoutToken).ConfigureAwait(false);
+            await firstChannel.DeliverAsync(9401UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x61 }, cancellationToken: timeoutToken).ConfigureAwait(false);
+            await processor.Entered.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
+
+            firstConnection.RaiseConnectionShutdown();
+            await firstChannel.CancelEntered.WaitAsync(timeoutToken).ConfigureAwait(false);
+            firstChannel.ReleaseCancel();
+
+            bool fatalEscalated = await WaitForAsync(() => capturingResultSink.CallCount == 0, TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
+            Assert.True(fatalEscalated);
+
+            await processingService.StopAsync(timeoutToken).ConfigureAwait(false);
+            await consumerService.StopAsync(timeoutToken).ConfigureAwait(false);
+            consumerService.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Verifies that StopAsync retirement mode prevents admission of deliveries arriving after consumer cancellation.
         /// </summary>
         [Fact]
@@ -1140,6 +1192,23 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 _ = Entered.TrySetResult(true);
                 throw new InvalidOperationException("Synthetic fatal processor failure.");
+            }
+        }
+
+        private sealed class CancellationAwareThrowingArticleWorkProcessor : IArticleWorkProcessor
+        {
+            internal TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public ValueTask<ArticleWorkProcessingResult> ProcessAsync(RabbitMqArticleWorkRequest request, RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
+            {
+                _ = Entered.TrySetResult(true);
+
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    throw new InvalidOperationException("Expected canceled operation token before throwing synthetic fatal processor failure.");
+                }
+
+                throw new InvalidOperationException("Synthetic fatal processor failure during generation cancellation.");
             }
         }
 

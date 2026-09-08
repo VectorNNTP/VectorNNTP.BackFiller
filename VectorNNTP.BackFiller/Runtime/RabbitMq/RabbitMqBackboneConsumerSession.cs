@@ -755,6 +755,26 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         }
 
         /// <summary>
+        /// Identifies settlement attempts that target deliveries whose owning consumer generation can no longer legally settle them.
+        /// </summary>
+        /// <remarks>
+        /// This exception is used as an authoritative signal for stale or abandoned generation-local settlement outcomes.
+        /// It intentionally excludes unrelated processing and parser invariants so higher layers can contain only expected
+        /// generation-replacement fallout without suppressing fatal errors.
+        /// </remarks>
+        internal sealed class RabbitMqStaleDeliverySettlementException : InvalidOperationException
+        {
+            /// <summary>
+            /// Initializes a stale-delivery settlement classification exception.
+            /// </summary>
+            /// <param name="message">Diagnostic reason describing the stale or abandoned settlement condition.</param>
+            internal RabbitMqStaleDeliverySettlementException(string message)
+                : base(message)
+            {
+            }
+        }
+
+        /// <summary>
         /// Settlement handle that ACKs or NACKs a delivery on the original consumer channel generation.
         /// </summary>
         private sealed class RabbitMqDeliverySettlement : IRabbitMqDeliverySettlement
@@ -836,13 +856,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                     if (_owner._settlementAdmissionAbandoned)
                     {
-                        throw new InvalidOperationException("RabbitMQ delivery settlement was abandoned during consumer shutdown.");
+                        throw new RabbitMqStaleDeliverySettlementException("RabbitMQ delivery settlement was abandoned during consumer shutdown.");
                     }
 
                     long activeGeneration = _owner.ActiveConnectionGeneration;
                     if (activeGeneration <= 0 || activeGeneration != _deliveryGeneration || _owner._ownedChannel.ConnectionGeneration != _deliveryGeneration)
                     {
-                        throw new InvalidOperationException("RabbitMQ delivery settlement channel generation is stale.");
+                        throw new RabbitMqStaleDeliverySettlementException("RabbitMQ delivery settlement channel generation is stale.");
                     }
 
                     if (requeue.HasValue)
