@@ -26,7 +26,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Integer-backed state field used for atomic transition operations.
         /// </summary>
-        private int _stateValue = (int)TransitWorkItemState.Queued;
+        private int _stateValue = (int)TransitWorkItemState.Registered;
 
         /// <summary>
         /// Completion source used to signal the caller-facing publish result exactly once.
@@ -151,7 +151,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Attempts to place the item in queued state.
         /// </summary>
-        /// <param name="utcNow">UTC timestamp to record for the requeue operation.</param>
+        /// <param name="utcNow">UTC timestamp to record for the queue operation.</param>
         /// <returns><see langword="true"/> when the item is queued or already queued; otherwise <see langword="false"/>.</returns>
         internal bool TryMarkQueued(DateTimeOffset utcNow)
         {
@@ -171,13 +171,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     return true;
                 }
 
-                if (current != TransitWorkItemState.RetryPending)
+                if (current is not (TransitWorkItemState.Registered or TransitWorkItemState.RetryPending))
                 {
                     return false;
                 }
 
-                if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.Queued, (int)TransitWorkItemState.RetryPending)
-                    == (int)TransitWorkItemState.RetryPending)
+                if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.Queued, (int)current)
+                    == (int)current)
                 {
                     OwnerConnectionId = null;
                     LastEnqueuedUtc = utcNow;
@@ -227,13 +227,53 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <returns><see langword="true"/> when the item was claimed; otherwise <see langword="false"/>.</returns>
         internal bool TryMarkClaimed(string connectionId, DateTimeOffset utcNow)
         {
+            return TryMarkClaimed(connectionId, utcNow, TransitWorkItemState.Queued);
+        }
+
+        /// <summary>
+        /// Attempts to claim the item for direct connection submission without global queue admission.
+        /// </summary>
+        /// <param name="connectionId">Connection identifier that will own the item.</param>
+        /// <param name="utcNow">UTC timestamp to record for the claim.</param>
+        /// <returns><see langword="true"/> when the item was claimed; otherwise <see langword="false"/>.</returns>
+        internal bool TryMarkDirectClaimed(string connectionId, DateTimeOffset utcNow)
+        {
+            return TryMarkClaimed(connectionId, utcNow, TransitWorkItemState.Registered);
+        }
+
+        /// <summary>
+        /// Claims the item for direct connection submission or throws when it was not in registered state.
+        /// </summary>
+        /// <remarks>
+        /// This transition only establishes connection-local in-flight ownership for direct submission workflows.
+        /// It does not imply global queue admission and must not be paired with global queue counter transfers.
+        /// </remarks>
+        /// <param name="connectionId">Connection identifier that will own the item.</param>
+        /// <param name="utcNow">UTC timestamp to record for the claim.</param>
+        internal void MarkDirectClaimed(string connectionId, DateTimeOffset utcNow)
+        {
+            if (!TryMarkDirectClaimed(connectionId, utcNow))
+            {
+                throw new InvalidOperationException("Cannot direct-claim a transit work item that is not registered.");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to claim the item for a connection from one expected source state.
+        /// </summary>
+        /// <param name="connectionId">Connection identifier that will own the item.</param>
+        /// <param name="utcNow">UTC timestamp to record for the claim.</param>
+        /// <param name="expectedState">Expected source state required for claim.</param>
+        /// <returns><see langword="true"/> when the claim transition succeeded; otherwise <see langword="false"/>.</returns>
+        private bool TryMarkClaimed(string connectionId, DateTimeOffset utcNow, TransitWorkItemState expectedState)
+        {
             if (string.IsNullOrWhiteSpace(connectionId))
             {
                 throw new ArgumentException("Connection id is required.", nameof(connectionId));
             }
 
-            if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.Claimed, (int)TransitWorkItemState.Queued)
-                != (int)TransitWorkItemState.Queued)
+            if (Interlocked.CompareExchange(ref _stateValue, (int)TransitWorkItemState.Claimed, (int)expectedState)
+                != (int)expectedState)
             {
                 return false;
             }
@@ -427,6 +467,54 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
+        /// Determines whether the supplied state currently owns admitted queue capacity.
+        /// </summary>
+        /// <param name="state">State to classify.</param>
+        /// <returns><see langword="true"/> when the state is queued, retry-pending, or connection in-flight.</returns>
+        internal static bool IsAdmittedOwnershipState(TransitWorkItemState state)
+        {
+            return state is TransitWorkItemState.Queued
+                or TransitWorkItemState.RetryPending
+                or TransitWorkItemState.Claimed
+                or TransitWorkItemState.Staged
+                or TransitWorkItemState.Flushed
+                or TransitWorkItemState.AwaitingResponse;
+        }
+
+        /// <summary>
+        /// Determines whether the supplied state currently owns in-flight connection capacity.
+        /// </summary>
+        /// <param name="state">State to classify.</param>
+        /// <returns><see langword="true"/> when the state is one of the connection-owned in-flight phases.</returns>
+        internal static bool IsInFlightOwnershipState(TransitWorkItemState state)
+        {
+            return state is TransitWorkItemState.Claimed
+                or TransitWorkItemState.Staged
+                or TransitWorkItemState.Flushed
+                or TransitWorkItemState.AwaitingResponse;
+        }
+
+        /// <summary>
+        /// Determines whether the supplied state currently owns ready-queue capacity.
+        /// </summary>
+        /// <param name="state">State to classify.</param>
+        /// <returns><see langword="true"/> when the state represents ready-queue ownership.</returns>
+        internal static bool IsQueuedOwnershipState(TransitWorkItemState state)
+        {
+            return state == TransitWorkItemState.Queued;
+        }
+
+        /// <summary>
+        /// Determines whether the supplied state currently owns retry-pending capacity.
+        /// </summary>
+        /// <param name="state">State to classify.</param>
+        /// <returns><see langword="true"/> when the state represents retry-pending ownership.</returns>
+        internal static bool IsRetryPendingOwnershipState(TransitWorkItemState state)
+        {
+            return state == TransitWorkItemState.RetryPending;
+        }
+
+        /// <summary>
         /// Determines whether the supplied state is already terminal.
         /// </summary>
         /// <param name="state">State to classify.</param>
@@ -471,12 +559,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal enum TransitWorkItemState
     {
         /// <summary>
-        /// The item is queued and available for claim.
+        /// The item is registered with the publisher but does not yet own queue capacity.
+        /// </summary>
+        Registered = -1,
+
+        /// <summary>
+        /// The item is queued and owns ready-queue capacity.
         /// </summary>
         Queued = 0,
 
         /// <summary>
-        /// A connection has claimed the item.
+        /// A connection has claimed the item and it owns in-flight capacity.
         /// </summary>
         Claimed = 1,
 
@@ -496,7 +589,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         AwaitingResponse = 4,
 
         /// <summary>
-        /// The item is waiting for its retry deadline.
+        /// The item is waiting for its retry deadline and owns retry capacity.
         /// </summary>
         RetryPending = 5,
 

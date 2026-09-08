@@ -146,6 +146,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             TransitWorkItem item = CreateItem(1, "<attempt-budget@example.com>", 64);
 
+            item.MarkQueued(DateTimeOffset.UtcNow);
             item.MarkClaimed("conn-1", DateTimeOffset.UtcNow);
             Assert.Equal(1, item.AttemptCount);
             Assert.True(item.HasAttemptsRemaining());
@@ -183,6 +184,89 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             InvalidOperationException exception = Assert.Throws<InvalidOperationException>(queue.MarkInFlightTerminal);
             Assert.Contains("in-flight accounting invariant", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Confirms forced terminalization racing a paused claim transfer releases ownership exactly once and still completes publication.
+        /// </summary>
+        [Fact]
+        public async Task ForceTerminalization_WhenClaimTransferPaused_DoesNotUnderflowAndCompletes()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 2);
+            TransitWorkItem item = CreateItem(10, "<race-claim-terminal@example.com>", 32);
+            await queue.EnqueueAsync(item, CancellationToken.None);
+
+            TaskCompletionSource claimPaused = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource releaseClaimTransfer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            queue.ClaimOwnershipTransferPauseHook = _ =>
+            {
+                claimPaused.TrySetResult();
+                releaseClaimTransfer.Task.GetAwaiter().GetResult();
+            };
+
+            Task<bool> claimTask = Task.Run(() => queue.TryClaim("conn-race", out _));
+            await claimPaused.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            TransitPublishResult forced = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Ambiguous,
+                ResponseCode: null,
+                ResponseText: "forced",
+                Provenance: TransitPublishProvenance.Shutdown);
+
+            Task terminalizeTask = Task.Run(() =>
+            {
+                Assert.True(item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState));
+                Assert.Equal(TransitWorkItemState.Claimed, priorState);
+                queue.ReleaseTerminalOwnership(priorState);
+                Assert.True(item.TrySetCompletionResult(forced));
+            });
+
+            _ = releaseClaimTransfer.TrySetResult();
+
+            Assert.True(await claimTask.WaitAsync(TimeSpan.FromSeconds(5)));
+            await terminalizeTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.True(item.IsTerminal);
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TransitPublishStatus.Ambiguous, completion.Status);
+        }
+
+        /// <summary>
+        /// Confirms terminalization while registered-before-admission does not release unowned capacity and cannot later acquire queue ownership.
+        /// </summary>
+        [Fact]
+        public async Task Terminalize_WhenRegisteredBeforeAdmission_DoesNotTouchCountersOrRequeue()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 1);
+            TransitWorkItem item = CreateItem(11, "<registered-terminal@example.com>", 16);
+
+            Assert.Equal(TransitWorkItemState.Registered, item.State);
+            TransitPublishResult canceled = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Canceled,
+                ResponseCode: null,
+                ResponseText: "canceled",
+                Provenance: TransitPublishProvenance.Cancellation);
+
+            Assert.True(item.TryTransitionToTerminal(canceled.Status, canceled.Provenance, out TransitWorkItemState priorState));
+            Assert.Equal(TransitWorkItemState.Registered, priorState);
+
+            queue.ReleaseTerminalOwnership(priorState);
+            Assert.True(item.TrySetCompletionResult(canceled));
+
+            await queue.EnqueueAsync(item, CancellationToken.None);
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.False(queue.TryClaim("conn-late", out _));
+
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TransitPublishStatus.Canceled, completion.Status);
         }
 
         /// <summary>

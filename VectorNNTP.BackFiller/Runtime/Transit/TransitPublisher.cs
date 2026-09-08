@@ -1419,33 +1419,42 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return;
             }
 
-            if (!inFlightOwnershipAlreadyTransferred && priorState is TransitWorkItemState.Claimed
-                or TransitWorkItemState.Staged
-                or TransitWorkItemState.Flushed
-                or TransitWorkItemState.AwaitingResponse)
+            ExceptionDispatchInfo? deferredFailure = null;
+            try
             {
-                _globalQueue.MarkInFlightTerminal();
+                if (!inFlightOwnershipAlreadyTransferred)
+                {
+                    _globalQueue.ReleaseTerminalOwnership(priorState);
+                }
+
+                if (ShouldMarkTransitCompleted(result, priorState))
+                {
+                    _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
+                }
+
+                _ = result.Status switch
+                {
+                    TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
+                    TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
+                    TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                    TransitPublishStatus.Queued
+                    or TransitPublishStatus.Unavailable
+                    or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
+                    TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
+                    _ => Interlocked.Increment(ref _totalArticlesFailed),
+                };
+            }
+            catch (Exception ex)
+            {
+                deferredFailure = ExceptionDispatchInfo.Capture(ex);
+            }
+            finally
+            {
+                _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
+                _ = item.TrySetCompletionResult(result);
             }
 
-            if (ShouldMarkTransitCompleted(result, priorState))
-            {
-                _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
-            }
-
-            _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
-
-            _ = result.Status switch
-            {
-                TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
-                TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
-                TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
-                TransitPublishStatus.Queued
-                or TransitPublishStatus.Unavailable
-                or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
-                TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
-                _ => Interlocked.Increment(ref _totalArticlesFailed),
-            };
-            _ = item.TrySetCompletionResult(result);
+            deferredFailure?.Throw();
         }
 
         private static bool ShouldMarkTransitCompleted(TransitPublishResult result, TransitWorkItemState priorState)
@@ -1459,12 +1468,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private static bool IsAdmittedTransitOwnershipState(TransitWorkItemState priorState)
         {
-            return priorState is TransitWorkItemState.Queued
-                or TransitWorkItemState.RetryPending
-                or TransitWorkItemState.Claimed
-                or TransitWorkItemState.Staged
-                or TransitWorkItemState.Flushed
-                or TransitWorkItemState.AwaitingResponse;
+            return TransitWorkItem.IsAdmittedOwnershipState(priorState);
         }
 
         /// <summary>
@@ -1491,43 +1495,34 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                switch (priorState)
+                ExceptionDispatchInfo? deferredFailure = null;
+                try
                 {
-                    case TransitWorkItemState.Queued:
-                        _globalQueue.MarkQueuedTerminal();
-                        break;
-                    case TransitWorkItemState.RetryPending:
-                        _globalQueue.MarkRetryPendingTerminal();
-                        break;
-                    case TransitWorkItemState.Claimed:
-                    case TransitWorkItemState.Staged:
-                    case TransitWorkItemState.Flushed:
-                    case TransitWorkItemState.AwaitingResponse:
-                        _globalQueue.MarkInFlightTerminal();
-                        break;
-                    case TransitWorkItemState.CompletedAccepted:
-                    case TransitWorkItemState.CompletedRejected:
-                    case TransitWorkItemState.CompletedFailed:
-                    case TransitWorkItemState.CompletedCanceled:
-                        break;
-                    default:
-                        break;
+                    _globalQueue.ReleaseTerminalOwnership(priorState);
+
+                    _ = forced.Status switch
+                    {
+                        TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
+                        TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
+                        TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                        TransitPublishStatus.Queued
+                        or TransitPublishStatus.Unavailable
+                        or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
+                        TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
+                        _ => Interlocked.Increment(ref _totalArticlesFailed),
+                    };
+                }
+                catch (Exception ex)
+                {
+                    deferredFailure = ExceptionDispatchInfo.Capture(ex);
+                }
+                finally
+                {
+                    _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
+                    _ = item.TrySetCompletionResult(forced);
                 }
 
-                _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
-
-                _ = forced.Status switch
-                {
-                    TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
-                    TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
-                    TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
-                    TransitPublishStatus.Queued
-                    or TransitPublishStatus.Unavailable
-                    or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
-                    TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
-                    _ => Interlocked.Increment(ref _totalArticlesFailed),
-                };
-                _ = item.TrySetCompletionResult(forced);
+                deferredFailure?.Throw();
             }
 
             await Task.CompletedTask.ConfigureAwait(false);
