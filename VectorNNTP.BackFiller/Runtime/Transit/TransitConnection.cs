@@ -1275,7 +1275,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
 
                     long recheckedProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
-                    if (recheckedProgressTick != lastProgressTick)
+                    if (recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)
                     {
                         continue;
                     }
