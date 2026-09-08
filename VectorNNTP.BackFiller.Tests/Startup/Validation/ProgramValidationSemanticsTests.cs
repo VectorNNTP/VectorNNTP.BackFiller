@@ -11,9 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
-using Startup = global::VectorNNTP.Backfiller.Startup;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Commands;
+using VectorNNTP.Backfiller.Startup.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
 using Xunit;
 
@@ -93,6 +93,123 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             Assert.True(result.IsValid);
             Assert.Empty(result.Errors);
+        }
+
+        /// <summary>
+        /// Confirms validate-config runtime projection does not require listener certificate directory in non-listener mode.
+        /// </summary>
+        [Fact]
+        public void BuildValidateConfigCommandResult_WhenDirCertsMissing_RemainsValidInNonListenerSnapshotMode()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+
+            ConfigurationValidationResult result = ValidateConfigCommandHandler.BuildValidateConfigCommandResult(configuration);
+
+            Assert.True(result.IsValid);
+            Assert.DoesNotContain(result.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Confirms non-listener startup validation can project runtime options without certificate-directory prerequisites.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenDirCertsMissing_DoesNotReturnDirCertsConfigurationError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult _) =
+                await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.DoesNotContain(configResult.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Confirms full startup validation still enforces listener certificate directory prerequisites.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenDirCertsMissing_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Contains(configResult.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+            Assert.Null(runtimeOptions);
+            Assert.True(dependencyResult.IsValid);
+        }
+
+        /// <summary>
+        /// Confirms RuntimeSnapshotFactory omits listener certificate directory and LetsEncrypt runtime projection in non-listener mode.
+        /// </summary>
+        [Fact]
+        public void BuildRuntimeOptionsSnapshot_WhenNonListenerModeAndDirCertsMissing_BuildsWithoutCertificateDirectory()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> errors = [];
+
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                errors,
+                includeLetsEncryptRuntimeOptions: false);
+
+            Assert.NotNull(runtimeOptions);
+            Assert.Empty(errors);
+            Assert.Null(runtimeOptions.ValidatedCertificateDirectory);
+            Assert.Null(runtimeOptions.LetsEncrypt);
+            Assert.NotNull(runtimeOptions.RabbitMq);
+            Assert.Equal("localhost", runtimeOptions.TransitServerHost);
+        }
+
+        /// <summary>
+        /// Confirms RuntimeSnapshotFactory still fails in full-startup mode when certificate directory is missing.
+        /// </summary>
+        [Fact]
+        public void BuildRuntimeOptionsSnapshot_WhenFullStartupModeAndDirCertsMissing_Fails()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> errors = [];
+
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                errors,
+                includeLetsEncryptRuntimeOptions: true);
+
+            Assert.Null(runtimeOptions);
+            Assert.Contains(errors, static e =>
+                e.Setting == "BackFiller"
+                && e.Error.Contains("DirCerts", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>

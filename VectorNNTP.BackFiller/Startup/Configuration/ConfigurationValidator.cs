@@ -277,6 +277,12 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
 
             errors.AddRange(ValidateAnnotatedObject(backFiller, "BackFiller"));
 
+            if (!includeListenerCertificateValidation)
+            {
+                _ = errors.RemoveAll(static e =>
+                    string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+            }
+
             // Detailed bind address validation using custom validator
             List<BindAddressValidationResult> diagnostics = BindAddressValidator.Validate(
                 backFiller.BindAddress,

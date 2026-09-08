@@ -63,7 +63,6 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 string canonicalBackFillerFqdn = BackFillerIdentityValidator.BuildBackFillerFqdn(backFillerName, backFillerId, canonicalDnsSuffix);
 
                 string validatedLogDirectory = ResolveAndValidateLogDirectory(configuration);
-                string validatedCertificateDirectory = ResolveAndValidateCertificateDirectory(configuration);
 
                 string[] rabbitMqHosts = [.. (backFiller.RabbitMQ?.Hosts ?? [])
                     .Where(static x => !string.IsNullOrWhiteSpace(x))
@@ -73,9 +72,14 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is required to build runtime options.");
 
                 IReadOnlyList<IPAddress> canonicalBindAddresses = BindAddressDnsAddressDeriver.DeriveCanonicalDnsAddresses(backFiller.BindAddress);
-                BackFillerLetsEncryptRuntimeOptions? letsEncryptRuntimeOptions = includeLetsEncryptRuntimeOptions
-                    ? BuildLetsEncryptRuntimeOptions(backFiller, validatedCertificateDirectory, canonicalBackFillerFqdn)
-                    : null;
+                string? validatedCertificateDirectory = null;
+                BackFillerLetsEncryptRuntimeOptions? letsEncryptRuntimeOptions = null;
+                if (includeLetsEncryptRuntimeOptions)
+                {
+                    validatedCertificateDirectory = ResolveAndValidateCertificateDirectory(configuration);
+                    letsEncryptRuntimeOptions = BuildLetsEncryptRuntimeOptions(backFiller, validatedCertificateDirectory, canonicalBackFillerFqdn);
+                }
+
                 RabbitMqRuntimeOptions rabbitMqRuntimeOptions = BuildRabbitMqRuntimeOptions(backFiller, canonicalBackFillerFqdn);
 
                 return new BackFillerRuntimeOptions(
