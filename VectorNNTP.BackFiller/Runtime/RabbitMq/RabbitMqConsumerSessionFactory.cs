@@ -255,6 +255,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             List<RetirementOperation> retirements = [];
             List<Task> pendingRetirements = [];
+            HashSet<Task> reservedRetirementTasks = [];
 
             await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -276,6 +277,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
                     _retiringSessionRuntimes[sessionKey] = new RetiringSessionRuntimeState(runtimeState.Identity, completionSource.Task);
                     retirements.Add(new RetirementOperation(sessionKey, runtimeState, completionSource));
+                    _ = reservedRetirementTasks.Add(completionSource.Task);
                 }
 
                 foreach (RetirementOperation retirement in retirements)
@@ -296,15 +298,50 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _stateGate.Release();
             }
 
-            for (int index = 0; index < retirements.Count; index++)
-            {
-                await ExecuteRetirementOperationAsync(retirements[index], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
+            Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
 
+            List<Exception>? pendingJoinFailures = null;
             for (int index = 0; index < pendingRetirements.Count; index++)
             {
-                await pendingRetirements[index].WaitAsync(cancellationToken).ConfigureAwait(false);
+                Task pendingRetirement = pendingRetirements[index];
+                try
+                {
+                    await pendingRetirement.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (reservedRetirementTasks.Contains(pendingRetirement))
+                    {
+                        continue;
+                    }
+
+                    pendingJoinFailures ??= [];
+                    pendingJoinFailures.Add(ex);
+                }
             }
+
+            if (retirementFailure is not null)
+            {
+                if (pendingJoinFailures is null)
+                {
+                    throw retirementFailure;
+                }
+
+                pendingJoinFailures.Insert(0, retirementFailure);
+                throw new AggregateException(pendingJoinFailures);
+            }
+
+            if (pendingJoinFailures is { Count: 1 })
+            {
+                throw pendingJoinFailures[0];
+            }
+
+            if (pendingJoinFailures is { Count: > 1 })
+            {
+                throw new AggregateException(pendingJoinFailures);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         /// <summary>
@@ -537,9 +574,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _stateGate.Release();
             }
 
-            for (int i = 0; i < retirements.Count; i++)
+            Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
+            if (retirementFailure is not null)
             {
-                await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+                throw retirementFailure;
             }
 
             for (int i = 0; i < starts.Count; i++)
@@ -634,17 +672,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _stateGate.Release();
             }
 
-            for (int i = 0; i < retirements.Count; i++)
-            {
-                try
-                {
-                    await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    LogConsumerSessionStopFailed(_logger, retirements[i].Runtime.Identity.SessionKey, ex);
-                }
-            }
+            _ = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: true, cancellationToken).ConfigureAwait(false);
 
             Task[] pendingRetirements = [.. _retiringSessionRuntimes.Values.Select(static runtime => runtime.RetirementTask)];
             for (int i = 0; i < pendingRetirements.Length; i++)
@@ -687,6 +715,40 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _connectionManager.ConnectionReplaced -= OnConnectionReplaced;
             _gracefulShutdownRegistration.Dispose();
             _forcedShutdownRegistration.Dispose();
+        }
+
+        /// <summary>
+        /// Executes one retirement batch and ensures each reserved operation reaches a terminal completion state.
+        /// </summary>
+        private async Task<Exception?> ExecuteRetirementBatchAsync(IReadOnlyList<RetirementOperation> operations, bool cancelAdmittedWork, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operations);
+
+            List<Exception>? failures = null;
+            for (int index = 0; index < operations.Count; index++)
+            {
+                try
+                {
+                    await ExecuteRetirementOperationAsync(operations[index], cancelAdmittedWork, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    failures ??= [];
+                    failures.Add(ex);
+
+                    if (cancelAdmittedWork)
+                    {
+                        LogConsumerSessionStopFailed(_logger, operations[index].Runtime.Identity.SessionKey, ex);
+                    }
+                }
+            }
+
+            return failures switch
+            {
+                null => null,
+                { Count: 1 } => failures[0],
+                _ => new AggregateException(failures),
+            };
         }
 
         /// <summary>

@@ -2226,6 +2226,139 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
+        /// Confirms cancellation of a later retire-capacity call still joins existing pending retirements before surfacing cancellation.
+        /// </summary>
+        [Fact]
+        public async Task RetireCapacityAsync_WhenCallerTokenCanceledDuringPendingJoin_WaitsForPendingRetirementsBeforeCancellation()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(20));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey2 = $"{accountId:N}:2";
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 2)).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            sessionFactory.BlockStopForSession(sessionKey2);
+            Task retireA = service.RetireCapacityAsync(accountId, retainConnectionCount: 1, CancellationToken.None);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+
+            using CancellationTokenSource retireBToken = new();
+            Task retireB = service.RetireCapacityAsync(accountId, retainConnectionCount: 1, retireBToken.Token);
+            retireBToken.Cancel();
+
+            Assert.False(retireB.IsCompleted);
+
+            sessionFactory.ReleaseStop(sessionKey2);
+
+            await retireA.ConfigureAwait(false);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await retireB.ConfigureAwait(false)).ConfigureAwait(false);
+
+            await service.StopAsync(timeoutToken).ConfigureAwait(false);
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Confirms multiple reserved retirement failures remain observable and are not discarded.
+        /// </summary>
+        [Fact]
+        public async Task RetireCapacityAsync_WhenMultipleReservedRetirementsFail_ReportsAggregateFailure()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            FaultInjectingSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey2 = $"{accountId:N}:2";
+            string sessionKey3 = $"{accountId:N}:3";
+            sessionFactory.SetFailureMode(sessionKey2, RetirementFailureMode.StopThrowsBeforeStopping);
+            sessionFactory.SetFailureMode(sessionKey3, RetirementFailureMode.StopThrowsBeforeStopping);
+
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+            AggregateException aggregate = await Assert.ThrowsAsync<AggregateException>(
+                async () => await service.RetireCapacityAsync(accountId, retainConnectionCount: 1, CancellationToken.None).ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.Equal(2, aggregate.InnerExceptions.Count);
+            Assert.All(aggregate.InnerExceptions, static ex => Assert.IsType<InvalidOperationException>(ex));
+
+            Assert.Contains(aggregate.InnerExceptions, ex => ex.Message.Contains(sessionKey2, StringComparison.Ordinal));
+            Assert.Contains(aggregate.InnerExceptions, ex => ex.Message.Contains(sessionKey3, StringComparison.Ordinal));
+
+            await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Confirms interruption of the first reserved retirement still terminalizes later reserved retirements and allows hosted shutdown join completion.
+        /// </summary>
+        [Fact]
+        public async Task RetireCapacityAsync_WhenFirstReservedRetirementIsCanceled_LaterReservedRetirementStillCompletesAndHostedShutdownJoins()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(20));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey2 = $"{accountId:N}:2";
+            string sessionKey3 = $"{accountId:N}:3";
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            await service.StartAsync(timeoutToken).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            _ = sessionFactory.RequireLatestSession(sessionKey2);
+            BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey2);
+
+            using CancellationTokenSource retireCts = new();
+            Task retireTask = service.RetireCapacityAsync(accountId, retainConnectionCount: 1, retireCts.Token);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, session3.StopCallCount);
+            Assert.False(session3.DisposeCalled);
+
+            retireCts.Cancel();
+            shutdownCoordinator.SignalForcedShutdown();
+            sessionFactory.ReleaseStop(sessionKey2);
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                async () => await retireTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.Equal(1, session3.StopCallCount);
+            Assert.True(session3.DisposeCalled);
+
+            await service.StopAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, service.ActiveSessionCount);
+
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Confirms the concurrent retire calls do not double dispose behavior.
         /// </summary>
         [Fact]
@@ -2401,6 +2534,61 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             service.Dispose();
             await manager.DisposeAsync().ConfigureAwait(false);
         }
+        /// <summary>
+        /// Confirms reconciliation cancellation during the first reserved retirement still terminalizes later reserved retirements and does not block hosted shutdown joins.
+        /// </summary>
+        [Fact]
+        public async Task ReconcileSessions_WhenFirstReservedRetirementIsCanceled_LaterReservedRetirementStillCompletesAndShutdownJoins()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(20));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey2 = $"{accountId:N}:2";
+            string sessionKey3 = $"{accountId:N}:3";
+
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            await service.StartAsync(timeoutToken).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            _ = sessionFactory.RequireLatestSession(sessionKey2);
+            BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey2);
+
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+
+            using CancellationTokenSource reconcileCts = new();
+            Task reconcileTask = service.ReconcileOnceAsync(reconcileCts.Token);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, session3.StopCallCount);
+            Assert.False(session3.DisposeCalled);
+
+            reconcileCts.Cancel();
+            sessionFactory.ReleaseStop(sessionKey2);
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                async () => await reconcileTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.Equal(1, session3.StopCallCount);
+            Assert.True(session3.DisposeCalled);
+
+            await service.StopAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, service.ActiveSessionCount);
+
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Confirms the active session count is consistently synchronized behavior.
         /// </summary>
@@ -3736,6 +3924,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 lock (_gate)
                 {
                     _failureModesBySessionKey[sessionKey] = mode;
+                }
+            }
+
+            /// <summary>
+            /// Confirms the require latest session behavior.
+            /// </summary>
+            /// <param name="sessionKey">The session key used by this test scenario.</param>
+            /// <returns>The latest tracked fault-injecting session for the key.</returns>
+            internal FaultInjectingSession RequireLatestSession(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    return !_sessionsByKey.TryGetValue(sessionKey, out List<FaultInjectingSession>? sessions) || sessions.Count == 0
+                        ? throw new InvalidOperationException($"Expected tracked RabbitMQ session '{sessionKey}'.")
+                        : sessions[^1];
                 }
             }
 
