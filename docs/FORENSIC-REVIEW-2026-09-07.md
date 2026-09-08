@@ -139,7 +139,7 @@ Detailed entries contain qualifications, tests, consequences, and proposed valid
 | ID | Severity | Type | Title |
 |---|---|---|---|
 | ~~H01~~ | ~~HIGH~~ | ~~C/S~~ | ~~Delivery cancellation escapes the only processor; fatal stop can look successful~~ |
-| H02 | HIGH | C/S | Consumer recovery can remain permanently Retiring |
+| ~~H02~~ | ~~HIGH~~ | ~~C/S~~ | ~~Consumer recovery can remain permanently Retiring~~ |
 | H03 | HIGH | C | Interrupted retirement batch abandons unstarted operations |
 | H04 | HIGH | C | Transit negotiation failure permanently removes a worker |
 | H05 | HIGH | C | Transit state, counters, and completion publication diverge |
