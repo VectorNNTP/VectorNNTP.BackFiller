@@ -255,6 +255,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             List<RetirementOperation> retirements = [];
             List<Task> pendingRetirements = [];
+            HashSet<Task> reservedRetirementTasks = [];
 
             await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
@@ -276,6 +277,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
                     _retiringSessionRuntimes[sessionKey] = new RetiringSessionRuntimeState(runtimeState.Identity, completionSource.Task);
                     retirements.Add(new RetirementOperation(sessionKey, runtimeState, completionSource));
+                    _ = reservedRetirementTasks.Add(completionSource.Task);
                 }
 
                 foreach (RetirementOperation retirement in retirements)
@@ -298,15 +300,48 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
             Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
 
+            List<Exception>? pendingJoinFailures = null;
             for (int index = 0; index < pendingRetirements.Count; index++)
             {
-                await pendingRetirements[index].WaitAsync(cancellationToken).ConfigureAwait(false);
+                Task pendingRetirement = pendingRetirements[index];
+                try
+                {
+                    await pendingRetirement.ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    if (reservedRetirementTasks.Contains(pendingRetirement))
+                    {
+                        continue;
+                    }
+
+                    pendingJoinFailures ??= [];
+                    pendingJoinFailures.Add(ex);
+                }
             }
 
             if (retirementFailure is not null)
             {
-                throw retirementFailure;
+                if (pendingJoinFailures is null)
+                {
+                    throw retirementFailure;
+                }
+
+                pendingJoinFailures.Insert(0, retirementFailure);
+                throw new AggregateException(pendingJoinFailures);
             }
+
+            if (pendingJoinFailures is { Count: 1 })
+            {
+                throw pendingJoinFailures[0];
+            }
+
+            if (pendingJoinFailures is { Count: > 1 })
+            {
+                throw new AggregateException(pendingJoinFailures);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         /// <summary>
