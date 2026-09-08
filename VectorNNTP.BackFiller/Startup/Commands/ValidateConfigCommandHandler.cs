@@ -8,6 +8,7 @@
 using Serilog;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
+using ConfigurationValidator = VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator;
 
 namespace VectorNNTP.Backfiller.Startup.Commands
 {
@@ -105,7 +106,11 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 .Get<BackFillerOptions>();
 
             errors.AddRange(ConfigurationValidator.ValidateConnectionStrings(configuration, warnings));
-            errors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(configuration, warnings, includeListenerCertificateValidation: false));
+            errors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(
+                backFiller,
+                warnings,
+                new PhysicalSystemMemoryProvider(),
+                includeListenerCertificateValidation: false));
 
             if (errors.Count == 0)
             {

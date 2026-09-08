@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using Startup = global::VectorNNTP.Backfiller.Startup;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Commands;
@@ -75,6 +76,25 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 e.Setting == "BackFiller"
                 && e.Error.Contains("DirLogs", StringComparison.Ordinal));
         }
+
+        /// <summary>
+        /// Confirms validate-config validates the already bound BackFiller snapshot by rejecting a second BackFiller section bind attempt within a single command evaluation.
+        /// </summary>
+        [Fact]
+        public void BuildValidateConfigCommandResult_WhenSecondBackFillerBindWouldOccur_DoesNotRebindConfiguration()
+        {
+            IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+            IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(baselineConfiguration);
+
+            ConfigurationValidationResult result = ValidateConfigCommandHandler.BuildValidateConfigCommandResult(guardedConfiguration);
+
+            Assert.True(result.IsValid);
+            Assert.Empty(result.Errors);
+        }
+
         /// <summary>
         /// Confirms the validate back filler options when canonical identity available does not use configured domain names behavior.
         /// </summary>
@@ -3114,6 +3134,44 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
+        }
+
+        private sealed class SingleBackFillerBindConfiguration(IConfiguration inner) : IConfiguration
+        {
+            private readonly IConfiguration _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            private int _backFillerBindCount;
+
+            public string? this[string key]
+            {
+                get => _inner[key];
+                set => _inner[key] = value;
+            }
+
+            public IEnumerable<IConfigurationSection> GetChildren()
+            {
+                return _inner.GetChildren();
+            }
+
+            public IChangeToken GetReloadToken()
+            {
+                return _inner.GetReloadToken();
+            }
+
+            public IConfigurationSection GetSection(string key)
+            {
+                IConfigurationSection section = _inner.GetSection(key);
+                if (!string.Equals(key, "BackFiller", StringComparison.OrdinalIgnoreCase))
+                {
+                    return section;
+                }
+
+                if (Interlocked.Increment(ref _backFillerBindCount) > 1)
+                {
+                    throw new InvalidOperationException("BackFiller section was rebound more than once during validate-config command evaluation.");
+                }
+
+                return section;
+            }
         }
 
     }
