@@ -281,6 +281,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Contains(result.FailedDependencies, static failure =>
                 failure.Dependency == "CloudflareDnsSynchronization"
                 && failure.Reason.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(result.Errors, static error =>
+                error.Category == "CloudflareDnsSynchronization"
+                && error.Message.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(facade.Records, record => record.Id == "existing-a");
             Assert.Contains(facade.Records, record => record.Id == "existing-aaaa");
         }
@@ -356,9 +359,13 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             Assert.False(result.IsValid);
             Assert.Equal(0, facade.DeleteCallCount);
+            Assert.Equal(0, facade.AddCallCount);
             Assert.Contains(result.FailedDependencies, static failure =>
                 failure.Dependency == "CloudflareDnsSynchronization"
                 && failure.Reason.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(result.Errors, static error =>
+                error.Category == "CloudflareDnsSynchronization"
+                && error.Message.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(facade.Records, record => record.Id == "existing-a2");
         }
 

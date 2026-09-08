@@ -92,7 +92,6 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             {
                 const string Message = "Wildcard bind-address semantics produced no eligible DNS addresses; refusing empty exact-set reconciliation.";
                 failures.Add((DependencyName, Message));
-                errors.Add((DependencyName, Message));
                 Log.Error("{Message} FQDN={Fqdn}", Message, canonicalFqdn);
                 return new DependencyValidationResult(failures, warnings, errors);
             }
