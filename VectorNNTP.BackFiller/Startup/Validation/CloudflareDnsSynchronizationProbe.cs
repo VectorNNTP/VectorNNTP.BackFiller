@@ -86,6 +86,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 desiredIpv4Count,
                 desiredIpv6Count);
 
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (UsesWildcardListenerSemantics(runtimeOptions) && desiredAddresses.Count == 0)
             {
                 const string Message = "Wildcard bind-address semantics produced no eligible DNS addresses; refusing empty exact-set reconciliation.";

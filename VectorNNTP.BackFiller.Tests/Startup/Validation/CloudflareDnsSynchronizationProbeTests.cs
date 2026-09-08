@@ -310,6 +310,34 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         /// <summary>
+        /// Verifies wildcard empty desired-set safety does not bypass pre-canceled caller token semantics.
+        /// </summary>
+        [Fact]
+        public async Task SynchronizeGeneratedBackFillerDnsAsync_WhenWildcardSemanticsAndDesiredSetEmptyAndPreCanceled_ThrowsOperationCanceledExceptionWithoutDeletion()
+        {
+            FakeCloudflareDnsFacade facade = new(
+                [
+                    CreateRecord("existing-a3", DnsRecordType.A, "198.51.100.80"),
+                    CreateRecord("existing-aaaa3", DnsRecordType.Aaaa, "2001:db8::80"),
+                ]);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(
+                canonicalBindAddresses: [],
+                configuredBindAddressTokens: []);
+
+            using CancellationTokenSource cancellationTokenSource = new();
+            cancellationTokenSource.Cancel();
+
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+                await RunSynchronizationAsync(runtimeOptions, facade, cancellationTokenSource.Token));
+
+            Assert.Equal(0, facade.DeleteCallCount);
+            Assert.Equal(0, facade.AddCallCount);
+            Assert.Contains(facade.Records, record => record.Id == "existing-a3");
+            Assert.Contains(facade.Records, record => record.Id == "existing-aaaa3");
+        }
+
+        /// <summary>
         /// Verifies explicit wildcard token semantics with no eligible derived addresses fail safely without deleting existing records.
         /// </summary>
         [Fact]
