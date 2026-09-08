@@ -48,8 +48,8 @@ namespace VectorNNTP.Backfiller.Startup.Commands
 
             try
             {
-                (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult) =
-                    StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, _) =
+                    StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
                         configuration,
                         dependencyTimeout: TimeSpan.FromSeconds(5),
                         cancellationToken: CancellationToken.None)

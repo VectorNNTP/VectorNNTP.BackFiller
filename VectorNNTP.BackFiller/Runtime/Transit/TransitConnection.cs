@@ -21,6 +21,17 @@ using System.Threading.Channels;
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
+    /// Identifies semantic checkpoints within the response-progress watchdog loop for deterministic test coordination.
+    /// </summary>
+    internal enum TransitWatchdogProbePoint
+    {
+        /// <summary>
+        /// Indicates the watchdog observed stale definitive progress while pending work still existed and is about to perform its final no-fault guard check.
+        /// </summary>
+        TimeoutElapsedWithPendingBeforeFinalRecheck,
+    }
+
+    /// <summary>
     /// Owns one outbound NNTP transit session, including transport establishment, protocol negotiation,
     /// TAKETHIS submission, and response correlation for work assigned to this connection.
     /// </summary>
@@ -86,6 +97,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Optional collector for staging, flush, read, and response-correlation timing metrics.
         /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
+
+        /// <summary>
+        /// Optional callback invoked when the response-progress watchdog reaches deterministic semantic probe points.
+        /// </summary>
+        private readonly Action<TransitWatchdogProbePoint>? _watchdogProbe;
 
         /// <summary>
         /// Gate that serializes staging and flushing on the shared transport writer.
@@ -274,6 +290,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
+        /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
         internal TransitConnection(
             string host,
             int port,
@@ -284,7 +301,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Func<int>? expectedBatchIntentCountProvider = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
-            TransitTimingCollector? timingCollector = null)
+            TransitTimingCollector? timingCollector = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
             : this(
                 host,
                 port,
@@ -296,7 +314,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 expectedBatchIntentCountProvider,
                 responseProgressTimeout,
                 responseProgressCheckInterval,
-                timingCollector)
+                timingCollector,
+                watchdogProbe)
         {
         }
 
@@ -320,6 +339,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
+        /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
         /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException">
@@ -342,7 +362,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Func<int>? expectedBatchIntentCountProvider = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
-            TransitTimingCollector? timingCollector = null)
+            TransitTimingCollector? timingCollector = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
         {
             if (string.IsNullOrWhiteSpace(host))
             {
@@ -387,6 +408,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _responseProgressTimeout = effectiveResponseProgressTimeout;
             _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
             _timingCollector = timingCollector;
+            _watchdogProbe = watchdogProbe;
             _ = expectedBatchIntentCountProvider;
         }
 
@@ -515,6 +537,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             // Intentionally no-op in global queue architecture.
         }
+
+
 
         /// <summary>
         /// Establishes transport connectivity and negotiates protocol readiness for TAKETHIS publishing.
@@ -767,6 +791,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     {
                         throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
                     }
+
 
                     _pendingBySendOrder.Enqueue(item.MessageId);
                     _ = Interlocked.Increment(ref _submissionsStarted);
@@ -1189,21 +1214,28 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    if (_pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate) && pendingCandidate is not null)
+                    bool removed = _pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
+                    if (removed && pendingCandidate is not null)
                     {
                         pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
-                        _timingCollector?.RecordResponseCorrelation(
-                            elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
-                            responseAvailableTick: responseAvailableTick,
-                            correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
-                            definitive: mapped.ResponseCode is 239 or 439);
-                        AcknowledgeSendOrder(mapped.MessageId);
                         TransitPublishResult correlatedResult = mapped with
                         {
                             T2SocketWriteBeginTick = pendingCandidate.T2SocketWriteBeginTick,
                             T3SocketWriteEndTick = pendingCandidate.T3SocketWriteEndTick,
                             T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
+
+                        if (correlatedResult.ResponseCode is 239 or 439)
+                        {
+                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, pendingCandidate.T6ResponseCorrelatedTick);
+                        }
+
+                        _timingCollector?.RecordResponseCorrelation(
+                            elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
+                            responseAvailableTick: responseAvailableTick,
+                            correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
+                            definitive: mapped.ResponseCode is 239 or 439);
+                        AcknowledgeSendOrder(mapped.MessageId);
 
                         RecordSubmissionResult(correlatedResult.Status);
                         if (_timingCollector is not null)
@@ -1213,11 +1245,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                         _ = _completedQueue.Writer.TryWrite(new CompletedWork(pendingCandidate.WorkItem, correlatedResult));
                         TryCompleteDirectSubmit(pendingCandidate.WorkItem.WorkItemId, correlatedResult);
-
-                        if (correlatedResult.ResponseCode is 239 or 439)
-                        {
-                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
-                        }
                     }
                 }
             }
@@ -1269,7 +1296,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    TimeoutException timeout = new($"Transit response progress timeout exceeded for connection {ConnectionId} after {elapsed.TotalSeconds:F3}s with {_pendingByMessageId.Count} outstanding work items.");
+                    _watchdogProbe?.Invoke(TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck);
+
+                    long recheckedProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
+                    if (recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)
+                    {
+                        continue;
+                    }
+
+                    TimeSpan recheckedElapsed = Stopwatch.GetElapsedTime(recheckedProgressTick);
+                    if (recheckedElapsed <= _responseProgressTimeout)
+                    {
+                        continue;
+                    }
+
+                    TimeoutException timeout = new($"Transit response progress timeout exceeded for connection {ConnectionId} after {recheckedElapsed.TotalSeconds:F3}s with {_pendingByMessageId.Count} outstanding work items.");
                     TrySignalResponseLoopFault(timeout, cancelResponseLoop: true);
                     return;
                 }
@@ -2349,5 +2390,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         [LoggerMessage(EventId = 2213, Level = LogLevel.Warning, Message = "Transit connection {ConnectionId} response loop faulted")]
         private static partial void LogTransitResponseLoopFaulted(ILogger logger, Exception exception, string connectionId);
+
     }
 }

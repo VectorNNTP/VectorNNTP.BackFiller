@@ -160,7 +160,25 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
         {
-            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider());
+            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider(), includeListenerCertificateValidation: true);
+        }
+
+        /// <summary>
+        /// Binds and validates the <c>BackFiller</c> section for the requested validation scope.
+        /// </summary>
+        /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
+        /// <param name="warnings">Collector that receives non-blocking configuration diagnostics.</param>
+        /// <param name="includeListenerCertificateValidation">
+        /// <see langword="true"/> to enforce listener certificate/ACME key+PFX validation; otherwise skips listener-certificate-only checks
+        /// so non-listener validation paths can project unrelated runtime settings.
+        /// </param>
+        /// <returns>A list of blocking <c>(Setting, Error)</c> tuples produced during BackFiller validation.</returns>
+        internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
+            IConfiguration configuration,
+            List<(string Setting, string Message)> warnings,
+            bool includeListenerCertificateValidation)
+        {
+            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider(), includeListenerCertificateValidation);
         }
 
         /// <summary>
@@ -170,11 +188,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
         /// <param name="warnings">Collector that receives non-blocking configuration diagnostics.</param>
         /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <param name="includeListenerCertificateValidation">
+        /// <see langword="true"/> enforces listener certificate/ACME key+PFX validation; otherwise listener-certificate-only checks are skipped.
+        /// </param>
         /// <returns>A list of blocking <c>(Setting, Error)</c> tuples produced during BackFiller validation.</returns>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings,
-            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider,
+            bool includeListenerCertificateValidation = true)
         {
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(warnings);
@@ -184,7 +206,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 .GetSection("BackFiller")
                 .Get<BackFillerOptions>();
 
-            List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider);
+            List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider, includeListenerCertificateValidation);
 
             if (configuration["BackFiller:LetsEncrypt:Enabled"] is not null)
             {
@@ -214,7 +236,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings)
         {
-            return ValidateBackFillerOptions(backFiller, warnings, new PhysicalSystemMemoryProvider());
+            return ValidateBackFillerOptions(backFiller, warnings, new PhysicalSystemMemoryProvider(), includeListenerCertificateValidation: true);
         }
 
         /// <summary>
@@ -223,6 +245,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
         /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode notices.</param>
         /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <param name="includeListenerCertificateValidation">
+        /// <see langword="true"/> enforces listener certificate/ACME key+PFX validation; otherwise listener-certificate-only checks are skipped.
+        /// </param>
         /// <returns>
         /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
         /// Severity mapping from validator diagnostics is handled by <c>AddDiagnostics</c> helpers.
@@ -235,7 +260,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings,
-            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider,
+            bool includeListenerCertificateValidation = true)
         {
             ArgumentNullException.ThrowIfNull(warnings);
             ArgumentNullException.ThrowIfNull(physicalSystemMemoryProvider);
@@ -250,6 +276,12 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             }
 
             errors.AddRange(ValidateAnnotatedObject(backFiller, "BackFiller"));
+
+            if (!includeListenerCertificateValidation)
+            {
+                _ = errors.RemoveAll(static e =>
+                    string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+            }
 
             // Detailed bind address validation using custom validator
             List<BindAddressValidationResult> diagnostics = BindAddressValidator.Validate(
@@ -310,159 +342,162 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     "MaximumShutdownDrainTimeoutSeconds must be less than or equal to BackFiller:Shutdown:GracePeriodSeconds to preserve bounded shutdown semantics."));
             }
 
-            bool useStagingDirectory = backFiller.LetsEncrypt?.UseStagingDirectory ?? false;
-            if (useStagingDirectory)
+            if (includeListenerCertificateValidation)
             {
-                warnings.Add((
-                    "BackFiller:LetsEncrypt:UseStagingDirectory",
-                    "Let's Encrypt staging directory is enabled (BackFiller:LetsEncrypt:UseStagingDirectory=true). Issued certificates are for testing and are not suitable for production trust."));
-            }
-
-            string? generatedBackFillerFqdn = null;
-            if (!string.IsNullOrWhiteSpace(backFiller.Name) &&
-                backFiller.Id is >= 0 and <= 99 &&
-                !string.IsNullOrWhiteSpace(backFiller.DnsSuffix))
-            {
-                try
+                bool useStagingDirectory = backFiller.LetsEncrypt?.UseStagingDirectory ?? false;
+                if (useStagingDirectory)
                 {
-                    generatedBackFillerFqdn = BackFillerIdentityValidator.BuildBackFillerFqdn(
-                        backFiller.Name,
-                        backFiller.Id.Value,
-                        backFiller.DnsSuffix);
-                    Log.Information("Generated canonical BackFiller certificate identity FQDN: {BackFillerFqdn}", generatedBackFillerFqdn);
+                    warnings.Add((
+                        "BackFiller:LetsEncrypt:UseStagingDirectory",
+                        "Let's Encrypt staging directory is enabled (BackFiller:LetsEncrypt:UseStagingDirectory=true). Issued certificates are for testing and are not suitable for production trust."));
                 }
-                catch (ArgumentOutOfRangeException ex)
-                {
-                    errors.Add(("BackFiller:Id", $"Failed to generate canonical BackFiller FQDN: {ex.Message}"));
-                }
-                catch (ArgumentException ex)
-                {
-                    errors.Add(("BackFiller", $"Failed to generate canonical BackFiller FQDN: {ex.Message}"));
-                }
-            }
 
-            // BackFiller source-of-truth certificate identity is the generated canonical FQDN.
-            // Do not mutate configuration-derived options here; use a derived runtime value for validation.
-            string[]? effectiveDomainNames = !string.IsNullOrWhiteSpace(generatedBackFillerFqdn)
-                ? [generatedBackFillerFqdn]
-                : null;
+                string? generatedBackFillerFqdn = null;
+                if (!string.IsNullOrWhiteSpace(backFiller.Name) &&
+                    backFiller.Id is >= 0 and <= 99 &&
+                    !string.IsNullOrWhiteSpace(backFiller.DnsSuffix))
+                {
+                    try
+                    {
+                        generatedBackFillerFqdn = BackFillerIdentityValidator.BuildBackFillerFqdn(
+                            backFiller.Name,
+                            backFiller.Id.Value,
+                            backFiller.DnsSuffix);
+                        Log.Information("Generated canonical BackFiller certificate identity FQDN: {BackFillerFqdn}", generatedBackFillerFqdn);
+                    }
+                    catch (ArgumentOutOfRangeException ex)
+                    {
+                        errors.Add(("BackFiller:Id", $"Failed to generate canonical BackFiller FQDN: {ex.Message}"));
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        errors.Add(("BackFiller", $"Failed to generate canonical BackFiller FQDN: {ex.Message}"));
+                    }
+                }
 
-            // Validate the effective DomainNames shape used by runtime certificate operations.
-            if (effectiveDomainNames != null)
-            {
-                List<LetsEncryptValidationResult> domainNamesDiagnostics = LetsEncryptValidator.ValidateDomainNames(
-                    effectiveDomainNames,
+                // BackFiller source-of-truth certificate identity is the generated canonical FQDN.
+                // Do not mutate configuration-derived options here; use a derived runtime value for validation.
+                string[]? effectiveDomainNames = !string.IsNullOrWhiteSpace(generatedBackFillerFqdn)
+                    ? [generatedBackFillerFqdn]
+                    : null;
+
+                // Validate the effective DomainNames shape used by runtime certificate operations.
+                if (effectiveDomainNames != null)
+                {
+                    List<LetsEncryptValidationResult> domainNamesDiagnostics = LetsEncryptValidator.ValidateDomainNames(
+                        effectiveDomainNames,
+                        "BackFiller:LetsEncrypt");
+
+                    AddDiagnostics(errors, warnings, domainNamesDiagnostics);
+                }
+
+                // Validate PFX export password requirements for certificate bundle protection.
+                List<LetsEncryptValidationResult> pfxPasswordDiagnostics = LetsEncryptValidator.ValidatePfxExportPassword(
+                    backFiller.LetsEncrypt?.PfxExportPassword,
                     "BackFiller:LetsEncrypt");
 
-                AddDiagnostics(errors, warnings, domainNamesDiagnostics);
+                AddDiagnostics(errors, warnings, pfxPasswordDiagnostics);
+
+                // Validate renewal-check scheduler interval bounds.
+                List<LetsEncryptValidationResult> renewalCheckIntervalDiagnostics = LetsEncryptValidator.ValidateRenewalCheckIntervalHours(
+                    backFiller.LetsEncrypt?.RenewalCheckIntervalHours,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, renewalCheckIntervalDiagnostics);
+
+                // Validate renewal-check scheduling jitter ratio bounds.
+                List<LetsEncryptValidationResult> renewalJitterDiagnostics = LetsEncryptValidator.ValidateRenewalJitterRatio(
+                    backFiller.LetsEncrypt?.RenewalJitterRatio,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, renewalJitterDiagnostics);
+
+                // Validate renewal eligibility threshold bounds.
+                List<LetsEncryptValidationResult> renewBeforeExpiryDaysDiagnostics = LetsEncryptValidator.ValidateRenewBeforeExpiryDays(
+                    backFiller.LetsEncrypt?.RenewBeforeExpiryDays,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, renewBeforeExpiryDaysDiagnostics);
+
+                // Validate ACME account email when Let's Encrypt integration is configured.
+                List<LetsEncryptValidationResult> letsEncryptDiagnostics = LetsEncryptValidator.ValidateAcmeAccountEmail(
+                    backFiller.LetsEncrypt?.AcmeAccountEmail,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, letsEncryptDiagnostics);
+
+                // Validate account-key filename semantics and PEM private key loadability.
+                List<LetsEncryptValidationResult> accountKeyDiagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
+                    backFiller.LetsEncrypt?.AcmeAccountKeyPem,
+                    backFiller.DirCerts,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, accountKeyDiagnostics);
+
+                // Validate transient ACME retry attempt bounds.
+                List<LetsEncryptValidationResult> transientRetryDiagnostics = LetsEncryptValidator.ValidateAcmeTransientRetryMaxAttempts(
+                    backFiller.LetsEncrypt?.AcmeTransientRetryMaxAttempts,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, transientRetryDiagnostics);
+
+                // Validate clock-skew check TTL bounds.
+                List<LetsEncryptValidationResult> clockSkewCheckTtlDiagnostics = LetsEncryptValidator.ValidateClockSkewCheckTtlMinutes(
+                    backFiller.LetsEncrypt?.ClockSkewCheckTtlMinutes,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, clockSkewCheckTtlDiagnostics);
+
+                // Validate maximum permitted clock-skew bounds.
+                List<LetsEncryptValidationResult> clockSkewMaxDiagnostics = LetsEncryptValidator.ValidateClockSkewMaxMinutes(
+                    backFiller.LetsEncrypt?.ClockSkewMaxMinutes,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, clockSkewMaxDiagnostics);
+
+                // Validate authoritative DNS nameserver cache TTL bounds.
+                List<LetsEncryptValidationResult> dnsAuthoritativeNsCacheDiagnostics = LetsEncryptValidator.ValidateDnsAuthoritativeNsCacheMinutes(
+                    backFiller.LetsEncrypt?.DnsAuthoritativeNsCacheMinutes,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, dnsAuthoritativeNsCacheDiagnostics);
+
+                // Validate authoritative DNS quorum ratio bounds.
+                List<LetsEncryptValidationResult> dnsAuthoritativeQuorumRatioDiagnostics = LetsEncryptValidator.ValidateDnsAuthoritativeQuorumRatio(
+                    backFiller.LetsEncrypt?.DnsAuthoritativeQuorumRatio,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, dnsAuthoritativeQuorumRatioDiagnostics);
+
+                // Validate DNS propagation-delay bounds.
+                List<LetsEncryptValidationResult> dnsPropagationDelayDiagnostics = LetsEncryptValidator.ValidateDnsPropagationDelaySeconds(
+                    backFiller.LetsEncrypt?.DnsPropagationDelaySeconds,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, dnsPropagationDelayDiagnostics);
+
+                // Validate DNS TXT polling interval bounds.
+                List<LetsEncryptValidationResult> dnsTxtPollIntervalDiagnostics = LetsEncryptValidator.ValidateDnsTxtPollIntervalSeconds(
+                    backFiller.LetsEncrypt?.DnsTxtPollIntervalSeconds,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, dnsTxtPollIntervalDiagnostics);
+
+                // Validate DNS TXT polling timeout bounds.
+                List<LetsEncryptValidationResult> dnsTxtPollTimeoutDiagnostics = LetsEncryptValidator.ValidateDnsTxtPollTimeoutSeconds(
+                    backFiller.LetsEncrypt?.DnsTxtPollTimeoutSeconds,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, dnsTxtPollTimeoutDiagnostics);
+
+                // Validate DNS TXT polling interval/timeout coherence.
+                List<LetsEncryptValidationResult> dnsTxtPollingCoherenceDiagnostics = LetsEncryptValidator.ValidateDnsTxtPollingCoherence(
+                    backFiller.LetsEncrypt?.DnsTxtPollIntervalSeconds,
+                    backFiller.LetsEncrypt?.DnsTxtPollTimeoutSeconds,
+                    "BackFiller:LetsEncrypt");
+
+                AddDiagnostics(errors, warnings, dnsTxtPollingCoherenceDiagnostics);
             }
-
-            // Validate PFX export password requirements for certificate bundle protection.
-            List<LetsEncryptValidationResult> pfxPasswordDiagnostics = LetsEncryptValidator.ValidatePfxExportPassword(
-                backFiller.LetsEncrypt?.PfxExportPassword,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, pfxPasswordDiagnostics);
-
-            // Validate renewal-check scheduler interval bounds.
-            List<LetsEncryptValidationResult> renewalCheckIntervalDiagnostics = LetsEncryptValidator.ValidateRenewalCheckIntervalHours(
-                backFiller.LetsEncrypt?.RenewalCheckIntervalHours,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, renewalCheckIntervalDiagnostics);
-
-            // Validate renewal-check scheduling jitter ratio bounds.
-            List<LetsEncryptValidationResult> renewalJitterDiagnostics = LetsEncryptValidator.ValidateRenewalJitterRatio(
-                backFiller.LetsEncrypt?.RenewalJitterRatio,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, renewalJitterDiagnostics);
-
-            // Validate renewal eligibility threshold bounds.
-            List<LetsEncryptValidationResult> renewBeforeExpiryDaysDiagnostics = LetsEncryptValidator.ValidateRenewBeforeExpiryDays(
-                backFiller.LetsEncrypt?.RenewBeforeExpiryDays,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, renewBeforeExpiryDaysDiagnostics);
-
-            // Validate ACME account email when Let's Encrypt integration is configured.
-            List<LetsEncryptValidationResult> letsEncryptDiagnostics = LetsEncryptValidator.ValidateAcmeAccountEmail(
-                backFiller.LetsEncrypt?.AcmeAccountEmail,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, letsEncryptDiagnostics);
-
-            // Validate account-key filename semantics and PEM private key loadability.
-            List<LetsEncryptValidationResult> accountKeyDiagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
-                backFiller.LetsEncrypt?.AcmeAccountKeyPem,
-                backFiller.DirCerts,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, accountKeyDiagnostics);
-
-            // Validate transient ACME retry attempt bounds.
-            List<LetsEncryptValidationResult> transientRetryDiagnostics = LetsEncryptValidator.ValidateAcmeTransientRetryMaxAttempts(
-                backFiller.LetsEncrypt?.AcmeTransientRetryMaxAttempts,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, transientRetryDiagnostics);
-
-            // Validate clock-skew check TTL bounds.
-            List<LetsEncryptValidationResult> clockSkewCheckTtlDiagnostics = LetsEncryptValidator.ValidateClockSkewCheckTtlMinutes(
-                backFiller.LetsEncrypt?.ClockSkewCheckTtlMinutes,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, clockSkewCheckTtlDiagnostics);
-
-            // Validate maximum permitted clock-skew bounds.
-            List<LetsEncryptValidationResult> clockSkewMaxDiagnostics = LetsEncryptValidator.ValidateClockSkewMaxMinutes(
-                backFiller.LetsEncrypt?.ClockSkewMaxMinutes,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, clockSkewMaxDiagnostics);
-
-            // Validate authoritative DNS nameserver cache TTL bounds.
-            List<LetsEncryptValidationResult> dnsAuthoritativeNsCacheDiagnostics = LetsEncryptValidator.ValidateDnsAuthoritativeNsCacheMinutes(
-                backFiller.LetsEncrypt?.DnsAuthoritativeNsCacheMinutes,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, dnsAuthoritativeNsCacheDiagnostics);
-
-            // Validate authoritative DNS quorum ratio bounds.
-            List<LetsEncryptValidationResult> dnsAuthoritativeQuorumRatioDiagnostics = LetsEncryptValidator.ValidateDnsAuthoritativeQuorumRatio(
-                backFiller.LetsEncrypt?.DnsAuthoritativeQuorumRatio,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, dnsAuthoritativeQuorumRatioDiagnostics);
-
-            // Validate DNS propagation-delay bounds.
-            List<LetsEncryptValidationResult> dnsPropagationDelayDiagnostics = LetsEncryptValidator.ValidateDnsPropagationDelaySeconds(
-                backFiller.LetsEncrypt?.DnsPropagationDelaySeconds,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, dnsPropagationDelayDiagnostics);
-
-            // Validate DNS TXT polling interval bounds.
-            List<LetsEncryptValidationResult> dnsTxtPollIntervalDiagnostics = LetsEncryptValidator.ValidateDnsTxtPollIntervalSeconds(
-                backFiller.LetsEncrypt?.DnsTxtPollIntervalSeconds,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, dnsTxtPollIntervalDiagnostics);
-
-            // Validate DNS TXT polling timeout bounds.
-            List<LetsEncryptValidationResult> dnsTxtPollTimeoutDiagnostics = LetsEncryptValidator.ValidateDnsTxtPollTimeoutSeconds(
-                backFiller.LetsEncrypt?.DnsTxtPollTimeoutSeconds,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, dnsTxtPollTimeoutDiagnostics);
-
-            // Validate DNS TXT polling interval/timeout coherence.
-            List<LetsEncryptValidationResult> dnsTxtPollingCoherenceDiagnostics = LetsEncryptValidator.ValidateDnsTxtPollingCoherence(
-                backFiller.LetsEncrypt?.DnsTxtPollIntervalSeconds,
-                backFiller.LetsEncrypt?.DnsTxtPollTimeoutSeconds,
-                "BackFiller:LetsEncrypt");
-
-            AddDiagnostics(errors, warnings, dnsTxtPollingCoherenceDiagnostics);
 
             // Validate Cloudflare API token formatting and requiredness.
             List<LetsEncryptValidationResult> cloudflareApiTokenDiagnostics = LetsEncryptValidator.ValidateCloudFlareApiToken(

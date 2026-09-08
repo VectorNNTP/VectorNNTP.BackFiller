@@ -24,9 +24,12 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// </summary>
         /// <param name="configuration">Application configuration root used by dependency probes that require configuration access.</param>
         /// <param name="backFiller">Validated BackFiller options consumed by Cloudflare and transit-server dependency probes.</param>
-        /// <param name="runtimeOptions">Validated immutable runtime options snapshot used by RabbitMQ, DNS, and certificate probes.</param>
+        /// <param name="runtimeOptions">Validated immutable runtime options snapshot used by RabbitMQ and optional listener readiness probes.</param>
         /// <param name="dependencyTimeout">Per-operation timeout passed to network dependency probes.</param>
         /// <param name="cancellationToken">Startup cancellation token propagated to all asynchronous probe operations.</param>
+        /// <param name="includeListenerCertificateReadiness">
+        /// <see langword="true"/> runs listener DNS synchronization and certificate readiness probes after baseline dependencies.
+        /// </param>
         /// <returns>
         /// A task that completes with a <see cref="DependencyValidationResult"/> containing aggregated failures, warnings,
         /// and errors from every executed dependency phase.
@@ -45,7 +48,8 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             BackFillerOptions? backFiller,
             BackFillerRuntimeOptions runtimeOptions,
             TimeSpan dependencyTimeout,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool includeListenerCertificateReadiness = true)
         {
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(runtimeOptions);
@@ -95,7 +99,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                     .Concat(transitServerDependencyResult.Errors)
                     .Concat(rabbitMqDependencyResult.Errors));
 
-            if (!baselineResult.IsValid)
+            if (!baselineResult.IsValid || !includeListenerCertificateReadiness)
             {
                 return baselineResult;
             }

@@ -9,6 +9,7 @@
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Startup;
 using VectorNNTP.Backfiller.Startup.Commands;
+using VectorNNTP.BackFiller.Tests.Startup.Validation;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure;
 using Xunit;
 
@@ -143,6 +144,46 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Commands
 
             Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
         }
+
+        /// <summary>
+        /// Confirms validate-startup enforces full startup listener ACME requirements and fails when mandatory listener certificate settings are missing.
+        /// </summary>
+        [Fact]
+        public void TryHandleCommand_WhenValidateStartupMissingListenerAcmeSettings_ReturnsConfigurationFailure()
+        {
+            IConfiguration configuration = BuildStartupValidationConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = string.Empty,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = string.Empty,
+            });
+
+            using ConsoleOutputScope outputScope = ConsoleOutputScope.Capture();
+            int? exitCode = ParseAndMaybeExecute(["--validate-startup"], configuration);
+            string output = outputScope.GetCapturedOutput();
+
+            Assert.Equal(ExitCodePolicy.ExitCodeConfigurationFailure, exitCode);
+            Assert.DoesNotContain("Startup validation PASSED", output, StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Confirms validate-config preserves scoped non-listener behavior and does not fail solely on missing listener ACME certificate settings.
+        /// </summary>
+        [Fact]
+        public void TryHandleCommand_WhenValidateConfigMissingListenerAcmeSettings_ReturnsSuccess()
+        {
+            IConfiguration configuration = BuildStartupValidationConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = string.Empty,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = string.Empty,
+            });
+
+            using ConsoleOutputScope outputScope = ConsoleOutputScope.Capture();
+            int? exitCode = ParseAndMaybeExecute(["--validate-config"], configuration);
+            string output = outputScope.GetCapturedOutput();
+
+            Assert.Equal(ExitCodePolicy.ExitCodeNormalShutdown, exitCode);
+            Assert.Contains("Configuration validation PASSED", output, StringComparison.Ordinal);
+        }
         /// <summary>
         /// Confirms the try handle command when dump config includes use staging directory prints cleartext value behavior.
         /// </summary>
@@ -206,6 +247,52 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Commands
                 : command.HasValue
                 ? OperationalCommandExecutor.ExecuteCommand(command.Value, configuration)
                 : null;
+        }
+
+        private static IConfiguration BuildStartupValidationConfiguration(Dictionary<string, string?> overrides)
+        {
+            Dictionary<string, string?> values = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirLogs"] = "logs",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:ConnectionBlockedTimeoutSeconds"] = "120",
+                ["BackFiller:RabbitMQ:Hosts:0"] = "203.0.113.1",
+                ["BackFiller:RabbitMQ:Port"] = "5672",
+                ["BackFiller:RabbitMQ:Username"] = "nntparticles",
+                ["BackFiller:RabbitMQ:Password"] = "password-1",
+                ["BackFiller:RabbitMQ:VirtualHost"] = "/",
+                ["BackFiller:RabbitMQ:EnableSsl"] = "false",
+                ["BackFiller:RabbitMQ:ConnectionScaleDownIdleSeconds"] = "300",
+                ["BackFiller:RabbitMQ:ScaleDownCooldownSeconds"] = "60",
+                ["BackFiller:RabbitMQ:MinimumConnectionLifetimeSeconds"] = "30",
+                ["BackFiller:RabbitMQ:NetworkRecoveryIntervalSeconds"] = "60",
+                ["BackFiller:RabbitMQ:PoolReconnectBaseDelayMs"] = "100",
+                ["BackFiller:RabbitMQ:PoolReconnectMaxDelayMs"] = "1000",
+                ["BackFiller:RabbitMQ:MaxPendingLeaseWaiters"] = "10",
+                ["BackFiller:RabbitMQ:UnhealthyLeasesThreshold"] = "30",
+                ["BackFiller:RabbitMQ:MaxConsecutiveRecoveryFailures"] = "3",
+                ["BackFiller:RabbitMQ:PublishConfirmTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:MaximumShutdownDrainTimeoutSeconds"] = "30",
+                ["BackFiller:TransitServer:Host"] = "transit01.example.net",
+                ["BackFiller:TransitServer:Port"] = "119",
+                ["BackFiller:TransitServer:UseSsl"] = "false",
+            };
+
+            foreach ((string key, string? value) in overrides)
+            {
+                values[key] = value;
+            }
+
+            return ProgramValidationSemanticsTests.BuildConfigurationForCommandTests(values);
         }
     }
 }

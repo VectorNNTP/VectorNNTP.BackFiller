@@ -10,9 +10,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using Startup = global::VectorNNTP.Backfiller.Startup;
+using Microsoft.Extensions.Primitives;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Commands;
+using VectorNNTP.Backfiller.Startup.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
 using Xunit;
 
@@ -75,6 +76,191 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 e.Setting == "BackFiller"
                 && e.Error.Contains("DirLogs", StringComparison.Ordinal));
         }
+
+        /// <summary>
+        /// Confirms validate-config validates the already bound BackFiller snapshot by rejecting a second BackFiller section bind attempt within a single command evaluation.
+        /// </summary>
+        [Fact]
+        public void BuildValidateConfigCommandResult_WhenSecondBackFillerBindWouldOccur_DoesNotRebindConfiguration()
+        {
+            IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+            IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(baselineConfiguration);
+
+            ConfigurationValidationResult result = ValidateConfigCommandHandler.BuildValidateConfigCommandResult(guardedConfiguration);
+
+            Assert.True(result.IsValid);
+            Assert.Empty(result.Errors);
+        }
+
+        /// <summary>
+        /// Confirms validate-config runtime projection does not require listener certificate directory in non-listener mode.
+        /// </summary>
+        [Fact]
+        public void BuildValidateConfigCommandResult_WhenDirCertsMissing_RemainsValidInNonListenerSnapshotMode()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+
+            ConfigurationValidationResult result = ValidateConfigCommandHandler.BuildValidateConfigCommandResult(configuration);
+
+            Assert.True(result.IsValid);
+            Assert.DoesNotContain(result.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Confirms non-listener startup validation can project runtime options without certificate-directory prerequisites.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenDirCertsMissing_DoesNotReturnDirCertsConfigurationError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult _) =
+                await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.DoesNotContain(configResult.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Confirms non-listener pipeline validates and projects a single authoritative BackFiller bind snapshot.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenSecondBackFillerBindWouldOccur_DoesNotRebindConfiguration()
+        {
+            IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+            IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(
+                baselineConfiguration,
+                "BackFiller section was rebound more than once during non-listener startup validation pipeline evaluation.");
+
+            (ConfigurationValidationResult configResult, _) =
+                await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                    guardedConfiguration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.True(configResult.IsValid);
+            Assert.Empty(configResult.Errors);
+        }
+
+        /// <summary>
+        /// Confirms full startup validation still enforces listener certificate directory prerequisites.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenDirCertsMissing_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Contains(configResult.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
+            Assert.Null(runtimeOptions);
+            Assert.True(dependencyResult.IsValid);
+        }
+
+        /// <summary>
+        /// Confirms full-startup pipeline keeps strict listener certificate prerequisites while avoiding a second BackFiller bind.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenSecondBackFillerBindWouldOccur_DoesNotRebindConfiguration()
+        {
+            IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+            IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(
+                baselineConfiguration,
+                "BackFiller section was rebound more than once during full-startup validation pipeline evaluation.");
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult _, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    guardedConfiguration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.NotEmpty(configResult.Errors);
+            Assert.Null(runtimeOptions);
+        }
+
+        /// <summary>
+        /// Confirms RuntimeSnapshotFactory omits listener certificate directory and LetsEncrypt runtime projection in non-listener mode.
+        /// </summary>
+        [Fact]
+        public void BuildRuntimeOptionsSnapshot_WhenNonListenerModeAndDirCertsMissing_BuildsWithoutCertificateDirectory()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> errors = [];
+
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                errors,
+                includeLetsEncryptRuntimeOptions: false);
+
+            Assert.NotNull(runtimeOptions);
+            Assert.Empty(errors);
+            Assert.Null(runtimeOptions.ValidatedCertificateDirectory);
+            Assert.Null(runtimeOptions.LetsEncrypt);
+            Assert.NotNull(runtimeOptions.RabbitMq);
+            Assert.Equal("localhost", runtimeOptions.TransitServerHost);
+        }
+
+        /// <summary>
+        /// Confirms RuntimeSnapshotFactory still fails in full-startup mode when certificate directory is missing.
+        /// </summary>
+        [Fact]
+        public void BuildRuntimeOptionsSnapshot_WhenFullStartupModeAndDirCertsMissing_Fails()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:DirCerts"] = string.Empty,
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> errors = [];
+
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                errors,
+                includeLetsEncryptRuntimeOptions: true);
+
+            Assert.Null(runtimeOptions);
+            Assert.Contains(errors, static e =>
+                e.Setting == "BackFiller"
+                && e.Error.Contains("DirCerts", StringComparison.OrdinalIgnoreCase));
+        }
+
         /// <summary>
         /// Confirms the validate back filler options when canonical identity available does not use configured domain names behavior.
         /// </summary>
@@ -198,11 +384,11 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Empty(dependencyResult.FailedDependencies);
         }
         /// <summary>
-        /// Confirms the validate configuration and dependencies async when lets encrypt disabled and cloudflare configured still runs cloudflare dependency validation behavior.
+        /// Confirms the non-listener startup validation path still executes Cloudflare dependency validation when Cloudflare is configured.
         /// </summary>
         [Trait("Category", "Integration")]
         [Fact]
-        public async Task ValidateConfigurationAndDependenciesAsync_WhenLetsEncryptDisabledAndCloudflareConfigured_StillRunsCloudflareDependencyValidation()
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenCloudflareConfiguredInNonListenerPath_StillRunsCloudflareDependencyValidation()
         {
             IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
@@ -225,6 +411,86 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.True(configResult.IsValid);
             Assert.Contains(dependencyResult.FailedDependencies, static d => d.Dependency == "CloudflareZone");
         }
+
+        /// <summary>
+        /// Confirms the full startup validation path still requires mandatory listener ACME inputs before runtime snapshot/dependency execution.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenListenerAcmeSettingsMissing_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Null(runtimeOptions);
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
+            Assert.True(dependencyResult.IsValid);
+            Assert.Empty(dependencyResult.FailedDependencies);
+        }
+
+        /// <summary>
+        /// Confirms full startup validation still rejects malformed listener-only ACME settings.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenListenerAcmeSettingsMalformed_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "not-an-email",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "..\\..\\account.key",
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "short",
+                ["BackFiller:LetsEncrypt:RenewalCheckIntervalHours"] = "0",
+                ["BackFiller:LetsEncrypt:RenewalJitterRatio"] = "1",
+                ["BackFiller:LetsEncrypt:RenewBeforeExpiryDays"] = "0",
+                ["BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewMaxMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio"] = "0",
+                ["BackFiller:LetsEncrypt:DnsPropagationDelaySeconds"] = "-1",
+                ["BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Null(runtimeOptions);
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalCheckIntervalHours");
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds");
+            Assert.True(dependencyResult.IsValid);
+            Assert.Empty(dependencyResult.FailedDependencies);
+        }
+
         /// <summary>
         /// Confirms the validate configuration and dependencies async when cloudflare configured remains valid without legacy lets encrypt enabled warnings behavior.
         /// </summary>
@@ -254,6 +520,73 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.DoesNotContain(configResult.Warnings, static w => w.Setting == "BackFiller:LetsEncrypt:Enabled");
         }
         /// <summary>
+        /// Confirms non-listener validation scope ignores listener-only ACME certificate readiness settings.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenNonListenerScopeAndListenerAcmeSettingsMalformed_DoesNotReturnListenerAcmeErrors()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "not-an-email",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "..\\..\\account.key",
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "short",
+                ["BackFiller:LetsEncrypt:RenewalCheckIntervalHours"] = "0",
+                ["BackFiller:LetsEncrypt:RenewalJitterRatio"] = "1",
+                ["BackFiller:LetsEncrypt:RenewBeforeExpiryDays"] = "0",
+                ["BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewMaxMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio"] = "0",
+                ["BackFiller:LetsEncrypt:DnsPropagationDelaySeconds"] = "-1",
+                ["BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalCheckIntervalHours");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalJitterRatio");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:ClockSkewMaxMinutes");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsPropagationDelaySeconds");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds");
+        }
+
+        /// <summary>
+        /// Confirms non-listener validation scope still validates independent Cloudflare prerequisites.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenNonListenerScopeAndCloudflareZoneMalformed_ReturnsCloudflareZoneError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "invalid-zone-id",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
+
+            Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:CloudFlareZoneId");
+        }
+
+        /// <summary>
         /// Confirms the validate configuration and dependencies async when rabbit mq endpoint unreachable returns rabbit mq dependency failure behavior.
         /// </summary>
         [Fact]
@@ -277,7 +610,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:TransitServer:UseSsl"] = "false",
             });
 
-            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
             Assert.Empty(configErrors);
 
             (_, DependencyValidationResult dependencyResult) =
@@ -313,7 +649,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:TransitServer:UseSsl"] = "false",
             });
 
-            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
             Assert.Empty(configErrors);
 
             (_, DependencyValidationResult dependencyResult) =
@@ -2783,7 +3122,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                     CancellationToken.None);
 
             // Sanity-check configuration-level validation first and report any config errors for diagnosis.
-            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
             Assert.True(configErrors.Count == 0, $"Unexpected configuration errors: {string.Join("; ", configErrors.Select(e => e.Setting + ": " + e.Error))}");
 
             Assert.True(configResult.IsValid);
@@ -3014,7 +3356,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         /// <param name="values">The values used by this test scenario.</param>
         /// <param name="includeRabbitMqBaseline">The include rabbit mq baseline used by this test scenario.</param>
         /// <returns>The value returned by the build configuration helper.</returns>
-        private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
+        internal static IConfiguration BuildConfigurationForCommandTests(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             if (includeRabbitMqBaseline)
             {
@@ -3067,6 +3409,58 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             return new ConfigurationBuilder()
                 .AddInMemoryCollection(values)
                 .Build();
+        }
+
+        private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
+        {
+            return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
+        }
+
+        private sealed class SingleBackFillerBindConfiguration : IConfiguration
+        {
+            private readonly IConfiguration _inner;
+            private readonly string _multipleBindMessage;
+            private int _backFillerBindCount;
+
+            internal SingleBackFillerBindConfiguration(IConfiguration inner, string multipleBindMessage = "BackFiller section was rebound more than once during validate-config command evaluation.")
+            {
+                _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+                _multipleBindMessage = string.IsNullOrWhiteSpace(multipleBindMessage)
+                    ? throw new ArgumentException("A non-empty multiple-bind message is required.", nameof(multipleBindMessage))
+                    : multipleBindMessage;
+            }
+
+            public string? this[string key]
+            {
+                get => _inner[key];
+                set => _inner[key] = value;
+            }
+
+            public IEnumerable<IConfigurationSection> GetChildren()
+            {
+                return _inner.GetChildren();
+            }
+
+            public IChangeToken GetReloadToken()
+            {
+                return _inner.GetReloadToken();
+            }
+
+            public IConfigurationSection GetSection(string key)
+            {
+                IConfigurationSection section = _inner.GetSection(key);
+                if (!string.Equals(key, "BackFiller", StringComparison.OrdinalIgnoreCase))
+                {
+                    return section;
+                }
+
+                if (Interlocked.Increment(ref _backFillerBindCount) > 1)
+                {
+                    throw new InvalidOperationException(_multipleBindMessage);
+                }
+
+                return section;
+            }
         }
 
     }

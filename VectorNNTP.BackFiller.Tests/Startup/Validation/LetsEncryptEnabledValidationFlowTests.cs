@@ -6,6 +6,7 @@
 // Focused tests for lets encrypt validation flow, covering configuration and validation contracts; certificate and DNS dependency behavior.
 
 using Microsoft.Extensions.Configuration;
+using VectorNNTP.Backfiller.Startup.Configuration;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Startup.Validation
@@ -104,6 +105,25 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         [Fact]
+        public void ValidateBackFillerOptions_WhenLegacyLetsEncryptEnabledKeyProvidedInNonListenerScope_StillReturnsUnsupportedSettingError()
+        {
+            IConfiguration configuration = BuildBackFillerConfigurationWithRawBindPort(
+                bindPort: "119",
+                bindAddresses: ["127.0.0.1"],
+                domainNames: null,
+                includeLegacyEnabledKey: true);
+
+            List<(string Setting, string Error)> errors = ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
+
+            Assert.Contains(errors, static e =>
+                e.Setting == "BackFiller:LetsEncrypt:Enabled"
+                && e.Error.Contains("no longer supported", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
         public void ValidateBackFillerOptions_WhenConfiguredDomainNamesInvalid_DoesNotUseConfiguredDomainNames()
         {
             IConfiguration configuration = BuildBackFillerConfigurationWithRawBindPort(
@@ -120,7 +140,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
         private static List<(string Setting, string Error)> InvokeValidateBackFillerOptions(IConfiguration configuration)
         {
-            return global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            return ConfigurationValidator.ValidateBackFillerOptions(configuration);
         }
 
         private static IConfiguration BuildBackFillerConfiguration(params string[]? bindAddresses)

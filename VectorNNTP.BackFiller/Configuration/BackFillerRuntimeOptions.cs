@@ -20,7 +20,7 @@ namespace VectorNNTP.Backfiller.Configuration
     /// <param name="BackFillerId">Authoritative BackFiller server identifier derived from validated configuration.</param>
     /// <param name="CanonicalDnsSuffix">Canonical DNS suffix derived from validated configuration.</param>
     /// <param name="ValidatedLogDirectory">Validated absolute log directory path.</param>
-    /// <param name="ValidatedCertificateDirectory">Validated absolute certificate directory path.</param>
+    /// <param name="ValidatedCertificateDirectory">Validated absolute certificate directory path when listener certificate runtime projection is included; otherwise <see langword="null"/> for non-listener scoped snapshots.</param>
     /// <param name="RabbitMqHosts">Canonical RabbitMQ host list used by runtime services.</param>
     /// <param name="RabbitMqPort">Validated RabbitMQ port used by runtime services.</param>
     /// <param name="RabbitMqEnableSsl">Validated RabbitMQ TLS mode used by runtime services.</param>
@@ -50,7 +50,7 @@ namespace VectorNNTP.Backfiller.Configuration
         int BackFillerId,
         string CanonicalDnsSuffix,
         string ValidatedLogDirectory,
-        string ValidatedCertificateDirectory,
+        string? ValidatedCertificateDirectory,
         IReadOnlyList<string> RabbitMqHosts,
         int RabbitMqPort,
         bool RabbitMqEnableSsl,

@@ -87,9 +87,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             IConfiguration config = Build(values);
 
-            // Convert the diagnostic harness into real assertions: verify that the full pipeline
+            // Convert the diagnostic harness into real assertions: verify that the non-listener validation pipeline
             // produces the expected outcome (no TransitServer UseSsl error when UseSsl is missing)
-            (ConfigurationValidationResult? configResult, DependencyValidationResult? dependencyResult, global::VectorNNTP.Backfiller.Configuration.BackFillerRuntimeOptions? runtimeOptions) = await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
+            (ConfigurationValidationResult configResult, DependencyValidationResult _) = await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
 
             string errorSummary = string.Join("; ", configResult.Errors.Select(e => $"{e.Setting}: {e.Error}"));
             string warnSummary = string.Join("; ", configResult.Warnings.Select(w => $"{w.Setting}: {w.Message}"));
@@ -129,7 +129,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             IConfiguration config = Build(values);
 
-            (ConfigurationValidationResult? configResult, DependencyValidationResult? dependencyResult, global::VectorNNTP.Backfiller.Configuration.BackFillerRuntimeOptions? runtimeOptions) = await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
+            (ConfigurationValidationResult configResult, DependencyValidationResult _) = await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
 
             string errorSummary = string.Join("; ", configResult.Errors.Select(e => $"{e.Setting}: {e.Error}"));
             string warnSummary = string.Join("; ", configResult.Warnings.Select(w => $"{w.Setting}: {w.Message}"));
@@ -170,7 +170,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             IConfiguration config = Build(values);
 
-            (ConfigurationValidationResult? configResult, DependencyValidationResult? dependencyResult, global::VectorNNTP.Backfiller.Configuration.BackFillerRuntimeOptions? runtimeOptions) = await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
+            (ConfigurationValidationResult configResult, DependencyValidationResult _) = await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
 
             Assert.True(configResult.IsValid);
             // When UseSsl=false and Port=563 the validator should emit a port warning about TLS convention
@@ -208,7 +208,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             IConfiguration config = Build(values);
 
-            (ConfigurationValidationResult? configResult, DependencyValidationResult? dependencyResult, global::VectorNNTP.Backfiller.Configuration.BackFillerRuntimeOptions? runtimeOptions) = await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
+            (ConfigurationValidationResult configResult, DependencyValidationResult _) = await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(config, TimeSpan.FromSeconds(1), CancellationToken.None);
 
             Assert.True(configResult.IsValid);
             // When UseSsl=true and Port=563 there should be no port warning
