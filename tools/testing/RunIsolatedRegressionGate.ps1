@@ -349,7 +349,21 @@ if ($selectedCases.Count -eq 0) {
 }
 
 $perClassDiscovery = [System.Collections.Generic.List[object]]::new()
-$selectedClassNames = if ($RequestedClasses.Count -gt 0) { $RequestedClasses } else { ($selectedCases | Select-Object -ExpandProperty ClassName -Unique) }
+$selectedClassNames = [System.Collections.Generic.List[string]]::new()
+$seenClassNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+
+foreach ($requestedClass in $RequestedClasses) {
+	if ($seenClassNames.Add($requestedClass)) {
+		$selectedClassNames.Add($requestedClass)
+	}
+}
+
+foreach ($selectedCase in $selectedCases) {
+	if (-not [string]::IsNullOrWhiteSpace($selectedCase.ClassName) -and $seenClassNames.Add($selectedCase.ClassName)) {
+		$selectedClassNames.Add($selectedCase.ClassName)
+	}
+}
+
 foreach ($className in $selectedClassNames) {
 	$classCases = @($selectedCases | Where-Object { $_.ClassName -eq $className })
 	$methodCount = (@($classCases | Select-Object -ExpandProperty MethodName -Unique)).Count

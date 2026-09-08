@@ -1049,7 +1049,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             byte[] payloadCopy = articlePayload.ToArray();
             TransitWorkItem item = new(Interlocked.Increment(ref _sendSequence), messageId, maxAttempts: 3);
-            item.MarkClaimed(ConnectionId, DateTimeOffset.UtcNow);
+            item.MarkDirectClaimed(ConnectionId, DateTimeOffset.UtcNow);
 
             TaskCompletionSource<TransitPublishResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _directSubmitCompletions[item.WorkItemId] = completion;

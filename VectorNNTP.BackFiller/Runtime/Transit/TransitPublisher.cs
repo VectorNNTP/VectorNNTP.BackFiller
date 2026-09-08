@@ -1419,22 +1419,37 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return;
             }
 
-            if (!inFlightOwnershipAlreadyTransferred && priorState is TransitWorkItemState.Claimed
-                or TransitWorkItemState.Staged
-                or TransitWorkItemState.Flushed
-                or TransitWorkItemState.AwaitingResponse)
+            _ = IncrementLifetimeResultCounter(result.Status);
+
+            ExceptionDispatchInfo? deferredFailure = null;
+            try
             {
-                _globalQueue.MarkInFlightTerminal();
+                if (!inFlightOwnershipAlreadyTransferred)
+                {
+                    _globalQueue.ReleaseTerminalOwnership(priorState);
+                }
+
+                if (ShouldMarkTransitCompleted(result, priorState))
+                {
+                    _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
+                }
+            }
+            catch (Exception ex)
+            {
+                deferredFailure = ExceptionDispatchInfo.Capture(ex);
+            }
+            finally
+            {
+                _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
+                _ = item.TrySetCompletionResult(result);
             }
 
-            if (ShouldMarkTransitCompleted(result, priorState))
-            {
-                _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
-            }
+            deferredFailure?.Throw();
+        }
 
-            _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
-
-            _ = result.Status switch
+        private long IncrementLifetimeResultCounter(TransitPublishStatus status)
+        {
+            return status switch
             {
                 TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
                 TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
@@ -1445,7 +1460,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
                 _ => Interlocked.Increment(ref _totalArticlesFailed),
             };
-            _ = item.TrySetCompletionResult(result);
         }
 
         private static bool ShouldMarkTransitCompleted(TransitPublishResult result, TransitWorkItemState priorState)
@@ -1459,12 +1473,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
         private static bool IsAdmittedTransitOwnershipState(TransitWorkItemState priorState)
         {
-            return priorState is TransitWorkItemState.Queued
-                or TransitWorkItemState.RetryPending
-                or TransitWorkItemState.Claimed
-                or TransitWorkItemState.Staged
-                or TransitWorkItemState.Flushed
-                or TransitWorkItemState.AwaitingResponse;
+            return TransitWorkItem.IsAdmittedOwnershipState(priorState);
         }
 
         /// <summary>
@@ -1474,6 +1483,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private async Task ForceTerminalizeRemainingWorkAsync()
         {
             TransitWorkItem[] remaining = [.. _activeWorkItems.Values];
+            ExceptionDispatchInfo? firstDeferredFailure = null;
+            List<Exception>? additionalFailures = null;
+
             foreach (TransitWorkItem item in remaining)
             {
                 TransitPublishResult forced = new(
@@ -1491,43 +1503,38 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                switch (priorState)
+                _ = IncrementLifetimeResultCounter(forced.Status);
+
+                try
                 {
-                    case TransitWorkItemState.Queued:
-                        _globalQueue.MarkQueuedTerminal();
-                        break;
-                    case TransitWorkItemState.RetryPending:
-                        _globalQueue.MarkRetryPendingTerminal();
-                        break;
-                    case TransitWorkItemState.Claimed:
-                    case TransitWorkItemState.Staged:
-                    case TransitWorkItemState.Flushed:
-                    case TransitWorkItemState.AwaitingResponse:
-                        _globalQueue.MarkInFlightTerminal();
-                        break;
-                    case TransitWorkItemState.CompletedAccepted:
-                    case TransitWorkItemState.CompletedRejected:
-                    case TransitWorkItemState.CompletedFailed:
-                    case TransitWorkItemState.CompletedCanceled:
-                        break;
-                    default:
-                        break;
+                    _globalQueue.ReleaseTerminalOwnership(priorState);
+                }
+                catch (Exception ex)
+                {
+                    if (firstDeferredFailure is null)
+                    {
+                        firstDeferredFailure = ExceptionDispatchInfo.Capture(ex);
+                    }
+                    else
+                    {
+                        (additionalFailures ??= []).Add(ex);
+                    }
+                }
+                finally
+                {
+                    _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
+                    _ = item.TrySetCompletionResult(forced);
+                }
+            }
+
+            if (firstDeferredFailure is not null)
+            {
+                if (additionalFailures is null || additionalFailures.Count == 0)
+                {
+                    firstDeferredFailure.Throw();
                 }
 
-                _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
-
-                _ = forced.Status switch
-                {
-                    TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
-                    TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
-                    TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
-                    TransitPublishStatus.Queued
-                    or TransitPublishStatus.Unavailable
-                    or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
-                    TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
-                    _ => Interlocked.Increment(ref _totalArticlesFailed),
-                };
-                _ = item.TrySetCompletionResult(forced);
+                throw new AggregateException([firstDeferredFailure.SourceException, .. additionalFailures]);
             }
 
             await Task.CompletedTask.ConfigureAwait(false);

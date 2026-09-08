@@ -6,6 +6,7 @@
 // Focused tests for transit global work queue, covering NNTP article and transport behavior.
 // Primary responsibility: documents the executable contracts covered by the transit global work queue test suite.
 
+using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
@@ -146,6 +147,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             TransitWorkItem item = CreateItem(1, "<attempt-budget@example.com>", 64);
 
+            item.MarkQueued(DateTimeOffset.UtcNow);
             item.MarkClaimed("conn-1", DateTimeOffset.UtcNow);
             Assert.Equal(1, item.AttemptCount);
             Assert.True(item.HasAttemptsRemaining());
@@ -186,6 +188,267 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Confirms enqueue admission racing terminalization cannot strand queued ownership and completion settles once.
+        /// </summary>
+        [Fact]
+        public async Task EnqueueAndTerminalize_RacingTransitions_DoNotStrandQueuedOwnershipOrCompletion()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 2);
+            TransitWorkItem item = CreateItem(10, "<race-enqueue-terminal@example.com>", 32);
+
+            TransitPublishResult forced = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Canceled,
+                ResponseCode: null,
+                ResponseText: "forced",
+                Provenance: TransitPublishProvenance.Cancellation);
+
+            Task enqueueTask = Task.Run(() => queue.EnqueueAsync(item, CancellationToken.None).AsTask());
+            Task terminalizeTask = Task.Run(() =>
+            {
+                if (item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState))
+                {
+                    queue.ReleaseTerminalOwnership(priorState);
+                    Assert.True(item.TrySetCompletionResult(forced));
+                }
+            });
+
+            await enqueueTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await terminalizeTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.True(item.IsTerminal);
+
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TransitPublishStatus.Canceled, completion.Status);
+            Assert.False(item.TrySetCompletionResult(forced));
+        }
+
+        /// <summary>
+        /// Confirms claim transfer racing terminalization cannot diverge queued and in-flight accounting.
+        /// </summary>
+        [Fact]
+        public async Task ClaimAndTerminalize_RacingTransitions_DoNotDivergeQueuedAndInFlightAccounting()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 2);
+            TransitWorkItem item = CreateItem(12, "<race-claim-terminal@example.com>", 32);
+            await queue.EnqueueAsync(item, CancellationToken.None);
+
+            TransitPublishResult forced = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Ambiguous,
+                ResponseCode: null,
+                ResponseText: "forced",
+                Provenance: TransitPublishProvenance.Shutdown);
+
+            TaskCompletionSource terminalTransitionObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource admissionGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource releaseClaimTransfer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            object admissionGate = GetAdmissionGate(queue);
+
+            Task claimTransferPauseTask = Task.Run(() =>
+            {
+                lock (admissionGate)
+                {
+                    _ = admissionGateHeld.TrySetResult();
+                    releaseClaimTransfer.Task.GetAwaiter().GetResult();
+                }
+            });
+
+            await admissionGateHeld.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Task<bool> claimTask = Task.Run(() => queue.TryClaim("conn-race", out _));
+
+            DateTimeOffset claimWaitStart = DateTimeOffset.UtcNow;
+            while (item.State != TransitWorkItemState.Claimed)
+            {
+                Assert.True(DateTimeOffset.UtcNow - claimWaitStart < TimeSpan.FromSeconds(5));
+                await Task.Yield();
+            }
+
+            Task terminalizeTask = Task.Run(() =>
+            {
+                Assert.True(item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState));
+                _ = terminalTransitionObserved.TrySetResult();
+                queue.ReleaseTerminalOwnership(priorState);
+                Assert.True(item.TrySetCompletionResult(forced));
+            });
+
+            await terminalTransitionObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            _ = releaseClaimTransfer.TrySetResult();
+
+            await claimTransferPauseTask.WaitAsync(TimeSpan.FromSeconds(5));
+            _ = await claimTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await terminalizeTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.True(item.IsTerminal);
+            Assert.False(queue.TryClaim("conn-race-2", out _));
+
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TransitPublishStatus.Ambiguous, completion.Status);
+            Assert.False(item.TrySetCompletionResult(forced));
+        }
+
+        /// <summary>
+        /// Confirms retry scheduling and retry-to-queued readmission racing terminalization cannot underflow or strand ownership.
+        /// </summary>
+        [Fact]
+        public async Task RetryReadmissionAndTerminalize_RacingTransitions_DoNotUnderflowOrStrandOwnership()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 1);
+            TransitWorkItem blocker = CreateItem(13, "<capacity-blocker@example.com>", 32);
+            TransitWorkItem item = CreateItem(14, "<race-retry-terminal@example.com>", 32);
+
+            await queue.EnqueueAsync(item, CancellationToken.None);
+            Assert.True(queue.TryClaim("conn-race", out TransitWorkItem? claimed));
+            Assert.NotNull(claimed);
+
+            await queue.EnqueueAsync(blocker, CancellationToken.None);
+
+            Task<bool> scheduleTask = Task.Run(() => queue.ScheduleRetryAsync(
+                claimed!,
+                TransitWorkFailureClass.ConnectionReset,
+                TransitTransmissionUncertainty.ConnectionFailedDuringSend,
+                TimeSpan.Zero,
+                transferOwnershipFromInFlight: true,
+                cancellationToken: CancellationToken.None).AsTask());
+
+            DateTimeOffset waitStart = DateTimeOffset.UtcNow;
+            while (queue.RetryPendingCount == 0)
+            {
+                Assert.True(DateTimeOffset.UtcNow - waitStart < TimeSpan.FromSeconds(5));
+                await Task.Delay(5);
+            }
+
+            TransitPublishResult forced = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Failed,
+                ResponseCode: null,
+                ResponseText: "forced",
+                Provenance: TransitPublishProvenance.Failed);
+
+            Assert.True(item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState));
+            queue.ReleaseTerminalOwnership(priorState);
+            Assert.True(item.TrySetCompletionResult(forced));
+
+            Assert.True(queue.TryClaim("conn-blocker", out _));
+            queue.MarkInFlightTerminal();
+
+            _ = await scheduleTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await queue.DrainEligibleRetriesAsync(CancellationToken.None);
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.False(queue.TryClaim("conn-late", out _));
+            Assert.True(item.IsTerminal);
+
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TransitPublishStatus.Failed, completion.Status);
+            Assert.False(item.TrySetCompletionResult(forced));
+        }
+
+        /// <summary>
+        /// Confirms terminalization while registered-before-admission does not release unowned capacity and cannot later acquire queue ownership.
+        /// </summary>
+        [Fact]
+        public async Task Terminalize_WhenRegisteredBeforeAdmission_DoesNotTouchCountersOrRequeue()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 1);
+            TransitWorkItem item = CreateItem(11, "<registered-terminal@example.com>", 16);
+
+            Assert.Equal(TransitWorkItemState.Registered, item.State);
+            TransitPublishResult canceled = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Canceled,
+                ResponseCode: null,
+                ResponseText: "canceled",
+                Provenance: TransitPublishProvenance.Cancellation);
+
+            Assert.True(item.TryTransitionToTerminal(canceled.Status, canceled.Provenance, out TransitWorkItemState priorState));
+            Assert.Equal(TransitWorkItemState.Registered, priorState);
+
+            queue.ReleaseTerminalOwnership(priorState);
+            Assert.True(item.TrySetCompletionResult(canceled));
+
+            await queue.EnqueueAsync(item, CancellationToken.None);
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.False(queue.TryClaim("conn-late", out _));
+
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(TransitPublishStatus.Canceled, completion.Status);
+        }
+
+        /// <summary>
+        /// Confirms terminal release from queued, in-flight, and retry-pending states decrements exactly one matching ownership counter.
+        /// </summary>
+        [Fact]
+        public async Task ReleaseTerminalOwnership_FromOwnedStates_ReleasesExactlyOwnedCounter()
+        {
+            GlobalTransitWorkQueue queue = new(maxQueuedItemCount: 4);
+
+            TransitWorkItem queuedItem = CreateItem(21, "<terminal-queued@example.com>", 8);
+            await queue.EnqueueAsync(queuedItem, CancellationToken.None);
+            Assert.True(queuedItem.TryTransitionToTerminal(TransitPublishStatus.Canceled, TransitPublishProvenance.Cancellation, out TransitWorkItemState queuedPrior));
+            Assert.Equal(TransitWorkItemState.Queued, queuedPrior);
+            queue.ReleaseTerminalOwnership(queuedPrior);
+            Assert.True(queuedItem.TrySetCompletionResult(new TransitPublishResult(
+                MessageId: queuedItem.MessageId,
+                Status: TransitPublishStatus.Canceled,
+                ResponseCode: null,
+                ResponseText: "queued",
+                Provenance: TransitPublishProvenance.Cancellation)));
+
+            TransitWorkItem inFlightItem = CreateItem(22, "<terminal-inflight@example.com>", 8);
+            await queue.EnqueueAsync(inFlightItem, CancellationToken.None);
+            Assert.True(queue.TryClaim("conn-owned", out TransitWorkItem? claimed));
+            Assert.NotNull(claimed);
+            Assert.True(inFlightItem.TryTransitionToTerminal(TransitPublishStatus.Failed, TransitPublishProvenance.Failed, out TransitWorkItemState inFlightPrior));
+            Assert.True(TransitWorkItem.IsInFlightOwnershipState(inFlightPrior));
+            queue.ReleaseTerminalOwnership(inFlightPrior);
+            Assert.True(inFlightItem.TrySetCompletionResult(new TransitPublishResult(
+                MessageId: inFlightItem.MessageId,
+                Status: TransitPublishStatus.Failed,
+                ResponseCode: null,
+                ResponseText: "inflight",
+                Provenance: TransitPublishProvenance.Failed)));
+
+            TransitWorkItem retryItem = CreateItem(23, "<terminal-retry@example.com>", 8);
+            await queue.EnqueueAsync(retryItem, CancellationToken.None);
+            Assert.True(queue.TryClaim("conn-retry", out TransitWorkItem? retryClaimed));
+            Assert.NotNull(retryClaimed);
+            Assert.True(await queue.ScheduleRetryAsync(
+                retryClaimed!,
+                TransitWorkFailureClass.ConnectionReset,
+                TransitTransmissionUncertainty.ConnectionFailedDuringSend,
+                TimeSpan.FromDays(1),
+                transferOwnershipFromInFlight: true,
+                cancellationToken: CancellationToken.None));
+            Assert.True(retryItem.TryTransitionToTerminal(TransitPublishStatus.Ambiguous, TransitPublishProvenance.Shutdown, out TransitWorkItemState retryPrior));
+            Assert.Equal(TransitWorkItemState.RetryPending, retryPrior);
+            queue.ReleaseTerminalOwnership(retryPrior);
+            Assert.True(retryItem.TrySetCompletionResult(new TransitPublishResult(
+                MessageId: retryItem.MessageId,
+                Status: TransitPublishStatus.Ambiguous,
+                ResponseCode: null,
+                ResponseText: "retry",
+                Provenance: TransitPublishProvenance.Shutdown)));
+
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+            Assert.False(queue.TryClaim("conn-none", out _));
+        }
+
+        /// <summary>
         /// Creates an identity-only transit work item for queue ownership and retry tests.
         /// </summary>
         /// <param name="id">The synthetic work-item identifier for the test case.</param>
@@ -196,6 +459,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             _ = payloadSize;
             return new TransitWorkItem(id, messageId, maxAttempts: 3);
+        }
+
+        private static object GetAdmissionGate(GlobalTransitWorkQueue queue)
+        {
+            ArgumentNullException.ThrowIfNull(queue);
+
+            FieldInfo? gateField = typeof(GlobalTransitWorkQueue).GetField("_admissionGate", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(gateField);
+
+            object? gate = gateField.GetValue(queue);
+            return Assert.IsType<object>(gate);
         }
     }
 }

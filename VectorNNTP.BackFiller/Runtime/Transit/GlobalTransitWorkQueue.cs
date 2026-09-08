@@ -55,7 +55,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private readonly int _maxQueuedItemCount;
 
-
         /// <summary>
         /// Current count of work items still owned by the ready queue.
         /// </summary>
@@ -158,7 +157,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 bool reserved = false;
                 lock (_admissionGate)
                 {
-                    if (CanAdmit())
+                    if (CanAdmit() && item.TryMarkQueued(DateTimeOffset.UtcNow))
                     {
                         _ = Interlocked.Increment(ref _queuedItemCount);
                         reserved = true;
@@ -205,8 +204,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    _ = Interlocked.Decrement(ref _queuedItemCount);
-                    _ = Interlocked.Increment(ref _inFlightCount);
+                    TransferQueuedToInFlightOwnership();
                     item = candidate;
                     return true;
                 }
@@ -286,17 +284,35 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             DateTimeOffset now = DateTimeOffset.UtcNow;
-            if (!item.TryMoveToRetryPending(failureClass, uncertainty, now, retryDelay))
-            {
-                return false;
-            }
-
             if (transferOwnershipFromInFlight)
             {
-                MarkInFlightTerminal();
+                lock (_claimGate)
+                {
+                    lock (_admissionGate)
+                    {
+                        if (!item.TryMoveToRetryPending(failureClass, uncertainty, now, retryDelay))
+                        {
+                            return false;
+                        }
+
+                        MarkInFlightTerminalUnsynchronized();
+                        _ = Interlocked.Increment(ref _retryPendingCount);
+                    }
+                }
+            }
+            else
+            {
+                lock (_admissionGate)
+                {
+                    if (!item.TryMoveToRetryPending(failureClass, uncertainty, now, retryDelay))
+                    {
+                        return false;
+                    }
+
+                    _ = Interlocked.Increment(ref _retryPendingCount);
+                }
             }
 
-            _ = Interlocked.Increment(ref _retryPendingCount);
             _scheduledRetries.Enqueue(new ScheduledRetry(item, item.NextEligibleUtc ?? now));
             _ = _retryScheduledSignal.Release();
             await DrainEligibleRetriesAsync(cancellationToken).ConfigureAwait(false);
@@ -325,25 +341,40 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                if (!dequeued.Item.TryMarkQueued(DateTimeOffset.UtcNow))
+                while (true)
                 {
-                    continue;
-                }
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                _ = Interlocked.Decrement(ref _retryPendingCount);
-                try
-                {
-                    await EnqueueAsync(dequeued.Item, cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    if (dequeued.Item.TryRevertQueuedToRetryPending(DateTimeOffset.UtcNow))
+                    bool admitted = false;
+                    bool terminalized = false;
+                    lock (_admissionGate)
                     {
-                        _ = Interlocked.Increment(ref _retryPendingCount);
-                        _scheduledRetries.Enqueue(dequeued);
+                        DateTimeOffset admissionNow = DateTimeOffset.UtcNow;
+                        if (CanAdmit() && dequeued.Item.TryMarkQueued(admissionNow))
+                        {
+                            DecrementRetryPendingOwnership();
+                            _ = Interlocked.Increment(ref _queuedItemCount);
+                            admitted = true;
+                        }
+                        else if (dequeued.Item.IsTerminal)
+                        {
+                            terminalized = true;
+                        }
                     }
 
-                    throw;
+                    if (terminalized)
+                    {
+                        break;
+                    }
+
+                    if (admitted)
+                    {
+                        await _readyQueue.Writer.WriteAsync(dequeued.Item, CancellationToken.None).ConfigureAwait(false);
+                        break;
+                    }
+
+                    _ = Interlocked.Increment(ref _admissionWaitCount);
+                    await WaitForCapacityAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -354,35 +385,45 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <exception cref="InvalidOperationException">Thrown when in-flight accounting would underflow.</exception>
         internal void MarkInFlightTerminal()
         {
-            while (true)
+            lock (_claimGate)
             {
-                long observed = Interlocked.Read(ref _inFlightCount);
-                if (observed <= 0)
-                {
-                    throw new InvalidOperationException("Global transit queue in-flight accounting invariant violated: decrement attempted with no in-flight ownership.");
-                }
-
-                if (Interlocked.CompareExchange(ref _inFlightCount, observed - 1, observed) == observed)
-                {
-                    return;
-                }
+                MarkInFlightTerminalUnsynchronized();
             }
         }
 
         /// <summary>
-        /// Releases queued ownership for an item that is terminalized before being claimed.
+        /// Releases ownership for one terminalized item according to the state observed before terminal transition.
         /// </summary>
-        internal void MarkQueuedTerminal()
+        /// <param name="priorState">The non-terminal state observed immediately before terminalization won.</param>
+        internal void ReleaseTerminalOwnership(TransitWorkItemState priorState)
         {
-            DecrementQueuedOwnership();
-        }
+            if (TransitWorkItem.IsQueuedOwnershipState(priorState))
+            {
+                lock (_admissionGate)
+                {
+                    DecrementQueuedOwnership();
+                }
 
-        /// <summary>
-        /// Releases retry-pending ownership for an item that is terminalized before requeue.
-        /// </summary>
-        internal void MarkRetryPendingTerminal()
-        {
-            DecrementRetryPendingOwnership();
+                return;
+            }
+
+            if (TransitWorkItem.IsRetryPendingOwnershipState(priorState))
+            {
+                lock (_admissionGate)
+                {
+                    DecrementRetryPendingOwnership();
+                }
+
+                return;
+            }
+
+            if (TransitWorkItem.IsInFlightOwnershipState(priorState))
+            {
+                lock (_claimGate)
+                {
+                    MarkInFlightTerminalUnsynchronized();
+                }
+            }
         }
 
         /// <summary>
@@ -426,6 +467,39 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private static Task WaitForCapacityAsync(CancellationToken cancellationToken)
         {
             return Task.Delay(TimeSpan.FromMilliseconds(5), cancellationToken);
+        }
+
+        /// <summary>
+        /// Transfers one ownership slot from queued to in-flight while holding claim-transfer serialization.
+        /// </summary>
+        private void TransferQueuedToInFlightOwnership()
+        {
+            lock (_admissionGate)
+            {
+                DecrementQueuedOwnership();
+                _ = Interlocked.Increment(ref _inFlightCount);
+            }
+        }
+
+        /// <summary>
+        /// Releases one in-flight ownership slot while claim-transfer serialization is already held.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when in-flight accounting would underflow.</exception>
+        private void MarkInFlightTerminalUnsynchronized()
+        {
+            while (true)
+            {
+                long observed = Interlocked.Read(ref _inFlightCount);
+                if (observed <= 0)
+                {
+                    throw new InvalidOperationException("Global transit queue in-flight accounting invariant violated: decrement attempted with no in-flight ownership.");
+                }
+
+                if (Interlocked.CompareExchange(ref _inFlightCount, observed - 1, observed) == observed)
+                {
+                    return;
+                }
+            }
         }
 
         /// <summary>

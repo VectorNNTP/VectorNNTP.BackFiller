@@ -10,6 +10,7 @@ using System.Buffers;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -4724,6 +4725,118 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Verifies that terminal publication still completes and active tracking is cleaned up when post-terminal retention completion throws.
+        /// </summary>
+        [Fact]
+        public async Task CompleteTerminal_WhenRetentionCompletionThrows_StillCompletesWorkItemAndReleasesQueuedOwnership()
+        {
+            ThrowingRetentionAuthority retention = new(new ArticleRetentionAuthority(CreatePublisherOptions(port: 19011)));
+            await using TransitPublisher publisher = CreatePublisherWithLogger(19011, connectionPoolSize: 1, NullLogger<TransitPublisher>.Instance, retentionAuthority: retention);
+
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+            TransitWorkItem item = new(9001, "<h05-retention-throw@example.com>", maxAttempts: 3);
+            RegisterActiveWorkItem(publisher, item);
+            await queue.EnqueueAsync(item, CancellationToken.None);
+
+            TransitPublishResult result = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Unavailable,
+                ResponseCode: null,
+                ResponseText: "retention failure path",
+                Provenance: TransitPublishProvenance.Unavailable);
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => InvokeCompleteTerminal(publisher, item, result, inFlightOwnershipAlreadyTransferred: false));
+            Assert.Contains("Synthetic retention failure", exception.Message, StringComparison.Ordinal);
+
+            await retention.MarkTransitCompletedEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(TransitPublishStatus.Unavailable, completion.Status);
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+            Assert.Equal(1, GetTotalArticlesFailedCount(publisher));
+        }
+
+        /// <summary>
+        /// Verifies that competing terminalization paths complete exactly once and release in-flight ownership exactly once.
+        /// </summary>
+        [Fact]
+        public async Task CompleteTerminal_WhenInvokedConcurrently_CompletesOnceAndDoesNotDoubleReleaseOwnership()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19012, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+
+            TransitWorkItem item = new(9002, "<h05-concurrent-complete@example.com>", maxAttempts: 3);
+            RegisterActiveWorkItem(publisher, item);
+            await queue.EnqueueAsync(item, CancellationToken.None);
+            Assert.True(queue.TryClaim("conn-h05", out TransitWorkItem? claimed));
+            Assert.NotNull(claimed);
+
+            TransitPublishResult first = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Accepted,
+                ResponseCode: 239,
+                ResponseText: "ok",
+                Provenance: TransitPublishProvenance.OtherOrUnknown);
+
+            TransitPublishResult second = new(
+                MessageId: item.MessageId,
+                Status: TransitPublishStatus.Ambiguous,
+                ResponseCode: null,
+                ResponseText: "lost",
+                Provenance: TransitPublishProvenance.ConnectionClose);
+
+            Task firstTask = Task.Run(() => InvokeCompleteTerminal(publisher, item, first, inFlightOwnershipAlreadyTransferred: false));
+            Task secondTask = Task.Run(() => InvokeCompleteTerminal(publisher, item, second, inFlightOwnershipAlreadyTransferred: false));
+            await Task.WhenAll(firstTask, secondTask);
+
+            TransitPublishResult completion = await item.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(completion.Status is TransitPublishStatus.Accepted or TransitPublishStatus.Ambiguous);
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+
+        /// <summary>
+        /// Verifies forced terminalization continues processing all snapshot items when an earlier item fails ownership release, while preserving failure observability.
+        /// </summary>
+        [Fact]
+        public async Task ForceTerminalizeRemainingWorkAsync_WhenFirstItemOwnershipReleaseFails_ContinuesAndCompletesRemainingItems()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19013, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+
+            TransitWorkItem first = new(9101, "<h05-force-terminal-first@example.com>", maxAttempts: 3);
+            TransitWorkItem second = new(9102, "<h05-force-terminal-second@example.com>", maxAttempts: 3);
+
+            first.MarkQueued(DateTimeOffset.UtcNow);
+            second.MarkQueued(DateTimeOffset.UtcNow);
+            RegisterActiveWorkItem(publisher, first);
+            RegisterActiveWorkItem(publisher, second);
+
+            AggregateException exception = await Assert.ThrowsAsync<AggregateException>(async () =>
+            {
+                await InvokeForceTerminalizeRemainingWorkAsync(publisher);
+            });
+            Assert.Equal(2, exception.InnerExceptions.Count);
+            Assert.All(exception.InnerExceptions, inner => Assert.IsType<InvalidOperationException>(inner));
+            Assert.All(exception.InnerExceptions, inner => Assert.Contains("queued-item accounting invariant", inner.Message, StringComparison.OrdinalIgnoreCase));
+
+            TransitPublishResult firstCompletion = await first.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            TransitPublishResult secondCompletion = await second.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(TransitPublishStatus.Ambiguous, firstCompletion.Status);
+            Assert.Equal(TransitPublishStatus.Ambiguous, secondCompletion.Status);
+            Assert.True(first.IsTerminal);
+            Assert.True(second.IsTerminal);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+        }
+
+        /// <summary>
         /// Confirms publish async  when pipeline depth two receives two takethis before any response  completes both and clears in flight correlation behavior.
         /// </summary>
         /// <remarks>
@@ -5288,6 +5401,72 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <returns>Snapshot array of currently tracked active transit work items.</returns>
         private static TransitWorkItem[] GetActiveWorkItems(TransitPublisher publisher)
         {
+            IDictionary activeSubmissions = GetActiveWorkItemDictionary(publisher);
+            return activeSubmissions.Values.Cast<TransitWorkItem>().ToArray();
+        }
+
+        /// <summary>
+        /// Registers one active transit work item through the publisher's reflection seam for targeted lifecycle tests.
+        /// </summary>
+        /// <param name="publisher">Publisher whose active dictionary is updated.</param>
+        /// <param name="item">Work item to track as active.</param>
+        private static void RegisterActiveWorkItem(TransitPublisher publisher, TransitWorkItem item)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            IDictionary activeSubmissions = GetActiveWorkItemDictionary(publisher);
+            activeSubmissions[item.WorkItemId] = item;
+        }
+
+        /// <summary>
+        /// Invokes private terminal completion through reflection for deterministic ownership and terminalization tests.
+        /// </summary>
+        /// <param name="publisher">Publisher owning the terminal completion method.</param>
+        /// <param name="item">Work item to terminalize.</param>
+        /// <param name="result">Terminal publish result to apply.</param>
+        /// <param name="inFlightOwnershipAlreadyTransferred">Whether in-flight ownership was already released prior to invocation.</param>
+        private static void InvokeCompleteTerminal(TransitPublisher publisher, TransitWorkItem item, TransitPublishResult result, bool inFlightOwnershipAlreadyTransferred)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+            ArgumentNullException.ThrowIfNull(item);
+            ArgumentNullException.ThrowIfNull(result);
+
+            MethodInfo? method = typeof(TransitPublisher).GetMethod("CompleteTerminal", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            try
+            {
+                _ = method.Invoke(publisher, [item, result, inFlightOwnershipAlreadyTransferred]);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Invokes private forced terminalization through reflection for deterministic shutdown-path ownership tests.
+        /// </summary>
+        /// <param name="publisher">Publisher instance under test.</param>
+        /// <returns>Task representing forced terminalization completion.</returns>
+        private static Task InvokeForceTerminalizeRemainingWorkAsync(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            MethodInfo? method = typeof(TransitPublisher).GetMethod("ForceTerminalizeRemainingWorkAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            object? invocation = method.Invoke(publisher, []);
+            return Assert.IsAssignableFrom<Task>(invocation);
+        }
+
+        /// <summary>
+        /// Reads the publisher's private active-work dictionary through reflection.
+        /// </summary>
+        /// <param name="publisher">Publisher whose active dictionary is inspected.</param>
+        /// <returns>Mutable dictionary used by publisher active-work tracking.</returns>
+        private static IDictionary GetActiveWorkItemDictionary(TransitPublisher publisher)
+        {
             ArgumentNullException.ThrowIfNull(publisher);
 
             FieldInfo? field = typeof(TransitPublisher).GetField("_activeWorkItems", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -5296,8 +5475,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             object? raw = field.GetValue(publisher);
             Assert.NotNull(raw);
 
-            IDictionary activeSubmissions = Assert.IsAssignableFrom<IDictionary>(raw);
-            return activeSubmissions.Values.Cast<TransitWorkItem>().ToArray();
+            return Assert.IsAssignableFrom<IDictionary>(raw);
+        }
+
+        private static long GetTotalArticlesFailedCount(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            FieldInfo? field = typeof(TransitPublisher).GetField("_totalArticlesFailed", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? raw = field.GetValue(publisher);
+            return Assert.IsType<long>(raw);
         }
 
         /// <summary>
@@ -5887,6 +6076,56 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             }
         }
 
+        private sealed class ThrowingRetentionAuthority(IArticleRetentionAuthority inner) : IArticleRetentionAuthority
+        {
+            private readonly IArticleRetentionAuthority _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+
+            public TaskCompletionSource<bool> MarkTransitCompletedEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TimeSpan SweepInterval => _inner.SweepInterval;
+
+            public ArticleRetentionAdmissionResult TryRetainSuccessArticle(string messageId, DownloadedArticleBuffer payloadOwner, DateTimeOffset? insertedUtc = null)
+            {
+                return _inner.TryRetainSuccessArticle(messageId, payloadOwner, insertedUtc);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageId(string messageId)
+            {
+                return _inner.TryAcquireReadLeaseByMessageId(messageId);
+            }
+
+            public ArticleRetentionReadLeaseResult TryAcquireReadLeaseByMessageIdMd5(string messageIdMd5)
+            {
+                return _inner.TryAcquireReadLeaseByMessageIdMd5(messageIdMd5);
+            }
+
+            public ArticleRetentionCompletionResult MarkTransitCompleted(string messageId)
+            {
+                _ = MarkTransitCompletedEntered.TrySetResult(true);
+                throw new InvalidOperationException("Synthetic retention failure from test seam.");
+            }
+
+            public ArticleRetentionCompletionResult MarkListenerCompleted(string messageId)
+            {
+                return _inner.MarkListenerCompleted(messageId);
+            }
+
+            public long ExpireEligibleArticles(DateTimeOffset nowUtc)
+            {
+                return _inner.ExpireEligibleArticles(nowUtc);
+            }
+
+            public void BeginShutdown()
+            {
+                _inner.BeginShutdown();
+            }
+
+            public ArticleRetentionSnapshot GetSnapshot(DateTimeOffset? nowUtc = null)
+            {
+                return _inner.GetSnapshot(nowUtc);
+            }
+        }
+
         /// <summary>
         /// Creates a test publisher using a caller-supplied <see cref="ILogger{TCategoryName}"/> implementation.
         /// </summary>
@@ -5901,24 +6140,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <returns>The value returned by the create publisher with logger helper.</returns>
         private static TransitPublisher CreatePublisherWithLogger(int port, int connectionPoolSize, ILogger<TransitPublisher> logger, int perConnectionPipelineDepth = 8, IArticleRetentionAuthority? retentionAuthority = null)
         {
-            BackFillerRuntimeOptions options = new(
-                CanonicalBackFillerFqdn: "bf.example.com",
-                BackFillerId: 42,
-                CanonicalDnsSuffix: "example.com",
-                ValidatedLogDirectory: "C:\\logs",
-                ValidatedCertificateDirectory: "C:\\certs",
-                RabbitMqHosts: ["localhost"],
-                RabbitMqPort: 5672,
-                RabbitMqEnableSsl: false,
-                TransitServerHost: IPAddress.Loopback.ToString(),
-                TransitServerPort: port,
-                TransitServerUseSsl: false,
-                ShutdownGracePeriodSeconds: 60,
-                ShutdownDrainQueuedWork: true,
-                ShutdownFinishActiveArticles: true,
-                RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
-                WriteBatchCoalesceMicroseconds: 250);
-
+            BackFillerRuntimeOptions options = CreatePublisherOptions(port);
             return new TransitPublisher(options, TimeProvider.System, logger, retentionAuthority ?? new ArticleRetentionAuthority(options), connectionPoolSize, perConnectionPipelineDepth);
         }
 
