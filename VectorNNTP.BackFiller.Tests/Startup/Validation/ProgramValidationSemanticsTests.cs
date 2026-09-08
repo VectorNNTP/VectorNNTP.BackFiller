@@ -279,6 +279,53 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         /// <summary>
+        /// Confirms full startup validation still rejects malformed listener-only ACME settings.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenListenerAcmeSettingsMalformed_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "not-an-email",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "..\\..\\account.key",
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "short",
+                ["BackFiller:LetsEncrypt:RenewalCheckIntervalHours"] = "0",
+                ["BackFiller:LetsEncrypt:RenewalJitterRatio"] = "1",
+                ["BackFiller:LetsEncrypt:RenewBeforeExpiryDays"] = "0",
+                ["BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewMaxMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio"] = "0",
+                ["BackFiller:LetsEncrypt:DnsPropagationDelaySeconds"] = "-1",
+                ["BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Null(runtimeOptions);
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalCheckIntervalHours");
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds");
+            Assert.True(dependencyResult.IsValid);
+            Assert.Empty(dependencyResult.FailedDependencies);
+        }
+
+        /// <summary>
         /// Confirms the validate configuration and dependencies async when cloudflare configured remains valid without legacy lets encrypt enabled warnings behavior.
         /// </summary>
         [Fact]
@@ -306,6 +353,73 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Empty(configResult.Errors);
             Assert.DoesNotContain(configResult.Warnings, static w => w.Setting == "BackFiller:LetsEncrypt:Enabled");
         }
+        /// <summary>
+        /// Confirms non-listener validation scope ignores listener-only ACME certificate readiness settings.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenNonListenerScopeAndListenerAcmeSettingsMalformed_DoesNotReturnListenerAcmeErrors()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "not-an-email",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "..\\..\\account.key",
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "short",
+                ["BackFiller:LetsEncrypt:RenewalCheckIntervalHours"] = "0",
+                ["BackFiller:LetsEncrypt:RenewalJitterRatio"] = "1",
+                ["BackFiller:LetsEncrypt:RenewBeforeExpiryDays"] = "0",
+                ["BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:ClockSkewMaxMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes"] = "0",
+                ["BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio"] = "0",
+                ["BackFiller:LetsEncrypt:DnsPropagationDelaySeconds"] = "-1",
+                ["BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds"] = "0",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalCheckIntervalHours");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewalJitterRatio");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:RenewBeforeExpiryDays");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeTransientRetryMaxAttempts");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:ClockSkewCheckTtlMinutes");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:ClockSkewMaxMinutes");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsAuthoritativeNsCacheMinutes");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsAuthoritativeQuorumRatio");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsPropagationDelaySeconds");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsTxtPollIntervalSeconds");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:DnsTxtPollTimeoutSeconds");
+        }
+
+        /// <summary>
+        /// Confirms non-listener validation scope still validates independent Cloudflare prerequisites.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenNonListenerScopeAndCloudflareZoneMalformed_ReturnsCloudflareZoneError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "invalid-zone-id",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
+
+            Assert.Contains(errors, static e => e.Setting == "BackFiller:LetsEncrypt:CloudFlareZoneId");
+        }
+
         /// <summary>
         /// Confirms the validate configuration and dependencies async when rabbit mq endpoint unreachable returns rabbit mq dependency failure behavior.
         /// </summary>
