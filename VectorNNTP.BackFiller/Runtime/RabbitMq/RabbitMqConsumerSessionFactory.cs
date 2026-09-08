@@ -539,9 +539,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _stateGate.Release();
             }
 
-            for (int i = 0; i < retirements.Count; i++)
+            Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
+            if (retirementFailure is not null)
             {
-                await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+                throw retirementFailure;
             }
 
             for (int i = 0; i < starts.Count; i++)

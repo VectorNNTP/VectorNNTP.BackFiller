@@ -2249,7 +2249,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await service.StartAsync(timeoutToken).ConfigureAwait(false);
             await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
 
-            BlockingStopTrackingSession session2 = sessionFactory.RequireLatestSession(sessionKey2);
+            _ = sessionFactory.RequireLatestSession(sessionKey2);
             BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
             sessionFactory.BlockStopForSession(sessionKey2);
 
@@ -2454,6 +2454,61 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             service.Dispose();
             await manager.DisposeAsync().ConfigureAwait(false);
         }
+        /// <summary>
+        /// Confirms reconciliation cancellation during the first reserved retirement still terminalizes later reserved retirements and does not block hosted shutdown joins.
+        /// </summary>
+        [Fact]
+        public async Task ReconcileSessions_WhenFirstReservedRetirementIsCanceled_LaterReservedRetirementStillCompletesAndShutdownJoins()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(20));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey2 = $"{accountId:N}:2";
+            string sessionKey3 = $"{accountId:N}:3";
+
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            await service.StartAsync(timeoutToken).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            _ = sessionFactory.RequireLatestSession(sessionKey2);
+            BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey2);
+
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+
+            using CancellationTokenSource reconcileCts = new();
+            Task reconcileTask = service.ReconcileOnceAsync(reconcileCts.Token);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, session3.StopCallCount);
+            Assert.False(session3.DisposeCalled);
+
+            reconcileCts.Cancel();
+            sessionFactory.ReleaseStop(sessionKey2);
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                async () => await reconcileTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.Equal(1, session3.StopCallCount);
+            Assert.True(session3.DisposeCalled);
+
+            await service.StopAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, service.ActiveSessionCount);
+
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Confirms the active session count is consistently synchronized behavior.
         /// </summary>
