@@ -52,6 +52,18 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 && e.Error.Contains("Duplicate bind address", StringComparison.OrdinalIgnoreCase));
         }
 
+        [Fact]
+        public void ValidateBackFillerOptions_WhenBindAddressEntryIsExplicitlyEmpty_ReturnsBindAddressEntryError()
+        {
+            IConfiguration configuration = BuildBackFillerConfiguration(string.Empty);
+
+            List<(string Setting, string Error)> errors = InvokeValidateBackFillerOptions(configuration);
+
+            Assert.Contains(errors, static e =>
+                e.Setting == "BackFiller:BindAddress[0]"
+                && e.Error.Contains("cannot be empty", StringComparison.OrdinalIgnoreCase));
+        }
+
         [Theory]
         [InlineData("0")]
         [InlineData("65536")]

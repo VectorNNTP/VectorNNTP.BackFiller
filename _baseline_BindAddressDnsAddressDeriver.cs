@@ -31,14 +31,14 @@ namespace VectorNNTP.Backfiller.Configuration
             string[]? bindAddresses,
             Func<IReadOnlyList<IPAddress>>? interfaceAddressProvider = null)
         {
-            HashSet<IPAddress> derivedAddresses = [];
-            bool includeWildcardIpv4Addresses = bindAddresses == null || bindAddresses.Length == 0;
-            bool includeWildcardIpv6Addresses = bindAddresses == null || bindAddresses.Length == 0;
-
             if (bindAddresses == null || bindAddresses.Length == 0)
             {
-                bindAddresses = [];
+                return [];
             }
+
+            HashSet<IPAddress> derivedAddresses = [];
+            bool includeWildcardIpv4Addresses = false;
+            bool includeWildcardIpv6Addresses = false;
 
             for (int index = 0; index < bindAddresses.Length; index++)
             {

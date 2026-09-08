@@ -24,6 +24,29 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
     public sealed class BindAddressDnsAddressDeriverTests
     {
         /// <summary>
+        /// Verifies omitted bind-address configuration is interpreted as wildcard semantics for DNS derivation.
+        /// </summary>
+        [Fact]
+        public void DeriveCanonicalDnsAddresses_WhenBindAddressOmitted_UsesEligibleWildcardInterfaceAddresses()
+        {
+            IReadOnlyList<IPAddress> addresses = BindAddressDnsAddressDeriver.DeriveCanonicalDnsAddresses(
+                bindAddresses: null,
+                interfaceAddressProvider: static () =>
+                [
+                    IPAddress.Parse("10.10.0.5"),
+                    IPAddress.Parse("2001:db8::505"),
+                    IPAddress.Loopback,
+                    IPAddress.IPv6Loopback,
+                    IPAddress.Any,
+                    IPAddress.IPv6Any,
+                ]);
+
+            Assert.Equal(
+                ["10.10.0.5", "2001:db8::505"],
+                addresses.Select(static address => address.ToString()).OrderBy(static value => value, StringComparer.Ordinal));
+        }
+
+        /// <summary>
         /// Verifies explicit IPv4 and IPv6 bind addresses are parsed and preserved exactly.
         /// </summary>
         [Fact]
