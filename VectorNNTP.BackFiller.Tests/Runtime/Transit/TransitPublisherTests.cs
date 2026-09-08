@@ -4561,6 +4561,44 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Verifies forced terminalization continues processing all snapshot items when an earlier item fails ownership release, while preserving failure observability.
+        /// </summary>
+        [Fact]
+        public async Task ForceTerminalizeRemainingWorkAsync_WhenFirstItemOwnershipReleaseFails_ContinuesAndCompletesRemainingItems()
+        {
+            await using TransitPublisher publisher = CreatePublisher(port: 19013, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            GlobalTransitWorkQueue queue = GetGlobalQueue(publisher);
+
+            TransitWorkItem first = new(9101, "<h05-force-terminal-first@example.com>", maxAttempts: 3);
+            TransitWorkItem second = new(9102, "<h05-force-terminal-second@example.com>", maxAttempts: 3);
+
+            first.MarkQueued(DateTimeOffset.UtcNow);
+            second.MarkQueued(DateTimeOffset.UtcNow);
+            RegisterActiveWorkItem(publisher, first);
+            RegisterActiveWorkItem(publisher, second);
+
+            AggregateException exception = await Assert.ThrowsAsync<AggregateException>(async () =>
+            {
+                await InvokeForceTerminalizeRemainingWorkAsync(publisher);
+            });
+            Assert.Equal(2, exception.InnerExceptions.Count);
+            Assert.All(exception.InnerExceptions, inner => Assert.IsType<InvalidOperationException>(inner));
+            Assert.All(exception.InnerExceptions, inner => Assert.Contains("queued-item accounting invariant", inner.Message, StringComparison.OrdinalIgnoreCase));
+
+            TransitPublishResult firstCompletion = await first.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+            TransitPublishResult secondCompletion = await second.CompletionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(TransitPublishStatus.Ambiguous, firstCompletion.Status);
+            Assert.Equal(TransitPublishStatus.Ambiguous, secondCompletion.Status);
+            Assert.True(first.IsTerminal);
+            Assert.True(second.IsTerminal);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+            Assert.Equal(0, queue.QueuedItemCount);
+            Assert.Equal(0, queue.InFlightCount);
+            Assert.Equal(0, queue.RetryPendingCount);
+        }
+
+        /// <summary>
         /// Confirms publish async  when pipeline depth two receives two takethis before any response  completes both and clears in flight correlation behavior.
         /// </summary>
         /// <remarks>
@@ -5147,6 +5185,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Invokes private forced terminalization through reflection for deterministic shutdown-path ownership tests.
+        /// </summary>
+        /// <param name="publisher">Publisher instance under test.</param>
+        /// <returns>Task representing forced terminalization completion.</returns>
+        private static Task InvokeForceTerminalizeRemainingWorkAsync(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            MethodInfo? method = typeof(TransitPublisher).GetMethod("ForceTerminalizeRemainingWorkAsync", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(method);
+
+            object? invocation = method.Invoke(publisher, []);
+            return Assert.IsAssignableFrom<Task>(invocation);
         }
 
         /// <summary>

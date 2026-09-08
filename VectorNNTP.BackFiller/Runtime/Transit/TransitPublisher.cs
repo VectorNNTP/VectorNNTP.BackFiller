@@ -1478,6 +1478,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private async Task ForceTerminalizeRemainingWorkAsync()
         {
             TransitWorkItem[] remaining = [.. _activeWorkItems.Values];
+            ExceptionDispatchInfo? firstDeferredFailure = null;
+            List<Exception>? additionalFailures = null;
+
             foreach (TransitWorkItem item in remaining)
             {
                 TransitPublishResult forced = new(
@@ -1495,7 +1498,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                ExceptionDispatchInfo? deferredFailure = null;
                 try
                 {
                     _globalQueue.ReleaseTerminalOwnership(priorState);
@@ -1514,15 +1516,30 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
                 catch (Exception ex)
                 {
-                    deferredFailure = ExceptionDispatchInfo.Capture(ex);
+                    if (firstDeferredFailure is null)
+                    {
+                        firstDeferredFailure = ExceptionDispatchInfo.Capture(ex);
+                    }
+                    else
+                    {
+                        (additionalFailures ??= []).Add(ex);
+                    }
                 }
                 finally
                 {
                     _ = _activeWorkItems.TryRemove(item.WorkItemId, out _);
                     _ = item.TrySetCompletionResult(forced);
                 }
+            }
 
-                deferredFailure?.Throw();
+            if (firstDeferredFailure is not null)
+            {
+                if (additionalFailures is null || additionalFailures.Count == 0)
+                {
+                    firstDeferredFailure.Throw();
+                }
+
+                throw new AggregateException([firstDeferredFailure.SourceException, .. additionalFailures]);
             }
 
             await Task.CompletedTask.ConfigureAwait(false);
