@@ -56,16 +56,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private readonly int _maxQueuedItemCount;
 
         /// <summary>
-        /// Optional deterministic test seam invoked after an item transitions to claimed but before queued-to-in-flight counter transfer.
-        /// </summary>
-        /// <remarks>
-        /// This seam exists only to force deterministic interleavings in regression tests that validate claim/terminal ownership transfer safety.
-        /// It must not be used by production code and does not alter ownership rules outside test orchestration.
-        /// </remarks>
-        internal Action<TransitWorkItem>? ClaimOwnershipTransferPauseHook { get; set; }
-
-
-        /// <summary>
         /// Current count of work items still owned by the ready queue.
         /// </summary>
         private long _queuedItemCount;
@@ -214,7 +204,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    ClaimOwnershipTransferPauseHook?.Invoke(candidate);
                     TransferQueuedToInFlightOwnership();
                     item = candidate;
                     return true;
@@ -299,23 +288,29 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             {
                 lock (_claimGate)
                 {
+                    lock (_admissionGate)
+                    {
+                        if (!item.TryMoveToRetryPending(failureClass, uncertainty, now, retryDelay))
+                        {
+                            return false;
+                        }
+
+                        MarkInFlightTerminalUnsynchronized();
+                        _ = Interlocked.Increment(ref _retryPendingCount);
+                    }
+                }
+            }
+            else
+            {
+                lock (_admissionGate)
+                {
                     if (!item.TryMoveToRetryPending(failureClass, uncertainty, now, retryDelay))
                     {
                         return false;
                     }
 
-                    MarkInFlightTerminalUnsynchronized();
                     _ = Interlocked.Increment(ref _retryPendingCount);
                 }
-            }
-            else
-            {
-                if (!item.TryMoveToRetryPending(failureClass, uncertainty, now, retryDelay))
-                {
-                    return false;
-                }
-
-                _ = Interlocked.Increment(ref _retryPendingCount);
             }
 
             _scheduledRetries.Enqueue(new ScheduledRetry(item, item.NextEligibleUtc ?? now));
@@ -346,25 +341,40 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                if (!dequeued.Item.TryMarkQueued(DateTimeOffset.UtcNow))
+                while (true)
                 {
-                    continue;
-                }
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                _ = Interlocked.Decrement(ref _retryPendingCount);
-                try
-                {
-                    await EnqueueAsync(dequeued.Item, cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    if (dequeued.Item.TryRevertQueuedToRetryPending(DateTimeOffset.UtcNow))
+                    bool admitted = false;
+                    bool terminalized = false;
+                    lock (_admissionGate)
                     {
-                        _ = Interlocked.Increment(ref _retryPendingCount);
-                        _scheduledRetries.Enqueue(dequeued);
+                        DateTimeOffset admissionNow = DateTimeOffset.UtcNow;
+                        if (CanAdmit() && dequeued.Item.TryMarkQueued(admissionNow))
+                        {
+                            DecrementRetryPendingOwnership();
+                            _ = Interlocked.Increment(ref _queuedItemCount);
+                            admitted = true;
+                        }
+                        else if (dequeued.Item.IsTerminal)
+                        {
+                            terminalized = true;
+                        }
                     }
 
-                    throw;
+                    if (terminalized)
+                    {
+                        break;
+                    }
+
+                    if (admitted)
+                    {
+                        await _readyQueue.Writer.WriteAsync(dequeued.Item, CancellationToken.None).ConfigureAwait(false);
+                        break;
+                    }
+
+                    _ = Interlocked.Increment(ref _admissionWaitCount);
+                    await WaitForCapacityAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -389,13 +399,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         {
             if (TransitWorkItem.IsQueuedOwnershipState(priorState))
             {
-                DecrementQueuedOwnership();
+                lock (_admissionGate)
+                {
+                    DecrementQueuedOwnership();
+                }
+
                 return;
             }
 
             if (TransitWorkItem.IsRetryPendingOwnershipState(priorState))
             {
-                DecrementRetryPendingOwnership();
+                lock (_admissionGate)
+                {
+                    DecrementRetryPendingOwnership();
+                }
+
                 return;
             }
 
@@ -456,8 +474,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private void TransferQueuedToInFlightOwnership()
         {
-            DecrementQueuedOwnership();
-            _ = Interlocked.Increment(ref _inFlightCount);
+            lock (_admissionGate)
+            {
+                DecrementQueuedOwnership();
+                _ = Interlocked.Increment(ref _inFlightCount);
+            }
         }
 
         /// <summary>

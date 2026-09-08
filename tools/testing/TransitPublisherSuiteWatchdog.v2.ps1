@@ -61,43 +61,16 @@ function Invoke-WatchedRun {
 	$stdoutPath = Join-Path $artifactsDir ("TransitPublisher-suite-$stamp.$Label.stdout.log")
 	$stderrPath = Join-Path $artifactsDir ("TransitPublisher-suite-$stamp.$Label.stderr.log")
 
-	$psi = [System.Diagnostics.ProcessStartInfo]::new('dotnet')
-	$psi.WorkingDirectory = $RepoRoot
-	$psi.UseShellExecute = $false
-	$psi.RedirectStandardOutput = $true
-	$psi.RedirectStandardError = $true
-	$psi.CreateNoWindow = $true
-	$null = $psi.ArgumentList.Add('test')
-	$null = $psi.ArgumentList.Add($ProjectPath)
-	$null = $psi.ArgumentList.Add('--filter')
-	$null = $psi.ArgumentList.Add($Filter)
-	$null = $psi.ArgumentList.Add('--logger')
-	$null = $psi.ArgumentList.Add('console;verbosity=detailed')
+	$argumentList = @(
+		'test'
+		$ProjectPath
+		'--filter'
+		$Filter
+		'--logger'
+		'console;verbosity=detailed'
+	)
 
-	$stdoutWriter = [System.IO.StreamWriter]::new($stdoutPath, $false, [System.Text.UTF8Encoding]::new($false))
-	$stderrWriter = [System.IO.StreamWriter]::new($stderrPath, $false, [System.Text.UTF8Encoding]::new($false))
-	$outputHandler = [System.Diagnostics.DataReceivedEventHandler]{
-		param($sender, $eventArgs)
-		if ($null -ne $eventArgs.Data) {
-			$stdoutWriter.WriteLine($eventArgs.Data)
-			$stdoutWriter.Flush()
-		}
-	}
-	$errorHandler = [System.Diagnostics.DataReceivedEventHandler]{
-		param($sender, $eventArgs)
-		if ($null -ne $eventArgs.Data) {
-			$stderrWriter.WriteLine($eventArgs.Data)
-			$stderrWriter.Flush()
-		}
-	}
-
-	$runner = [System.Diagnostics.Process]::new()
-	$runner.StartInfo = $psi
-	$runner.add_OutputDataReceived($outputHandler)
-	$runner.add_ErrorDataReceived($errorHandler)
-	$null = $runner.Start()
-	$runner.BeginOutputReadLine()
-	$runner.BeginErrorReadLine()
+	$runner = Start-Process -FilePath 'dotnet' -ArgumentList $argumentList -WorkingDirectory $RepoRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
 
 	$runStart = [DateTimeOffset]::UtcNow
 	$lastProgressUtc = [DateTimeOffset]::UtcNow
@@ -196,12 +169,6 @@ function Invoke-WatchedRun {
 	}
 
 	$runner.WaitForExit()
-	$runner.CancelOutputRead()
-	$runner.CancelErrorRead()
-	$runner.remove_OutputDataReceived($outputHandler)
-	$runner.remove_ErrorDataReceived($errorHandler)
-	$stdoutWriter.Dispose()
-	$stderrWriter.Dispose()
 
 	$endUtc = [DateTimeOffset]::UtcNow
 	$exitCode = if ($runner.HasExited) { $runner.ExitCode } else { -1 }
