@@ -2226,6 +2226,59 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             await manager.DisposeAsync().ConfigureAwait(false);
         }
         /// <summary>
+        /// Confirms interruption of the first reserved retirement still terminalizes later reserved retirements and allows hosted shutdown join completion.
+        /// </summary>
+        [Fact]
+        public async Task RetireCapacityAsync_WhenFirstReservedRetirementIsCanceled_LaterReservedRetirementStillCompletesAndHostedShutdownJoins()
+        {
+            using CancellationTokenSource timeoutCts = new(TimeSpan.FromSeconds(20));
+            CancellationToken timeoutToken = timeoutCts.Token;
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            MutableAccountSnapshotProvider snapshotProvider = new(serverId: 12);
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 2, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
+            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+
+            Guid accountId = Guid.NewGuid();
+            string sessionKey2 = $"{accountId:N}:2";
+            string sessionKey3 = $"{accountId:N}:3";
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            await service.StartAsync(timeoutToken).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+
+            BlockingStopTrackingSession session2 = sessionFactory.RequireLatestSession(sessionKey2);
+            BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey2);
+
+            using CancellationTokenSource retireCts = new();
+            Task retireTask = service.RetireCapacityAsync(accountId, retainConnectionCount: 1, retireCts.Token);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, session3.StopCallCount);
+            Assert.False(session3.DisposeCalled);
+
+            retireCts.Cancel();
+            shutdownCoordinator.SignalForcedShutdown();
+            sessionFactory.ReleaseStop(sessionKey2);
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                async () => await retireTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.Equal(1, session3.StopCallCount);
+            Assert.True(session3.DisposeCalled);
+
+            await service.StopAsync(timeoutToken).ConfigureAwait(false);
+
+            Assert.Equal(0, service.ActiveSessionCount);
+
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Confirms the concurrent retire calls do not double dispose behavior.
         /// </summary>
         [Fact]

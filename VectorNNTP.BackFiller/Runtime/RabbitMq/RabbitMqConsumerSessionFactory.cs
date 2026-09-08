@@ -296,14 +296,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _stateGate.Release();
             }
 
-            for (int index = 0; index < retirements.Count; index++)
-            {
-                await ExecuteRetirementOperationAsync(retirements[index], cancelAdmittedWork: false, cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
+            Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
 
             for (int index = 0; index < pendingRetirements.Count; index++)
             {
                 await pendingRetirements[index].WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (retirementFailure is not null)
+            {
+                throw retirementFailure;
             }
         }
 
@@ -634,17 +636,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 _ = _stateGate.Release();
             }
 
-            for (int i = 0; i < retirements.Count; i++)
-            {
-                try
-                {
-                    await ExecuteRetirementOperationAsync(retirements[i], cancelAdmittedWork: true, cancellationToken: cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    LogConsumerSessionStopFailed(_logger, retirements[i].Runtime.Identity.SessionKey, ex);
-                }
-            }
+            _ = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: true, cancellationToken).ConfigureAwait(false);
 
             Task[] pendingRetirements = [.. _retiringSessionRuntimes.Values.Select(static runtime => runtime.RetirementTask)];
             for (int i = 0; i < pendingRetirements.Length; i++)
@@ -687,6 +679,40 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _connectionManager.ConnectionReplaced -= OnConnectionReplaced;
             _gracefulShutdownRegistration.Dispose();
             _forcedShutdownRegistration.Dispose();
+        }
+
+        /// <summary>
+        /// Executes one retirement batch and ensures each reserved operation reaches a terminal completion state.
+        /// </summary>
+        private async Task<Exception?> ExecuteRetirementBatchAsync(IReadOnlyList<RetirementOperation> operations, bool cancelAdmittedWork, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(operations);
+
+            List<Exception>? failures = null;
+            for (int index = 0; index < operations.Count; index++)
+            {
+                try
+                {
+                    await ExecuteRetirementOperationAsync(operations[index], cancelAdmittedWork, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    failures ??= [];
+                    failures.Add(ex);
+
+                    if (cancelAdmittedWork)
+                    {
+                        LogConsumerSessionStopFailed(_logger, operations[index].Runtime.Identity.SessionKey, ex);
+                    }
+                }
+            }
+
+            return failures switch
+            {
+                null => null,
+                { Count: 1 } => failures[0],
+                _ => new AggregateException(failures),
+            };
         }
 
         /// <summary>
