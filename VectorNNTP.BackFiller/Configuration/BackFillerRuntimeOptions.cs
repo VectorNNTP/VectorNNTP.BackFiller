@@ -101,7 +101,7 @@ namespace VectorNNTP.Backfiller.Configuration
         internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
 
         /// <summary>
-        /// Gets the effective canonical bind-address set used by listener and DNS projection paths.
+        /// Gets the effective canonical DNS-advertisement address set.
         /// </summary>
         /// <value>
         /// For runtime snapshots projected from BackFiller bind-address configuration, omitted or empty configured bind-address values
