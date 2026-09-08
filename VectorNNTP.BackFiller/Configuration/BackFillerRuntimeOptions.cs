@@ -101,9 +101,14 @@ namespace VectorNNTP.Backfiller.Configuration
         internal TimeSpan EffectiveTransitShutdownAbsoluteMaximum => TransitShutdownAbsoluteMaximum ?? TimeSpan.FromMinutes(30);
 
         /// <summary>
-        /// Gets the canonical bind-address set, or an empty set when no explicit bind addresses are configured.
+        /// Gets the effective canonical bind-address set used by listener and DNS projection paths.
         /// </summary>
-        /// <value>Validated canonical bind addresses used by listener and DNS projection logic.</value>
+        /// <value>
+        /// For runtime snapshots projected from BackFiller bind-address configuration, omitted or empty configured bind-address values
+        /// follow wildcard semantics and derive eligible interface addresses rather than an empty set; explicitly configured addresses
+        /// preserve their validated canonical semantics. If canonical bind addresses are absent on this record instance,
+        /// an empty set is returned.
+        /// </value>
         internal IReadOnlyList<IPAddress> EffectiveCanonicalBindAddresses => CanonicalBindAddresses ?? [];
 
         /// <summary>
