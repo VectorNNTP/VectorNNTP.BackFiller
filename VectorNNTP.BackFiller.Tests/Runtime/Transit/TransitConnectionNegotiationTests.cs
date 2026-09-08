@@ -252,6 +252,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.True(connection.IsTlsActive);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
+
+        /// <summary>
+        /// Confirms the initialize async when start tls rejected throws lifecycle negotiation failure and cleanup reaches disconnected behavior.
+        /// </summary>
+        [Fact]
+        public async Task InitializeAsync_WhenStartTlsRejected_ThrowsLifecycleNegotiationFailureAndCleansUp()
+        {
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
+            {
+                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
+                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
+                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakeNntpServer.WriteLineAsync(stream, "STARTTLS");
+                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
+                await FakeNntpServer.WriteLineAsync(stream, ".");
+                await FakeNntpServer.ExpectCommandAsync(stream, "STARTTLS");
+                await FakeNntpServer.WriteLineAsync(stream, "580 starttls refused");
+            });
+
+            await using TransitConnection connection = new(
+                host: IPAddress.Loopback.ToString(),
+                port: server.Port,
+                useSsl: false,
+                NullLogger<TransitPublisher>.Instance);
+
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
+            Assert.Equal("STARTTLS negotiation", ex.StageName);
+            Assert.Contains("Unexpected STARTTLS response code", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+        }
+
         /// <summary>
         /// Confirms the initialize async when streaming not advertised throws behavior.
         /// </summary>
@@ -273,9 +305,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
 
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("STREAMING capability", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when capabilities response code unexpected throws behavior.
@@ -297,8 +331,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("Unexpected CAPABILITIES response code", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when mode stream rejected throws behavior.
@@ -323,8 +359,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("Unexpected MODE STREAM response code", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when compress deflate advertised does not negotiate compression behavior.
@@ -381,8 +419,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("Unexpected NNTP greeting response code", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when server closes during greeting throws behavior.
@@ -430,8 +470,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("closed while awaiting line response", ex.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when use ssl true negotiation runs over tls behavior.
@@ -593,8 +635,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 NullLogger<TransitPublisher>.Instance,
                 _tlsFixture.ServerCertificateValidationCallback);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("STREAMING capability", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when start tls advertised with compression upgrades to tls without compression behavior.
@@ -792,7 +836,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            _ = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
 
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
@@ -842,7 +887,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            _ = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
 
             using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
@@ -871,8 +917,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 useSsl: false,
                 NullLogger<TransitPublisher>.Instance);
 
-            InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => connection.InitializeAsync(CancellationToken.None));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
             Assert.Contains("does not advertise STREAMING capability", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
         }
         /// <summary>
         /// Confirms the initialize async when start tls handshake fails then retry on same instance succeeds with fresh transport behavior.

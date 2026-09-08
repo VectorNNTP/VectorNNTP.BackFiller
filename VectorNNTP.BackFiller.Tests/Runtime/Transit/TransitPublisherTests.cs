@@ -3641,6 +3641,243 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Verifies that a greeting-stage negotiation failure on the first connection attempt is treated as a recoverable lifecycle failure and does not permanently remove worker capacity.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenInitialGreetingNegotiationFailsAfterCleanup_WorkerRecoversAndProcessesSubsequentWork()
+        {
+            string messageId = "<publisher-h04-greeting-recovery@example.com>";
+            byte[] payload = [(byte)'G', (byte)'\n'];
+            int acceptedSessionCount = 0;
+
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "400 temporary unavailable");
+                },
+                async (stream, cancellationToken) =>
+                {
+                    Interlocked.Increment(ref acceptedSessionCount);
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                    string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                    Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                    byte[] receivedPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                    Assert.Equal(payload, receivedPayload);
+                    await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            TransitPublishResult result = await publisher.PublishAsync(messageId, payload, timeout.Token).AsTask().WaitAsync(timeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(1, Volatile.Read(ref acceptedSessionCount));
+            Assert.Equal(1, GetRemainingConnectionWorkerCount(publisher));
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.True(diagnostics.TotalReconnects >= 1);
+            Assert.True(diagnostics.Slots.Length > 0 && diagnostics.Slots[0].HasCurrentConnection);
+            Assert.Equal(0, diagnostics.QueueSnapshot.QueuedItemCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.InFlightCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.RetryPendingCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+
+        /// <summary>
+        /// Verifies that STARTTLS rejection on the first connection attempt remains lifecycle-classified after cleanup and the worker recovers to process subsequent work.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenInitialStartTlsRejectedAfterCleanup_WorkerRecoversAndProcessesSubsequentWork()
+        {
+            string messageId = "<publisher-h04-starttls-recovery@example.com>";
+            byte[] payload = [(byte)'T', (byte)'\n'];
+            int acceptedSessionCount = 0;
+
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STARTTLS");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "STARTTLS", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "580 STARTTLS rejected");
+                },
+                async (stream, cancellationToken) =>
+                {
+                    Interlocked.Increment(ref acceptedSessionCount);
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                    string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                    Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                    byte[] receivedPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                    Assert.Equal(payload, receivedPayload);
+                    await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            TransitPublishResult result = await publisher.PublishAsync(messageId, payload, timeout.Token).AsTask().WaitAsync(timeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(1, Volatile.Read(ref acceptedSessionCount));
+            Assert.Equal(1, GetRemainingConnectionWorkerCount(publisher));
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.True(diagnostics.TotalReconnects >= 1);
+            Assert.True(diagnostics.Slots.Length > 0 && diagnostics.Slots[0].HasCurrentConnection);
+            Assert.Equal(0, diagnostics.QueueSnapshot.QueuedItemCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.InFlightCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.RetryPendingCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+
+        /// <summary>
+        /// Verifies that missing STREAMING capability on the first connection attempt is treated as a recoverable lifecycle failure despite cleanup resetting mutable state.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenInitialStreamingCapabilityMissingAfterCleanup_WorkerRecoversAndProcessesSubsequentWork()
+        {
+            string messageId = "<publisher-h04-streaming-recovery@example.com>";
+            byte[] payload = [(byte)'S', (byte)'\n'];
+            int acceptedSessionCount = 0;
+
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "VERSION 2");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                },
+                async (stream, cancellationToken) =>
+                {
+                    Interlocked.Increment(ref acceptedSessionCount);
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                    string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                    Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                    byte[] receivedPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                    Assert.Equal(payload, receivedPayload);
+                    await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            TransitPublishResult result = await publisher.PublishAsync(messageId, payload, timeout.Token).AsTask().WaitAsync(timeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(1, Volatile.Read(ref acceptedSessionCount));
+            Assert.Equal(1, GetRemainingConnectionWorkerCount(publisher));
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.True(diagnostics.TotalReconnects >= 1);
+            Assert.True(diagnostics.Slots.Length > 0 && diagnostics.Slots[0].HasCurrentConnection);
+            Assert.Equal(0, diagnostics.QueueSnapshot.QueuedItemCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.InFlightCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.RetryPendingCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+
+        /// <summary>
+        /// Verifies that MODE STREAM rejection on the first connection attempt is treated as a recoverable lifecycle failure after cleanup and does not permanently remove worker capacity.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenInitialModeStreamRejectedAfterCleanup_WorkerRecoversAndProcessesSubsequentWork()
+        {
+            string messageId = "<publisher-h04-mode-stream-recovery@example.com>";
+            byte[] payload = [(byte)'M', (byte)'\n'];
+            int acceptedSessionCount = 0;
+
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "501 streaming unavailable");
+                },
+                async (stream, cancellationToken) =>
+                {
+                    Interlocked.Increment(ref acceptedSessionCount);
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                    string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                    Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                    byte[] receivedPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                    Assert.Equal(payload, receivedPayload);
+                    await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            TransitPublishResult result = await publisher.PublishAsync(messageId, payload, timeout.Token).AsTask().WaitAsync(timeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(1, Volatile.Read(ref acceptedSessionCount));
+            Assert.Equal(1, GetRemainingConnectionWorkerCount(publisher));
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.True(diagnostics.TotalReconnects >= 1);
+            Assert.True(diagnostics.Slots.Length > 0 && diagnostics.Slots[0].HasCurrentConnection);
+            Assert.Equal(0, diagnostics.QueueSnapshot.QueuedItemCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.InFlightCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.RetryPendingCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+
+        /// <summary>
         /// Verifies that cancellation while a publish is waiting for channel admission does not increment the total-submitted metric.
         /// </summary>
         /// <remarks>
@@ -4872,6 +5109,25 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             bool classified = InvokeIsConnectionLifecycleSubmitFailure(connection, new InvalidOperationException("arbitrary"));
 
             Assert.False(classified);
+        }
+
+        /// <summary>
+        /// Verifies that initialization negotiation lifecycle failures remain classified as connection-lifecycle submit failures even when cleanup already reset the mutable connection state to disconnected.
+        /// </summary>
+        [Fact]
+        public void IsConnectionLifecycleSubmitFailure_WhenInitializationNegotiationFailureAndConnectionDisconnected_ReturnsTrue()
+        {
+            TransitConnection connection = new("localhost", 119, useSsl: false, NullLogger<TransitPublisher>.Instance);
+            SetConnectionState(connection, TransitConnectionState.Disconnected);
+
+            TransitConnection.TransitConnectionLifecycleException failure = new(
+                TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                stageName: "MODE STREAM response",
+                detail: "Unexpected MODE STREAM response code: 501.");
+
+            bool classified = InvokeIsConnectionLifecycleSubmitFailure(connection, failure);
+
+            Assert.True(classified);
         }
 
         /// <summary>
