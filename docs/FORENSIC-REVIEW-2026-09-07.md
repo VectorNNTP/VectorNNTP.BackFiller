@@ -142,7 +142,7 @@ Detailed entries contain qualifications, tests, consequences, and proposed valid
 | ~~H02~~ | ~~HIGH~~ | ~~C/S~~ | ~~Consumer recovery can remain permanently Retiring~~ |
 | ~~H03~~ | ~~HIGH~~ | ~~C~~ | ~~Interrupted retirement batch abandons unstarted operations~~ |
 | ~~H04~~ | ~~HIGH~~ | ~~C~~ | ~~Transit negotiation failure permanently removes a worker~~ |
-| H05 | HIGH | C | Transit state, counters, and completion publication diverge |
+| ~~H05~~ | ~~HIGH~~ | ~~C~~ | ~~Transit state, counters, and completion publication diverge~~ |
 | H06 | HIGH | S | Response watchdog does not interrupt blocked Transit writes |
 | H07 | HIGH | C | Stale listener timer terminalizes a replacement request |
 | H08 | HIGH | C | Production graceful listener shutdown aborts transfers |
