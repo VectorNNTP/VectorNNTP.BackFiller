@@ -1707,7 +1707,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentNullException.ThrowIfNull(connection);
             ArgumentNullException.ThrowIfNull(exception);
 
-            bool result = exception is TransitConnection.TransitConnectionLifecycleException || (connection.CurrentState == TransitConnectionState.Faulted || connection.IsResponseLoopFaulted
+            if (exception is TransitConnection.TransitConnectionLifecycleException lifecycleException)
+            {
+                if (lifecycleException.Failure == TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure)
+                {
+                    return true;
+                }
+
+                return true;
+            }
+
+            bool result = (connection.CurrentState == TransitConnectionState.Faulted || connection.IsResponseLoopFaulted
                     ? exception is IOException
                     or ObjectDisposedException
                     or SocketException

@@ -593,13 +593,37 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     token => ReadLineAsync(token).AsTask(),
                     "greeting response",
                     cancellationToken).ConfigureAwait(false);
-                TransitProtocolParser.ValidateGreeting(greetingLine);
+
+                try
+                {
+                    TransitProtocolParser.ValidateGreeting(greetingLine);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new TransitConnectionLifecycleException(
+                        TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                        "greeting response",
+                        ex,
+                        ex.Message);
+                }
 
                 TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-                Capabilities = await AwaitInitializationStageAsync(
-                    ReadCapabilitiesAsync,
-                    "CAPABILITIES exchange",
-                    cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    Capabilities = await AwaitInitializationStageAsync(
+                        ReadCapabilitiesAsync,
+                        "CAPABILITIES exchange",
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex) when (ex is not TransitConnectionLifecycleException)
+                {
+                    throw new TransitConnectionLifecycleException(
+                        TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                        "CAPABILITIES exchange",
+                        ex,
+                        ex.Message);
+                }
+
                 LogTransitCapabilities(_logger, ConnectionId, Capabilities.SupportsStartTls, Capabilities.SupportsStreaming);
 
                 if (!_useSsl && Capabilities.SupportsStartTls)
@@ -615,16 +639,31 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     _writer = PipeWriter.Create(_writeStream ?? throw new InvalidOperationException("Transit transport write stream is not initialized."), new StreamPipeWriterOptions(leaveOpen: true));
 
                     TransitionState(TransitConnectionState.CapabilitiesNegotiation);
-                    Capabilities = await AwaitInitializationStageAsync(
-                        ReadCapabilitiesAsync,
-                        "CAPABILITIES exchange (post-STARTTLS)",
-                        cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        Capabilities = await AwaitInitializationStageAsync(
+                            ReadCapabilitiesAsync,
+                            "CAPABILITIES exchange (post-STARTTLS)",
+                            cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex) when (ex is not TransitConnectionLifecycleException)
+                    {
+                        throw new TransitConnectionLifecycleException(
+                            TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                            "CAPABILITIES exchange (post-STARTTLS)",
+                            ex,
+                            ex.Message);
+                    }
+
                     LogTransitCapabilities(_logger, ConnectionId, Capabilities.SupportsStartTls, Capabilities.SupportsStreaming);
                 }
 
                 if (!Capabilities.SupportsStreaming)
                 {
-                    throw new InvalidOperationException("Transit server does not advertise STREAMING capability.");
+                    throw new TransitConnectionLifecycleException(
+                        TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                        "CAPABILITIES exchange",
+                        detail: "Transit server does not advertise STREAMING capability.");
                 }
 
                 TransitionState(TransitConnectionState.StartingStreaming);
@@ -633,10 +672,27 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     token => ReadLineAsync(token).AsTask(),
                     "MODE STREAM response",
                     cancellationToken).ConfigureAwait(false);
-                (int streamCode, _) = TransitProtocolParser.ParseStatusCodeAndText(streamResponse);
+
+                int streamCode;
+                try
+                {
+                    (streamCode, _) = TransitProtocolParser.ParseStatusCodeAndText(streamResponse);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new TransitConnectionLifecycleException(
+                        TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                        "MODE STREAM response",
+                        ex,
+                        ex.Message);
+                }
+
                 if (streamCode != 203)
                 {
-                    throw new InvalidOperationException($"Unexpected MODE STREAM response code: {streamCode}.");
+                    throw new TransitConnectionLifecycleException(
+                        TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                        "MODE STREAM response",
+                        detail: $"Unexpected MODE STREAM response code: {streamCode}.");
                 }
 
                 _streamingModeNegotiated = true;
@@ -2336,6 +2392,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             WriterCompletedDuringTakethisSubmission,
             InitializationProgressTimeout,
             WriterDisposedDuringTakethisSubmission,
+            InitializationNegotiationProtocolFailure,
         }
 
         /// <summary>
@@ -2348,23 +2405,49 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             /// </summary>
             /// <param name="failure">Lifecycle failure classification that determines the base exception message.</param>
             /// <param name="stageName">Optional stage label used by timeout failure messages.</param>
-            internal TransitConnectionLifecycleException(TransitConnectionLifecycleFailure failure, string? stageName = null)
-                : base(failure switch
-                {
-                    TransitConnectionLifecycleFailure.WriterNotInitialized => "Transit protocol writer is not initialized.",
-                    TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission => "Transit protocol writer completed during TAKETHIS submission.",
-                    TransitConnectionLifecycleFailure.InitializationProgressTimeout => $"Transit connection initialization timed out while awaiting {stageName ?? "protocol progress"}.",
-                    TransitConnectionLifecycleFailure.WriterDisposedDuringTakethisSubmission => "Transit protocol writer was disposed during TAKETHIS submission.",
-                    _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown transit lifecycle failure."),
-                })
+            /// <param name="innerException">Optional inner exception that preserves the original failure cause.</param>
+            /// <param name="detail">Optional detailed message text used for protocol-negotiation failures.</param>
+            internal TransitConnectionLifecycleException(
+                TransitConnectionLifecycleFailure failure,
+                string? stageName = null,
+                Exception? innerException = null,
+                string? detail = null)
+                : base(
+                    BuildMessage(failure, stageName, detail),
+                    innerException)
             {
                 Failure = failure;
+                StageName = stageName;
+                Detail = detail;
             }
 
             /// <summary>
             /// Gets the lifecycle failure classification associated with this exception instance.
             /// </summary>
             internal TransitConnectionLifecycleFailure Failure { get; }
+
+            /// <summary>
+            /// Gets the stage name associated with this lifecycle failure when available.
+            /// </summary>
+            internal string? StageName { get; }
+
+            /// <summary>
+            /// Gets additional detail captured for this lifecycle failure when available.
+            /// </summary>
+            internal string? Detail { get; }
+
+            private static string BuildMessage(TransitConnectionLifecycleFailure failure, string? stageName, string? detail)
+            {
+                return failure switch
+                {
+                    TransitConnectionLifecycleFailure.WriterNotInitialized => "Transit protocol writer is not initialized.",
+                    TransitConnectionLifecycleFailure.WriterCompletedDuringTakethisSubmission => "Transit protocol writer completed during TAKETHIS submission.",
+                    TransitConnectionLifecycleFailure.InitializationProgressTimeout => $"Transit connection initialization timed out while awaiting {stageName ?? "protocol progress"}.",
+                    TransitConnectionLifecycleFailure.WriterDisposedDuringTakethisSubmission => "Transit protocol writer was disposed during TAKETHIS submission.",
+                    TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure => detail ?? $"Transit connection negotiation failed during {stageName ?? "protocol negotiation"}.",
+                    _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown transit lifecycle failure."),
+                };
+            }
         }
 
         /// <summary>
