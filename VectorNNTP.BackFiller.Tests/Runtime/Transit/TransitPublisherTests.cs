@@ -1915,16 +1915,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
             Assert.NotEqual(0L, baselineProgressTick);
 
-            await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
-            await blockingRetention.MarkTransitCompletedEntered.Task.WaitAsync(observationTimeout.Token);
+            try
+            {
+                await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
+                await blockingRetention.MarkTransitCompletedEntered.Task.WaitAsync(observationTimeout.Token);
 
-            long progressTickAfterFirstDefinitive = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(baselineProgressTick, progressTickAfterFirstDefinitive);
-            Assert.Equal(1, connection.OutstandingSubmissionCount);
-            Assert.False(connection.IsResponseLoopFaulted);
-
-            allowSecondResponse.TrySetResult(true);
-            blockingRetention.AllowMarkTransitCompleted.TrySetResult(true);
+                long progressTickAfterFirstDefinitive = GetConnectionDefinitiveResponseProgressTick(connection);
+                Assert.NotEqual(baselineProgressTick, progressTickAfterFirstDefinitive);
+                Assert.Equal(1, connection.OutstandingSubmissionCount);
+                Assert.False(connection.IsResponseLoopFaulted);
+            }
+            finally
+            {
+                allowSecondResponse.TrySetResult(true);
+                blockingRetention.AllowMarkTransitCompleted.TrySetResult(true);
+            }
 
             TransitPublishResult[] results = await Task.WhenAll(first, second).WaitAsync(observationTimeout.Token);
             Assert.All(results, result => Assert.Equal(responseCode, result.ResponseCode));
