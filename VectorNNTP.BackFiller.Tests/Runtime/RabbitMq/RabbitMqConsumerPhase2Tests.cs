@@ -551,6 +551,60 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         }
 
         /// <summary>
+        /// Verifies broker cancellation failure during replacement remains visible but does not strand the local session in retiring state.
+        /// </summary>
+        [Fact]
+        public async Task ConnectionReplacement_WhenBrokerCancellationFails_SessionCanRecoverWithSubsequentStart()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 4, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 4, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                sink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: 4);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingConnection firstConnection = connector.RequireLastConnection();
+            TrackingChannel firstConsumerChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            firstConsumerChannel.FailNextCancel(new InvalidOperationException("forced cancel failure"));
+            long firstGeneration = session.ActiveConnectionGeneration;
+
+            firstConnection.RaiseConnectionShutdown();
+
+            bool replaced = await WaitForAsync(
+                () => manager.ConnectionGeneration > firstGeneration && connector.ConnectCallCount >= 2,
+                TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            Assert.True(replaced);
+
+            long replacementGeneration = manager.ConnectionGeneration;
+            InvalidOperationException cancellationFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => session.HandleConnectionReplacedAsync(new RabbitMqConnectionReplacedEventArgs(replacementGeneration, IsReplacement: true), CancellationToken.None)).ConfigureAwait(false);
+            Assert.Equal("forced cancel failure", cancellationFailure.Message);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingConnection secondConnection = connector.RequireLastConnection();
+            TrackingChannel secondConsumerChannel = secondConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            Assert.True(session.IsRunning);
+            Assert.Equal(replacementGeneration, session.ActiveConnectionGeneration);
+            Assert.NotSame(firstConsumerChannel, secondConsumerChannel);
+            Assert.True(firstConsumerChannel.Disposed);
+
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Verifies non-replacement notifications (automatic client recovery path) do not force unnecessary consumer recreation.
         /// </summary>
         [Fact]
@@ -4022,6 +4076,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// Supplies a forced NACK failure for the fixture or scenario under test.
             /// </summary>
             private Exception? _nackFailure;
+            /// <summary>
+            /// Supplies a forced cancel failure for the fixture or scenario under test.
+            /// </summary>
+            private Exception? _cancelFailure;
 
             /// <summary>
             /// Supplies underlying channel for the fixture or scenario under test.
@@ -4128,6 +4186,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             public void FailNextNack(Exception exception)
             {
                 _nackFailure = exception ?? throw new ArgumentNullException(nameof(exception));
+            }
+
+            /// <summary>
+            /// Forces the next cancel attempt to fail with the supplied exception.
+            /// </summary>
+            /// <param name="exception">The exception to throw from BasicCancelAsync.</param>
+            public void FailNextCancel(Exception exception)
+            {
+                _cancelFailure = exception ?? throw new ArgumentNullException(nameof(exception));
             }
 
             /// <summary>
@@ -4273,6 +4340,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     if (_cancelRelease is not null)
                     {
                         await _cancelRelease.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (_cancelFailure is not null)
+                    {
+                        Exception failure = _cancelFailure;
+                        _cancelFailure = null;
+                        throw failure;
                     }
                 }
             }

@@ -375,6 +375,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 LogConsumerRetiring(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, _admittedDeliveryCount);
             }
 
+            Exception? cancelFailure = null;
             try
             {
                 if (_ownedChannel is not null && !string.IsNullOrWhiteSpace(_consumerTag))
@@ -389,7 +390,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             catch (Exception ex)
             {
                 LogConsumerCancellationFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex);
-                throw;
+                cancelFailure = ex;
             }
 
             if (cancelAdmittedWork)
@@ -428,6 +429,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _sessionCancellation?.Dispose();
             _sessionCancellation = null;
 
+            Exception? channelDisposeFailure = null;
             if (_ownedChannel is not null)
             {
                 try
@@ -441,7 +443,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 catch (Exception ex)
                 {
                     LogConsumerChannelDisposeFailed(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ex);
-                    throw;
+                    channelDisposeFailure = ex;
                 }
             }
 
@@ -459,6 +461,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             if (expectedShutdown)
             {
                 LogConsumerStopped(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal);
+                return;
+            }
+
+            Exception? stopFailure = CombineStopFailures(cancelFailure, channelDisposeFailure);
+            if (stopFailure is not null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(stopFailure).Throw();
             }
         }
 
@@ -640,6 +649,27 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             await StartCoreAsync(cancellationToken).ConfigureAwait(false);
 
             LogConsumerRecreationCompleted(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal, ActiveConnectionGeneration);
+        }
+
+        /// <summary>
+        /// Combines stop-path failures while preserving broker-cancel precedence for recovery callers.
+        /// </summary>
+        /// <param name="cancelFailure">Failure observed while issuing broker cancellation.</param>
+        /// <param name="channelDisposeFailure">Failure observed while disposing the local owned channel.</param>
+        /// <returns>The exception to propagate, or <see langword="null"/> when no non-shutdown failure occurred.</returns>
+        private static Exception? CombineStopFailures(Exception? cancelFailure, Exception? channelDisposeFailure)
+        {
+            if (cancelFailure is null)
+            {
+                return channelDisposeFailure;
+            }
+
+            if (channelDisposeFailure is null)
+            {
+                return cancelFailure;
+            }
+
+            return new AggregateException(cancelFailure, channelDisposeFailure);
         }
 
         /// <summary>
