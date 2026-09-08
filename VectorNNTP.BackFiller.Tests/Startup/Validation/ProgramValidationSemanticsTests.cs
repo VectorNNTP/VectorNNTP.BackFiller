@@ -3056,7 +3056,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         /// <param name="values">The values used by this test scenario.</param>
         /// <param name="includeRabbitMqBaseline">The include rabbit mq baseline used by this test scenario.</param>
         /// <returns>The value returned by the build configuration helper.</returns>
-        private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
+        internal static IConfiguration BuildConfigurationForCommandTests(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             if (includeRabbitMqBaseline)
             {
@@ -3109,6 +3109,11 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             return new ConfigurationBuilder()
                 .AddInMemoryCollection(values)
                 .Build();
+        }
+
+        private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
+        {
+            return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
         }
 
     }
