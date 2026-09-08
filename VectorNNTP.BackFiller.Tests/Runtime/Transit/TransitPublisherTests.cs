@@ -1911,12 +1911,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Task<TransitPublishResult> second = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
 
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, baselineProgressTick);
+
             await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
             await blockingRetention.MarkTransitCompletedEntered.Task.WaitAsync(observationTimeout.Token);
 
-            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
-            long progressTick = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(0L, progressTick);
+            long progressTickAfterFirstDefinitive = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(baselineProgressTick, progressTickAfterFirstDefinitive);
+            Assert.Equal(1, connection.OutstandingSubmissionCount);
+            Assert.False(connection.IsResponseLoopFaulted);
 
             allowSecondResponse.TrySetResult(true);
             blockingRetention.AllowMarkTransitCompleted.TrySetResult(true);
@@ -1998,10 +2003,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
-        /// Verifies that when the last pending submission is correlated and removed with a non-definitive response near the watchdog boundary, the connection does not fault once no watchdog-relevant pending work remains.
+        /// Verifies that when the final pending response is removed at the watchdog timeout boundary by a non-definitive correlation, the watchdog does not fault because no pending response work remains.
         /// </summary>
         [Fact]
-        public async Task PublishAsync_WhenLastPendingResponseIsRemovedNearWatchdogBoundary_DoesNotFaultConnection()
+        public async Task PublishAsync_WhenLastPendingResponseIsRemovedAtWatchdogBoundary_DoesNotFaultConnection()
         {
             TimeSpan responseProgressTimeout = TimeSpan.FromMilliseconds(250);
             TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
@@ -2010,6 +2015,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             string secondMessageId = "<watchdog-last-pending-second@example.com>";
             TaskCompletionSource<bool> firstResponseSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> firstResultObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
             {
@@ -2033,7 +2039,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
                 await FakePublisherServer.WriteLineAsync(stream, $"400 {firstMessageId} temporary");
                 firstResponseSent.TrySetResult(true);
+                await firstResultObserved.Task.WaitAsync(cancellationToken);
                 await allowSecondResponse.Task.WaitAsync(cancellationToken);
+
                 await FakePublisherServer.WriteLineAsync(stream, $"400 {secondMessageId} temporary");
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             });
@@ -2052,30 +2060,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
-            long initialTick = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(0L, initialTick);
+            long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, baselineProgressTick);
 
             await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
             TransitPublishResult firstResult = await first.WaitAsync(observationTimeout.Token);
+            firstResultObserved.TrySetResult(true);
+
             Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
             Assert.Equal(400, firstResult.ResponseCode);
+            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.Equal(1, connection.OutstandingSubmissionCount);
 
-            while (Stopwatch.GetElapsedTime(initialTick) < responseProgressTimeout - responseProgressCheckInterval)
-            {
-                observationTimeout.Token.ThrowIfCancellationRequested();
-                await Task.Yield();
-            }
+            await WaitForElapsedProgressAsync(baselineProgressTick, responseProgressTimeout, observationTimeout.Token);
 
             allowSecondResponse.TrySetResult(true);
             TransitPublishResult secondResult = await second.WaitAsync(observationTimeout.Token);
 
             Assert.Equal(TransitPublishStatus.Ambiguous, secondResult.Status);
             Assert.Equal(400, secondResult.ResponseCode);
-
-            await Task.Delay(responseProgressCheckInterval + responseProgressCheckInterval, observationTimeout.Token);
             Assert.Equal(0, connection.OutstandingSubmissionCount);
-            Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
+            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
             Assert.False(connection.IsResponseLoopFaulted);
+            Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
         }
 
         /// <summary>
@@ -2116,7 +2123,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, new byte[] { (byte)'T', (byte)'\n' }, CancellationToken.None).AsTask();
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, baselineProgressTick);
+            await WaitForOutstandingAwaitingResponsesAsync(publisher, minimumAwaitingResponses: 1, observationTimeout.Token);
+            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
 
+            await WaitForElapsedProgressAsync(baselineProgressTick, responseProgressTimeout, observationTimeout.Token);
             while (!connection.IsResponseLoopFaulted)
             {
                 observationTimeout.Token.ThrowIfCancellationRequested();
@@ -5084,6 +5096,25 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     return;
                 }
 
+                await Task.Yield();
+            }
+        }
+
+        /// <summary>
+        /// Waits until elapsed monotonic time from a captured progress tick exceeds the specified threshold.
+        /// </summary>
+        /// <param name="progressTick">Baseline progress tick used for elapsed-time observation.</param>
+        /// <param name="minimumElapsed">Elapsed threshold that must be exceeded before returning.</param>
+        /// <param name="cancellationToken">Cancels the wait if the threshold cannot be observed in time.</param>
+        /// <returns>Completes when elapsed time since <paramref name="progressTick"/> exceeds <paramref name="minimumElapsed"/>.</returns>
+        private static async Task WaitForElapsedProgressAsync(long progressTick, TimeSpan minimumElapsed, CancellationToken cancellationToken)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(progressTick, 0L);
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(minimumElapsed, TimeSpan.Zero);
+
+            while (Stopwatch.GetElapsedTime(progressTick) <= minimumElapsed)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 await Task.Yield();
             }
         }
