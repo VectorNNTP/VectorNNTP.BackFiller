@@ -2573,6 +2573,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.False(session3.DisposeCalled);
 
             reconcileCts.Cancel();
+            await sessionFactory.WaitForStopCancellationObservedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
             sessionFactory.ReleaseStop(sessionKey2);
 
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
@@ -2969,6 +2970,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopStarted = new(StringComparer.Ordinal);
             /// <summary>
+            /// Confirms stop cancellation observed behavior.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _stopCancellationObserved = new(StringComparer.Ordinal);
+            /// <summary>
             /// Confirms  gate behavior.
             /// </summary>
             private readonly object _gate = new();
@@ -3077,6 +3082,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 {
                     _stopBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _stopStarted[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _stopCancellationObserved[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
 
@@ -3098,6 +3104,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     if (!_stopStarted.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         throw new InvalidOperationException($"No stop-start signal exists for session '{sessionKey}'.");
+                    }
+
+                    task = source.Task;
+                }
+
+                await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Confirms the wait for stop cancellation observed async behavior.
+            /// </summary>
+            /// <param name="sessionKey">The session key used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            internal async Task WaitForStopCancellationObservedAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task task;
+                lock (_gate)
+                {
+                    if (!_stopCancellationObserved.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No stop-cancellation signal exists for session '{sessionKey}'.");
                     }
 
                     task = source.Task;
@@ -3134,10 +3161,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 Task? gateTask = null;
                 TaskCompletionSource<bool>? startedSignal = null;
+                TaskCompletionSource<bool>? cancellationObservedSignal = null;
 
                 lock (_gate)
                 {
                     _ = _stopStarted.TryGetValue(sessionKey, out startedSignal);
+                    _ = _stopCancellationObserved.TryGetValue(sessionKey, out cancellationObservedSignal);
                     if (_stopBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         gateTask = source.Task;
@@ -3146,9 +3175,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
                 _ = startedSignal?.TrySetResult(true);
 
-                if (gateTask is not null)
+                if (gateTask is null)
+                {
+                    return;
+                }
+
+                try
                 {
                     await gateTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    _ = cancellationObservedSignal?.TrySetResult(true);
+                    throw;
                 }
             }
         }
