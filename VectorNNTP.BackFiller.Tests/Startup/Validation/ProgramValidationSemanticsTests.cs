@@ -198,11 +198,11 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Empty(dependencyResult.FailedDependencies);
         }
         /// <summary>
-        /// Confirms the validate configuration and dependencies async when lets encrypt disabled and cloudflare configured still runs cloudflare dependency validation behavior.
+        /// Confirms the non-listener startup validation path still executes Cloudflare dependency validation when Cloudflare is configured.
         /// </summary>
         [Trait("Category", "Integration")]
         [Fact]
-        public async Task ValidateConfigurationAndDependenciesAsync_WhenLetsEncryptDisabledAndCloudflareConfigured_StillRunsCloudflareDependencyValidation()
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenCloudflareConfiguredInNonListenerPath_StillRunsCloudflareDependencyValidation()
         {
             IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
@@ -225,6 +225,39 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.True(configResult.IsValid);
             Assert.Contains(dependencyResult.FailedDependencies, static d => d.Dependency == "CloudflareZone");
         }
+
+        /// <summary>
+        /// Confirms the full startup validation path still requires mandatory listener ACME inputs before runtime snapshot/dependency execution.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenListenerAcmeSettingsMissing_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Null(runtimeOptions);
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+            Assert.Contains(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
+            Assert.True(dependencyResult.IsValid);
+            Assert.Empty(dependencyResult.FailedDependencies);
+        }
+
         /// <summary>
         /// Confirms the validate configuration and dependencies async when cloudflare configured remains valid without legacy lets encrypt enabled warnings behavior.
         /// </summary>
@@ -277,7 +310,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:TransitServer:UseSsl"] = "false",
             });
 
-            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
             Assert.Empty(configErrors);
 
             (_, DependencyValidationResult dependencyResult) =
@@ -313,7 +349,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:TransitServer:UseSsl"] = "false",
             });
 
-            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
             Assert.Empty(configErrors);
 
             (_, DependencyValidationResult dependencyResult) =
@@ -2783,7 +2822,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                     CancellationToken.None);
 
             // Sanity-check configuration-level validation first and report any config errors for diagnosis.
-            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+            List<(string Setting, string Error)> configErrors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: [],
+                includeListenerCertificateValidation: false);
             Assert.True(configErrors.Count == 0, $"Unexpected configuration errors: {string.Join("; ", configErrors.Select(e => e.Setting + ": " + e.Error))}");
 
             Assert.True(configResult.IsValid);

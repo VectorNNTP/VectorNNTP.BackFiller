@@ -33,21 +33,52 @@ namespace VectorNNTP.Backfiller.Startup.Validation
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="dependencyTimeout"/> is less than or equal to <see cref="TimeSpan.Zero"/>.</exception>
         /// <exception cref="OperationCanceledException">The operation is canceled via <paramref name="cancellationToken"/>.</exception>
         /// <remarks>
-        /// This overload delegates to <see cref="ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(IConfiguration, TimeSpan, CancellationToken)"/>
-        /// and intentionally discards the runtime-options snapshot.
+        /// This overload is used by non-listener startup validation surfaces. It validates baseline configuration
+        /// and baseline dependencies without requiring listener certificate runtime projection/readiness.
         /// </remarks>
         internal static async Task<(ConfigurationValidationResult, DependencyValidationResult)> ValidateConfigurationAndDependenciesAsync(
             IConfiguration configuration,
             TimeSpan dependencyTimeout,
             CancellationToken cancellationToken)
         {
-            (ConfigurationValidationResult configurationValidationResult, DependencyValidationResult dependencyValidationResult, _) =
-                await ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
-                    configuration,
-                    dependencyTimeout,
-                    cancellationToken).ConfigureAwait(false);
+            ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(dependencyTimeout, TimeSpan.Zero);
 
-            return (configurationValidationResult, dependencyValidationResult);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            List<(string Setting, string Error)> configErrors = [];
+            List<(string Setting, string Message)> configWarnings = [];
+
+            BackFillerOptions? backFiller = configuration
+                .GetSection("BackFiller")
+                .Get<BackFillerOptions>();
+
+            configErrors.AddRange(ConfigurationValidator.ValidateConnectionStrings(configuration, configWarnings));
+            configErrors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(configuration, configWarnings, includeListenerCertificateValidation: false));
+
+            BackFillerRuntimeOptions? runtimeOptions = null;
+            if (configErrors.Count == 0)
+            {
+                runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                    configuration,
+                    backFiller,
+                    configErrors,
+                    includeLetsEncryptRuntimeOptions: false);
+            }
+
+            ConfigurationValidationResult configResult = new(configErrors, configWarnings);
+
+            DependencyValidationResult dependencyResult = configResult.IsValid && runtimeOptions != null
+                ? await DependencyProbeRunner.ValidateDependenciesAsync(
+                    configuration,
+                    backFiller,
+                    runtimeOptions,
+                    dependencyTimeout,
+                    cancellationToken,
+                    includeListenerCertificateReadiness: false).ConfigureAwait(false)
+                : DependencyValidationResult.Success();
+
+            return (configResult, dependencyResult);
         }
 
         /// <summary>

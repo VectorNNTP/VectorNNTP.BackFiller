@@ -160,7 +160,25 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings)
         {
-            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider());
+            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider(), includeListenerCertificateValidation: true);
+        }
+
+        /// <summary>
+        /// Binds and validates the <c>BackFiller</c> section for the requested validation scope.
+        /// </summary>
+        /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
+        /// <param name="warnings">Collector that receives non-blocking configuration diagnostics.</param>
+        /// <param name="includeListenerCertificateValidation">
+        /// <see langword="true"/> to enforce listener certificate/ACME key+PFX validation; otherwise skips listener-certificate-only checks
+        /// so non-listener validation paths can project unrelated runtime settings.
+        /// </param>
+        /// <returns>A list of blocking <c>(Setting, Error)</c> tuples produced during BackFiller validation.</returns>
+        internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
+            IConfiguration configuration,
+            List<(string Setting, string Message)> warnings,
+            bool includeListenerCertificateValidation)
+        {
+            return ValidateBackFillerOptions(configuration, warnings, new PhysicalSystemMemoryProvider(), includeListenerCertificateValidation);
         }
 
         /// <summary>
@@ -170,11 +188,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="configuration">The application configuration root used to bind <see cref="BackFillerOptions"/>.</param>
         /// <param name="warnings">Collector that receives non-blocking configuration diagnostics.</param>
         /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <param name="includeListenerCertificateValidation">
+        /// <see langword="true"/> enforces listener certificate/ACME key+PFX validation; otherwise listener-certificate-only checks are skipped.
+        /// </param>
         /// <returns>A list of blocking <c>(Setting, Error)</c> tuples produced during BackFiller validation.</returns>
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             IConfiguration configuration,
             List<(string Setting, string Message)> warnings,
-            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider,
+            bool includeListenerCertificateValidation = true)
         {
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(warnings);
@@ -184,7 +206,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 .GetSection("BackFiller")
                 .Get<BackFillerOptions>();
 
-            List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider);
+            List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider, includeListenerCertificateValidation);
 
             if (configuration["BackFiller:LetsEncrypt:Enabled"] is not null)
             {
@@ -214,7 +236,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings)
         {
-            return ValidateBackFillerOptions(backFiller, warnings, new PhysicalSystemMemoryProvider());
+            return ValidateBackFillerOptions(backFiller, warnings, new PhysicalSystemMemoryProvider(), includeListenerCertificateValidation: true);
         }
 
         /// <summary>
@@ -223,6 +245,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="backFiller">The bound <see cref="BackFillerOptions"/> instance, or <see langword="null"/> when the section is missing.</param>
         /// <param name="warnings">Collector that receives non-blocking diagnostics such as staging-mode notices.</param>
         /// <param name="physicalSystemMemoryProvider">Provider used to resolve total physical memory for retention policy validation.</param>
+        /// <param name="includeListenerCertificateValidation">
+        /// <see langword="true"/> enforces listener certificate/ACME key+PFX validation; otherwise listener-certificate-only checks are skipped.
+        /// </param>
         /// <returns>
         /// A list of blocking configuration errors represented as <c>(Setting, Error)</c> tuples.
         /// Severity mapping from validator diagnostics is handled by <c>AddDiagnostics</c> helpers.
@@ -235,7 +260,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         internal static List<(string Setting, string Error)> ValidateBackFillerOptions(
             BackFillerOptions? backFiller,
             List<(string Setting, string Message)> warnings,
-            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider)
+            IPhysicalSystemMemoryProvider physicalSystemMemoryProvider,
+            bool includeListenerCertificateValidation = true)
         {
             ArgumentNullException.ThrowIfNull(warnings);
             ArgumentNullException.ThrowIfNull(physicalSystemMemoryProvider);
@@ -357,12 +383,15 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 AddDiagnostics(errors, warnings, domainNamesDiagnostics);
             }
 
-            // Validate PFX export password requirements for certificate bundle protection.
-            List<LetsEncryptValidationResult> pfxPasswordDiagnostics = LetsEncryptValidator.ValidatePfxExportPassword(
-                backFiller.LetsEncrypt?.PfxExportPassword,
-                "BackFiller:LetsEncrypt");
+            if (includeListenerCertificateValidation)
+            {
+                // Validate PFX export password requirements for certificate bundle protection.
+                List<LetsEncryptValidationResult> pfxPasswordDiagnostics = LetsEncryptValidator.ValidatePfxExportPassword(
+                    backFiller.LetsEncrypt?.PfxExportPassword,
+                    "BackFiller:LetsEncrypt");
 
-            AddDiagnostics(errors, warnings, pfxPasswordDiagnostics);
+                AddDiagnostics(errors, warnings, pfxPasswordDiagnostics);
+            }
 
             // Validate renewal-check scheduler interval bounds.
             List<LetsEncryptValidationResult> renewalCheckIntervalDiagnostics = LetsEncryptValidator.ValidateRenewalCheckIntervalHours(
@@ -392,13 +421,16 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
 
             AddDiagnostics(errors, warnings, letsEncryptDiagnostics);
 
-            // Validate account-key filename semantics and PEM private key loadability.
-            List<LetsEncryptValidationResult> accountKeyDiagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
-                backFiller.LetsEncrypt?.AcmeAccountKeyPem,
-                backFiller.DirCerts,
-                "BackFiller:LetsEncrypt");
+            if (includeListenerCertificateValidation)
+            {
+                // Validate account-key filename semantics and PEM private key loadability.
+                List<LetsEncryptValidationResult> accountKeyDiagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
+                    backFiller.LetsEncrypt?.AcmeAccountKeyPem,
+                    backFiller.DirCerts,
+                    "BackFiller:LetsEncrypt");
 
-            AddDiagnostics(errors, warnings, accountKeyDiagnostics);
+                AddDiagnostics(errors, warnings, accountKeyDiagnostics);
+            }
 
             // Validate transient ACME retry attempt bounds.
             List<LetsEncryptValidationResult> transientRetryDiagnostics = LetsEncryptValidator.ValidateAcmeTransientRetryMaxAttempts(

@@ -105,14 +105,15 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 .Get<BackFillerOptions>();
 
             errors.AddRange(ConfigurationValidator.ValidateConnectionStrings(configuration, warnings));
-            errors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(backFiller, warnings));
+            errors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(configuration, warnings, includeListenerCertificateValidation: false));
 
             if (errors.Count == 0)
             {
                 _ = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
                     configuration,
                     backFiller,
-                    errors);
+                    errors,
+                    includeLetsEncryptRuntimeOptions: false);
             }
 
             return new ConfigurationValidationResult(errors, warnings);

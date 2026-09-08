@@ -28,6 +28,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         /// <param name="configuration">Configuration root used to resolve operational directories and related settings.</param>
         /// <param name="backFiller">Validated BackFiller options section used to construct runtime identity and service settings.</param>
         /// <param name="configErrors">Mutable validation-error accumulator that receives snapshot-construction failures.</param>
+        /// <param name="includeLetsEncryptRuntimeOptions">Whether listener ACME runtime projection is required for the current snapshot construction operation.</param>
         /// <returns>
         /// A fully populated <see cref="BackFillerRuntimeOptions"/> snapshot when construction succeeds; otherwise
         /// <see langword="null"/> after appending an explanatory error to <paramref name="configErrors"/>.
@@ -40,7 +41,8 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         internal static BackFillerRuntimeOptions? BuildRuntimeOptionsSnapshot(
             IConfiguration configuration,
             BackFillerOptions? backFiller,
-            List<(string Setting, string Error)> configErrors)
+            List<(string Setting, string Error)> configErrors,
+            bool includeLetsEncryptRuntimeOptions = true)
         {
             ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(configErrors);
@@ -71,7 +73,9 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     ?? throw new InvalidOperationException("BackFiller:TransitServer:Host is required to build runtime options.");
 
                 IReadOnlyList<IPAddress> canonicalBindAddresses = BindAddressDnsAddressDeriver.DeriveCanonicalDnsAddresses(backFiller.BindAddress);
-                BackFillerLetsEncryptRuntimeOptions letsEncryptRuntimeOptions = BuildLetsEncryptRuntimeOptions(backFiller, validatedCertificateDirectory, canonicalBackFillerFqdn);
+                BackFillerLetsEncryptRuntimeOptions? letsEncryptRuntimeOptions = includeLetsEncryptRuntimeOptions
+                    ? BuildLetsEncryptRuntimeOptions(backFiller, validatedCertificateDirectory, canonicalBackFillerFqdn)
+                    : null;
                 RabbitMqRuntimeOptions rabbitMqRuntimeOptions = BuildRabbitMqRuntimeOptions(backFiller, canonicalBackFillerFqdn);
 
                 return new BackFillerRuntimeOptions(

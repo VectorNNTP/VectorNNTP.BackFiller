@@ -245,10 +245,18 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             });
             BackFillerOptions options = BindBackFillerOptions(configuration);
             List<(string Setting, string Message)> warnings = [];
-            List<(string Setting, string Error)> validationErrors = ConfigurationValidator.ValidateBackFillerOptions(options, warnings, new FixedPhysicalSystemMemoryProvider(physicalMemoryBytes));
+            List<(string Setting, string Error)> validationErrors = ConfigurationValidator.ValidateBackFillerOptions(
+                options,
+                warnings,
+                new FixedPhysicalSystemMemoryProvider(physicalMemoryBytes),
+                includeListenerCertificateValidation: false);
             List<(string Setting, string Error)> projectionErrors = [];
 
-            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(configuration, options, projectionErrors);
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                options,
+                projectionErrors,
+                includeLetsEncryptRuntimeOptions: false);
 
             Assert.Empty(validationErrors);
             Assert.Empty(projectionErrors);
