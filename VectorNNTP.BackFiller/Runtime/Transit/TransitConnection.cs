@@ -547,10 +547,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <returns>A task that completes when the connection reaches <see cref="TransitConnectionState.Ready"/>.</returns>
         /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> is canceled.</exception>
         /// <exception cref="InvalidOperationException">
-        /// Thrown when greeting/capability/mode-stream protocol responses are invalid for a publishing-ready session.
+        /// Thrown when internal initialization invariants are violated, such as missing transport read/write streams after a required stage transition.
         /// </exception>
         /// <exception cref="TransitConnectionLifecycleException">
-        /// Thrown when initialization exceeds the configured response-progress timeout.
+        /// Thrown when initialization exceeds the configured response-progress timeout or when protocol negotiation fails during greeting,
+        /// CAPABILITIES, STARTTLS, post-STARTTLS CAPABILITIES, STREAMING capability validation, or MODE STREAM response validation.
         /// </exception>
         /// <remarks>
         /// The method performs TCP connect, optional immediate TLS, greeting validation, CAPABILITIES negotiation,
@@ -629,10 +630,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 if (!_useSsl && Capabilities.SupportsStartTls)
                 {
                     TransitionState(TransitConnectionState.StartingTls);
-                    await AwaitInitializationStageAsync(
-                        StartTlsAsync,
-                        "STARTTLS negotiation",
-                        cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await AwaitInitializationStageAsync(
+                            StartTlsAsync,
+                            "STARTTLS negotiation",
+                            cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (InvalidOperationException ex) when (ex is not TransitConnectionLifecycleException)
+                    {
+                        throw new TransitConnectionLifecycleException(
+                            TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure,
+                            "STARTTLS negotiation",
+                            ex,
+                            ex.Message);
+                    }
+
                     TransitionState(TransitConnectionState.TlsEstablished);
 
                     _reader = PipeReader.Create(_readStream ?? throw new InvalidOperationException("Transit transport read stream is not initialized."), new StreamPipeReaderOptions(leaveOpen: true));
@@ -1795,7 +1808,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <param name="cancellationToken">Token used to cancel command/response exchange and TLS authentication.</param>
         /// <returns>A task that completes when the TLS upgrade succeeds.</returns>
-        /// <exception cref="InvalidOperationException">Thrown when the server does not return status code <c>382</c> for STARTTLS.</exception>
+        /// <exception cref="InvalidOperationException">
+        /// Thrown when the STARTTLS response line is malformed or when the server does not return status code <c>382</c>.
+        /// </exception>
+        /// <remarks>
+        /// During connection initialization, STARTTLS protocol failures from this helper are wrapped into
+        /// <see cref="TransitConnectionLifecycleException"/> with <see cref="TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure"/>.
+        /// </remarks>
         private async Task StartTlsAsync(CancellationToken cancellationToken)
         {
             await WriteCommandAsync("STARTTLS", cancellationToken).ConfigureAwait(false);

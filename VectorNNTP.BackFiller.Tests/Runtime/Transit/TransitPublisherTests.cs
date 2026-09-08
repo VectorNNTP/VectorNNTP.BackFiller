@@ -3696,6 +3696,68 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
+        /// Verifies that STARTTLS rejection on the first connection attempt remains lifecycle-classified after cleanup and the worker recovers to process subsequent work.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenInitialStartTlsRejectedAfterCleanup_WorkerRecoversAndProcessesSubsequentWork()
+        {
+            string messageId = "<publisher-h04-starttls-recovery@example.com>";
+            byte[] payload = [(byte)'T', (byte)'\n'];
+            int acceptedSessionCount = 0;
+
+            await using FakePublisherServer server = await FakePublisherServer.StartSessionsAsync(
+            [
+                async (stream, cancellationToken) =>
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STARTTLS");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "STARTTLS", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "580 STARTTLS rejected");
+                },
+                async (stream, cancellationToken) =>
+                {
+                    Interlocked.Increment(ref acceptedSessionCount);
+                    await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                    await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                    await FakePublisherServer.WriteLineAsync(stream, ".");
+                    await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                    await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                    string takethisLine = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                    Assert.Equal($"TAKETHIS {messageId}", takethisLine);
+                    byte[] receivedPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                    Assert.Equal(payload, receivedPayload);
+                    await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} transferred");
+                },
+            ]);
+
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+            TransitPublishResult result = await publisher.PublishAsync(messageId, payload, timeout.Token).AsTask().WaitAsync(timeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(1, Volatile.Read(ref acceptedSessionCount));
+            Assert.Equal(1, GetRemainingConnectionWorkerCount(publisher));
+
+            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+            Assert.True(diagnostics.TotalReconnects >= 1);
+            Assert.True(diagnostics.Slots.Length > 0 && diagnostics.Slots[0].HasCurrentConnection);
+            Assert.Equal(0, diagnostics.QueueSnapshot.QueuedItemCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.InFlightCount);
+            Assert.Equal(0, diagnostics.QueueSnapshot.RetryPendingCount);
+            Assert.Equal(0, GetActiveSubmissionCount(publisher));
+        }
+
+        /// <summary>
         /// Verifies that missing STREAMING capability on the first connection attempt is treated as a recoverable lifecycle failure despite cleanup resetting mutable state.
         /// </summary>
         [Fact]

@@ -252,6 +252,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.True(connection.IsTlsActive);
             Assert.True(connection.Capabilities.SupportsStreaming);
         }
+
+        /// <summary>
+        /// Confirms the initialize async when start tls rejected throws lifecycle negotiation failure and cleanup reaches disconnected behavior.
+        /// </summary>
+        [Fact]
+        public async Task InitializeAsync_WhenStartTlsRejected_ThrowsLifecycleNegotiationFailureAndCleansUp()
+        {
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, _) =>
+            {
+                await FakeNntpServer.WriteLineAsync(stream, "200 transit ready");
+                await FakeNntpServer.ExpectCommandAsync(stream, "CAPABILITIES");
+                await FakeNntpServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakeNntpServer.WriteLineAsync(stream, "STARTTLS");
+                await FakeNntpServer.WriteLineAsync(stream, "STREAMING");
+                await FakeNntpServer.WriteLineAsync(stream, ".");
+                await FakeNntpServer.ExpectCommandAsync(stream, "STARTTLS");
+                await FakeNntpServer.WriteLineAsync(stream, "580 starttls refused");
+            });
+
+            await using TransitConnection connection = new(
+                host: IPAddress.Loopback.ToString(),
+                port: server.Port,
+                useSsl: false,
+                NullLogger<TransitPublisher>.Instance);
+
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(CancellationToken.None));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure, ex.Failure);
+            Assert.Equal("STARTTLS negotiation", ex.StageName);
+            Assert.Contains("Unexpected STARTTLS response code", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+        }
+
         /// <summary>
         /// Confirms the initialize async when streaming not advertised throws behavior.
         /// </summary>
