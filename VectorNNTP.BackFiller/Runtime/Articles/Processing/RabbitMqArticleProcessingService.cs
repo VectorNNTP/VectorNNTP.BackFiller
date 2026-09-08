@@ -120,6 +120,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                                 result.Disposition,
                                 result.Delivery.Redelivered);
                         }
+                        catch (OperationCanceledException) when (IsGenerationLocalCancellation(stoppingToken, delivery.CancellationToken))
+                        {
+                        }
+                        catch (RabbitMqBackboneConsumerSession.RabbitMqStaleDeliverySettlementException) when (IsGenerationLocalCancellation(stoppingToken, delivery.CancellationToken))
+                        {
+                        }
                         finally
                         {
                             _drainBarrier.ExitProcessingScope();
@@ -155,6 +161,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
 
             return CancellationTokenSource.CreateLinkedTokenSource(hostToken, deliveryToken);
+        }
+
+        /// <summary>
+        /// Determines whether cancellation was initiated by consumer-generation replacement while host shutdown was not requested.
+        /// </summary>
+        /// <param name="hostToken">Host-level stopping token that represents application shutdown intent.</param>
+        /// <param name="deliveryToken">Per-delivery token that represents consumer-generation lifetime.</param>
+        /// <returns><see langword="true"/> when delivery-local generation cancellation should be contained by the per-delivery boundary.</returns>
+        private static bool IsGenerationLocalCancellation(CancellationToken hostToken, CancellationToken deliveryToken)
+        {
+            return deliveryToken.IsCancellationRequested && !hostToken.IsCancellationRequested;
         }
 
         /// <summary>
