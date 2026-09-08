@@ -135,6 +135,30 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         /// <summary>
+        /// Confirms non-listener pipeline validates and projects a single authoritative BackFiller bind snapshot.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenSecondBackFillerBindWouldOccur_DoesNotRebindConfiguration()
+        {
+            IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+            IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(
+                baselineConfiguration,
+                "BackFiller section was rebound more than once during non-listener startup validation pipeline evaluation.");
+
+            (ConfigurationValidationResult configResult, _) =
+                await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                    guardedConfiguration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.True(configResult.IsValid);
+            Assert.Empty(configResult.Errors);
+        }
+
+        /// <summary>
         /// Confirms full startup validation still enforces listener certificate directory prerequisites.
         /// </summary>
         [Fact]
@@ -156,6 +180,31 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Contains(configResult.Errors, static e => string.Equals(e.Setting, "BackFiller.DirCerts", StringComparison.Ordinal));
             Assert.Null(runtimeOptions);
             Assert.True(dependencyResult.IsValid);
+        }
+
+        /// <summary>
+        /// Confirms full-startup pipeline keeps strict listener certificate prerequisites while avoiding a second BackFiller bind.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenSecondBackFillerBindWouldOccur_DoesNotRebindConfiguration()
+        {
+            IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+            IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(
+                baselineConfiguration,
+                "BackFiller section was rebound more than once during full-startup validation pipeline evaluation.");
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult _, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    guardedConfiguration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.NotEmpty(configResult.Errors);
+            Assert.Null(runtimeOptions);
         }
 
         /// <summary>
@@ -3367,10 +3416,19 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
         }
 
-        private sealed class SingleBackFillerBindConfiguration(IConfiguration inner) : IConfiguration
+        private sealed class SingleBackFillerBindConfiguration : IConfiguration
         {
-            private readonly IConfiguration _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+            private readonly IConfiguration _inner;
+            private readonly string _multipleBindMessage;
             private int _backFillerBindCount;
+
+            internal SingleBackFillerBindConfiguration(IConfiguration inner, string multipleBindMessage = "BackFiller section was rebound more than once during validate-config command evaluation.")
+            {
+                _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+                _multipleBindMessage = string.IsNullOrWhiteSpace(multipleBindMessage)
+                    ? throw new ArgumentException("A non-empty multiple-bind message is required.", nameof(multipleBindMessage))
+                    : multipleBindMessage;
+            }
 
             public string? this[string key]
             {
@@ -3398,7 +3456,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
                 if (Interlocked.Increment(ref _backFillerBindCount) > 1)
                 {
-                    throw new InvalidOperationException("BackFiller section was rebound more than once during validate-config command evaluation.");
+                    throw new InvalidOperationException(_multipleBindMessage);
                 }
 
                 return section;

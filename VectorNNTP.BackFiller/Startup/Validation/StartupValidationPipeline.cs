@@ -54,7 +54,11 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 .Get<BackFillerOptions>();
 
             configErrors.AddRange(ConfigurationValidator.ValidateConnectionStrings(configuration, configWarnings));
-            configErrors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(configuration, configWarnings, includeListenerCertificateValidation: false));
+            configErrors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(
+                backFiller,
+                configWarnings,
+                new PhysicalSystemMemoryProvider(),
+                includeListenerCertificateValidation: false));
 
             BackFillerRuntimeOptions? runtimeOptions = null;
             if (configErrors.Count == 0)
