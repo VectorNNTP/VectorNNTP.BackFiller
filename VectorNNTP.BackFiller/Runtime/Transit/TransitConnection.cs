@@ -21,6 +21,17 @@ using System.Threading.Channels;
 namespace VectorNNTP.Backfiller.Runtime.Transit
 {
     /// <summary>
+    /// Identifies semantic checkpoints within the response-progress watchdog loop for deterministic test coordination.
+    /// </summary>
+    internal enum TransitWatchdogProbePoint
+    {
+        /// <summary>
+        /// Indicates the watchdog observed stale definitive progress while pending work still existed and is about to perform its final no-fault guard check.
+        /// </summary>
+        TimeoutElapsedWithPendingBeforeFinalRecheck,
+    }
+
+    /// <summary>
     /// Owns one outbound NNTP transit session, including transport establishment, protocol negotiation,
     /// TAKETHIS submission, and response correlation for work assigned to this connection.
     /// </summary>
@@ -86,6 +97,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Optional collector for staging, flush, read, and response-correlation timing metrics.
         /// </summary>
         private readonly TransitTimingCollector? _timingCollector;
+
+        /// <summary>
+        /// Optional callback invoked when the response-progress watchdog reaches deterministic semantic probe points.
+        /// </summary>
+        private readonly Action<TransitWatchdogProbePoint>? _watchdogProbe;
 
         /// <summary>
         /// Gate that serializes staging and flushing on the shared transport writer.
@@ -274,6 +290,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
+        /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
         internal TransitConnection(
             string host,
             int port,
@@ -284,7 +301,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Func<int>? expectedBatchIntentCountProvider = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
-            TransitTimingCollector? timingCollector = null)
+            TransitTimingCollector? timingCollector = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
             : this(
                 host,
                 port,
@@ -296,7 +314,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 expectedBatchIntentCountProvider,
                 responseProgressTimeout,
                 responseProgressCheckInterval,
-                timingCollector)
+                timingCollector,
+                watchdogProbe)
         {
         }
 
@@ -320,6 +339,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
+        /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
         /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException">
@@ -342,7 +362,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             Func<int>? expectedBatchIntentCountProvider = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
-            TransitTimingCollector? timingCollector = null)
+            TransitTimingCollector? timingCollector = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
         {
             if (string.IsNullOrWhiteSpace(host))
             {
@@ -387,6 +408,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _responseProgressTimeout = effectiveResponseProgressTimeout;
             _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
             _timingCollector = timingCollector;
+            _watchdogProbe = watchdogProbe;
             _ = expectedBatchIntentCountProvider;
         }
 
@@ -1273,6 +1295,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     {
                         continue;
                     }
+
+                    _watchdogProbe?.Invoke(TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck);
 
                     long recheckedProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
                     if (recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)

@@ -107,6 +107,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         private readonly Action? _claimBoundaryObserved;
 
         /// <summary>
+        /// Optional internal watchdog probe forwarded to created connections for deterministic watchdog regression coordination.
+        /// </summary>
+        private readonly Action<TransitWatchdogProbePoint>? _watchdogProbe;
+
+        /// <summary>
         /// Monotonic identifier source for newly admitted work items.
         /// </summary>
         private long _nextWorkItemId;
@@ -177,6 +182,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="connectionResponseProgressCheckInterval">Optional interval used when polling connection response progress.</param>
         /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
         /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
+        /// <param name="watchdogProbe">Optional internal callback invoked at deterministic watchdog semantic checkpoints.</param>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -187,7 +193,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TimeSpan? connectionResponseProgressTimeout = null,
             TimeSpan? connectionResponseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
-            Action? claimBoundaryObserved = null)
+            Action? claimBoundaryObserved = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
@@ -210,6 +217,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _retentionAuthority = retentionAuthority;
             _timingCollector = timingCollector;
             _claimBoundaryObserved = claimBoundaryObserved;
+            _watchdogProbe = watchdogProbe;
             _connectionPoolSize = connectionPoolSize;
             _perConnectionPipelineDepth = perConnectionPipelineDepth;
             _connectionResponseProgressTimeout = connectionResponseProgressTimeout;
@@ -240,6 +248,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="connectionResponseProgressCheckInterval">Optional interval used when polling connection response progress.</param>
         /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
         /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
+        /// <param name="watchdogProbe">Optional internal callback invoked at deterministic watchdog semantic checkpoints.</param>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -249,7 +258,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TimeSpan? connectionResponseProgressTimeout = null,
             TimeSpan? connectionResponseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
-            Action? claimBoundaryObserved = null)
+            Action? claimBoundaryObserved = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
             : this(
                 runtimeOptions,
                 timeProvider,
@@ -260,7 +270,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 connectionResponseProgressTimeout,
                 connectionResponseProgressCheckInterval,
                 timingCollector,
-                claimBoundaryObserved)
+                claimBoundaryObserved,
+                watchdogProbe)
         {
         }
 
@@ -1561,7 +1572,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     perConnectionPipelineDepth: _perConnectionPipelineDepth,
                     responseProgressTimeout: initializationResponseProgressTimeout,
                     responseProgressCheckInterval: _connectionResponseProgressCheckInterval,
-                    timingCollector: _timingCollector);
+                    timingCollector: _timingCollector,
+                    watchdogProbe: _watchdogProbe);
 
                 try
                 {

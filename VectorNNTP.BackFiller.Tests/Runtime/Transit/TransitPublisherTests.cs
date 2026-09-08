@@ -2021,6 +2021,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TaskCompletionSource<bool> firstResponseSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> firstResultObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> watchdogReachedFinalRecheckBoundary = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowWatchdogFinalRecheck = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
             {
@@ -2056,7 +2058,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionPoolSize: 1,
                 perConnectionPipelineDepth: 2,
                 connectionResponseProgressTimeout: responseProgressTimeout,
-                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval,
+                watchdogProbe: point =>
+                {
+                    if (point != TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck)
+                    {
+                        return;
+                    }
+
+                    watchdogReachedFinalRecheckBoundary.TrySetResult(true);
+                    allowWatchdogFinalRecheck.Task.GetAwaiter().GetResult();
+                });
 
             await publisher.InitializeAsync(CancellationToken.None);
 
@@ -2068,26 +2080,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
             Assert.NotEqual(0L, baselineProgressTick);
 
-            await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
-            TransitPublishResult firstResult = await first.WaitAsync(observationTimeout.Token);
-            firstResultObserved.TrySetResult(true);
+            try
+            {
+                await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
+                TransitPublishResult firstResult = await first.WaitAsync(observationTimeout.Token);
+                firstResultObserved.TrySetResult(true);
 
-            Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
-            Assert.Equal(400, firstResult.ResponseCode);
-            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
-            Assert.Equal(1, connection.OutstandingSubmissionCount);
+                Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
+                Assert.Equal(400, firstResult.ResponseCode);
+                Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.Equal(1, connection.OutstandingSubmissionCount);
 
-            await WaitForElapsedProgressAsync(baselineProgressTick, responseProgressTimeout, observationTimeout.Token);
+                await watchdogReachedFinalRecheckBoundary.Task.WaitAsync(observationTimeout.Token);
+                Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.Equal(1, connection.OutstandingSubmissionCount);
 
-            allowSecondResponse.TrySetResult(true);
-            TransitPublishResult secondResult = await second.WaitAsync(observationTimeout.Token);
+                allowSecondResponse.TrySetResult(true);
+                TransitPublishResult secondResult = await second.WaitAsync(observationTimeout.Token);
+                allowWatchdogFinalRecheck.TrySetResult(true);
 
-            Assert.Equal(TransitPublishStatus.Ambiguous, secondResult.Status);
-            Assert.Equal(400, secondResult.ResponseCode);
-            Assert.Equal(0, connection.OutstandingSubmissionCount);
-            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
-            Assert.False(connection.IsResponseLoopFaulted);
-            Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
+                Assert.Equal(TransitPublishStatus.Ambiguous, secondResult.Status);
+                Assert.Equal(400, secondResult.ResponseCode);
+                Assert.Equal(0, connection.OutstandingSubmissionCount);
+                Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.False(connection.IsResponseLoopFaulted);
+                Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
+            }
+            finally
+            {
+                allowSecondResponse.TrySetResult(true);
+                allowWatchdogFinalRecheck.TrySetResult(true);
+            }
         }
 
         /// <summary>
@@ -2099,6 +2122,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TimeSpan responseProgressTimeout = TimeSpan.FromMilliseconds(150);
             TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
             string messageId = "<watchdog-timeout-single@example.com>";
+            TaskCompletionSource<bool> watchdogReachedFinalRecheckBoundary = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
             {
@@ -2121,7 +2145,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionPoolSize: 1,
                 perConnectionPipelineDepth: 1,
                 connectionResponseProgressTimeout: responseProgressTimeout,
-                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval,
+                watchdogProbe: point =>
+                {
+                    if (point == TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck)
+                    {
+                        watchdogReachedFinalRecheckBoundary.TrySetResult(true);
+                    }
+                });
 
             await publisher.InitializeAsync(CancellationToken.None);
 
@@ -2133,7 +2164,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             await WaitForOutstandingAwaitingResponsesAsync(publisher, minimumAwaitingResponses: 1, observationTimeout.Token);
             Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
 
-            await WaitForElapsedProgressAsync(baselineProgressTick, responseProgressTimeout, observationTimeout.Token);
+            await watchdogReachedFinalRecheckBoundary.Task.WaitAsync(observationTimeout.Token);
+            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.Equal(1, connection.OutstandingSubmissionCount);
+
             while (!connection.IsResponseLoopFaulted)
             {
                 observationTimeout.Token.ThrowIfCancellationRequested();
@@ -4899,6 +4933,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <param name="perConnectionPipelineDepth">The maximum claimed pipeline depth per connection.</param>
         /// <param name="connectionResponseProgressTimeout">Optional response-progress watchdog timeout.</param>
         /// <param name="connectionResponseProgressCheckInterval">Optional response-progress watchdog polling interval.</param>
+        /// <param name="watchdogProbe">Optional deterministic watchdog probe hook for semantic test coordination.</param>
         /// <returns>Returns a configured but uninitialized publisher instance.</returns>
         private static TransitPublisher CreatePublisher(
             int port,
@@ -4908,7 +4943,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TimeSpan? connectionResponseProgressTimeout = null,
             TimeSpan? connectionResponseProgressCheckInterval = null,
             Action? claimBoundaryObserved = null,
-            IArticleRetentionAuthority? retentionAuthority = null)
+            IArticleRetentionAuthority? retentionAuthority = null,
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
         {
             BackFillerRuntimeOptions options = CreatePublisherOptions(port, transitRetryMaxAttempts);
 
@@ -4922,7 +4958,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionResponseProgressTimeout,
                 connectionResponseProgressCheckInterval,
                 timingCollector: null,
-                claimBoundaryObserved: claimBoundaryObserved);
+                claimBoundaryObserved: claimBoundaryObserved,
+                watchdogProbe: watchdogProbe);
         }
 
         /// <summary>
@@ -5101,25 +5138,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     return;
                 }
 
-                await Task.Yield();
-            }
-        }
-
-        /// <summary>
-        /// Waits until elapsed monotonic time from a captured progress tick exceeds the specified threshold.
-        /// </summary>
-        /// <param name="progressTick">Baseline progress tick used for elapsed-time observation.</param>
-        /// <param name="minimumElapsed">Elapsed threshold that must be exceeded before returning.</param>
-        /// <param name="cancellationToken">Cancels the wait if the threshold cannot be observed in time.</param>
-        /// <returns>Completes when elapsed time since <paramref name="progressTick"/> exceeds <paramref name="minimumElapsed"/>.</returns>
-        private static async Task WaitForElapsedProgressAsync(long progressTick, TimeSpan minimumElapsed, CancellationToken cancellationToken)
-        {
-            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(progressTick, 0L);
-            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(minimumElapsed, TimeSpan.Zero);
-
-            while (Stopwatch.GetElapsedTime(progressTick) <= minimumElapsed)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
                 await Task.Yield();
             }
         }
