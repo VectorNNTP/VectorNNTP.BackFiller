@@ -8,7 +8,6 @@
 
 using System.Reflection;
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
@@ -1051,38 +1050,61 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqConsumerService consumerService = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
 
             CancellationAwareThrowingArticleWorkProcessor processor = new();
-            CapturingResultSink capturingResultSink = new();
             RabbitMqArticleProcessingService processingService = new(
                 consumerService,
                 new DeterministicWorkRequestParser(),
                 processor,
-                capturingResultSink,
+                new NoOpArticleWorkResultSink(),
                 new ArticleProcessingDrainBarrier(),
                 NullLogger<RabbitMqArticleProcessingService>.Instance);
 
-            Guid accountId = Guid.NewGuid();
-            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
-            await consumerService.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+            try
+            {
+                Guid accountId = Guid.NewGuid();
+                await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+                await consumerService.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
 
-            TrackingConnection firstConnection = connector.RequireLastConnection();
-            TrackingChannel firstChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
-            firstChannel.EnableDeterministicShutdownRaceHooks();
+                TrackingConnection firstConnection = connector.RequireLastConnection();
+                TrackingChannel firstChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+                firstChannel.EnableDeterministicShutdownRaceHooks();
 
-            await processingService.StartAsync(timeoutToken).ConfigureAwait(false);
-            await firstChannel.DeliverAsync(9401UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x61 }, cancellationToken: timeoutToken).ConfigureAwait(false);
-            await processor.Entered.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
+                await processingService.StartAsync(timeoutToken).ConfigureAwait(false);
+                Task processingTask = processingService.ExecuteTask ?? throw new InvalidOperationException("Expected processing execution task after service start.");
 
-            firstConnection.RaiseConnectionShutdown();
-            await firstChannel.CancelEntered.WaitAsync(timeoutToken).ConfigureAwait(false);
-            firstChannel.ReleaseCancel();
+                await firstChannel.DeliverAsync(9401UL, redelivered: false, exchange: "grabbers.giganews", routingKey: "grabbers.giganews", payload: new byte[] { 0x61 }, cancellationToken: timeoutToken).ConfigureAwait(false);
+                await processor.Entered.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
 
-            bool fatalEscalated = await WaitForAsync(() => capturingResultSink.CallCount == 0, TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
-            Assert.True(fatalEscalated);
+                firstConnection.RaiseConnectionShutdown();
+                await firstChannel.CancelEntered.WaitAsync(timeoutToken).ConfigureAwait(false);
+                firstChannel.ReleaseCancel();
 
-            await processingService.StopAsync(timeoutToken).ConfigureAwait(false);
-            await consumerService.StopAsync(timeoutToken).ConfigureAwait(false);
-            consumerService.Dispose();
-            await manager.DisposeAsync().ConfigureAwait(false);
+                bool generationCancellationObserved = await WaitForAsync(
+                    () => processor.IsObservedDeliveryCancellationRequested,
+                    TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                Assert.True(generationCancellationObserved);
+
+                processor.AllowThrow();
+
+                InvalidOperationException fatalException = await Assert.ThrowsAsync<InvalidOperationException>(
+                    () => processingTask.WaitAsync(timeoutToken)).ConfigureAwait(false);
+                Assert.Equal("Synthetic fatal processor failure during generation cancellation.", fatalException.Message);
+            }
+            finally
+            {
+                try
+                {
+                    if (processingService.ExecuteTask is Task processingTask && !processingTask.IsCompleted)
+                    {
+                        await processingService.StopAsync(timeoutToken).ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    await consumerService.StopAsync(timeoutToken).ConfigureAwait(false);
+                    consumerService.Dispose();
+                    await manager.DisposeAsync().ConfigureAwait(false);
+                }
+            }
         }
 
         /// <summary>
@@ -1197,11 +1219,25 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
         private sealed class CancellationAwareThrowingArticleWorkProcessor : IArticleWorkProcessor
         {
+            private readonly TaskCompletionSource<bool> _allowThrow = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private CancellationToken _observedDeliveryToken;
+            private int _hasObservedDeliveryToken;
+
             internal TaskCompletionSource<bool> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            public ValueTask<ArticleWorkProcessingResult> ProcessAsync(RabbitMqArticleWorkRequest request, RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
+            internal bool IsObservedDeliveryCancellationRequested => Volatile.Read(ref _hasObservedDeliveryToken) == 1 && _observedDeliveryToken.IsCancellationRequested;
+
+            internal void AllowThrow()
             {
+                _ = _allowThrow.TrySetResult(true);
+            }
+
+            public async ValueTask<ArticleWorkProcessingResult> ProcessAsync(RabbitMqArticleWorkRequest request, RabbitMqArticleDelivery delivery, CancellationToken cancellationToken)
+            {
+                _observedDeliveryToken = delivery.CancellationToken;
+                Volatile.Write(ref _hasObservedDeliveryToken, 1);
                 _ = Entered.TrySetResult(true);
+                await _allowThrow.Task.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
                 if (!cancellationToken.IsCancellationRequested)
                 {
