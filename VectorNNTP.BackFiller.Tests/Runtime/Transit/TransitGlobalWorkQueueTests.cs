@@ -6,6 +6,7 @@
 // Focused tests for transit global work queue, covering NNTP article and transport behavior.
 // Primary responsibility: documents the executable contracts covered by the transit global work queue test suite.
 
+using System.Reflection;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using Xunit;
 
@@ -242,16 +243,43 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 ResponseText: "forced",
                 Provenance: TransitPublishProvenance.Shutdown);
 
-            Task<bool> claimTask = Task.Run(() => queue.TryClaim("conn-race", out _));
-            Task terminalizeTask = Task.Run(() =>
+            TaskCompletionSource terminalTransitionObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource admissionGateHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource releaseClaimTransfer = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            object admissionGate = GetAdmissionGate(queue);
+
+            Task claimTransferPauseTask = Task.Run(() =>
             {
-                if (item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState))
+                lock (admissionGate)
                 {
-                    queue.ReleaseTerminalOwnership(priorState);
-                    Assert.True(item.TrySetCompletionResult(forced));
+                    _ = admissionGateHeld.TrySetResult();
+                    releaseClaimTransfer.Task.GetAwaiter().GetResult();
                 }
             });
 
+            await admissionGateHeld.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Task<bool> claimTask = Task.Run(() => queue.TryClaim("conn-race", out _));
+
+            DateTimeOffset claimWaitStart = DateTimeOffset.UtcNow;
+            while (item.State != TransitWorkItemState.Claimed)
+            {
+                Assert.True(DateTimeOffset.UtcNow - claimWaitStart < TimeSpan.FromSeconds(5));
+                await Task.Yield();
+            }
+
+            Task terminalizeTask = Task.Run(() =>
+            {
+                Assert.True(item.TryTransitionToTerminal(forced.Status, forced.Provenance, out TransitWorkItemState priorState));
+                _ = terminalTransitionObserved.TrySetResult();
+                queue.ReleaseTerminalOwnership(priorState);
+                Assert.True(item.TrySetCompletionResult(forced));
+            });
+
+            await terminalTransitionObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            _ = releaseClaimTransfer.TrySetResult();
+
+            await claimTransferPauseTask.WaitAsync(TimeSpan.FromSeconds(5));
             _ = await claimTask.WaitAsync(TimeSpan.FromSeconds(5));
             await terminalizeTask.WaitAsync(TimeSpan.FromSeconds(5));
 
@@ -431,6 +459,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         {
             _ = payloadSize;
             return new TransitWorkItem(id, messageId, maxAttempts: 3);
+        }
+
+        private static object GetAdmissionGate(GlobalTransitWorkQueue queue)
+        {
+            ArgumentNullException.ThrowIfNull(queue);
+
+            FieldInfo? gateField = typeof(GlobalTransitWorkQueue).GetField("_admissionGate", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(gateField);
+
+            object? gate = gateField.GetValue(queue);
+            return Assert.IsType<object>(gate);
         }
     }
 }
