@@ -551,6 +551,180 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         }
 
         /// <summary>
+        /// Verifies broker cancellation failure during replacement remains visible but does not strand the local session in retiring state.
+        /// </summary>
+        [Fact]
+        public async Task ConnectionReplacement_WhenBrokerCancellationFails_SessionCanRecoverWithSubsequentStart()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 4, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 4, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                sink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: 4);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingConnection firstConnection = connector.RequireLastConnection();
+            TrackingChannel firstConsumerChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            firstConsumerChannel.FailNextCancel(new InvalidOperationException("forced cancel failure"));
+            long firstGeneration = session.ActiveConnectionGeneration;
+
+            firstConnection.RaiseConnectionShutdown();
+
+            bool replaced = await WaitForAsync(
+                () => manager.ConnectionGeneration > firstGeneration && connector.ConnectCallCount >= 2,
+                TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            Assert.True(replaced);
+
+            long replacementGeneration = manager.ConnectionGeneration;
+            InvalidOperationException cancellationFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => session.HandleConnectionReplacedAsync(new RabbitMqConnectionReplacedEventArgs(replacementGeneration, IsReplacement: true), CancellationToken.None)).ConfigureAwait(false);
+            Assert.Equal("forced cancel failure", cancellationFailure.Message);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingConnection secondConnection = connector.RequireLastConnection();
+            TrackingChannel secondConsumerChannel = secondConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            Assert.True(session.IsRunning);
+            Assert.Equal(replacementGeneration, session.ActiveConnectionGeneration);
+            Assert.NotSame(firstConsumerChannel, secondConsumerChannel);
+            Assert.True(firstConsumerChannel.Disposed);
+
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Verifies disposal failure during replacement preserves ownership and blocks replacement startup overlap.
+        /// </summary>
+        [Fact]
+        public async Task ConnectionReplacement_WhenDisposeFails_DoesNotStartReplacementOrReleaseOldOwnership()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 4, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 5, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                new RecordingDeliverySink(),
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: 4);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingConnection firstConnection = connector.RequireLastConnection();
+            TrackingChannel firstConsumerChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            firstConsumerChannel.FailNextDispose(new InvalidOperationException("forced dispose failure"));
+            long firstGeneration = session.ActiveConnectionGeneration;
+
+            firstConnection.RaiseConnectionShutdown();
+
+            bool replaced = await WaitForAsync(
+                () => manager.ConnectionGeneration > firstGeneration && connector.ConnectCallCount >= 2,
+                TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            Assert.True(replaced);
+
+            long replacementGeneration = manager.ConnectionGeneration;
+            InvalidOperationException stopFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => session.HandleConnectionReplacedAsync(new RabbitMqConnectionReplacedEventArgs(replacementGeneration, IsReplacement: true), CancellationToken.None)).ConfigureAwait(false);
+            Assert.Equal("forced dispose failure", stopFailure.Message);
+
+            Assert.True(firstConsumerChannel.Disposed);
+            Assert.False(session.IsRunning);
+            long generationAfterFailure = session.ActiveConnectionGeneration;
+            Assert.True(generationAfterFailure > 0);
+            Assert.Equal(firstGeneration, generationAfterFailure);
+
+            firstConsumerChannel.FailNextDispose(new InvalidOperationException("forced dispose failure retry"));
+            InvalidOperationException restartFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => session.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+            Assert.Equal("forced dispose failure retry", restartFailure.Message);
+            Assert.Equal(generationAfterFailure, session.ActiveConnectionGeneration);
+
+            int totalConsumeRegistrations = connector.AllConnections.SelectMany(static connection => connection.Channels).Sum(static channel => channel.ConsumeCallCount);
+            Assert.Equal(1, totalConsumeRegistrations);
+
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Verifies cancellation and disposal failures are both preserved without releasing ownership.
+        /// </summary>
+        [Fact]
+        public async Task ConnectionReplacement_WhenCancelAndDisposeFail_PreservesBothFailuresAndBlocksReplacement()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 4, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 6, connectionLimit: 10),
+                manager,
+                topologyInitializer,
+                new RecordingDeliverySink(),
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: 4);
+
+            await session.StartAsync(CancellationToken.None).ConfigureAwait(false);
+
+            TrackingConnection firstConnection = connector.RequireLastConnection();
+            TrackingChannel firstConsumerChannel = firstConnection.Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            firstConsumerChannel.FailNextCancel(new InvalidOperationException("forced cancel failure"));
+            firstConsumerChannel.FailNextDispose(new InvalidOperationException("forced dispose failure"));
+            long firstGeneration = session.ActiveConnectionGeneration;
+
+            firstConnection.RaiseConnectionShutdown();
+
+            bool replaced = await WaitForAsync(
+                () => manager.ConnectionGeneration > firstGeneration && connector.ConnectCallCount >= 2,
+                TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            Assert.True(replaced);
+
+            long replacementGeneration = manager.ConnectionGeneration;
+            AggregateException stopFailure = await Assert.ThrowsAsync<AggregateException>(
+                () => session.HandleConnectionReplacedAsync(new RabbitMqConnectionReplacedEventArgs(replacementGeneration, IsReplacement: true), CancellationToken.None)).ConfigureAwait(false);
+            Assert.Collection(
+                stopFailure.InnerExceptions,
+                exception => Assert.Equal("forced cancel failure", exception.Message),
+                exception => Assert.Equal("forced dispose failure", exception.Message));
+
+            Assert.True(firstConsumerChannel.Disposed);
+            Assert.False(session.IsRunning);
+            long generationAfterFailure = session.ActiveConnectionGeneration;
+            Assert.Equal(firstGeneration, generationAfterFailure);
+            Assert.True(generationAfterFailure > 0);
+
+            firstConsumerChannel.FailNextDispose(new InvalidOperationException("forced dispose failure retry"));
+            InvalidOperationException restartFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => session.StartAsync(CancellationToken.None)).ConfigureAwait(false);
+            Assert.Equal("forced dispose failure retry", restartFailure.Message);
+
+            Assert.Equal(generationAfterFailure, session.ActiveConnectionGeneration);
+            int totalConsumeRegistrations = connector.AllConnections.SelectMany(static connection => connection.Channels).Sum(static channel => channel.ConsumeCallCount);
+            Assert.Equal(1, totalConsumeRegistrations);
+
+            await session.DisposeAsync().ConfigureAwait(false);
+            await manager.DisposeAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Verifies non-replacement notifications (automatic client recovery path) do not force unnecessary consumer recreation.
         /// </summary>
         [Fact]
@@ -4022,6 +4196,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// Supplies a forced NACK failure for the fixture or scenario under test.
             /// </summary>
             private Exception? _nackFailure;
+            /// <summary>
+            /// Supplies a forced cancel failure for the fixture or scenario under test.
+            /// </summary>
+            private Exception? _cancelFailure;
+            /// <summary>
+            /// Supplies a forced dispose failure for the fixture or scenario under test.
+            /// </summary>
+            private Exception? _disposeFailure;
 
             /// <summary>
             /// Supplies underlying channel for the fixture or scenario under test.
@@ -4128,6 +4310,24 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             public void FailNextNack(Exception exception)
             {
                 _nackFailure = exception ?? throw new ArgumentNullException(nameof(exception));
+            }
+
+            /// <summary>
+            /// Forces the next cancel attempt to fail with the supplied exception.
+            /// </summary>
+            /// <param name="exception">The exception to throw from BasicCancelAsync.</param>
+            public void FailNextCancel(Exception exception)
+            {
+                _cancelFailure = exception ?? throw new ArgumentNullException(nameof(exception));
+            }
+
+            /// <summary>
+            /// Forces the next dispose attempt to fail with the supplied exception.
+            /// </summary>
+            /// <param name="exception">The exception to throw from DisposeAsync.</param>
+            public void FailNextDispose(Exception exception)
+            {
+                _disposeFailure = exception ?? throw new ArgumentNullException(nameof(exception));
             }
 
             /// <summary>
@@ -4273,6 +4473,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     if (_cancelRelease is not null)
                     {
                         await _cancelRelease.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (_cancelFailure is not null)
+                    {
+                        Exception failure = _cancelFailure;
+                        _cancelFailure = null;
+                        throw failure;
                     }
                 }
             }
@@ -4424,6 +4631,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 _consumerTag = null;
                 OperationLog.Add("dispose");
                 _ = _disposedObserved.TrySetResult(true);
+                if (_disposeFailure is not null)
+                {
+                    Exception failure = _disposeFailure;
+                    _disposeFailure = null;
+                    return ValueTask.FromException(failure);
+                }
+
                 return ValueTask.CompletedTask;
             }
         }

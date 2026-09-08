@@ -30,6 +30,11 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure
         private readonly TextWriter _originalWriter;
 
         /// <summary>
+        /// Stores the redirected writer currently installed for this scope.
+        /// </summary>
+        private readonly TextWriter _redirectedWriter;
+
+        /// <summary>
         /// Stores the captured string writer when the scope owns in-memory capture.
         /// </summary>
         private readonly StringWriter? _capturedWriter;
@@ -54,6 +59,7 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure
         {
             ArgumentNullException.ThrowIfNull(redirectedWriter);
             _capturedWriter = capturedWriter;
+            _redirectedWriter = redirectedWriter;
             _originalWriter = Console.Out;
             _ownsGate = ownsGate;
             Console.SetOut(redirectedWriter);
@@ -132,9 +138,16 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure
         internal string GetCapturedOutput()
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            Console.Out.Flush();
-            return _capturedWriter?.ToString()
-                ?? throw new InvalidOperationException("Captured output is available only for in-memory console capture scopes.");
+            if (_capturedWriter is null)
+            {
+                throw new InvalidOperationException("Captured output is available only for in-memory console capture scopes.");
+            }
+
+            lock (_capturedWriter)
+            {
+                _redirectedWriter.Flush();
+                return _capturedWriter.ToString();
+            }
         }
 
         /// <summary>
