@@ -1866,6 +1866,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             string firstMessageId = $"<watchdog-blocked-{responseCode}-1@example.com>";
             string secondMessageId = $"<watchdog-blocked-{responseCode}-2@example.com>";
             TaskCompletionSource<bool> firstResponseSent = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowFirstResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
@@ -1888,6 +1889,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 byte[] secondPayload = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
                 Assert.Equal(payload, secondPayload);
 
+                await allowFirstResponse.Task.WaitAsync(cancellationToken);
                 await FakePublisherServer.WriteLineAsync(stream, $"{responseCode} {firstMessageId} first");
                 firstResponseSent.TrySetResult(true);
                 await allowSecondResponse.Task.WaitAsync(cancellationToken);
@@ -1914,6 +1916,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
             long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
             Assert.NotEqual(0L, baselineProgressTick);
+            allowFirstResponse.TrySetResult(true);
 
             try
             {
@@ -1927,6 +1930,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             }
             finally
             {
+                allowFirstResponse.TrySetResult(true);
                 allowSecondResponse.TrySetResult(true);
                 blockingRetention.AllowMarkTransitCompleted.TrySetResult(true);
             }
