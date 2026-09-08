@@ -146,7 +146,7 @@ Detailed entries contain qualifications, tests, consequences, and proposed valid
 | H06 | HIGH | S | Response watchdog does not interrupt blocked Transit writes |
 | H07 | HIGH | C | Stale listener timer terminalizes a replacement request |
 | H08 | HIGH | C | Production graceful listener shutdown aborts transfers |
-| H09 | HIGH | C | Omitted bind address can delete published DNS addresses |
+| ~~H09~~ | ~~HIGH~~ | ~~C~~ | ~~Omitted bind address can delete published DNS addresses~~ |
 | H10 | HIGH | S | Stalled clients can occupy all listener capacity |
 | M01 | MEDIUM | C | Idle retirement decrements unrelated active-lease accounting |
 | M02 | MEDIUM | C | Successful keepalive loses deferred retirement |
