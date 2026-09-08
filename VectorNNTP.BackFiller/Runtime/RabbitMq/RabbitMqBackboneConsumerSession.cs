@@ -221,6 +221,16 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             try
             {
                 ThrowIfDisposed();
+                if (_lifecycleState is RabbitMqConsumerLifecycleState.Running)
+                {
+                    return;
+                }
+
+                if (_lifecycleState is RabbitMqConsumerLifecycleState.Retiring)
+                {
+                    await StopCoreAsync(expectedShutdown: false, cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+                }
+
                 if (_lifecycleState is not RabbitMqConsumerLifecycleState.Stopped)
                 {
                     return;
@@ -447,20 +457,27 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
             }
 
-            _ownedChannel = null;
-            _consumerTag = null;
-            _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
-            _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
-            _settlementAdmissionAbandoned = false;
-            _admittedDeliveryCount = 0;
-            _drainCompletion = CreateCompletedDrainSource();
+            if (channelDisposeFailure is null)
+            {
+                _ownedChannel = null;
+                _consumerTag = null;
+                _ = Interlocked.Exchange(ref _activeConnectionGeneration, 0);
+                _lifecycleState = RabbitMqConsumerLifecycleState.Stopped;
+                _settlementAdmissionAbandoned = false;
+                _admittedDeliveryCount = 0;
+                _drainCompletion = CreateCompletedDrainSource();
 
-            _connectionScope?.Dispose();
-            _connectionScope = null;
+                _connectionScope?.Dispose();
+                _connectionScope = null;
+            }
 
             if (expectedShutdown)
             {
-                LogConsumerStopped(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal);
+                if (channelDisposeFailure is null)
+                {
+                    LogConsumerStopped(_logger, SessionIdentity.Backbone, SessionIdentity.SessionOrdinal);
+                }
+
                 return;
             }
 
@@ -659,17 +676,9 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <returns>The exception to propagate, or <see langword="null"/> when no non-shutdown failure occurred.</returns>
         private static Exception? CombineStopFailures(Exception? cancelFailure, Exception? channelDisposeFailure)
         {
-            if (cancelFailure is null)
-            {
-                return channelDisposeFailure;
-            }
-
-            if (channelDisposeFailure is null)
-            {
-                return cancelFailure;
-            }
-
-            return new AggregateException(cancelFailure, channelDisposeFailure);
+            return cancelFailure is null
+                ? channelDisposeFailure
+                : channelDisposeFailure is null ? cancelFailure : new AggregateException(cancelFailure, channelDisposeFailure);
         }
 
         /// <summary>
