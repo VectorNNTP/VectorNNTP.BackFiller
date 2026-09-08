@@ -1419,6 +1419,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 return;
             }
 
+            _ = IncrementLifetimeResultCounter(result.Status);
+
             ExceptionDispatchInfo? deferredFailure = null;
             try
             {
@@ -1431,18 +1433,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 {
                     _ = _retentionAuthority.MarkTransitCompleted(result.MessageId);
                 }
-
-                _ = result.Status switch
-                {
-                    TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
-                    TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
-                    TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
-                    TransitPublishStatus.Queued
-                    or TransitPublishStatus.Unavailable
-                    or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
-                    TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
-                    _ => Interlocked.Increment(ref _totalArticlesFailed),
-                };
             }
             catch (Exception ex)
             {
@@ -1455,6 +1445,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             }
 
             deferredFailure?.Throw();
+        }
+
+        private long IncrementLifetimeResultCounter(TransitPublishStatus status)
+        {
+            return status switch
+            {
+                TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
+                TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
+                TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
+                TransitPublishStatus.Queued
+                or TransitPublishStatus.Unavailable
+                or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
+                TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
+                _ => Interlocked.Increment(ref _totalArticlesFailed),
+            };
         }
 
         private static bool ShouldMarkTransitCompleted(TransitPublishResult result, TransitWorkItemState priorState)
@@ -1498,21 +1503,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
+                _ = IncrementLifetimeResultCounter(forced.Status);
+
                 try
                 {
                     _globalQueue.ReleaseTerminalOwnership(priorState);
-
-                    _ = forced.Status switch
-                    {
-                        TransitPublishStatus.Accepted => Interlocked.Increment(ref _totalArticlesAccepted),
-                        TransitPublishStatus.Rejected => Interlocked.Increment(ref _totalArticlesRejected),
-                        TransitPublishStatus.Canceled => Interlocked.Increment(ref _totalArticlesCanceled),
-                        TransitPublishStatus.Queued
-                        or TransitPublishStatus.Unavailable
-                        or TransitPublishStatus.Failed => Interlocked.Increment(ref _totalArticlesFailed),
-                        TransitPublishStatus.Ambiguous => Interlocked.Increment(ref _totalArticlesAmbiguous),
-                        _ => Interlocked.Increment(ref _totalArticlesFailed),
-                    };
                 }
                 catch (Exception ex)
                 {

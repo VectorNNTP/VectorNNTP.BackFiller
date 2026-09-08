@@ -4518,6 +4518,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(0, queue.QueuedItemCount);
             Assert.Equal(0, queue.InFlightCount);
             Assert.Equal(0, GetActiveSubmissionCount(publisher));
+            Assert.Equal(1, GetTotalArticlesFailedCount(publisher));
         }
 
         /// <summary>
@@ -5219,6 +5220,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.NotNull(raw);
 
             return Assert.IsAssignableFrom<IDictionary>(raw);
+        }
+
+        private static long GetTotalArticlesFailedCount(TransitPublisher publisher)
+        {
+            ArgumentNullException.ThrowIfNull(publisher);
+
+            FieldInfo? field = typeof(TransitPublisher).GetField("_totalArticlesFailed", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+
+            object? raw = field.GetValue(publisher);
+            return Assert.IsType<long>(raw);
         }
 
         /// <summary>
