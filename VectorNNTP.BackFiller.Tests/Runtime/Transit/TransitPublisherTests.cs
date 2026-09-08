@@ -5876,32 +5876,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             return new TransitPublisher(options, TimeProvider.System, logger, retentionAuthority ?? new ArticleRetentionAuthority(options), connectionPoolSize, perConnectionPipelineDepth);
         }
 
-        /// <summary>
-        /// Creates canonical runtime options for transit publisher tests that do not need per-test option customization.
-        /// </summary>
-        /// <param name="port">Fake transit server port assigned to the options.</param>
-        /// <returns>Runtime options aligned with the standard publisher test defaults.</returns>
-        private static BackFillerRuntimeOptions CreatePublisherOptions(int port)
-        {
-            return new BackFillerRuntimeOptions(
-                CanonicalBackFillerFqdn: "bf.example.com",
-                BackFillerId: 42,
-                CanonicalDnsSuffix: "example.com",
-                ValidatedLogDirectory: "C:\\logs",
-                ValidatedCertificateDirectory: "C:\\certs",
-                RabbitMqHosts: ["localhost"],
-                RabbitMqPort: 5672,
-                RabbitMqEnableSsl: false,
-                TransitServerHost: IPAddress.Loopback.ToString(),
-                TransitServerPort: port,
-                TransitServerUseSsl: false,
-                ShutdownGracePeriodSeconds: 60,
-                ShutdownDrainQueuedWork: true,
-                ShutdownFinishActiveArticles: true,
-                RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
-                WriteBatchCoalesceMicroseconds: 250);
-        }
-
         private static DownloadedArticleBuffer CreateDownloadedBuffer(ReadOnlyMemory<byte> payload)
         {
             byte[] rented = ArrayPool<byte>.Shared.Rent(payload.Length);
