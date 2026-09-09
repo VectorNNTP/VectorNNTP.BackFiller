@@ -86,6 +86,16 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 desiredIpv4Count,
                 desiredIpv6Count);
 
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (UsesWildcardListenerSemantics(runtimeOptions) && desiredAddresses.Count == 0)
+            {
+                const string Message = "Wildcard bind-address semantics produced no eligible DNS addresses; refusing empty exact-set reconciliation.";
+                failures.Add((DependencyName, Message));
+                Log.Error("{Message} FQDN={Fqdn}", Message, canonicalFqdn);
+                return new DependencyValidationResult(failures, warnings, errors);
+            }
+
             try
             {
                 using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -248,6 +258,44 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 record.RecordType,
                 NormalizeAddressText(record.Content),
                 record.Id);
+        }
+
+        /// <summary>
+        /// Determines whether runtime listener configuration has wildcard bind semantics.
+        /// </summary>
+        /// <param name="runtimeOptions">Runtime options containing configured bind-address tokens.</param>
+        /// <returns><see langword="true"/> when listener semantics bind all interfaces; otherwise <see langword="false"/>.</returns>
+        private static bool UsesWildcardListenerSemantics(BackFillerRuntimeOptions runtimeOptions)
+        {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+
+            IReadOnlyList<string> configuredTokens = runtimeOptions.EffectiveConfiguredBindAddressTokens;
+            if (configuredTokens.Count == 0)
+            {
+                return true;
+            }
+
+            foreach (string token in configuredTokens)
+            {
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    continue;
+                }
+
+                string trimmed = token.Trim();
+                if (BindAddressDnsAddressDeriver.IsWildcardBindAddressToken(trimmed))
+                {
+                    return true;
+                }
+
+                if (IPAddress.TryParse(trimmed, out IPAddress? parsedAddress)
+                    && (IPAddress.Any.Equals(parsedAddress) || IPAddress.IPv6Any.Equals(parsedAddress)))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

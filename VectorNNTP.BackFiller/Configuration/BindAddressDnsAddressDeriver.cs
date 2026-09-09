@@ -21,9 +21,13 @@ namespace VectorNNTP.Backfiller.Configuration
     internal static class BindAddressDnsAddressDeriver
     {
         /// <summary>
-        /// Derives canonical DNS addresses from configured bind-address values.
+        /// Derives canonical DNS addresses from bind-address configuration semantics.
         /// </summary>
-        /// <param name="bindAddresses">Configured bind-address values.</param>
+        /// <param name="bindAddresses">
+        /// Configured bind-address values.
+        /// <see langword="null"/> or an empty collection is treated as wildcard binding semantics and derives eligible IPv4 and IPv6 interface addresses.
+        /// Explicit configured values preserve existing explicit/wildcard-family derivation behavior.
+        /// </param>
         /// <param name="interfaceAddressProvider">Optional provider that returns local interface addresses for wildcard derivation.</param>
         /// <returns>Canonical deduplicated DNS address set ordered deterministically by address family and byte sequence.</returns>
         /// <exception cref="InvalidOperationException">Thrown when configured bind-address values contain unparseable entries or wildcard interface enumeration fails.</exception>
@@ -31,14 +35,14 @@ namespace VectorNNTP.Backfiller.Configuration
             string[]? bindAddresses,
             Func<IReadOnlyList<IPAddress>>? interfaceAddressProvider = null)
         {
+            HashSet<IPAddress> derivedAddresses = [];
+            bool includeWildcardIpv4Addresses = bindAddresses == null || bindAddresses.Length == 0;
+            bool includeWildcardIpv6Addresses = bindAddresses == null || bindAddresses.Length == 0;
+
             if (bindAddresses == null || bindAddresses.Length == 0)
             {
-                return [];
+                bindAddresses = [];
             }
-
-            HashSet<IPAddress> derivedAddresses = [];
-            bool includeWildcardIpv4Addresses = false;
-            bool includeWildcardIpv6Addresses = false;
 
             for (int index = 0; index < bindAddresses.Length; index++)
             {

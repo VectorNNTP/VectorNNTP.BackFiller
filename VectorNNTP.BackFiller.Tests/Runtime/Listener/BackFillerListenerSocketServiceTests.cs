@@ -214,6 +214,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public void BuildListenEndpoints_WhenBindAddressOmitted_UsesIpv4AndIpv6WildcardEndpoints()
+        {
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(bindPort: 119, bindTokens: []);
+
+            IReadOnlyList<IPEndPoint> endpoints = InvokeBuildListenEndpointsForTesting(runtime);
+
+            Assert.Contains(endpoints, endpoint => endpoint.Address.Equals(IPAddress.Any) && endpoint.Port == 119);
+            Assert.Contains(endpoints, endpoint => endpoint.Address.Equals(IPAddress.IPv6Any) && endpoint.Port == 119);
+            Assert.Equal(2, endpoints.Count);
+        }
+
+        [Fact]
         public async Task StartAsync_WhenMaxActiveConnectionsReached_RejectsAdditionalConnection()
         {
             int port = ReserveEphemeralTcpPort();
@@ -837,6 +849,20 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             await Task.Yield();
             Assert.False(task.IsCompleted);
+        }
+
+        private static IReadOnlyList<IPEndPoint> InvokeBuildListenEndpointsForTesting(BackFillerRuntimeOptions runtimeOptions)
+        {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+
+            MethodInfo method = typeof(BackFillerListenerSocketService).GetMethod(
+                "BuildListenEndpoints",
+                BindingFlags.NonPublic | BindingFlags.Static)
+                ?? throw new InvalidOperationException("BuildListenEndpoints method was not found for listener endpoint contract tests.");
+
+            object? rawResult = method.Invoke(null, [runtimeOptions]);
+            return rawResult as IReadOnlyList<IPEndPoint>
+                ?? throw new InvalidOperationException("BuildListenEndpoints returned an unexpected result type.");
         }
 
         private static void InjectActiveConnectionTaskForTesting(BackFillerListenerSocketService service, Task connectionTask)

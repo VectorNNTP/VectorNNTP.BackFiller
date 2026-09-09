@@ -258,6 +258,118 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         /// <summary>
+        /// Verifies omitted bind-address wildcard semantics with no eligible publishable addresses fails safely instead of deleting existing DNS records.
+        /// </summary>
+        [Fact]
+        public async Task SynchronizeGeneratedBackFillerDnsAsync_WhenWildcardSemanticsAndDesiredSetEmpty_ReturnsDependencyFailureWithoutDeletion()
+        {
+            FakeCloudflareDnsFacade facade = new(
+                [
+                    CreateRecord("existing-a", DnsRecordType.A, "198.51.100.50"),
+                    CreateRecord("existing-aaaa", DnsRecordType.Aaaa, "2001:db8::50"),
+                ]);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(
+                canonicalBindAddresses: [],
+                configuredBindAddressTokens: []);
+
+            DependencyValidationResult result = await RunSynchronizationAsync(runtimeOptions, facade, CancellationToken.None);
+
+            Assert.False(result.IsValid);
+            Assert.Equal(0, facade.DeleteCallCount);
+            Assert.Equal(0, facade.AddCallCount);
+            Assert.Contains(result.FailedDependencies, static failure =>
+                failure.Dependency == "CloudflareDnsSynchronization"
+                && failure.Reason.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(result.Errors, static error =>
+                error.Category == "CloudflareDnsSynchronization"
+                && error.Message.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(facade.Records, record => record.Id == "existing-a");
+            Assert.Contains(facade.Records, record => record.Id == "existing-aaaa");
+        }
+
+        /// <summary>
+        /// Verifies explicit concrete bind desired-set semantics still allow exact-set deletion of stale DNS records.
+        /// </summary>
+        [Fact]
+        public async Task SynchronizeGeneratedBackFillerDnsAsync_WhenConcreteDesiredSetKnown_StillDeletesStaleRecords()
+        {
+            FakeCloudflareDnsFacade facade = new(
+                [
+                    CreateRecord("keep-a", DnsRecordType.A, "198.51.100.60"),
+                    CreateRecord("stale-a", DnsRecordType.A, "198.51.100.61"),
+                ]);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(
+                canonicalBindAddresses: ["198.51.100.60"],
+                configuredBindAddressTokens: ["198.51.100.60"]);
+
+            DependencyValidationResult result = await RunSynchronizationAsync(runtimeOptions, facade, CancellationToken.None);
+
+            Assert.True(result.IsValid);
+            Assert.Equal(1, facade.DeleteCallCount);
+            Assert.Contains(facade.DeletedRecordIds, static id => id == "stale-a");
+            Assert.DoesNotContain(facade.DeletedRecordIds, static id => id == "keep-a");
+        }
+
+        /// <summary>
+        /// Verifies wildcard empty desired-set safety does not bypass pre-canceled caller token semantics.
+        /// </summary>
+        [Fact]
+        public async Task SynchronizeGeneratedBackFillerDnsAsync_WhenWildcardSemanticsAndDesiredSetEmptyAndPreCanceled_ThrowsOperationCanceledExceptionWithoutDeletion()
+        {
+            FakeCloudflareDnsFacade facade = new(
+                [
+                    CreateRecord("existing-a3", DnsRecordType.A, "198.51.100.80"),
+                    CreateRecord("existing-aaaa3", DnsRecordType.Aaaa, "2001:db8::80"),
+                ]);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(
+                canonicalBindAddresses: [],
+                configuredBindAddressTokens: []);
+
+            using CancellationTokenSource cancellationTokenSource = new();
+            cancellationTokenSource.Cancel();
+
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+                await RunSynchronizationAsync(runtimeOptions, facade, cancellationTokenSource.Token));
+
+            Assert.Equal(0, facade.DeleteCallCount);
+            Assert.Equal(0, facade.AddCallCount);
+            Assert.Contains(facade.Records, record => record.Id == "existing-a3");
+            Assert.Contains(facade.Records, record => record.Id == "existing-aaaa3");
+        }
+
+        /// <summary>
+        /// Verifies explicit wildcard token semantics with no eligible derived addresses fail safely without deleting existing records.
+        /// </summary>
+        [Fact]
+        public async Task SynchronizeGeneratedBackFillerDnsAsync_WhenExplicitWildcardAndDesiredSetEmpty_ReturnsDependencyFailureWithoutDeletion()
+        {
+            FakeCloudflareDnsFacade facade = new(
+                [
+                    CreateRecord("existing-a2", DnsRecordType.A, "198.51.100.70"),
+                ]);
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(
+                canonicalBindAddresses: [],
+                configuredBindAddressTokens: ["*"]);
+
+            DependencyValidationResult result = await RunSynchronizationAsync(runtimeOptions, facade, CancellationToken.None);
+
+            Assert.False(result.IsValid);
+            Assert.Equal(0, facade.DeleteCallCount);
+            Assert.Equal(0, facade.AddCallCount);
+            Assert.Contains(result.FailedDependencies, static failure =>
+                failure.Dependency == "CloudflareDnsSynchronization"
+                && failure.Reason.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(result.Errors, static error =>
+                error.Category == "CloudflareDnsSynchronization"
+                && error.Message.Contains("refusing empty exact-set reconciliation", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(facade.Records, record => record.Id == "existing-a2");
+        }
+
+        /// <summary>
         /// Executes DNS synchronization against a fake Cloudflare facade.
         /// </summary>
         /// <param name="runtimeOptions">Runtime options containing canonical FQDN and bind addresses.</param>
@@ -298,17 +410,17 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         /// <summary>
-        /// Creates runtime options fixture with canonical FQDN and canonical bind addresses.
+        /// Creates runtime options fixture with canonical FQDN, canonical bind addresses, and configured bind tokens.
         /// </summary>
-        /// <param name="bindAddresses">Bind addresses included in desired DNS state.</param>
+        /// <param name="canonicalBindAddresses">Bind addresses included in desired DNS state.</param>
+        /// <param name="configuredBindAddressTokens">Configured bind-address tokens used for listener semantics.</param>
         /// <returns>Runtime options fixture.</returns>
-        /// <summary>
-        /// Confirms the create runtime options behavior.
-        /// </summary>
-        /// <returns>The value returned by the create runtime options helper.</returns>
-        private static BackFillerRuntimeOptions CreateRuntimeOptions(params string[] bindAddresses)
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(
+            IReadOnlyList<string>? canonicalBindAddresses = null,
+            IReadOnlyList<string>? configuredBindAddressTokens = null)
         {
-            IReadOnlyList<IPAddress> canonicalBindAddresses = [.. bindAddresses.Select(IPAddress.Parse)];
+            IReadOnlyList<IPAddress> parsedCanonicalBindAddresses = [.. (canonicalBindAddresses ?? ["127.0.0.1"]).Select(IPAddress.Parse)];
+            IReadOnlyList<string> configuredTokens = configuredBindAddressTokens ?? ["127.0.0.1"];
 
             return new BackFillerRuntimeOptions(
                 CanonicalBackFillerFqdn: GeneratedFqdn,
@@ -323,13 +435,23 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 TransitServerPort: 119,
                 TransitServerUseSsl: false,
                 BindPort: 119,
-                ConfiguredBindAddressTokens: ["127.0.0.1"],
+                ConfiguredBindAddressTokens: configuredTokens,
                 ShutdownGracePeriodSeconds: 30,
                 ShutdownDrainQueuedWork: true,
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
                 WriteBatchCoalesceMicroseconds: 250,
-                CanonicalBindAddresses: canonicalBindAddresses);
+                CanonicalBindAddresses: parsedCanonicalBindAddresses);
+        }
+
+        /// <summary>
+        /// Creates runtime options fixture with canonical bind addresses mirrored from provided params.
+        /// </summary>
+        /// <param name="bindAddresses">Bind addresses included in desired DNS state.</param>
+        /// <returns>Runtime options fixture.</returns>
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(params string[] bindAddresses)
+        {
+            return CreateRuntimeOptions(canonicalBindAddresses: bindAddresses, configuredBindAddressTokens: ["127.0.0.1"]);
         }
 
         /// <summary>
