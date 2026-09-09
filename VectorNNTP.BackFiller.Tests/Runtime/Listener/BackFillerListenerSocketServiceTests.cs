@@ -805,8 +805,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 Assert.Equal(0, read);
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
                 IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
-                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2705);
-                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2706);
+                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2709);
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
 
                 using TcpClient recovered = new();
                 await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
@@ -905,8 +905,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
                 IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
-                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2705);
-                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2706);
+                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2709);
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
 
                 using TcpClient recovered = new();
                 await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);

@@ -651,7 +651,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         /// <param name="logger">Logger receiving the timeout termination event.</param>
         /// <param name="reason">Timeout category for diagnostics.</param>
-        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection timed out and was terminated; Reason={Reason}")]
+        [LoggerMessage(EventId = 2709, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection timed out and was terminated; Reason={Reason}")]
         private static partial void LogConnectionTimedOut(ILogger logger, string reason);
 
         /// <summary>
@@ -659,7 +659,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         /// <param name="logger">Logger receiving the client-processing fault event.</param>
         /// <param name="exception">Unhandled processing exception captured from the client task.</param>
-        [LoggerMessage(EventId = 2706, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
+        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
         private static partial void LogClientProcessingFault(ILogger logger, Exception exception);
 
         /// <summary>
@@ -667,21 +667,21 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         /// <param name="logger">Logger receiving the shutdown-close event.</param>
         /// <param name="exception">I/O exception observed while waiting for the connection to close.</param>
-        [LoggerMessage(EventId = 2707, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
+        [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
         private static partial void LogConnectionClosedDuringShutdown(ILogger logger, Exception exception);
 
         /// <summary>
         /// Logs that the accept loop is stopping because host or shutdown cancellation was signaled.
         /// </summary>
         /// <param name="logger">Logger receiving the cancellation-stop event.</param>
-        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
+        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
         private static partial void LogListenerStoppingByCancellation(ILogger logger);
 
         /// <summary>
         /// Logs that listener shutdown completed after sockets and tracked clients were closed.
         /// </summary>
         /// <param name="logger">Logger receiving the stop-complete event.</param>
-        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
+        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
     }
