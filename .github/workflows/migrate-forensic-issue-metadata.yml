@@ -2,6 +2,11 @@ name: Migrate forensic issue metadata
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type MIGRATE-FORENSIC-ISSUES to authorize the one-shot migration'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -10,9 +15,9 @@ permissions:
 
 jobs:
   migrate:
-    # Deliberately restricted to the trusted migration branch. The workflow
-    # never checks out or executes repository code.
-    if: github.ref == 'refs/heads/chore/migrate-forensic-issue-fields'
+    # Deliberately restricted to an explicit manual dispatch on master.
+    # The workflow never checks out or executes repository code.
+    if: github.ref == 'refs/heads/master' && inputs.confirm == 'MIGRATE-FORENSIC-ISSUES'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
