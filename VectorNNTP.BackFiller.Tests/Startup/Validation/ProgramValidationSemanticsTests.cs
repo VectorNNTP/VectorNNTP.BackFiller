@@ -2704,6 +2704,32 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                     || e.Error.Contains("between 5 and 600", StringComparison.OrdinalIgnoreCase)));
         }
         /// <summary>
+        /// Confirms omitted RabbitMQ ConsumerPrefetchCount preserves omission semantics without validation errors.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenRabbitMqConsumerPrefetchCountMissing_UsesOmissionWithoutError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+
+            Assert.DoesNotContain(errors, static e =>
+                e.Setting == "BackFiller:RabbitMQ:ConsumerPrefetchCount"
+                && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
         /// Confirms the validate back filler options when rabbit mq requested channel max missing uses default without error behavior.
         /// </summary>
         [Fact]
@@ -2728,6 +2754,151 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 e.Setting == "BackFiller:RabbitMQ:RequestedChannelMax"
                 && e.Error.Contains("required", StringComparison.OrdinalIgnoreCase));
         }
+        /// <summary>
+        /// Confirms explicit RabbitMQ ConsumerPrefetchCount=0 is rejected with the declared range error.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenRabbitMqConsumerPrefetchCountIsZero_ReturnsRangeError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:ConsumerPrefetchCount"] = "0",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+
+            Assert.Contains(errors, static e =>
+                e.Setting == "BackFiller:RabbitMQ:ConsumerPrefetchCount"
+                && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Confirms full startup validation fails and runtime snapshot is not produced when explicit prefetch zero is configured.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenRabbitMqConsumerPrefetchCountIsZero_RemainsInvalid()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:ConsumerPrefetchCount"] = "0",
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.False(configResult.IsValid);
+            Assert.Contains(configResult.Errors, static e =>
+                e.Setting == "BackFiller:RabbitMQ:ConsumerPrefetchCount"
+                && e.Error.Contains("between 1 and 65535", StringComparison.OrdinalIgnoreCase));
+            Assert.Null(runtimeOptions);
+            Assert.True(dependencyResult.IsValid);
+        }
+
+        /// <summary>
+        /// Confirms explicit RabbitMQ ConsumerPrefetchCount boundaries of 1 and 65535 are accepted.
+        /// </summary>
+        [Theory]
+        [InlineData("1")]
+        [InlineData("65535")]
+        public void ValidateBackFillerOptions_WhenRabbitMqConsumerPrefetchCountIsInRange_AcceptsValue(string prefetchCount)
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:ConsumerPrefetchCount"] = prefetchCount,
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:RabbitMQ:ConsumerPrefetchCount");
+        }
+
+        /// <summary>
+        /// Confirms explicit RabbitMQ ConsumerPrefetchCount beyond range fails startup binding and cannot reach runtime validation stages.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenRabbitMqConsumerPrefetchCountExceedsMaximum_ThrowsBindingError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:ConsumerPrefetchCount"] = "65536",
+            });
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None));
+
+            Assert.Contains("BackFiller:RabbitMQ:ConsumerPrefetchCount", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Confirms explicit RabbitMQ ConsumerPrefetchCount less than zero is rejected by startup binding.
+        /// </summary>
+        [Fact]
+        public void ValidateBackFillerOptions_WhenRabbitMqConsumerPrefetchCountNegative_ThrowsBindingError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "12",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
+                ["BackFiller:RabbitMQ:RpcTimeoutSeconds"] = "30",
+                ["BackFiller:RabbitMQ:ConsumerPrefetchCount"] = "-1",
+            });
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(configuration));
+
+            Assert.Contains("BackFiller:RabbitMQ:ConsumerPrefetchCount", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>
         /// Confirms the validate back filler options when rabbit mq requested channel max less than or equal to zero returns error behavior.
         /// </summary>
