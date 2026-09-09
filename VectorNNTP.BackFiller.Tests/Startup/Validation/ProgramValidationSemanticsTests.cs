@@ -52,6 +52,70 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         [Fact]
+        public void TryReadValidPrivateKeyPem_WhenPemContainsPrivateKey_ReturnsTrue()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "private-account.key");
+
+            using (RSA rsa = RSA.Create(2048))
+            {
+                File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+            }
+
+            try
+            {
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
+                Assert.False(string.IsNullOrWhiteSpace(pem));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void TryReadValidPrivateKeyPem_WhenPemContainsPublicKeyOnly_ReturnsFalse()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "public-only-account.key");
+
+            using (RSA rsa = RSA.Create(2048))
+            {
+                File.WriteAllText(keyFilePath, rsa.ExportRSAPublicKeyPem());
+            }
+
+            try
+            {
+                Assert.False(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void TryReadValidPrivateKeyPem_WhenPemMalformed_ReturnsFalse()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "malformed-account.key");
+
+            File.WriteAllText(keyFilePath, "-----BEGIN PRIVATE KEY-----\npartial\n");
+
+            try
+            {
+                Assert.False(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
         public void EnsureRelativeAcmeAccountKeyPemFile_WhenExistingFileIsPartial_ReplacesWithValidPrivateKeyPem()
         {
             string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
@@ -3524,6 +3588,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
                 using RSA rsa = RSA.Create();
                 rsa.ImportFromPem(pem);
+                _ = rsa.ExportPkcs8PrivateKey();
                 return true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)

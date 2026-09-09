@@ -120,6 +120,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
                 using RSA rsa = RSA.Create();
                 rsa.ImportFromPem(pem);
+                _ = rsa.ExportPkcs8PrivateKey();
                 return true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
