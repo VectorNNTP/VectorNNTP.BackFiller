@@ -237,6 +237,7 @@ ClientBin/
 *.dbproj.schemaview
 *.jfm
 *.pfx
+VectorNNTP.BackFiller/Docs/account.key
 *.publishsettings
 orleans.codegen.cs
 
