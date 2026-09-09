@@ -8,6 +8,7 @@
 
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
+using System.Text;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Startup.Validation;
 using Xunit;
@@ -26,7 +27,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
-        private const string DeterministicAcmeAccountPrivateKeyPkcs8DerBase64 = "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC8S+Vlahtt53SMWjz4CrpXdfudSM3YZFo0tKnEPt6NWUr+N460QtyNnNQv0OCWMe+UpXrur16r17r0Mvp3ye45V4yhJn0RKWAV19O/+U/6oO/q3PHL6Q4hBimSah7aGYhxRHofEPbDBL3jX3OrkWY4m2gJ9bHPLJBTl9ruNKmzINn8rxgcHPJjfqSC3fZe1LdggXFlw21+ZWc8e8N1q/ZptmeadOdSGeRrpWBtlSr1/T+uRZ4K9FbdRA8N8e/66bCXRVdFvJerLjrYMy4+mqqp/pwzQq+dkf6O8WaHq6hwGALLZycuOULJezt/nGOWc43NdIICAxcDtR4j8XKCn235AgMBAAECggEAa5207dFG+/lc0xp/3gPDnFkCBVKm0xYHuDfJDzAfYgm2orR+CuhrxUPswadPtIe1te8d42y3Xt9dKlQ4cl4mmP9AkJm+wSA0mkdP7lg/La7tb/328+Ou/5DWEag1GdGd+Z55bWf0oGEFZf4Xzea71X58Z7TUeuOtWRlhNuNCWe1gtVeiNBOKh2/OsPQ8ROodhwhjXImlpzmIm8WtMAa6rZhC7vL2cfmIKVRdWdRQYVavkOzxZBq2GqAD3ZXbEce+ku6Hz8y1nyrp9T2G6z1AuzrG4C/niogGx5YjAPSW8rr5rlcD6wEJiDUatVHeRvKwoqc2cGWR7MRFS0vI6uJHQQKBgQDv51v7ACwMm2HVfiQ/wYnvrO5QsD7EeqH269ZMVmi5eyFyVeEa14VmC5vj2c93VV73Og8y1ynLqDBFWlnXdYVXBVBe8WKhgCTSqRaSsdfj4XtnmVq8ojGihGHdXQRvzfIrz3FJ6NZQP2yOnJrEZa6MNbNDC3UDfIfYBKNxK4ASGwKBgQDI7h5aYJOgmCT36Xned2lh/lVFay1hRZnGj1GHYIVTGfnHnhlIyBzmPiknZuzj7HZcvfESZh8BYjL24azsZhjkfMMH3ouSWu45fQfbPm8lwTdoeEmo4JZfNxbYSohwPrsiRCFDSRIaZALYVrowPoqrDnXylNGkTE0xBQ1Y/1fhewKBgA8gIyh8JkrVMSHoxhhO94do+82SjyKMKNIMpIJDoG6xWLaAu6SZmguJB9ch0HbRpx8nRfYKotP4UrLMs4VmH3YRG7Qgu/s6vRebGZU+KUJw4PrzLElgYIjCl/kA+FqkPXSNq7LhP0Hn/cwwC4H+dzbX2+mKO2Jw44+3GybzeyupAoGACFYQvlEpbs1BI2P1YWx029LweLvUmyeHFLzXdhVkEqmOOmDtzZ43zLmhfXgAtggWdQyQVuITwTvwv1tnkDtAJyKh+M6b3cuV/J6aV9dERz237canz7DZrEOd2AVnmbiQjQBknOUIMj4Z/B3FBcFigWxNKm5QME/WGAWMozeczscCgYAkWIdz+Xvo64/gWFYkEvHUfif1op+LT2MP5v/YoWurwoJ2zCQxnBRdCT9ROU2dTKJo+Igfa2Ff6M/TVBEHigcqb8yweDnjswaKaxOq1NcSHqakx0rquV7Yn/IH51vddEAEb/F+Voh+GKaVcWSbJyMihU7TNuUJ5CCJI07waX4maw==";
+        private const string CanonicalAcmeFixtureRelativePath = "VectorNNTP.BackFiller.Tests/Fixtures/Acme/account-private-key.pem";
 
         /// <summary>
         /// Supplies  out for the fixture or scenario under test.
@@ -65,9 +66,12 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
             _ = Directory.CreateDirectory(certDirectory);
 
+            string canonicalPem = LoadCanonicalAcmeFixturePem();
+            byte[] canonicalPrivateKey = ReadPrivateKeyPkcs8Bytes(canonicalPem);
+
             string fileName = "account.key";
             string keyFilePath = Path.Combine(certDirectory, fileName);
-            if (TryReadValidPrivateKeyPem(keyFilePath, out _))
+            if (TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] existingPrivateKey) && existingPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
             {
                 return fileName;
             }
@@ -78,8 +82,8 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             {
                 using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    using StreamWriter writer = new(stream);
-                    writer.Write(GetDeterministicAcmeAccountPrivateKeyPem());
+                    using StreamWriter writer = new(stream, Encoding.UTF8);
+                    writer.Write(canonicalPem);
                     writer.Flush();
                     stream.Flush(true);
                 }
@@ -94,18 +98,83 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 }
             }
 
-            if (!TryReadValidPrivateKeyPem(keyFilePath, out _))
+            if (!TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] finalPrivateKey) || !finalPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
             {
-                throw new InvalidOperationException("Failed to create a valid ACME account key test fixture.");
+                throw new InvalidOperationException("Failed to create a valid deterministic ACME account key test fixture.");
             }
 
             return fileName;
         }
 
-        private static string GetDeterministicAcmeAccountPrivateKeyPem()
+        private static string LoadCanonicalAcmeFixturePem()
         {
-            byte[] pkcs8Der = Convert.FromBase64String(DeterministicAcmeAccountPrivateKeyPkcs8DerBase64);
-            return PemEncoding.WriteString("PRIVATE KEY", pkcs8Der);
+            string fixturePath = ResolveCanonicalAcmeFixturePath();
+            string pem = File.ReadAllText(fixturePath);
+            if (string.IsNullOrWhiteSpace(pem))
+            {
+                throw new InvalidOperationException($"Canonical ACME fixture at '{fixturePath}' is empty.");
+            }
+
+            _ = ReadPrivateKeyPkcs8Bytes(pem);
+            return pem;
+        }
+
+        private static string ResolveCanonicalAcmeFixturePath()
+        {
+            const string SolutionMarker = "VectorNNTP.BackFiller.slnx";
+            string? current = AppContext.BaseDirectory;
+
+            while (!string.IsNullOrWhiteSpace(current))
+            {
+                string markerPath = Path.Combine(current, SolutionMarker);
+                if (File.Exists(markerPath))
+                {
+                    string fixturePath = Path.Combine(current, CanonicalAcmeFixtureRelativePath.Replace('/', Path.DirectorySeparatorChar));
+                    if (File.Exists(fixturePath))
+                    {
+                        return fixturePath;
+                    }
+
+                    break;
+                }
+
+                DirectoryInfo? parent = Directory.GetParent(current);
+                current = parent?.FullName;
+            }
+
+            throw new DirectoryNotFoundException("Could not locate canonical ACME account key fixture file.");
+        }
+
+        private static byte[] ReadPrivateKeyPkcs8Bytes(string pem)
+        {
+            using RSA rsa = RSA.Create();
+            rsa.ImportFromPem(pem);
+            return rsa.ExportPkcs8PrivateKey();
+        }
+
+        private static bool TryReadPrivateKeyPkcs8Bytes(string keyFilePath, out byte[] privateKey)
+        {
+            privateKey = [];
+            if (!File.Exists(keyFilePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                string pem = File.ReadAllText(keyFilePath);
+                if (string.IsNullOrWhiteSpace(pem))
+                {
+                    return false;
+                }
+
+                privateKey = ReadPrivateKeyPkcs8Bytes(pem);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
+            {
+                return false;
+            }
         }
 
         private static bool TryReadValidPrivateKeyPem(string keyFilePath, out string pem)
