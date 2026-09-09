@@ -720,6 +720,34 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task StreamListenerProtocolSessionTransport_WhenReadCanceledByCaller_ThrowsOperationCanceledException()
+        {
+            BlockingProgressTimeoutStream stream = new();
+            await using StreamListenerProtocolSessionTransport transport = new(stream, TimeSpan.FromSeconds(5));
+            using CancellationTokenSource cancellation = new();
+
+            Task<int> readTask = transport.ReadAsync(new byte[8], cancellation.Token).AsTask();
+            await stream.WaitForReadEnteredAsync().ConfigureAwait(false);
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await readTask.ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        [Fact]
+        public async Task StreamListenerProtocolSessionTransport_WhenWriteCanceledByCaller_ThrowsOperationCanceledException()
+        {
+            BlockingProgressTimeoutStream stream = new();
+            await using StreamListenerProtocolSessionTransport transport = new(stream, TimeSpan.FromSeconds(5));
+            using CancellationTokenSource cancellation = new();
+
+            Task<int> writeTask = transport.WriteAsync(Encoding.ASCII.GetBytes("payload"), cancellation.Token).AsTask();
+            await stream.WaitForWriteEnteredAsync().ConfigureAwait(false);
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await writeTask.ConfigureAwait(false)).ConfigureAwait(false);
+        }
+
+        [Fact]
         public async Task RunAsync_WhenWriterFaultsWhileReaderRemainsActive_RethrowsTimeoutException()
         {
             byte[] request = ListenerProtocolEncoder.EncodeGetRequest(501, "30edc94157aa16fe644a45a1f1ffe160");

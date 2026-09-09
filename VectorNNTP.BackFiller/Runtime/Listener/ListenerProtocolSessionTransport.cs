@@ -61,7 +61,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using CancellationTokenSource timeoutCts = cancellationToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : new CancellationTokenSource();
             timeoutCts.CancelAfter(_ioProgressTimeout);
 
             try
@@ -83,7 +85,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 return 0;
             }
 
-            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using CancellationTokenSource timeoutCts = cancellationToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+                : new CancellationTokenSource();
             timeoutCts.CancelAfter(_ioProgressTimeout);
 
             try
