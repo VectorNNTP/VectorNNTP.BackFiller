@@ -46,14 +46,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private readonly Func<BackFillerLetsEncryptRuntimeOptions, TimeProvider, CancellationToken, Task<CertificateEvaluationResult>> _evaluateExistingCertificateAsync;
 
         /// <summary>
-        /// Certificate-provisioning operation that issues, persists, reloads, and publishes replacement listener certificates.
+        /// Optional observer notified when evaluation returns a bundle before transfer/non-transfer ownership resolution.
         /// </summary>
-        private readonly Func<BackFillerLetsEncryptRuntimeOptions, CancellationToken, Task> _provisionNewCertificateAsync;
-
-        /// <summary>
-        /// Disposal operation for evaluated certificate bundles that are not transferred into runtime ownership.
-        /// </summary>
-        private readonly Action<BackFillerCertificateBundle> _disposeUntransferredEvaluatedBundle;
+        private readonly Action<BackFillerCertificateBundle>? _evaluatedBundleObserver;
 
         /// <summary>
         /// Initializes one certificate provisioning coordinator.
@@ -69,7 +64,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             BackFillerCertificateState certificateState,
             ILogger<BackFillerCertificateProvisioningService> logger,
             TimeProvider timeProvider)
-            : this(certificateStore, acmeIssuer, certificateState, logger, timeProvider, evaluateExistingCertificateAsync: null, provisionNewCertificateAsync: null, disposeUntransferredEvaluatedBundle: null)
+            : this(certificateStore, acmeIssuer, certificateState, logger, timeProvider, evaluateExistingCertificateAsync: null, evaluatedBundleObserver: null)
         {
         }
 
@@ -82,8 +77,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="logger">Logger.</param>
         /// <param name="timeProvider">Unified time provider.</param>
         /// <param name="evaluateExistingCertificateAsync">Optional evaluation delegate; defaults to <see cref="BackFillerCertificateStore.EvaluateExistingCertificateAsync(BackFillerLetsEncryptRuntimeOptions, TimeProvider, CancellationToken)"/>.</param>
-        /// <param name="provisionNewCertificateAsync">Optional provisioning delegate; defaults to the built-in ACME persistence/reload workflow.</param>
-        /// <param name="disposeUntransferredEvaluatedBundle">Optional evaluated-bundle disposal delegate; defaults to disposing <see cref="BackFillerCertificateBundle.Certificate"/>.</param>
+        /// <param name="evaluatedBundleObserver">Optional observer for the evaluated bundle before ownership transfer/disposal is resolved.</param>
         internal BackFillerCertificateProvisioningService(
             BackFillerCertificateStore certificateStore,
             IAcmeCertificateIssuer acmeIssuer,
@@ -91,8 +85,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             ILogger<BackFillerCertificateProvisioningService> logger,
             TimeProvider timeProvider,
             Func<BackFillerLetsEncryptRuntimeOptions, TimeProvider, CancellationToken, Task<CertificateEvaluationResult>>? evaluateExistingCertificateAsync,
-            Func<BackFillerLetsEncryptRuntimeOptions, CancellationToken, Task>? provisionNewCertificateAsync,
-            Action<BackFillerCertificateBundle>? disposeUntransferredEvaluatedBundle)
+            Action<BackFillerCertificateBundle>? evaluatedBundleObserver)
         {
             ArgumentNullException.ThrowIfNull(certificateStore);
             ArgumentNullException.ThrowIfNull(acmeIssuer);
@@ -105,8 +98,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             _logger = logger;
             _timeProvider = timeProvider;
             _evaluateExistingCertificateAsync = evaluateExistingCertificateAsync ?? BackFillerCertificateStore.EvaluateExistingCertificateAsync;
-            _provisionNewCertificateAsync = provisionNewCertificateAsync ?? ProvisionNewCertificateAsync;
-            _disposeUntransferredEvaluatedBundle = disposeUntransferredEvaluatedBundle ?? (static bundle => bundle.Certificate.Dispose());
+            _evaluatedBundleObserver = evaluatedBundleObserver;
         }
 
         /// <summary>
@@ -159,14 +151,18 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 CertificateEvaluationResult evaluation = await _evaluateExistingCertificateAsync(letsEncryptOptions, _timeProvider, cancellationToken).ConfigureAwait(false);
                 bool evaluationCertificateTransferred = false;
 
+                if (evaluation.Certificate is not null)
+                {
+                    _evaluatedBundleObserver?.Invoke(evaluation.Certificate);
+                }
+
                 try
                 {
                     if (!evaluation.RequiresRenewal)
                     {
                         if (evaluation.Certificate is not null)
                         {
-                            _certificateState.Publish(evaluation.Certificate);
-                            evaluationCertificateTransferred = true;
+                            PublishEvaluatedCertificate(evaluation.Certificate, ref evaluationCertificateTransferred);
                         }
 
                         return false;
@@ -179,7 +175,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
                     try
                     {
-                        await _provisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
+                        await ProvisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
                         return true;
                     }
                     catch (OperationCanceledException)
@@ -191,8 +187,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                         if (evaluation.IsUsable && evaluation.Certificate is not null)
                         {
                             LogCertificateRenewalFailedUsingExistingCertificate(_logger, ex);
-                            _certificateState.Publish(evaluation.Certificate);
-                            evaluationCertificateTransferred = true;
+                            PublishEvaluatedCertificate(evaluation.Certificate, ref evaluationCertificateTransferred);
                             return false;
                         }
 
@@ -203,7 +198,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     if (!evaluationCertificateTransferred && evaluation.Certificate is not null)
                     {
-                        _disposeUntransferredEvaluatedBundle(evaluation.Certificate);
+                        evaluation.Certificate.Certificate.Dispose();
                     }
                 }
             }
@@ -227,13 +222,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             CertificateEvaluationResult evaluation = await _evaluateExistingCertificateAsync(letsEncryptOptions, _timeProvider, cancellationToken).ConfigureAwait(false);
             bool evaluationCertificateTransferred = false;
 
+            if (evaluation.Certificate is not null)
+            {
+                _evaluatedBundleObserver?.Invoke(evaluation.Certificate);
+            }
+
             try
             {
                 if (evaluation.IsUsable && !evaluation.RequiresRenewal && evaluation.Certificate is not null)
                 {
                     LogUsingExistingListenerCertificate(_logger, evaluation.Reason);
-                    _certificateState.Publish(evaluation.Certificate);
-                    evaluationCertificateTransferred = true;
+                    PublishEvaluatedCertificate(evaluation.Certificate, ref evaluationCertificateTransferred);
                     return;
                 }
 
@@ -242,7 +241,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     LogListenerCertificateInsideRenewalWindow(_logger);
                     try
                     {
-                        await _provisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
+                        await ProvisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
                         return;
                     }
                     catch (OperationCanceledException)
@@ -252,20 +251,19 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     catch (Exception ex)
                     {
                         LogCertificateRenewalFailedRetainingExistingCertificate(_logger, ex);
-                        _certificateState.Publish(evaluation.Certificate);
-                        evaluationCertificateTransferred = true;
+                        PublishEvaluatedCertificate(evaluation.Certificate, ref evaluationCertificateTransferred);
                         return;
                     }
                 }
 
                 LogListenerCertificateUnavailableOrUnusable(_logger, evaluation.Reason);
-                await _provisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
+                await ProvisionNewCertificateAsync(letsEncryptOptions, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
                 if (!evaluationCertificateTransferred && evaluation.Certificate is not null)
                 {
-                    _disposeUntransferredEvaluatedBundle(evaluation.Certificate);
+                    evaluation.Certificate.Certificate.Dispose();
                 }
             }
         }
@@ -329,6 +327,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 _logger,
                 activated.Certificate.Subject,
                 activatedNotAfterUtc);
+        }
+
+        /// <summary>
+        /// Transfers evaluated-bundle ownership into runtime state and marks transfer only after state accepts publication.
+        /// </summary>
+        /// <param name="bundle">Evaluated certificate bundle whose ownership is being transferred.</param>
+        /// <param name="evaluationCertificateTransferred">Transfer marker updated only after successful state publication.</param>
+        private void PublishEvaluatedCertificate(BackFillerCertificateBundle bundle, ref bool evaluationCertificateTransferred)
+        {
+            _certificateState.Publish(bundle);
+            evaluationCertificateTransferred = true;
         }
 
         /// <summary>
