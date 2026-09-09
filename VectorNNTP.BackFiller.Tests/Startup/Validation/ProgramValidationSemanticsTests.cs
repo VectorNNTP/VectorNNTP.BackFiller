@@ -213,7 +213,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         }
 
         [Fact]
-        public void EnsureRelativeAcmeAccountKeyPemFile_WhenRecreatedMultipleTimes_WritesDeterministicPemContent()
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenRecreatedMultipleTimes_WritesProcessScopedDeterministicPemContent()
         {
             string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
             _ = Directory.CreateDirectory(certDirectory);
