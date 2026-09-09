@@ -337,7 +337,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
                 Assert.Equal(0, read);
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
-                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
+                int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries.GetRange(scenarioLogStartIndex, scenarioLogCount);
                 Assert.Contains(
                     scenarioLogs,
                     static entry => entry.EventId.Id == 2709
@@ -788,7 +789,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
                 Assert.Equal(0, read);
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
-                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
+                int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries.GetRange(scenarioLogStartIndex, scenarioLogCount);
                 Assert.Contains(
                     scenarioLogs,
                     static entry => entry.EventId.Id == 2709
@@ -880,7 +882,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 timeoutStopwatch.Stop();
 
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
-                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
+                int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries.GetRange(scenarioLogStartIndex, scenarioLogCount);
                 Assert.Contains(
                     scenarioLogs,
                     static entry => entry.EventId.Id == 2709
