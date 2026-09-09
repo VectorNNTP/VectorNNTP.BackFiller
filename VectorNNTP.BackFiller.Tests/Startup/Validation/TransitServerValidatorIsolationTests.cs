@@ -7,7 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the transit server validator isolation test suite.
 
 using Microsoft.Extensions.Configuration;
-using Configuration = global::VectorNNTP.Backfiller.Configuration;
+using System.Security.Cryptography;
 using VectorNNTP.Backfiller.Startup.Validation;
 using Xunit;
 using Xunit.Abstractions;
@@ -41,7 +41,36 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         /// <returns>The value returned by the build helper.</returns>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {
-            return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+            string acmeAccountKeyPem = EnsureRelativeAcmeAccountKeyPemFile();
+            Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "security@example.com",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = acmeAccountKeyPem,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "test-only-pfx-pass-123",
+            };
+
+            foreach (KeyValuePair<string, string?> kv in values)
+            {
+                baseline[kv.Key] = kv.Value;
+            }
+
+            return new ConfigurationBuilder().AddInMemoryCollection(baseline).Build();
+        }
+
+        private static string EnsureRelativeAcmeAccountKeyPemFile()
+        {
+            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            _ = Directory.CreateDirectory(certDirectory);
+
+            string fileName = "account.key";
+            string keyFilePath = Path.Combine(certDirectory, fileName);
+            if (!File.Exists(keyFilePath))
+            {
+                using RSA rsa = RSA.Create(2048);
+                File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+            }
+
+            return fileName;
         }
         /// <summary>
         /// Confirms the transit server use ssl missing default false direct and full pipeline behavior.

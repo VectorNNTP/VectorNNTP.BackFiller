@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using System.Security.Cryptography;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Commands;
 using VectorNNTP.Backfiller.Startup.Configuration;
@@ -29,6 +30,26 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// </remarks>
     public class ProgramValidationSemanticsTests
     {
+        /// <summary>
+        /// Confirms shared command/startup success fixtures include mandatory listener ACME configuration values.
+        /// </summary>
+        [Fact]
+        public void BuildConfigurationForCommandTests_WhenUsingBaseline_IncludesMandatoryListenerAcmeConfiguration()
+        {
+            IConfiguration configuration = BuildConfigurationForCommandTests(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: []);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+        }
+
         /// <summary>
         /// Confirms the configuration validation result when only warnings is valid true behavior.
         /// </summary>
@@ -191,6 +212,8 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
                 ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = string.Empty,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = string.Empty,
             });
             IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(
                 baselineConfiguration,
@@ -426,6 +449,8 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:Id"] = "12",
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = string.Empty,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = string.Empty,
                 ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             });
@@ -3360,6 +3385,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         {
             if (includeRabbitMqBaseline)
             {
+                string acmeAccountKeyPem = EnsureRelativeAcmeAccountKeyPemFile();
                 Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
                 {
                     ["BackFiller:BindPort"] = "119",
@@ -3367,6 +3393,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                     ["BackFiller:Id"] = "12",
                     ["BackFiller:DnsSuffix"] = "example.com",
                     ["BackFiller:DirCerts"] = "certs",
+                    ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "security@example.com",
+                    ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = acmeAccountKeyPem,
+                    ["BackFiller:LetsEncrypt:PfxExportPassword"] = "test-only-pfx-pass-123",
                     ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                     // RabbitMQ baseline prerequisites to allow deeper validator checks
@@ -3414,6 +3443,22 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
+        }
+
+        private static string EnsureRelativeAcmeAccountKeyPemFile()
+        {
+            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            _ = Directory.CreateDirectory(certDirectory);
+
+            string fileName = "account.key";
+            string keyFilePath = Path.Combine(certDirectory, fileName);
+            if (!File.Exists(keyFilePath))
+            {
+                using RSA rsa = RSA.Create(2048);
+                File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+            }
+
+            return fileName;
         }
 
         private sealed class SingleBackFillerBindConfiguration : IConfiguration
