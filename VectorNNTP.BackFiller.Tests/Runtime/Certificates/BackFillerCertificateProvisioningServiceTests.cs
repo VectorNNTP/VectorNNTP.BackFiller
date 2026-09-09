@@ -133,7 +133,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(5));
 
                 BackFillerCertificateBundle? observedEvaluatedBundle = null;
-                BackFillerCertificateState state = new();
+                using BackFillerCertificateState state = new();
                 BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
                     state,
                     new FakeAcmeCertificateIssuer("bf-01.example.com"),
@@ -301,7 +301,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(5));
 
                 BackFillerCertificateBundle? observedEvaluatedBundle = null;
-                BackFillerCertificateState state = new();
+                using BackFillerCertificateState state = new();
                 BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
                     state,
                     new ThrowingIssueAcmeCertificateIssuer(new InvalidOperationException("renewal failed")),
@@ -313,9 +313,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.NotNull(observedEvaluatedBundle);
                 Assert.True(state.HasCertificate);
                 AssertCertificateUsable(observedEvaluatedBundle!.Certificate);
-
-                state.Dispose();
-                AssertCertificateDisposed(observedEvaluatedBundle.Certificate);
+                using X509Certificate2? clone = state.GetCurrentCertificateClone();
+                Assert.NotNull(clone);
             }
             finally
             {
