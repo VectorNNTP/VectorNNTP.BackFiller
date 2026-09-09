@@ -13,6 +13,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using System.Security.Cryptography;
 using VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Startup.Commands;
 using VectorNNTP.Backfiller.Startup.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -48,6 +49,22 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
             Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenExistingFileIsPartial_ReplacesWithValidPrivateKeyPem()
+        {
+            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+
+            File.WriteAllText(keyFilePath, "-----BEGIN PRIVATE KEY-----\npartial\n");
+
+            string returnedFileName = EnsureRelativeAcmeAccountKeyPemFile();
+
+            Assert.Equal("account.key", returnedFileName);
+            Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
+            Assert.False(string.IsNullOrWhiteSpace(pem));
         }
 
         /// <summary>
@@ -3452,13 +3469,67 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             string fileName = "account.key";
             string keyFilePath = Path.Combine(certDirectory, fileName);
-            if (!File.Exists(keyFilePath))
+            if (TryReadValidPrivateKeyPem(keyFilePath, out _))
             {
-                using RSA rsa = RSA.Create(2048);
-                File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+                return fileName;
+            }
+
+            using RSA rsa = RSA.Create(2048);
+            string pem = rsa.ExportPkcs8PrivateKeyPem();
+            string tempPath = CertificateFileConventions.BuildAtomicTempPath(keyFilePath);
+
+            try
+            {
+                using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    using StreamWriter writer = new(stream);
+                    writer.Write(pem);
+                    writer.Flush();
+                    stream.Flush(true);
+                }
+
+                File.Move(tempPath, keyFilePath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+
+            if (!TryReadValidPrivateKeyPem(keyFilePath, out _))
+            {
+                throw new InvalidOperationException("Failed to create a valid ACME account key test fixture.");
             }
 
             return fileName;
+        }
+
+        private static bool TryReadValidPrivateKeyPem(string keyFilePath, out string pem)
+        {
+            pem = string.Empty;
+            if (!File.Exists(keyFilePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                pem = File.ReadAllText(keyFilePath);
+                if (string.IsNullOrWhiteSpace(pem))
+                {
+                    return false;
+                }
+
+                using RSA rsa = RSA.Create();
+                rsa.ImportFromPem(pem);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
+            {
+                return false;
+            }
         }
 
         private sealed class SingleBackFillerBindConfiguration : IConfiguration
