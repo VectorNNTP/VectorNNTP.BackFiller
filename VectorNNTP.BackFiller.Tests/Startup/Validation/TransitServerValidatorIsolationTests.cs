@@ -7,7 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the transit server validator isolation test suite.
 
 using Microsoft.Extensions.Configuration;
-using Configuration = global::VectorNNTP.Backfiller.Configuration;
+using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Startup.Validation;
 using Xunit;
 using Xunit.Abstractions;
@@ -25,6 +25,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
+
         /// <summary>
         /// Supplies  out for the fixture or scenario under test.
         /// </summary>
@@ -41,8 +42,22 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         /// <returns>The value returned by the build helper.</returns>
         private static IConfiguration Build(Dictionary<string, string?> values)
         {
-            return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+            string acmeAccountKeyPem = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile();
+            Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "security@example.com",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = acmeAccountKeyPem,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "test-only-pfx-pass-123",
+            };
+
+            foreach (KeyValuePair<string, string?> kv in values)
+            {
+                baseline[kv.Key] = kv.Value;
+            }
+
+            return new ConfigurationBuilder().AddInMemoryCollection(baseline).Build();
         }
+
         /// <summary>
         /// Confirms the transit server use ssl missing default false direct and full pipeline behavior.
         /// </summary>

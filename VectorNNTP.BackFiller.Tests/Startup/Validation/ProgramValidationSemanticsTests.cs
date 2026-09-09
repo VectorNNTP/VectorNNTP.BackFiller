@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using System.Security.Cryptography;
+using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Commands;
 using VectorNNTP.Backfiller.Startup.Configuration;
@@ -29,6 +31,214 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// </remarks>
     public class ProgramValidationSemanticsTests
     {
+
+        /// <summary>
+        /// Confirms shared command/startup success fixtures include mandatory listener ACME configuration values.
+        /// </summary>
+        [Fact]
+        public void BuildConfigurationForCommandTests_WhenUsingBaseline_IncludesMandatoryListenerAcmeConfiguration()
+        {
+            IConfiguration configuration = BuildConfigurationForCommandTests(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+
+            List<(string Setting, string Error)> errors = global::VectorNNTP.Backfiller.Startup.Configuration.ConfigurationValidator.ValidateBackFillerOptions(
+                configuration,
+                warnings: []);
+
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountEmail");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:AcmeAccountKeyPem");
+            Assert.DoesNotContain(errors, static e => e.Setting == "BackFiller:LetsEncrypt:PfxExportPassword");
+        }
+
+        [Fact]
+        public void TryReadValidPrivateKeyPem_WhenPemContainsPrivateKey_ReturnsTrue()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "private-account.key");
+
+            using (RSA rsa = RSA.Create(2048))
+            {
+                File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+            }
+
+            try
+            {
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
+                Assert.False(string.IsNullOrWhiteSpace(pem));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void TryReadValidPrivateKeyPem_WhenPemContainsPublicKeyOnly_ReturnsFalse()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "public-only-account.key");
+
+            using (RSA rsa = RSA.Create(2048))
+            {
+                File.WriteAllText(keyFilePath, rsa.ExportRSAPublicKeyPem());
+            }
+
+            try
+            {
+                Assert.False(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void TryReadValidPrivateKeyPem_WhenPemMalformed_ReturnsFalse()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "malformed-account.key");
+
+            File.WriteAllText(keyFilePath, "-----BEGIN PRIVATE KEY-----\npartial\n");
+
+            try
+            {
+                Assert.False(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenFixtureMissing_WritesCanonicalPem()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+
+            try
+            {
+                string returnedFileName = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+
+                Assert.Equal("account.key", returnedFileName);
+                Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenExistingFileIsPartial_ReplacesWithCanonicalPem()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+
+            File.WriteAllText(keyFilePath, "-----BEGIN PRIVATE KEY-----\npartial\n");
+
+            try
+            {
+                string returnedFileName = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+
+                Assert.Equal("account.key", returnedFileName);
+                Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
+                Assert.False(string.IsNullOrWhiteSpace(pem));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenExistingFileContainsDifferentValidPrivateKey_ReplacesWithCanonicalPem()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+
+            using (RSA rsa = RSA.Create(2048))
+            {
+                File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+            }
+
+            try
+            {
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+
+                Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenExistingFileIsCanonical_ReusesExistingFile()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+            string canonical = TestAcmeAccountKeyFixture.Pem;
+            File.WriteAllText(keyFilePath, canonical);
+            DateTime before = File.GetLastWriteTimeUtc(keyFilePath);
+
+            try
+            {
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+
+                DateTime after = File.GetLastWriteTimeUtc(keyFilePath);
+                Assert.Equal(canonical, File.ReadAllText(keyFilePath));
+                Assert.Equal(before, after);
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenRecreatedMultipleTimes_WritesProcessScopedDeterministicPemContent()
+        {
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+
+            try
+            {
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                string first = File.ReadAllText(keyFilePath);
+
+                File.Delete(keyFilePath);
+
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                string second = File.ReadAllText(keyFilePath);
+
+                string canonical = TestAcmeAccountKeyFixture.Pem;
+                Assert.Equal(canonical, first);
+                Assert.Equal(canonical, second);
+                Assert.Equal(first, second);
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
+        }
+
         /// <summary>
         /// Confirms the configuration validation result when only warnings is valid true behavior.
         /// </summary>
@@ -191,6 +401,8 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             IConfiguration baselineConfiguration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
                 ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = string.Empty,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = string.Empty,
             });
             IConfiguration guardedConfiguration = new SingleBackFillerBindConfiguration(
                 baselineConfiguration,
@@ -426,6 +638,8 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:Id"] = "12",
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = "certs",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = string.Empty,
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = string.Empty,
                 ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
             });
@@ -3655,6 +3869,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         {
             if (includeRabbitMqBaseline)
             {
+                string acmeAccountKeyPem = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile();
                 Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
                 {
                     ["BackFiller:BindPort"] = "119",
@@ -3662,6 +3877,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                     ["BackFiller:Id"] = "12",
                     ["BackFiller:DnsSuffix"] = "example.com",
                     ["BackFiller:DirCerts"] = "certs",
+                    ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "security@example.com",
+                    ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = acmeAccountKeyPem,
+                    ["BackFiller:LetsEncrypt:PfxExportPassword"] = "test-only-pfx-pass-123",
                     ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                     ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                     // RabbitMQ baseline prerequisites to allow deeper validator checks
@@ -3709,6 +3927,33 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
+        }
+
+        private static bool TryReadValidPrivateKeyPem(string keyFilePath, out string pem)
+        {
+            pem = string.Empty;
+            if (!File.Exists(keyFilePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                pem = File.ReadAllText(keyFilePath);
+                if (string.IsNullOrWhiteSpace(pem))
+                {
+                    return false;
+                }
+
+                using RSA rsa = RSA.Create();
+                rsa.ImportFromPem(pem);
+                _ = rsa.ExportPkcs8PrivateKey();
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
+            {
+                return false;
+            }
         }
 
         private sealed class SingleBackFillerBindConfiguration : IConfiguration

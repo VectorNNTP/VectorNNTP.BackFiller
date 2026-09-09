@@ -6,6 +6,7 @@
 // Focused tests for article-retention configuration contract binding, validation, and runtime projection.
 
 using Microsoft.Extensions.Configuration;
+using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
 using Xunit;
@@ -302,6 +303,12 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             string root = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
             string logs = Path.Combine(root, "logs");
             string certs = Path.Combine(root, "certs");
+            _ = Directory.CreateDirectory(certs);
+            string acmeAccountKeyPemPath = Path.Combine(certs, "account.key");
+            using (RSA rsa = RSA.Create(2048))
+            {
+                File.WriteAllText(acmeAccountKeyPemPath, rsa.ExportPkcs8PrivateKeyPem());
+            }
 
             Dictionary<string, string?> values = new(StringComparer.OrdinalIgnoreCase)
             {
@@ -312,6 +319,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 ["BackFiller:DnsSuffix"] = "example.com",
                 ["BackFiller:DirCerts"] = certs,
                 ["BackFiller:DirLogs"] = logs,
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "security@example.com",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "account.key",
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "test-only-pfx-pass-123",
                 ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
                 ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
                 ["BackFiller:RabbitMQ:ChannelLeaseTimeoutSeconds"] = "60",
