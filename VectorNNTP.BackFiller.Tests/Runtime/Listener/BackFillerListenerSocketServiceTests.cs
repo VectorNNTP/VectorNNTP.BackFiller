@@ -301,12 +301,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
 
             ShutdownCoordinator shutdown = new();
+            CapturingLoggerProvider loggerProvider = new();
             BackFillerListenerSocketService service = new(
                 runtime,
                 state,
                 shutdown,
                 retentionAuthority,
-                NullLogger<BackFillerListenerSocketService>.Instance);
+                loggerProvider.CreateLogger<BackFillerListenerSocketService>());
 
             using CancellationTokenSource runCts = new();
             Task runTask = service.StartAsync(runCts.Token);
@@ -321,6 +322,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 await readinessProbeReleaseObserved.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
                 Task timeoutReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                int scenarioLogStartIndex = loggerProvider.Entries.Count;
 
                 Stopwatch timeoutStopwatch = Stopwatch.StartNew();
 
@@ -335,6 +337,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
                 Assert.Equal(0, read);
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
+                Assert.Contains(
+                    scenarioLogs,
+                    static entry => entry.EventId.Id == 2709
+                        && entry.StateValues.TryGetValue("Reason", out object? reason)
+                        && reason is string reasonText
+                        && reasonText == "tls-handshake");
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
 
                 using TcpClient recovered = new();
                 await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
@@ -779,7 +789,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 Assert.Equal(0, read);
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
                 IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
-                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2709);
+                Assert.Contains(
+                    scenarioLogs,
+                    static entry => entry.EventId.Id == 2709
+                        && entry.StateValues.TryGetValue("Reason", out object? reason)
+                        && reason is string reasonText
+                        && reasonText == "io-progress");
                 Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
 
                 using TcpClient recovered = new();
@@ -866,7 +881,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
                 IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
-                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2709);
+                Assert.Contains(
+                    scenarioLogs,
+                    static entry => entry.EventId.Id == 2709
+                        && entry.StateValues.TryGetValue("Reason", out object? reason)
+                        && reason is string reasonText
+                        && reasonText == "io-progress");
                 Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
 
                 using TcpClient recovered = new();

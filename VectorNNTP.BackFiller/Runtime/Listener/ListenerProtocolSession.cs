@@ -208,7 +208,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             else
             {
                 writerFault = await ObserveFaultAsync(writerTask, sessionToken).ConfigureAwait(false);
-                if (writerFault is not null || State != ListenerProtocolSessionState.ForcedShutdown)
+                bool writerCompletedWithoutExpectedCancellation = writerFault is null
+                    && !sessionToken.IsCancellationRequested
+                    && State != ListenerProtocolSessionState.ForcedShutdown;
+                if (writerFault is not null || writerCompletedWithoutExpectedCancellation)
                 {
                     BeginForcedShutdown();
                 }

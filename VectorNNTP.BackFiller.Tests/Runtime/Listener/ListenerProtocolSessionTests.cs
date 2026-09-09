@@ -825,6 +825,32 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task RunAsync_WhenWriterCompletesFirstByHostCancellation_DoesNotEscalateToForcedShutdown()
+        {
+            WriterFirstCancellationTransport transport = new();
+            ImmediateNotFoundHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            using CancellationTokenSource cancellation = new();
+            Task runTask = session.RunAsync(cancellation.Token);
+            await transport.WaitForReadStartedAsync().ConfigureAwait(false);
+
+            Task writerTask = GetPrivateFieldValue<Task>(session, "_writerTask")
+                ?? throw new InvalidOperationException("Writer task was not initialized.");
+
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await writerTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.False(runTask.IsCompleted);
+            Assert.NotEqual(ListenerProtocolSessionState.ForcedShutdown, session.State);
+
+            transport.ReleaseRead();
+            await runTask.ConfigureAwait(false);
+
+            Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
+        }
+
+        [Fact]
         public void ExceedsParserAccumulationLimit_WhenBufferedAndReadWouldOverflowInt_ReturnsTrue()
         {
             Assert.True(ListenerProtocolSession.ExceedsParserAccumulationLimit(int.MaxValue, 1, int.MaxValue));
@@ -2154,6 +2180,51 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
 
             internal Task WaitForReadStartedAsync() => _readStarted.Task;
+        }
+
+        private sealed class WriterFirstCancellationTransport : IListenerProtocolSessionTransport
+        {
+            private readonly TaskCompletionSource<bool> _readStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _releaseRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private bool _disposed;
+
+            public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(WriterFirstCancellationTransport));
+                }
+
+                _ = buffer;
+                _readStarted.TrySetResult(true);
+                await _releaseRead.Task.ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                return 0;
+            }
+
+            public async ValueTask<int> WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(WriterFirstCancellationTransport));
+                }
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                return buffer.Length;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _disposed = true;
+                _releaseRead.TrySetResult(true);
+                return ValueTask.CompletedTask;
+            }
+
+            internal Task WaitForReadStartedAsync() => _readStarted.Task;
+
+            internal void ReleaseRead() => _releaseRead.TrySetResult(true);
         }
 
         private sealed class SlowProgressFoundTransport : IListenerProtocolSessionTransport

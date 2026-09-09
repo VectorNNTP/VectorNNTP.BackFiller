@@ -184,6 +184,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private async Task ProcessAcceptedSocketAsync(Socket acceptedSocket, CancellationToken cancellationToken)
         {
             TcpClient? client = null;
+            bool tlsHandshakeCompleted = false;
             try
             {
                 client = new TcpClient { Client = acceptedSocket };
@@ -218,6 +219,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     throw new TimeoutException($"Inbound BackFiller TLS handshake exceeded configured timeout of {listenerOptions.TlsHandshakeTimeout}.");
                 }
 
+                tlsHandshakeCompleted = true;
                 string thumbprint = serverCertificate.Thumbprint ?? string.Empty;
                 LogTlsHandshakeSucceeded(_logger, remoteEndpoint, thumbprint);
 
@@ -249,7 +251,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             }
             catch (TimeoutException)
             {
-                LogConnectionTimedOut(_logger, "timeout");
+                LogConnectionTimedOut(_logger, tlsHandshakeCompleted ? "io-progress" : "tls-handshake");
             }
             catch (Exception ex)
             {
