@@ -27,6 +27,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         internal const int MaxOutstandingRequests = 64;
         internal const int MaxConcurrentProcessingRequests = 8;
         internal const int MaxOutboundResponses = 64;
+        private const int MaxWriteProgressChunkBytes = 32 * 1024;
 
         private readonly IListenerProtocolSessionTransport _transport;
         private readonly IListenerProtocolRequestHandler _requestHandler;
@@ -708,7 +709,9 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             int written = 0;
             while (written < payload.Length)
             {
-                int accepted = await _transport.WriteAsync(payload[written..], cancellationToken).ConfigureAwait(false);
+                int remaining = payload.Length - written;
+                int writeLength = Math.Min(remaining, MaxWriteProgressChunkBytes);
+                int accepted = await _transport.WriteAsync(payload.Slice(written, writeLength), cancellationToken).ConfigureAwait(false);
                 if (accepted <= 0)
                 {
                     throw new IOException("Transport returned zero accepted bytes.");

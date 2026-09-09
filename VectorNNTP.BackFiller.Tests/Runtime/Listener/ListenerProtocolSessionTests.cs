@@ -737,6 +737,49 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task RunAsync_WhenFoundPayloadWriteProgressesSlowly_DoesNotTimeoutWhenEachChunkProgressesWithinDeadline()
+        {
+            byte[] payload = Encoding.ASCII.GetBytes(new string('x', 128 * 1024));
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(601, "30edc94157aa16fe644a45a1f1ffe160");
+            SlowProgressFoundTransport transport = new(request, perWriteDelay: TimeSpan.FromMilliseconds(300));
+            BlockingAllRequestsHandler handler = new();
+            ListenerProtocolSession session = new(
+                transport,
+                handler,
+                CreateListenerOptions(ioProgressTimeoutSeconds: 1));
+
+            Task runTask = session.RunAsync(CancellationToken.None);
+            await handler.WaitForInvocationsAtLeastAsync(1).ConfigureAwait(false);
+            handler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(payload));
+
+            await runTask.ConfigureAwait(false);
+
+            Assert.True(transport.WriteCallCount > 2);
+            Assert.True(transport.TotalWriteDelay >= TimeSpan.FromSeconds(1));
+            Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
+        }
+
+        [Fact]
+        public async Task RunAsync_WhenFoundPayloadWriteUsesPartialProgress_CompletesAcrossMultipleWrites()
+        {
+            byte[] payload = Encoding.ASCII.GetBytes(new string('y', 96 * 1024));
+            byte[] request = ListenerProtocolEncoder.EncodeGetRequest(602, "30edc94157aa16fe644a45a1f1ffe160");
+            PartialProgressFoundTransport transport = new(request, maxAcceptedPerWrite: 2048);
+            BlockingAllRequestsHandler handler = new();
+            ListenerProtocolSession session = new(transport, handler);
+
+            Task runTask = session.RunAsync(CancellationToken.None);
+            await handler.WaitForInvocationsAtLeastAsync(1).ConfigureAwait(false);
+            handler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(payload));
+
+            await runTask.ConfigureAwait(false);
+
+            Assert.True(transport.WriteCallCount >= 20);
+            Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
+            Assert.True(transport.TotalWrittenBytes >= payload.Length + ListenerProtocol.HeaderLengthBytes);
+        }
+
+        [Fact]
         public async Task RunAsync_WhenHostCancellationRequested_StopsWithoutFaulting()
         {
             IdleCancelableTransport transport = new();
@@ -2083,6 +2126,130 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
 
             internal Task WaitForReadStartedAsync() => _readStarted.Task;
+        }
+
+        private sealed class SlowProgressFoundTransport : IListenerProtocolSessionTransport
+        {
+            private readonly byte[] _request;
+            private readonly TimeSpan _perWriteDelay;
+            private int _readStep;
+            private int _writeCallCount;
+            private long _totalWriteDelayTicks;
+            private bool _disposed;
+
+            internal SlowProgressFoundTransport(byte[] request, TimeSpan perWriteDelay)
+            {
+                _request = request;
+                _perWriteDelay = perWriteDelay;
+            }
+
+            internal int WriteCallCount => Volatile.Read(ref _writeCallCount);
+
+            internal TimeSpan TotalWriteDelay => TimeSpan.FromTicks(Volatile.Read(ref _totalWriteDelayTicks));
+
+            public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(SlowProgressFoundTransport));
+                }
+
+                if (Interlocked.CompareExchange(ref _readStep, 1, 0) == 0)
+                {
+                    if (_request.Length > buffer.Length)
+                    {
+                        throw new InvalidOperationException("Read fragment exceeds provided buffer size.");
+                    }
+
+                    _request.CopyTo(buffer);
+                    return ValueTask.FromResult(_request.Length);
+                }
+
+                return ValueTask.FromResult(0);
+            }
+
+            public async ValueTask<int> WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(SlowProgressFoundTransport));
+                }
+
+                _ = Interlocked.Increment(ref _writeCallCount);
+                await Task.Delay(_perWriteDelay, cancellationToken).ConfigureAwait(false);
+                _ = Interlocked.Add(ref _totalWriteDelayTicks, _perWriteDelay.Ticks);
+                return buffer.Length;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _disposed = true;
+                return ValueTask.CompletedTask;
+            }
+        }
+
+        private sealed class PartialProgressFoundTransport : IListenerProtocolSessionTransport
+        {
+            private readonly byte[] _request;
+            private readonly int _maxAcceptedPerWrite;
+            private int _readStep;
+            private int _writeCallCount;
+            private int _totalWrittenBytes;
+            private bool _disposed;
+
+            internal PartialProgressFoundTransport(byte[] request, int maxAcceptedPerWrite)
+            {
+                _request = request;
+                _maxAcceptedPerWrite = maxAcceptedPerWrite;
+            }
+
+            internal int WriteCallCount => Volatile.Read(ref _writeCallCount);
+
+            internal int TotalWrittenBytes => Volatile.Read(ref _totalWrittenBytes);
+
+            public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(PartialProgressFoundTransport));
+                }
+
+                if (Interlocked.CompareExchange(ref _readStep, 1, 0) == 0)
+                {
+                    if (_request.Length > buffer.Length)
+                    {
+                        throw new InvalidOperationException("Read fragment exceeds provided buffer size.");
+                    }
+
+                    _request.CopyTo(buffer);
+                    return ValueTask.FromResult(_request.Length);
+                }
+
+                return ValueTask.FromResult(0);
+            }
+
+            public ValueTask<int> WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(nameof(PartialProgressFoundTransport));
+                }
+
+                _ = Interlocked.Increment(ref _writeCallCount);
+                int accepted = Math.Min(buffer.Length, _maxAcceptedPerWrite);
+                _ = Interlocked.Add(ref _totalWrittenBytes, accepted);
+                return ValueTask.FromResult(accepted);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _disposed = true;
+                return ValueTask.CompletedTask;
+            }
         }
 
         private sealed class TestTransport : IListenerProtocolSessionTransport
