@@ -31,6 +31,37 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// </remarks>
     public class ProgramValidationSemanticsTests
     {
+        private const string DeterministicAcmeAccountPrivateKeyPem = """
+-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC8S+Vlahtt53SM
+Wjz4CrpXdfudSM3YZFo0tKnEPt6NWUr+N460QtyNnNQv0OCWMe+UpXrur16r17r0
+Mvp3ye45V4yhJn0RKWAV19O/+U/6oO/q3PHL6Q4hBimSah7aGYhxRHofEPbDBL3j
+X3OrkWY4m2gJ9bHPLJBTl9ruNKmzINn8rxgcHPJjfqSC3fZe1LdggXFlw21+ZWc8
+e8N1q/ZptmeadOdSGeRrpWBtlSr1/T+uRZ4K9FbdRA8N8e/66bCXRVdFvJerLjrY
+My4+mqqp/pwzQq+dkf6O8WaHq6hwGALLZycuOULJezt/nGOWc43NdIICAxcDtR4j
+8XKCn235AgMBAAECggEAa5207dFG+/lc0xp/3gPDnFkCBVKm0xYHuDfJDzAfYgm2
+orR+CuhrxUPswadPtIe1te8d42y3Xt9dKlQ4cl4mmP9AkJm+wSA0mkdP7lg/La7t
+b/328+Ou/5DWEag1GdGd+Z55bWf0oGEFZf4Xzea71X58Z7TUeuOtWRlhNuNCWe1g
+tVeiNBOKh2/OsPQ8ROodhwhjXImlpzmIm8WtMAa6rZhC7vL2cfmIKVRdWdRQYVav
+kOzxZBq2GqAD3ZXbEce+ku6Hz8y1nyrp9T2G6z1AuzrG4C/niogGx5YjAPSW8rr5
+rlcD6wEJiDUatVHeRvKwoqc2cGWR7MRFS0vI6uJHQQKBgQDv51v7ACwMm2HVfiQ/
+wYnvrO5QsD7EeqH269ZMVmi5eyFyVeEa14VmC5vj2c93VV73Og8y1ynLqDBFWlnX
+dYVXBVBe8WKhgCTSqRaSsdfj4XtnmVq8ojGihGHdXQRvzfIrz3FJ6NZQP2yOnJrE
+Za6MNbNDC3UDfIfYBKNxK4ASGwKBgQDI7h5aYJOgmCT36Xned2lh/lVFay1hRZnG
+j1GHYIVTGfnHnhlIyBzmPiknZuzj7HZcvfESZh8BYjL24azsZhjkfMMH3ouSWu45
+fQfbPm8lwTdoeEmo4JZfNxbYSohwPrsiRCFDSRIaZALYVrowPoqrDnXylNGkTE0x
+BQ1Y/1fhewKBgA8gIyh8JkrVMSHoxhhO94do+82SjyKMKNIMpIJDoG6xWLaAu6SZ
+mguJB9ch0HbRpx8nRfYKotP4UrLMs4VmH3YRG7Qgu/s6vRebGZU+KUJw4PrzLElg
+YIjCl/kA+FqkPXSNq7LhP0Hn/cwwC4H+dzbX2+mKO2Jw44+3GybzeyupAoGACFYQ
+vlEpbs1BI2P1YWx029LweLvUmyeHFLzXdhVkEqmOOmDtzZ43zLmhfXgAtggWdQyQ
+VuITwTvwv1tnkDtAJyKh+M6b3cuV/J6aV9dERz237canz7DZrEOd2AVnmbiQjQBk
+nOUIMj4Z/B3FBcFigWxNKm5QME/WGAWMozeczscCgYAkWIdz+Xvo64/gWFYkEvHU
+fif1op+LT2MP5v/YoWurwoJ2zCQxnBRdCT9ROU2dTKJo+Igfa2Ff6M/TVBEHigcq
+b8yweDnjswaKaxOq1NcSHqakx0rquV7Yn/IH51vddEAEb/F+Voh+GKaVcWSbJyMi
+hU7TNuUJ5CCJI07waX4maw==
+-----END PRIVATE KEY-----
+""";
+
         /// <summary>
         /// Confirms shared command/startup success fixtures include mandatory listener ACME configuration values.
         /// </summary>
@@ -129,6 +160,32 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Equal("account.key", returnedFileName);
             Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
             Assert.False(string.IsNullOrWhiteSpace(pem));
+        }
+
+        [Fact]
+        public void EnsureRelativeAcmeAccountKeyPemFile_WhenRecreatedMultipleTimes_WritesDeterministicPemContent()
+        {
+            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            _ = Directory.CreateDirectory(certDirectory);
+            string keyFilePath = Path.Combine(certDirectory, "account.key");
+
+            if (File.Exists(keyFilePath))
+            {
+                File.Delete(keyFilePath);
+            }
+
+            _ = EnsureRelativeAcmeAccountKeyPemFile();
+            string first = File.ReadAllText(keyFilePath);
+
+            File.Delete(keyFilePath);
+
+            _ = EnsureRelativeAcmeAccountKeyPemFile();
+            string second = File.ReadAllText(keyFilePath);
+
+            Assert.Equal(DeterministicAcmeAccountPrivateKeyPem, first);
+            Assert.Equal(DeterministicAcmeAccountPrivateKeyPem, second);
+            Assert.Equal(first, second);
+            Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
         }
 
         /// <summary>
@@ -3538,8 +3595,6 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 return fileName;
             }
 
-            using RSA rsa = RSA.Create(2048);
-            string pem = rsa.ExportPkcs8PrivateKeyPem();
             string tempPath = CertificateFileConventions.BuildAtomicTempPath(keyFilePath);
 
             try
@@ -3547,7 +3602,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     using StreamWriter writer = new(stream);
-                    writer.Write(pem);
+                    writer.Write(DeterministicAcmeAccountPrivateKeyPem);
                     writer.Flush();
                     stream.Flush(true);
                 }
