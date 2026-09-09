@@ -767,9 +767,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         [Fact]
         public async Task RunAsync_WhenFoundPayloadWriteProgressesSlowly_DoesNotTimeoutWhenEachChunkProgressesWithinDeadline()
         {
+            TimeSpan ioProgressTimeout = TimeSpan.FromSeconds(1);
             byte[] payload = Encoding.ASCII.GetBytes(new string('x', 128 * 1024));
             byte[] request = ListenerProtocolEncoder.EncodeGetRequest(601, "30edc94157aa16fe644a45a1f1ffe160");
-            SlowProgressFoundTransport transport = new(request, perWriteDelay: TimeSpan.FromMilliseconds(300));
+            SlowProgressFoundTransport transport = new(
+                request,
+                ioProgressTimeout,
+                perWriteDelay: TimeSpan.FromMilliseconds(300));
             BlockingAllRequestsHandler handler = new();
             ListenerProtocolSession session = new(
                 transport,
@@ -783,7 +787,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             await runTask.ConfigureAwait(false);
 
             Assert.True(transport.WriteCallCount > 2);
-            Assert.True(transport.TotalWriteDelay >= TimeSpan.FromSeconds(1));
+            Assert.True(transport.MaxAcceptedWriteBytes > 0);
+            Assert.InRange(transport.MaxAcceptedWriteBytes, 1, 32 * 1024);
+            Assert.True(transport.TotalWriteDelay > ioProgressTimeout);
             Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
         }
 
@@ -2082,6 +2088,91 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
         }
 
+        private sealed class DelayedProgressStream : Stream
+        {
+            private readonly TimeSpan _perWriteDelay;
+
+            internal DelayedProgressStream(TimeSpan perWriteDelay)
+            {
+                if (perWriteDelay <= TimeSpan.Zero)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(perWriteDelay));
+                }
+
+                _perWriteDelay = perWriteDelay;
+            }
+
+            public override bool CanRead => true;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => true;
+
+            public override long Length => throw new NotSupportedException();
+
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                _ = buffer;
+                _ = offset;
+                _ = count;
+                return 0;
+            }
+
+            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                _ = buffer;
+                _ = cancellationToken;
+                return ValueTask.FromResult(0);
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                _ = buffer;
+                _ = offset;
+                _ = count;
+            }
+
+            public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                _ = buffer;
+                await Task.Delay(_perWriteDelay, cancellationToken).ConfigureAwait(false);
+            }
+
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override Task FlushAsync(CancellationToken cancellationToken)
+            {
+                _ = cancellationToken;
+                return Task.CompletedTask;
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                _ = offset;
+                _ = origin;
+                throw new NotSupportedException();
+            }
+
+            public override void SetLength(long value)
+            {
+                _ = value;
+                throw new NotSupportedException();
+            }
+        }
+
         private sealed class WriterFaultWhileReaderActiveTransport : IListenerProtocolSessionTransport
         {
             private readonly byte[] _request;
@@ -2230,21 +2321,25 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         private sealed class SlowProgressFoundTransport : IListenerProtocolSessionTransport
         {
             private readonly byte[] _request;
+            private readonly StreamListenerProtocolSessionTransport _transport;
             private readonly TimeSpan _perWriteDelay;
             private int _readStep;
             private int _writeCallCount;
-            private long _totalWriteDelayTicks;
+            private int _maxAcceptedWriteBytes;
             private bool _disposed;
 
-            internal SlowProgressFoundTransport(byte[] request, TimeSpan perWriteDelay)
+            internal SlowProgressFoundTransport(byte[] request, TimeSpan ioProgressTimeout, TimeSpan perWriteDelay)
             {
                 _request = request;
                 _perWriteDelay = perWriteDelay;
+                _transport = new StreamListenerProtocolSessionTransport(new DelayedProgressStream(perWriteDelay), ioProgressTimeout);
             }
 
             internal int WriteCallCount => Volatile.Read(ref _writeCallCount);
 
-            internal TimeSpan TotalWriteDelay => TimeSpan.FromTicks(Volatile.Read(ref _totalWriteDelayTicks));
+            internal TimeSpan TotalWriteDelay => TimeSpan.FromTicks((long)WriteCallCount * _perWriteDelay.Ticks);
+
+            internal int MaxAcceptedWriteBytes => Volatile.Read(ref _maxAcceptedWriteBytes);
 
             public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
             {
@@ -2276,16 +2371,35 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                     throw new ObjectDisposedException(nameof(SlowProgressFoundTransport));
                 }
 
+                int accepted = await _transport.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
                 _ = Interlocked.Increment(ref _writeCallCount);
-                await Task.Delay(_perWriteDelay, cancellationToken).ConfigureAwait(false);
-                _ = Interlocked.Add(ref _totalWriteDelayTicks, _perWriteDelay.Ticks);
-                return buffer.Length;
+                UpdateMaxAcceptedWriteBytes(accepted);
+                return accepted;
             }
 
-            public ValueTask DisposeAsync()
+            public async ValueTask DisposeAsync()
             {
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
-                return ValueTask.CompletedTask;
+                await _transport.DisposeAsync().ConfigureAwait(false);
+            }
+
+            private void UpdateMaxAcceptedWriteBytes(int accepted)
+            {
+                int currentMax;
+                do
+                {
+                    currentMax = Volatile.Read(ref _maxAcceptedWriteBytes);
+                    if (accepted <= currentMax)
+                    {
+                        return;
+                    }
+                }
+                while (Interlocked.CompareExchange(ref _maxAcceptedWriteBytes, accepted, currentMax) != currentMax);
             }
         }
 
