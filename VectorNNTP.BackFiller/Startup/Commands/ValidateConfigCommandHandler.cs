@@ -111,6 +111,7 @@ namespace VectorNNTP.Backfiller.Startup.Commands
                 warnings,
                 new PhysicalSystemMemoryProvider(),
                 includeListenerCertificateValidation: false));
+            ConfigurationValidator.AppendObsoleteLetsEncryptEnabledError(configuration, errors);
 
             if (errors.Count == 0)
             {

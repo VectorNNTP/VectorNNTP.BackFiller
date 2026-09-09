@@ -207,15 +207,30 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 .Get<BackFillerOptions>();
 
             List<(string Setting, string Error)> errors = ValidateBackFillerOptions(backFiller, warnings, physicalSystemMemoryProvider, includeListenerCertificateValidation);
-
-            if (configuration["BackFiller:LetsEncrypt:Enabled"] is not null)
-            {
-                errors.Add((
-                    "BackFiller:LetsEncrypt:Enabled",
-                    "BackFiller:LetsEncrypt:Enabled is no longer supported. TLS listener certificate management is mandatory and this key must be removed."));
-            }
+            AppendObsoleteLetsEncryptEnabledError(configuration, errors);
 
             return errors;
+        }
+
+        /// <summary>
+        /// Appends a blocking validation error when obsolete <c>BackFiller:LetsEncrypt:Enabled</c> input is present.
+        /// </summary>
+        /// <param name="configuration">Configuration root containing raw keys from all providers.</param>
+        /// <param name="errors">Collector receiving the obsolete-setting diagnostic.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="configuration"/> or <paramref name="errors"/> is <see langword="null"/>.</exception>
+        internal static void AppendObsoleteLetsEncryptEnabledError(IConfiguration configuration, List<(string Setting, string Error)> errors)
+        {
+            ArgumentNullException.ThrowIfNull(configuration);
+            ArgumentNullException.ThrowIfNull(errors);
+
+            if (configuration["BackFiller:LetsEncrypt:Enabled"] is null)
+            {
+                return;
+            }
+
+            errors.Add((
+                "BackFiller:LetsEncrypt:Enabled",
+                "BackFiller:LetsEncrypt:Enabled is no longer supported. TLS listener certificate management is mandatory and this key must be removed."));
         }
 
         /// <summary>
