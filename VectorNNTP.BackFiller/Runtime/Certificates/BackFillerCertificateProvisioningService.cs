@@ -151,13 +151,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 CertificateEvaluationResult evaluation = await _evaluateExistingCertificateAsync(letsEncryptOptions, _timeProvider, cancellationToken).ConfigureAwait(false);
                 bool evaluationCertificateTransferred = false;
 
-                if (evaluation.Certificate is not null)
-                {
-                    _evaluatedBundleObserver?.Invoke(evaluation.Certificate);
-                }
-
                 try
                 {
+                    if (evaluation.Certificate is not null)
+                    {
+                        _evaluatedBundleObserver?.Invoke(evaluation.Certificate);
+                    }
                     if (!evaluation.RequiresRenewal)
                     {
                         if (evaluation.Certificate is not null)
@@ -222,13 +221,12 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             CertificateEvaluationResult evaluation = await _evaluateExistingCertificateAsync(letsEncryptOptions, _timeProvider, cancellationToken).ConfigureAwait(false);
             bool evaluationCertificateTransferred = false;
 
-            if (evaluation.Certificate is not null)
-            {
-                _evaluatedBundleObserver?.Invoke(evaluation.Certificate);
-            }
-
             try
             {
+                if (evaluation.Certificate is not null)
+                {
+                    _evaluatedBundleObserver?.Invoke(evaluation.Certificate);
+                }
                 if (evaluation.IsUsable && !evaluation.RequiresRenewal && evaluation.Certificate is not null)
                 {
                     LogUsingExistingListenerCertificate(_logger, evaluation.Reason);
