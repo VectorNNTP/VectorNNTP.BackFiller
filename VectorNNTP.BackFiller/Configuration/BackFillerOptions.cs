@@ -168,6 +168,20 @@ namespace VectorNNTP.Backfiller.Configuration
         public int ParserAccumulationMaxBytes { get; set; } = 262144;
 
         /// <summary>
+        /// Gets or sets the maximum time, in seconds, allowed for an accepted connection to complete TLS server authentication.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:TlsHandshakeTimeoutSeconds is required")]
+        [Range(1, 300, ErrorMessage = "BackFiller:Listener:TlsHandshakeTimeoutSeconds must be between 1 and 300")]
+        public int TlsHandshakeTimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Gets or sets the maximum no-progress interval, in seconds, for one listener-session read or write operation.
+        /// </summary>
+        [Required(ErrorMessage = "BackFiller:Listener:IoProgressTimeoutSeconds is required")]
+        [Range(1, 600, ErrorMessage = "BackFiller:Listener:IoProgressTimeoutSeconds must be between 1 and 600")]
+        public int IoProgressTimeoutSeconds { get; set; } = 60;
+
+        /// <summary>
         /// Gets or sets the maximum time, in seconds, to wait for ReceiptAck after a Found transfer is fully completed.
         /// </summary>
         [Required(ErrorMessage = "BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds is required")]

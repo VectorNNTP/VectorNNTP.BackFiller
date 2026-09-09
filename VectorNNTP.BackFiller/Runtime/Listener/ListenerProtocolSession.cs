@@ -76,6 +76,8 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             ListenerRuntimeOptions resolvedListenerOptions = listenerOptions
                 ?? new ListenerRuntimeOptions(
                     ParserAccumulationMaxBytes: 262144,
+                    TlsHandshakeTimeout: TimeSpan.FromSeconds(30),
+                    IoProgressTimeout: TimeSpan.FromSeconds(60),
                     AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
                     MaxQueuedFoundPayloadBytes: 67108864,
                     MaxActiveConnections: 1024);
@@ -146,7 +148,8 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// <param name="cancellationToken">Host cancellation token for session termination.</param>
         internal async Task RunAsync(CancellationToken cancellationToken)
         {
-            Task runTask;
+            Task readerTask;
+            Task writerTask;
             CancellationToken sessionToken;
 
             lock (_stateGate)
@@ -164,32 +167,67 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 sessionToken = linked.Token;
                 _writerTask = RunWriterAsync(sessionToken);
                 _runTask = RunReadLoopAsync(sessionToken);
-                runTask = _runTask;
+                readerTask = _runTask;
+                writerTask = _writerTask;
             }
 
-            Exception? readFault = null;
-            try
+            static async Task<Exception?> ObserveFaultAsync(Task task, CancellationToken token)
             {
-                await runTask.ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (sessionToken.IsCancellationRequested)
-            {
-            }
-            catch (Exception ex)
-            {
-                readFault = ex;
+                try
+                {
+                    await task.ConfigureAwait(false);
+                    return null;
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    return ex;
+                }
             }
 
-            if (readFault is not null)
+            Exception? readFault;
+            Exception? writerFault = null;
+            Task completedTask = await Task.WhenAny(readerTask, writerTask).ConfigureAwait(false);
+
+            if (ReferenceEquals(completedTask, readerTask))
             {
-                BeginForcedShutdown();
+                readFault = await ObserveFaultAsync(readerTask, sessionToken).ConfigureAwait(false);
+                if (readFault is not null)
+                {
+                    BeginForcedShutdown();
+                }
+                else if (State != ListenerProtocolSessionState.ForcedShutdown)
+                {
+                    BeginGracefulShutdown();
+                }
             }
-            else if (State != ListenerProtocolSessionState.ForcedShutdown)
+            else
             {
-                BeginGracefulShutdown();
+                writerFault = await ObserveFaultAsync(writerTask, sessionToken).ConfigureAwait(false);
+                if (writerFault is not null || State != ListenerProtocolSessionState.ForcedShutdown)
+                {
+                    BeginForcedShutdown();
+                }
+
+                readFault = await ObserveFaultAsync(readerTask, sessionToken).ConfigureAwait(false);
+                if (readFault is not null)
+                {
+                    BeginForcedShutdown();
+                }
             }
 
             await EnsureDrainAndStopAsync().ConfigureAwait(false);
+
+            writerFault ??= await ObserveFaultAsync(writerTask, sessionToken).ConfigureAwait(false);
+            readFault ??= await ObserveFaultAsync(readerTask, sessionToken).ConfigureAwait(false);
+
+            if (writerFault is not null)
+            {
+                throw new InvalidOperationException("Listener protocol session terminated due to writer failure.", writerFault);
+            }
 
             if (readFault is not null)
             {
