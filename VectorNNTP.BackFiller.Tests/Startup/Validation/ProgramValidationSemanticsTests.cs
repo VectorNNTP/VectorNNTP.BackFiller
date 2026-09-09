@@ -12,10 +12,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
 using System.Security.Cryptography;
-using System.Text;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Configuration;
-using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Startup.Commands;
 using VectorNNTP.Backfiller.Startup.Configuration;
 using VectorNNTP.Backfiller.Startup.Validation;
@@ -127,10 +125,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             try
             {
-                string returnedFileName = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                string returnedFileName = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
 
                 Assert.Equal("account.key", returnedFileName);
-                Assert.Equal(LoadCanonicalAcmeFixturePem(), File.ReadAllText(keyFilePath));
+                Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
                 Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
             }
             finally
@@ -150,10 +148,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             try
             {
-                string returnedFileName = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                string returnedFileName = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
 
                 Assert.Equal("account.key", returnedFileName);
-                Assert.Equal(LoadCanonicalAcmeFixturePem(), File.ReadAllText(keyFilePath));
+                Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
                 Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
                 Assert.False(string.IsNullOrWhiteSpace(pem));
             }
@@ -177,9 +175,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             try
             {
-                _ = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
 
-                Assert.Equal(LoadCanonicalAcmeFixturePem(), File.ReadAllText(keyFilePath));
+                Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
                 Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
             }
             finally
@@ -194,13 +192,13 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
             _ = Directory.CreateDirectory(certDirectory);
             string keyFilePath = Path.Combine(certDirectory, "account.key");
-            string canonical = LoadCanonicalAcmeFixturePem();
+            string canonical = TestAcmeAccountKeyFixture.Pem;
             File.WriteAllText(keyFilePath, canonical);
             DateTime before = File.GetLastWriteTimeUtc(keyFilePath);
 
             try
             {
-                _ = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
 
                 DateTime after = File.GetLastWriteTimeUtc(keyFilePath);
                 Assert.Equal(canonical, File.ReadAllText(keyFilePath));
@@ -221,15 +219,15 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
             try
             {
-                _ = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
                 string first = File.ReadAllText(keyFilePath);
 
                 File.Delete(keyFilePath);
 
-                _ = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                _ = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
                 string second = File.ReadAllText(keyFilePath);
 
-                string canonical = LoadCanonicalAcmeFixturePem();
+                string canonical = TestAcmeAccountKeyFixture.Pem;
                 Assert.Equal(canonical, first);
                 Assert.Equal(canonical, second);
                 Assert.Equal(first, second);
@@ -3576,7 +3574,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         {
             if (includeRabbitMqBaseline)
             {
-                string acmeAccountKeyPem = EnsureRelativeAcmeAccountKeyPemFile();
+                string acmeAccountKeyPem = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile();
                 Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
                 {
                     ["BackFiller:BindPort"] = "119",
@@ -3634,93 +3632,6 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         private static IConfiguration BuildConfiguration(Dictionary<string, string?> values, bool includeRabbitMqBaseline = true)
         {
             return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
-        }
-
-        private static string EnsureRelativeAcmeAccountKeyPemFile(string? fixtureDirectory = null)
-        {
-            string certDirectory = string.IsNullOrWhiteSpace(fixtureDirectory)
-                ? Path.Combine(AppContext.BaseDirectory, "certs")
-                : fixtureDirectory;
-            _ = Directory.CreateDirectory(certDirectory);
-
-            string canonicalPem = LoadCanonicalAcmeFixturePem();
-            byte[] canonicalPrivateKey = TestAcmeAccountKeyFixture.Pkcs8Bytes;
-
-            string fileName = "account.key";
-            string keyFilePath = Path.Combine(certDirectory, fileName);
-
-            if (TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] existingPrivateKey) && existingPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
-            {
-                return fileName;
-            }
-
-            string tempPath = CertificateFileConventions.BuildAtomicTempPath(keyFilePath);
-
-            try
-            {
-                using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                {
-                    using StreamWriter writer = new(stream, Encoding.UTF8);
-                    writer.Write(canonicalPem);
-                    writer.Flush();
-                    stream.Flush(true);
-                }
-
-                File.Move(tempPath, keyFilePath, overwrite: true);
-            }
-            finally
-            {
-                if (File.Exists(tempPath))
-                {
-                    File.Delete(tempPath);
-                }
-            }
-
-            if (!TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] finalPrivateKey) || !finalPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
-            {
-                throw new InvalidOperationException("Failed to create a valid deterministic ACME account key test fixture.");
-            }
-
-            return fileName;
-        }
-
-        private static string LoadCanonicalAcmeFixturePem()
-        {
-            string pem = TestAcmeAccountKeyFixture.Pem;
-            _ = ReadPrivateKeyPkcs8Bytes(pem);
-            return pem;
-        }
-
-        private static byte[] ReadPrivateKeyPkcs8Bytes(string pem)
-        {
-            using RSA rsa = RSA.Create();
-            rsa.ImportFromPem(pem);
-            return rsa.ExportPkcs8PrivateKey();
-        }
-
-        private static bool TryReadPrivateKeyPkcs8Bytes(string keyFilePath, out byte[] privateKey)
-        {
-            privateKey = [];
-            if (!File.Exists(keyFilePath))
-            {
-                return false;
-            }
-
-            try
-            {
-                string pem = File.ReadAllText(keyFilePath);
-                if (string.IsNullOrWhiteSpace(pem))
-                {
-                    return false;
-                }
-
-                privateKey = ReadPrivateKeyPkcs8Bytes(pem);
-                return true;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException or ArgumentException)
-            {
-                return false;
-            }
         }
 
         private static bool TryReadValidPrivateKeyPem(string keyFilePath, out string pem)

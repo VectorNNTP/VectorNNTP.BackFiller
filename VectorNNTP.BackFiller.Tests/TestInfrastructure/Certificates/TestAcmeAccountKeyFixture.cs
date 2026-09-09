@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Runtime and startup
-// Shared test fixture for process-wide deterministic ACME account key material.
+// Shared test fixture for process-scoped stable ACME account key material.
 
 using System.Security.Cryptography;
 
