@@ -86,10 +86,9 @@ jobs:
               --type Task \
               --parent "$PARENT_ISSUE"
 
-            # POST/PUT semantics accept the single-select option name. PUT is
-            # intentionally used only with the Priority field value here; the
-            # issue currently has no other issue-field values in this migration
-            # set, and the verification step below confirms the result.
+            # For a single-select issue field, the REST API accepts the option
+            # name. PUT is used because this migration owns the Priority value
+            # and intentionally sets exactly that field value.
             gh api \
               --method PUT \
               -H 'Accept: application/vnd.github+json' \
@@ -123,9 +122,13 @@ jobs:
 
           for issue in "${!priorities[@]}"; do
             expected_priority="${priorities[$issue]}"
-            issue_json="$(gh api "/repos/$REPO/issues/$issue")"
-            actual_type="$(jq -r '.type.name // empty' <<<"$issue_json")"
-            actual_parent="$(jq -r '.parent.number // empty' <<<"$issue_json")"
+
+            # gh issue view exposes the native GraphQL-backed issueType and
+            # parent fields directly, avoiding assumptions about REST issue
+            # response property names.
+            issue_meta="$(gh issue view "$issue" --repo "$REPO" --json issueType,parent)"
+            actual_type="$(jq -r '.issueType.name // empty' <<<"$issue_meta")"
+            actual_parent="$(jq -r '.parent.number // empty' <<<"$issue_meta")"
 
             values_json="$(gh api \
               -H 'Accept: application/vnd.github+json' \
