@@ -312,25 +312,32 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             try
             {
-                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-
                 int releasedCount = 0;
                 int releaseTarget = int.MaxValue;
-                TaskCompletionSource<bool> timeoutReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> releaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 service.OnConnectionSlotReleasedForTesting = () =>
                 {
                     int current = Interlocked.Increment(ref releasedCount);
                     if (current >= Volatile.Read(ref releaseTarget))
                     {
-                        timeoutReleaseObserved.TrySetResult(true);
+                        releaseObserved.TrySetResult(true);
                     }
                 };
+
+                TaskCompletionSource<bool> readinessProbeReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                releaseObserved = readinessProbeReleaseObserved;
+                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await readinessProbeReleaseObserved.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                TaskCompletionSource<bool> timeoutReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                releaseObserved = timeoutReleaseObserved;
+                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
 
                 Stopwatch timeoutStopwatch = Stopwatch.StartNew();
 
                 using TcpClient stalled = new();
                 await stalled.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
-                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
 
                 byte[] closureProbe = new byte[1];
                 Task<int> closureReadTask = stalled.GetStream().ReadAsync(closureProbe).AsTask();
@@ -758,24 +765,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             Task runTask = service.StartAsync(runCts.Token);
             try
             {
-                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-
                 int releasedCount = 0;
                 int releaseTarget = int.MaxValue;
-                TaskCompletionSource<bool> idleReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> releaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 service.OnConnectionSlotReleasedForTesting = () =>
                 {
                     int current = Interlocked.Increment(ref releasedCount);
                     if (current >= Volatile.Read(ref releaseTarget))
                     {
-                        idleReleaseObserved.TrySetResult(true);
+                        releaseObserved.TrySetResult(true);
                     }
                 };
+
+                TaskCompletionSource<bool> readinessProbeReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                releaseObserved = readinessProbeReleaseObserved;
+                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await readinessProbeReleaseObserved.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                TaskCompletionSource<bool> idleReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                releaseObserved = idleReleaseObserved;
+                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
 
                 using TcpClient idleClient = new();
                 await idleClient.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
                 using SslStream idleSsl = await AuthenticateClientAsync(idleClient).ConfigureAwait(false);
-                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
 
                 Stopwatch timeoutStopwatch = Stopwatch.StartNew();
 
@@ -841,24 +855,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             Task runTask = service.StartAsync(runCts.Token);
             try
             {
-                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-
                 int releasedCount = 0;
                 int releaseTarget = int.MaxValue;
-                TaskCompletionSource<bool> writerTimeoutReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> releaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 service.OnConnectionSlotReleasedForTesting = () =>
                 {
                     int current = Interlocked.Increment(ref releasedCount);
                     if (current >= Volatile.Read(ref releaseTarget))
                     {
-                        writerTimeoutReleaseObserved.TrySetResult(true);
+                        releaseObserved.TrySetResult(true);
                     }
                 };
+
+                TaskCompletionSource<bool> readinessProbeReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                releaseObserved = readinessProbeReleaseObserved;
+                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await readinessProbeReleaseObserved.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                TaskCompletionSource<bool> writerTimeoutReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                releaseObserved = writerTimeoutReleaseObserved;
+                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
 
                 using TcpClient stalled = new();
                 await stalled.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
                 using SslStream stalledSsl = await AuthenticateClientAsync(stalled).ConfigureAwait(false);
-                Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
 
                 byte[] foundRequest = ListenerProtocolEncoder.EncodeGetRequest(1701, messageIdMd5);
                 await stalledSsl.WriteAsync(foundRequest).ConfigureAwait(false);
