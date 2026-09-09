@@ -26,6 +26,8 @@ This document describes the authoritative externally configurable contract repre
 | BackFiller:DirLogs | string? | none | Yes | non-empty; resolvable path; creatable dir; write/read/replace/delete probe must pass | OperationalDirectoryValidator + Serilog file sink target directory | Yes |
 | BackFiller:DirCerts | string? | none | Yes | non-empty; resolvable path; creatable dir; capability probe; needed for account-key resolution | OperationalDirectoryValidator + certificate/key path projection | Yes |
 | BackFiller:Listener:ParserAccumulationMaxBytes | int | 262144 | Yes | 32768..int.MaxValue | Listener protocol buffering hard cap | Yes |
+| BackFiller:Listener:TlsHandshakeTimeoutSeconds | int | 30 | Yes | 1..300 | Bounds accepted-connection TLS handshake lifetime so unauthenticated stalled clients cannot hold a listener slot indefinitely; expiration terminates the affected connection (not the listener service) | Yes |
+| BackFiller:Listener:IoProgressTimeoutSeconds | int | 60 | Yes | 1..600 | Listener transport no-progress timeout for read/write operations; this is a progress/no-progress window (not a total transfer or connection-duration timeout). Legitimately slow transfers may continue while progress is observed; stalled operations are terminated and capacity is released | Yes |
 | BackFiller:Listener:AwaitingReceiptAckTimeoutSeconds | int | 30 | Yes | 1..300 | Receipt-ack wait timeout per connection | Yes |
 | BackFiller:Listener:MaxQueuedFoundPayloadBytes | int | 67108864 | Yes | 1..int.MaxValue | Per-connection queued/in-flight Found payload budget | Yes |
 | BackFiller:Listener:MaxActiveConnections | int | 1024 | Yes | 1..int.MaxValue | Listener admission/backpressure cap | Yes |

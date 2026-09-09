@@ -131,15 +131,18 @@ namespace VectorNNTP.Backfiller.Configuration
                 SweepInterval: TimeSpan.FromSeconds(1));
 
         /// <summary>
-        /// Gets effective Listener runtime options for parser bounds, receipt-ack deadline, Found payload pressure, and active connection cap.
+        /// Gets effective Listener runtime options for parser bounds, TLS/session no-progress deadlines, receipt-ack deadline, Found payload pressure, and active connection cap.
         /// </summary>
         /// <value>
         /// Configured Listener runtime options when present; otherwise defaults to a 256 KiB parser accumulation limit,
-        /// 30-second receipt-ack timeout, 64 MiB queued/in-flight Found payload budget per connection, and 1024 active connections.
+        /// 30-second TLS handshake timeout, 60-second read/write no-progress timeout, 30-second receipt-ack timeout,
+        /// 64 MiB queued/in-flight Found payload budget per connection, and 1024 active connections.
         /// </value>
         internal ListenerRuntimeOptions EffectiveListener => Listener
             ?? new ListenerRuntimeOptions(
                 ParserAccumulationMaxBytes: 262144,
+                TlsHandshakeTimeout: TimeSpan.FromSeconds(30),
+                IoProgressTimeout: TimeSpan.FromSeconds(60),
                 AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
                 MaxQueuedFoundPayloadBytes: 67108864,
                 MaxActiveConnections: 1024);

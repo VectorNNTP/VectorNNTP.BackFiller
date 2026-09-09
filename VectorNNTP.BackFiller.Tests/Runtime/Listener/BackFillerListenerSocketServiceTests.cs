@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the back filler listener socket service test suite.
 
 using System.Buffers;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -15,6 +16,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
@@ -286,6 +288,91 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
             finally
             {
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WhenTlsHandshakeStalls_TimesOutAndReleasesCapacityForNextConnection()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-h10-handshake-timeout.example.com");
+
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(
+                port,
+                ["127.0.0.1"],
+                maxActiveConnections: 1,
+                tlsHandshakeTimeoutSeconds: 3,
+                ioProgressTimeoutSeconds: 30,
+                awaitingReceiptAckTimeoutSeconds: 30);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+
+            ShutdownCoordinator shutdown = new();
+            CapturingLoggerProvider loggerProvider = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                loggerProvider.CreateLogger<BackFillerListenerSocketService>());
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+
+            try
+            {
+                ConnectionSlotReleasePhaseObserver releaseObserver = new();
+                service.OnConnectionSlotReleasedForTesting = releaseObserver.OnConnectionSlotReleased;
+
+                Task readinessProbeReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await readinessProbeReleaseObserved.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                Task timeoutReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                int scenarioLogStartIndex = loggerProvider.Entries.Count;
+
+                Stopwatch timeoutStopwatch = Stopwatch.StartNew();
+
+                using TcpClient stalled = new();
+                await stalled.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+
+                byte[] closureProbe = new byte[1];
+                Task<int> closureReadTask = stalled.GetStream().ReadAsync(closureProbe).AsTask();
+                int read = await closureReadTask.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                await timeoutReleaseObserved.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                timeoutStopwatch.Stop();
+
+                Assert.Equal(0, read);
+                Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
+                int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries.GetRange(scenarioLogStartIndex, scenarioLogCount);
+                Assert.Contains(
+                    scenarioLogs,
+                    static entry => entry.EventId.Id == 2709
+                        && entry.StateValues.TryGetValue("Reason", out object? reason)
+                        && reason is string reasonText
+                        && reasonText == "tls-handshake");
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
+
+                using TcpClient recovered = new();
+                await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream recoveredSsl = await AuthenticateClientAsync(recovered).ConfigureAwait(false);
+                Assert.True(recoveredSsl.IsAuthenticated);
+
+                recovered.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(recoveredSsl).ConfigureAwait(false);
+
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                shutdown.SignalForcedShutdown();
                 await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
                 await runTask.ConfigureAwait(false);
                 state.Dispose();
@@ -662,6 +749,226 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task StartAsync_WhenEstablishedClientIsIdle_TerminatesSessionAfterIoProgressTimeoutAndLogsConnectionTimedOut()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-h10-idle-timeout.example.com");
+
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(
+                port,
+                ["127.0.0.1"],
+                maxActiveConnections: 1,
+                tlsHandshakeTimeoutSeconds: 30,
+                ioProgressTimeoutSeconds: 3,
+                awaitingReceiptAckTimeoutSeconds: 30);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            CapturingLoggerProvider loggerProvider = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                loggerProvider.CreateLogger<BackFillerListenerSocketService>());
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                ConnectionSlotReleasePhaseObserver releaseObserver = new();
+                service.OnConnectionSlotReleasedForTesting = releaseObserver.OnConnectionSlotReleased;
+
+                Task readinessProbeReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await readinessProbeReleaseObserved.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                Task idleReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                int scenarioLogStartIndex = loggerProvider.Entries.Count;
+
+                using TcpClient idleClient = new();
+                await idleClient.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream idleSsl = await AuthenticateClientAsync(idleClient).ConfigureAwait(false);
+
+                Stopwatch timeoutStopwatch = Stopwatch.StartNew();
+
+                byte[] closureProbe = new byte[1];
+                Task<int> closureReadTask = idleSsl.ReadAsync(closureProbe).AsTask();
+                int read = await closureReadTask.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                await idleReleaseObserved.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                timeoutStopwatch.Stop();
+
+                Assert.Equal(0, read);
+                Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
+                int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries.GetRange(scenarioLogStartIndex, scenarioLogCount);
+                Assert.Contains(
+                    scenarioLogs,
+                    static entry => entry.EventId.Id == 2709
+                        && entry.StateValues.TryGetValue("Reason", out object? reason)
+                        && reason is string reasonText
+                        && reasonText == "io-progress");
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
+
+                using TcpClient recovered = new();
+                await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream recoveredSsl = await AuthenticateClientAsync(recovered).ConfigureAwait(false);
+                Assert.True(recoveredSsl.IsAuthenticated);
+
+                recovered.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(recoveredSsl).ConfigureAwait(false);
+
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
+        public async Task StartAsync_WhenClientStopsReadingButKeepsSending_WriterTimeoutTerminatesSessionAndLogsConnectionTimedOut()
+        {
+            const string messageId = "<stage6d-h10-writer-timeout@example.com>";
+
+            int port = ReserveEphemeralTcpPort();
+            using X509Certificate2 cert = CreateServerCertificate("bf-listener-h10-writer-timeout.example.com");
+
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(
+                port,
+                ["127.0.0.1"],
+                maxActiveConnections: 1,
+                tlsHandshakeTimeoutSeconds: 30,
+                ioProgressTimeoutSeconds: 3,
+                awaitingReceiptAckTimeoutSeconds: 30);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            string messageIdMd5 = RetainArticle(retentionAuthority, messageId, new string('p', 16 * 1024 * 1024));
+
+            BackFillerCertificateState state = new();
+            state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
+            ShutdownCoordinator shutdown = new();
+            CapturingLoggerProvider loggerProvider = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                loggerProvider.CreateLogger<BackFillerListenerSocketService>());
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+            try
+            {
+                ConnectionSlotReleasePhaseObserver releaseObserver = new();
+                service.OnConnectionSlotReleasedForTesting = releaseObserver.OnConnectionSlotReleased;
+
+                Task readinessProbeReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await readinessProbeReleaseObserved.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                Task writerTimeoutReleaseObserved = releaseObserver.BeginNextPhaseAndGetTask();
+                int scenarioLogStartIndex = loggerProvider.Entries.Count;
+
+                using TcpClient stalled = new();
+                await stalled.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream stalledSsl = await AuthenticateClientAsync(stalled).ConfigureAwait(false);
+
+                byte[] foundRequest = ListenerProtocolEncoder.EncodeGetRequest(1701, messageIdMd5);
+                await stalledSsl.WriteAsync(foundRequest).ConfigureAwait(false);
+
+                TaskCompletionSource<bool> keepReaderAliveWriteObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> keepReaderAliveWriteObservedAfterTimeoutWait = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                using CancellationTokenSource keepReaderAliveProducerCts = new();
+                int keepReaderAliveWritesSucceeded = 0;
+                int observeWritesAfterTimeoutWait = 0;
+                Task keepReaderAliveProducerTask = Task.Run(async () =>
+                {
+                    uint requestId = 1702;
+                    while (true)
+                    {
+                        try
+                        {
+                            keepReaderAliveProducerCts.Token.ThrowIfCancellationRequested();
+                            byte[] keepReaderAliveRequest = ListenerProtocolEncoder.EncodeGetRequest(requestId, "30edc94157aa16fe644a45a1f1ffe160");
+                            await stalledSsl.WriteAsync(keepReaderAliveRequest, keepReaderAliveProducerCts.Token).ConfigureAwait(false);
+                            _ = Interlocked.Increment(ref keepReaderAliveWritesSucceeded);
+                            keepReaderAliveWriteObserved.TrySetResult(true);
+                            if (Volatile.Read(ref observeWritesAfterTimeoutWait) != 0)
+                            {
+                                keepReaderAliveWriteObservedAfterTimeoutWait.TrySetResult(true);
+                            }
+
+                            requestId++;
+                        }
+                        catch (OperationCanceledException) when (keepReaderAliveProducerCts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        catch (IOException ex) when (IsExpectedTlsAbruptClosure(ex))
+                        {
+                            return;
+                        }
+                    }
+                });
+
+                await keepReaderAliveWriteObserved.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+
+                Stopwatch timeoutStopwatch = Stopwatch.StartNew();
+                try
+                {
+                    Volatile.Write(ref observeWritesAfterTimeoutWait, 1);
+                    await keepReaderAliveWriteObservedAfterTimeoutWait.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                    await writerTimeoutReleaseObserved.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                    await AwaitRemoteClosureAsync(stalledSsl).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    keepReaderAliveProducerCts.Cancel();
+                    await keepReaderAliveProducerTask.ConfigureAwait(false);
+                    timeoutStopwatch.Stop();
+                }
+
+                Assert.True(Volatile.Read(ref keepReaderAliveWritesSucceeded) >= 2);
+
+                Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
+                int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries.GetRange(scenarioLogStartIndex, scenarioLogCount);
+                Assert.Contains(
+                    scenarioLogs,
+                    static entry => entry.EventId.Id == 2709
+                        && entry.StateValues.TryGetValue("Reason", out object? reason)
+                        && reason is string reasonText
+                        && reasonText == "io-progress");
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2705);
+
+                using TcpClient recovered = new();
+                await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+                using SslStream recoveredSsl = await AuthenticateClientAsync(recovered).ConfigureAwait(false);
+                Assert.True(recoveredSsl.IsAuthenticated);
+
+                recovered.Client.Shutdown(SocketShutdown.Send);
+                await AwaitRemoteClosureAsync(recoveredSsl).ConfigureAwait(false);
+
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                shutdown.SignalForcedShutdown();
+                await service.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await runTask.ConfigureAwait(false);
+                state.Dispose();
+                shutdown.Dispose();
+            }
+        }
+
+        [Fact]
         public async Task StopAsync_WhenForcedEscalationOccursWhileWaiting_CancelsFinalWaitAndCompletesShutdown()
         {
             int port = ReserveEphemeralTcpPort();
@@ -835,12 +1142,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             byte[] single = new byte[1];
             while (true)
             {
-                int read = await sslStream.ReadAsync(single.AsMemory(0, 1)).ConfigureAwait(false);
-                if (read == 0)
+                try
+                {
+                    int read = await sslStream.ReadAsync(single.AsMemory(0, 1)).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        return;
+                    }
+                }
+                catch (IOException ex) when (IsExpectedTlsAbruptClosure(ex))
                 {
                     return;
                 }
             }
+        }
+
+        private static bool IsExpectedTlsAbruptClosure(IOException exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+
+            if (exception.Message.Contains("unexpected EOF", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("0 bytes", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            SocketException? socketException = exception.InnerException as SocketException;
+            return socketException?.SocketErrorCode is SocketError.ConnectionAborted or SocketError.ConnectionReset;
         }
 
         private static async Task AssertTaskRemainsIncompleteAsync(Task task)
@@ -938,6 +1266,104 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             throw new TimeoutException($"Timed out waiting for listener readiness at {address}:{port}.");
         }
 
+        private sealed class ConnectionSlotReleasePhaseObserver
+        {
+            private readonly object _gate = new();
+            private int _releasedCount;
+            private int _releaseTarget = int.MaxValue;
+            private TaskCompletionSource<bool> _releaseObserved = CreatePhaseTaskCompletionSource();
+
+            internal void OnConnectionSlotReleased()
+            {
+                TaskCompletionSource<bool>? observed = null;
+
+                lock (_gate)
+                {
+                    _releasedCount++;
+                    if (_releasedCount >= _releaseTarget)
+                    {
+                        observed = _releaseObserved;
+                    }
+                }
+
+                observed?.TrySetResult(true);
+            }
+
+            internal Task BeginNextPhaseAndGetTask()
+            {
+                lock (_gate)
+                {
+                    TaskCompletionSource<bool> nextObserved = CreatePhaseTaskCompletionSource();
+                    _releaseTarget = _releasedCount + 1;
+                    _releaseObserved = nextObserved;
+                    return nextObserved.Task;
+                }
+            }
+
+            private static TaskCompletionSource<bool> CreatePhaseTaskCompletionSource()
+            {
+                return new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+
+        private sealed class CapturingLoggerProvider
+        {
+            private readonly object _gate = new();
+
+            internal List<LogEntry> Entries { get; } = [];
+
+            internal ILogger<T> CreateLogger<T>()
+            {
+                return new CapturingLogger<T>(Entries, _gate);
+            }
+
+            internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
+
+            private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
+            {
+                private readonly List<LogEntry> _entries = entries;
+                private readonly object _gate = gate;
+
+                public IDisposable BeginScope<TState>(TState state) where TState : notnull
+                {
+                    return NullScope.Instance;
+                }
+
+                public bool IsEnabled(LogLevel logLevel)
+                {
+                    _ = logLevel;
+                    return true;
+                }
+
+                public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                {
+                    string message = formatter(state, exception);
+                    Dictionary<string, object?> stateValues = [];
+                    if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+                    {
+                        foreach (KeyValuePair<string, object?> item in structuredState)
+                        {
+                            stateValues[item.Key] = item.Value;
+                        }
+                    }
+
+                    lock (_gate)
+                    {
+                        _entries.Add(new LogEntry(eventId, logLevel, message, exception, stateValues));
+                    }
+                }
+
+                private sealed class NullScope : IDisposable
+                {
+                    internal static readonly NullScope Instance = new();
+
+                    public void Dispose()
+                    {
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Confirms the reserve ephemeral tcp port behavior.
         /// </summary>
@@ -1018,7 +1444,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         /// <param name="bindPort">The bind port used by this test scenario.</param>
         /// <param name="bindTokens">The bind tokens used by this test scenario.</param>
         /// <returns>The value returned by the create runtime options helper.</returns>
-        private static BackFillerRuntimeOptions CreateRuntimeOptions(int bindPort, IReadOnlyList<string> bindTokens, int maxActiveConnections = 1024)
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(
+            int bindPort,
+            IReadOnlyList<string> bindTokens,
+            int maxActiveConnections = 1024,
+            int tlsHandshakeTimeoutSeconds = 30,
+            int ioProgressTimeoutSeconds = 60,
+            int awaitingReceiptAckTimeoutSeconds = 30)
         {
             BackFillerLetsEncryptRuntimeOptions letsEncrypt = new(
                 CanonicalCertificateSubjectName: "bf-listener.example.com",
@@ -1061,7 +1493,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 WriteBatchCoalesceMicroseconds: 250,
                 Listener: new ListenerRuntimeOptions(
                     ParserAccumulationMaxBytes: 262144,
-                    AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
+                    TlsHandshakeTimeout: TimeSpan.FromSeconds(tlsHandshakeTimeoutSeconds),
+                    IoProgressTimeout: TimeSpan.FromSeconds(ioProgressTimeoutSeconds),
+                    AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(awaitingReceiptAckTimeoutSeconds),
                     MaxQueuedFoundPayloadBytes: 67108864,
                     MaxActiveConnections: maxActiveConnections),
                 LetsEncrypt: letsEncrypt);
