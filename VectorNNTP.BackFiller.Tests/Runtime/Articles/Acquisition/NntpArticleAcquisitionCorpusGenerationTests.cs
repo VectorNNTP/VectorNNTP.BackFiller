@@ -101,6 +101,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         }
 
         /// <summary>
+        /// Validates deterministic corruption helper behavior at the minimum non-empty source boundary.
+        /// </summary>
+        [Fact]
+        public void CorruptDeterministically_WhenSourceIsMinimumLength_ProducesDeterministicMalformedYEncSuffix()
+        {
+            byte[] source = [0x41];
+            int seed = 88;
+            byte[] suffix = "\r\n=yend size=broken crc32=ZZZZZZZZ\r\n"u8.ToArray();
+
+            byte[] corrupted = CorruptDeterministically(source, seed);
+            byte[] repeated = CorruptDeterministically(source, seed);
+
+            Assert.Equal(source.Length + suffix.Length, corrupted.Length);
+            Assert.Equal(corrupted, repeated);
+            Assert.NotEqual(source[0], corrupted[0]);
+
+            string footer = Encoding.ASCII.GetString(corrupted, source.Length, suffix.Length);
+            Assert.Equal("\r\n=yend size=broken crc32=ZZZZZZZZ\r\n", footer);
+            Assert.Contains("size=broken", footer, StringComparison.Ordinal);
+            Assert.Contains("crc32=ZZZZZZZZ", footer, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// Returns a value indicating whether local corpus generation is enabled.
         /// </summary>
         /// <returns><see langword="true"/> when generation is enabled; otherwise <see langword="false"/>.</returns>
@@ -242,7 +265,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         /// <returns>The value returned by the corrupt deterministically helper.</returns>
         private static byte[] CorruptDeterministically(byte[] source, int seed)
         {
-            byte[] output = new byte[source.Length + 16];
+            byte[] suffix = "\r\n=yend size=broken crc32=ZZZZZZZZ\r\n"u8.ToArray();
+            byte[] output = new byte[source.Length + suffix.Length];
             Buffer.BlockCopy(source, 0, output, 0, source.Length);
 
             using SHA256 hash = SHA256.Create();
@@ -254,7 +278,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 output[index] ^= (byte)(0x20 + i);
             }
 
-            byte[] suffix = "\r\n=yend size=broken crc32=ZZZZZZZZ\r\n"u8.ToArray();
             Buffer.BlockCopy(suffix, 0, output, source.Length, suffix.Length);
             return output;
         }
