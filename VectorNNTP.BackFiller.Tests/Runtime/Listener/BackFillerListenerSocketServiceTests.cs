@@ -870,16 +870,59 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 byte[] foundRequest = ListenerProtocolEncoder.EncodeGetRequest(1701, messageIdMd5);
                 await stalledSsl.WriteAsync(foundRequest).ConfigureAwait(false);
 
-                for (uint requestId = 1702; requestId <= 1710; requestId++)
+                TaskCompletionSource<bool> keepReaderAliveWriteObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                TaskCompletionSource<bool> keepReaderAliveWriteObservedAfterTimeoutWait = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                using CancellationTokenSource keepReaderAliveProducerCts = new();
+                int keepReaderAliveWritesSucceeded = 0;
+                int observeWritesAfterTimeoutWait = 0;
+                Task keepReaderAliveProducerTask = Task.Run(async () =>
                 {
-                    byte[] keepReaderAliveRequest = ListenerProtocolEncoder.EncodeGetRequest(requestId, "30edc94157aa16fe644a45a1f1ffe160");
-                    await stalledSsl.WriteAsync(keepReaderAliveRequest).ConfigureAwait(false);
-                }
+                    uint requestId = 1702;
+                    while (true)
+                    {
+                        try
+                        {
+                            keepReaderAliveProducerCts.Token.ThrowIfCancellationRequested();
+                            byte[] keepReaderAliveRequest = ListenerProtocolEncoder.EncodeGetRequest(requestId, "30edc94157aa16fe644a45a1f1ffe160");
+                            await stalledSsl.WriteAsync(keepReaderAliveRequest, keepReaderAliveProducerCts.Token).ConfigureAwait(false);
+                            _ = Interlocked.Increment(ref keepReaderAliveWritesSucceeded);
+                            keepReaderAliveWriteObserved.TrySetResult(true);
+                            if (Volatile.Read(ref observeWritesAfterTimeoutWait) != 0)
+                            {
+                                keepReaderAliveWriteObservedAfterTimeoutWait.TrySetResult(true);
+                            }
+
+                            requestId++;
+                        }
+                        catch (OperationCanceledException) when (keepReaderAliveProducerCts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        catch (IOException ex) when (IsExpectedTlsAbruptClosure(ex))
+                        {
+                            return;
+                        }
+                    }
+                });
+
+                await keepReaderAliveWriteObserved.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
                 Stopwatch timeoutStopwatch = Stopwatch.StartNew();
-                await writerTimeoutReleaseObserved.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
-                await AwaitRemoteClosureAsync(stalledSsl).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
-                timeoutStopwatch.Stop();
+                try
+                {
+                    Volatile.Write(ref observeWritesAfterTimeoutWait, 1);
+                    await keepReaderAliveWriteObservedAfterTimeoutWait.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                    await writerTimeoutReleaseObserved.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                    await AwaitRemoteClosureAsync(stalledSsl).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    keepReaderAliveProducerCts.Cancel();
+                    await keepReaderAliveProducerTask.ConfigureAwait(false);
+                    timeoutStopwatch.Stop();
+                }
+
+                Assert.True(Volatile.Read(ref keepReaderAliveWritesSucceeded) >= 2);
 
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
                 int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;
@@ -1106,8 +1149,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         {
             ArgumentNullException.ThrowIfNull(exception);
 
-            return exception.Message.Contains("unexpected EOF", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("0 bytes", StringComparison.OrdinalIgnoreCase);
+            if (exception.Message.Contains("unexpected EOF", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("0 bytes", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            SocketException? socketException = exception.InnerException as SocketException;
+            return socketException?.SocketErrorCode is SocketError.ConnectionAborted or SocketError.ConnectionReset;
         }
 
         private static async Task AssertTaskRemainsIncompleteAsync(Task task)
