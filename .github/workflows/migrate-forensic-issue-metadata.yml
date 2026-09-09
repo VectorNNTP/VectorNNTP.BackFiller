@@ -87,10 +87,10 @@ jobs:
               --parent "$PARENT_ISSUE"
 
             # For a single-select issue field, the REST API accepts the option
-            # name. PUT is used because this migration owns the Priority value
-            # and intentionally sets exactly that field value.
+            # name. POST adds the requested field value without replacing any
+            # other native issue fields that may already exist.
             gh api \
-              --method PUT \
+              --method POST \
               -H 'Accept: application/vnd.github+json' \
               -H 'X-GitHub-Api-Version: 2026-03-10' \
               "/repos/$REPO/issues/$issue/issue-field-values" \
