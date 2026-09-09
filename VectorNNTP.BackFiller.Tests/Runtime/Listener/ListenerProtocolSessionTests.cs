@@ -688,6 +688,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
+        public async Task StreamListenerProtocolSessionTransport_WhenReadStalls_TimesOutAndDisposes()
+        {
+            BlockingProgressTimeoutStream stream = new();
+            await using StreamListenerProtocolSessionTransport transport = new(stream, TimeSpan.FromMilliseconds(200));
+
+            Task<int> readTask = transport.ReadAsync(new byte[8], CancellationToken.None).AsTask();
+            await stream.WaitForReadEnteredAsync().ConfigureAwait(false);
+
+            TimeoutException timeout = await Assert.ThrowsAsync<TimeoutException>(async () => await readTask.ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.Contains("read exceeded no-progress timeout", timeout.Message, StringComparison.OrdinalIgnoreCase);
+
+            await transport.DisposeAsync().ConfigureAwait(false);
+            await stream.WaitForDisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
+        public async Task StreamListenerProtocolSessionTransport_WhenWriteStalls_TimesOutAndDisposes()
+        {
+            BlockingProgressTimeoutStream stream = new();
+            await using StreamListenerProtocolSessionTransport transport = new(stream, TimeSpan.FromMilliseconds(200));
+
+            Task<int> writeTask = transport.WriteAsync(Encoding.ASCII.GetBytes("payload"), CancellationToken.None).AsTask();
+            await stream.WaitForWriteEnteredAsync().ConfigureAwait(false);
+
+            TimeoutException timeout = await Assert.ThrowsAsync<TimeoutException>(async () => await writeTask.ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.Contains("write exceeded no-progress timeout", timeout.Message, StringComparison.OrdinalIgnoreCase);
+
+            await transport.DisposeAsync().ConfigureAwait(false);
+            await stream.WaitForDisposeAsync().ConfigureAwait(false);
+        }
+
+        [Fact]
         public void ExceedsParserAccumulationLimit_WhenBufferedAndReadWouldOverflowInt_ReturnsTrue()
         {
             Assert.True(ListenerProtocolSession.ExceedsParserAccumulationLimit(int.MaxValue, 1, int.MaxValue));
@@ -1011,12 +1043,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
         private static ListenerRuntimeOptions CreateListenerOptions(
             int parserAccumulationMaxBytes = 262144,
+            int tlsHandshakeTimeoutSeconds = 30,
+            int ioProgressTimeoutSeconds = 60,
             int awaitingReceiptAckTimeoutSeconds = 30,
             int maxQueuedFoundPayloadBytes = 67108864,
             int maxActiveConnections = 1024)
         {
             return new ListenerRuntimeOptions(
                 ParserAccumulationMaxBytes: parserAccumulationMaxBytes,
+                TlsHandshakeTimeout: TimeSpan.FromSeconds(tlsHandshakeTimeoutSeconds),
+                IoProgressTimeout: TimeSpan.FromSeconds(ioProgressTimeoutSeconds),
                 AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(awaitingReceiptAckTimeoutSeconds),
                 MaxQueuedFoundPayloadBytes: maxQueuedFoundPayloadBytes,
                 MaxActiveConnections: maxActiveConnections);
@@ -1793,6 +1829,125 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 }
 
                 return ValueTask.CompletedTask;
+            }
+        }
+
+        private sealed class BlockingProgressTimeoutStream : Stream
+        {
+            private readonly TaskCompletionSource<bool> _disposeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _readEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _writeEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly object _sync = new();
+            private bool _disposed;
+
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => true;
+            public override long Length => throw new NotSupportedException();
+            public override long Position
+            {
+                get => throw new NotSupportedException();
+                set => throw new NotSupportedException();
+            }
+
+            public Task WaitForDisposeAsync() => _disposeSignal.Task;
+
+            public Task WaitForReadEnteredAsync() => _readEntered.Task;
+
+            public Task WaitForWriteEnteredAsync() => _writeEntered.Task;
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                _readEntered.TrySetResult(true);
+                return AwaitReadCancellationAsync(cancellationToken);
+            }
+
+            public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                _writeEntered.TrySetResult(true);
+                return AwaitWriteCancellationAsync(cancellationToken);
+            }
+
+            public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+            {
+                return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override Task FlushAsync(CancellationToken cancellationToken)
+            {
+                return Task.CompletedTask;
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void SetLength(long value)
+            {
+                throw new NotSupportedException();
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                lock (_sync)
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    _disposed = true;
+                }
+
+                _disposeSignal.TrySetResult(true);
+                base.Dispose(disposing);
+            }
+
+            public override ValueTask DisposeAsync()
+            {
+                lock (_sync)
+                {
+                    if (_disposed)
+                    {
+                        return ValueTask.CompletedTask;
+                    }
+
+                    _disposed = true;
+                }
+
+                _disposeSignal.TrySetResult(true);
+                return ValueTask.CompletedTask;
+            }
+
+            private static async ValueTask<int> AwaitReadCancellationAsync(CancellationToken cancellationToken)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                return 0;
+            }
+
+            private static async ValueTask AwaitWriteCancellationAsync(CancellationToken cancellationToken)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
             }
         }
 

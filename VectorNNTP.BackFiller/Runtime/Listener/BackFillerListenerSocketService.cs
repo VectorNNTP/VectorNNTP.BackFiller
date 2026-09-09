@@ -205,18 +205,30 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                     CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 };
 
-                await sslStream.AuthenticateAsServerAsync(tlsOptions, cancellationToken).ConfigureAwait(false);
+                ListenerRuntimeOptions listenerOptions = _runtimeOptions.EffectiveListener;
+                using CancellationTokenSource handshakeTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                handshakeTimeoutCts.CancelAfter(listenerOptions.TlsHandshakeTimeout);
+
+                try
+                {
+                    await sslStream.AuthenticateAsServerAsync(tlsOptions, handshakeTimeoutCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (handshakeTimeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"Inbound BackFiller TLS handshake exceeded configured timeout of {listenerOptions.TlsHandshakeTimeout}.");
+                }
+
                 string thumbprint = serverCertificate.Thumbprint ?? string.Empty;
                 LogTlsHandshakeSucceeded(_logger, remoteEndpoint, thumbprint);
 
-                StreamListenerProtocolSessionTransport transport = new(sslStream);
+                StreamListenerProtocolSessionTransport transport = new(sslStream, listenerOptions.IoProgressTimeout);
                 await using (transport.ConfigureAwait(false))
                 {
                     ListenerProtocolRetentionRequestHandler requestHandler = new(_retentionAuthority);
                     ListenerProtocolSession session = new(
                         transport,
                         requestHandler,
-                        _runtimeOptions.EffectiveListener,
+                        listenerOptions,
                         onAwaitingReceiptAck: null,
                         onTerminalized: requestHandler.OnRequestTerminalized,
                         onFoundTransferTerminal: requestHandler.OnFoundTransferTerminal,
@@ -234,6 +246,10 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             catch (AuthenticationException ex)
             {
                 LogTlsHandshakeFailed(_logger, ex);
+            }
+            catch (TimeoutException)
+            {
+                LogConnectionTimedOut(_logger, "timeout");
             }
             catch (Exception ex)
             {
@@ -631,11 +647,19 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         private static partial void LogTlsHandshakeFailed(ILogger logger, Exception exception);
 
         /// <summary>
+        /// Logs that one accepted connection exceeded configured listener timeout bounds and was terminated.
+        /// </summary>
+        /// <param name="logger">Logger receiving the timeout termination event.</param>
+        /// <param name="reason">Timeout category for diagnostics.</param>
+        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection timed out and was terminated; Reason={Reason}")]
+        private static partial void LogConnectionTimedOut(ILogger logger, string reason);
+
+        /// <summary>
         /// Logs that post-accept client processing failed outside the expected shutdown path.
         /// </summary>
         /// <param name="logger">Logger receiving the client-processing fault event.</param>
         /// <param name="exception">Unhandled processing exception captured from the client task.</param>
-        [LoggerMessage(EventId = 2705, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
+        [LoggerMessage(EventId = 2706, Level = LogLevel.Warning, Message = "Inbound BackFiller client connection processing faulted")]
         private static partial void LogClientProcessingFault(ILogger logger, Exception exception);
 
         /// <summary>
@@ -643,21 +667,21 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         /// </summary>
         /// <param name="logger">Logger receiving the shutdown-close event.</param>
         /// <param name="exception">I/O exception observed while waiting for the connection to close.</param>
-        [LoggerMessage(EventId = 2706, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
+        [LoggerMessage(EventId = 2707, Level = LogLevel.Debug, Message = "Inbound BackFiller listener connection closed during shutdown")]
         private static partial void LogConnectionClosedDuringShutdown(ILogger logger, Exception exception);
 
         /// <summary>
         /// Logs that the accept loop is stopping because host or shutdown cancellation was signaled.
         /// </summary>
         /// <param name="logger">Logger receiving the cancellation-stop event.</param>
-        [LoggerMessage(EventId = 2707, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
+        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopping due to shutdown/cancellation")]
         private static partial void LogListenerStoppingByCancellation(ILogger logger);
 
         /// <summary>
         /// Logs that listener shutdown completed after sockets and tracked clients were closed.
         /// </summary>
         /// <param name="logger">Logger receiving the stop-complete event.</param>
-        [LoggerMessage(EventId = 2708, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
+        [LoggerMessage(EventId = 2709, Level = LogLevel.Information, Message = "Inbound BackFiller listener stopped")]
         private static partial void LogListenerStopped(ILogger logger);
 
     }

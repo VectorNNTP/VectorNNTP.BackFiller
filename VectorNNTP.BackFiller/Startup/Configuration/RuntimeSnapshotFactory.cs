@@ -146,12 +146,16 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
         private static ListenerRuntimeOptions BuildListenerRuntimeOptions(ListenerOptions? options)
         {
             int parserAccumulationMaxBytes = options?.ParserAccumulationMaxBytes ?? 262144;
+            int tlsHandshakeTimeoutSeconds = options?.TlsHandshakeTimeoutSeconds ?? 30;
+            int ioProgressTimeoutSeconds = options?.IoProgressTimeoutSeconds ?? 60;
             int awaitingReceiptAckTimeoutSeconds = options?.AwaitingReceiptAckTimeoutSeconds ?? 30;
             int maxQueuedFoundPayloadBytes = options?.MaxQueuedFoundPayloadBytes ?? 67108864;
             int maxActiveConnections = options?.MaxActiveConnections ?? 1024;
 
             return new ListenerRuntimeOptions(
                 ParserAccumulationMaxBytes: parserAccumulationMaxBytes,
+                TlsHandshakeTimeout: TimeSpan.FromSeconds(tlsHandshakeTimeoutSeconds),
+                IoProgressTimeout: TimeSpan.FromSeconds(ioProgressTimeoutSeconds),
                 AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(awaitingReceiptAckTimeoutSeconds),
                 MaxQueuedFoundPayloadBytes: maxQueuedFoundPayloadBytes,
                 MaxActiveConnections: maxActiveConnections);

@@ -39,23 +39,39 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
     internal sealed class StreamListenerProtocolSessionTransport : IListenerProtocolSessionTransport
     {
         private readonly Stream _stream;
+        private readonly TimeSpan _ioProgressTimeout;
         private bool _disposed;
 
         /// <summary>
         /// Initializes a stream-backed listener session transport.
         /// </summary>
         /// <param name="stream">Connected stream instance owned by the transport adapter.</param>
+        /// <param name="ioProgressTimeout">Maximum no-progress interval for each read or write operation.</param>
         /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <see langword="null"/>.</exception>
-        internal StreamListenerProtocolSessionTransport(Stream stream)
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="ioProgressTimeout"/> must be greater than zero.</exception>
+        internal StreamListenerProtocolSessionTransport(Stream stream, TimeSpan ioProgressTimeout)
         {
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(ioProgressTimeout, TimeSpan.Zero);
+            _ioProgressTimeout = ioProgressTimeout;
         }
 
         /// <inheritdoc/>
-        public ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
+        public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            return _stream.ReadAsync(buffer, cancellationToken);
+
+            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(_ioProgressTimeout);
+
+            try
+            {
+                return await _stream.ReadAsync(buffer, timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Listener transport read exceeded no-progress timeout of {_ioProgressTimeout}.");
+            }
         }
 
         /// <inheritdoc/>
@@ -67,8 +83,18 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 return 0;
             }
 
-            await _stream.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
-            return buffer.Length;
+            using CancellationTokenSource timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(_ioProgressTimeout);
+
+            try
+            {
+                await _stream.WriteAsync(buffer, timeoutCts.Token).ConfigureAwait(false);
+                return buffer.Length;
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Listener transport write exceeded no-progress timeout of {_ioProgressTimeout}.");
+            }
         }
 
         /// <inheritdoc/>

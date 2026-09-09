@@ -284,6 +284,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         {
             return new ListenerRuntimeOptions(
                 ParserAccumulationMaxBytes: 262144,
+                TlsHandshakeTimeout: TimeSpan.FromSeconds(30),
+                IoProgressTimeout: TimeSpan.FromSeconds(60),
                 AwaitingReceiptAckTimeout: TimeSpan.FromSeconds(30),
                 MaxQueuedFoundPayloadBytes: 67108864,
                 MaxActiveConnections: 1024);
