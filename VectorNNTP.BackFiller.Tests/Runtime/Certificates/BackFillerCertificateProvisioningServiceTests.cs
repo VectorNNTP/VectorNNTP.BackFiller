@@ -255,6 +255,42 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenObserverThrows_PropagatesAndDisposesUntransferredEvaluatedBundle()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 7);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                InvalidOperationException expected = new("observer failed");
+                BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new UnexpectedIssueAcmeCertificateIssuer(),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle =>
+                    {
+                        observedEvaluatedBundle = bundle;
+                        throw expected;
+                    });
+
+                InvalidOperationException actual = await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None));
+
+                Assert.Same(expected, actual);
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.False(state.HasCertificate);
+                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
         public async Task EnsureCertificateAvailabilityAsync_WhenProvisioningFailsWithUsableEvaluation_TransfersFallbackAndEvaluatorDoesNotDispose()
         {
             string tempDir = CreateUniqueTempDirectory();
