@@ -49,8 +49,10 @@
 //                any canonical value. The raw parser preserves ALL key/value pairs including
 //                duplicates, quoted values (both single and double quotes per ADO.NET spec),
 //                and escaped quotes (e.g., 'it''s' → it's, "say ""hi""" → say "hi"),
-//                then validates syntax to match DbConnectionStringBuilder behavior
-//                (e.g., rejects empty keys, consecutive semicolons, unterminated quoted values,
+//                then validates syntax to match DbConnectionStringBuilder/MySqlConnector behavior.
+//                Provider-valid empty segments between separators (leading, repeated, trailing)
+//                are skipped/ignored, while malformed key/value syntax is still rejected
+//                (e.g., empty keys, missing '=', unterminated quoted values,
 //                and unexpected text after closing quotes).
 //                HasAmbiguousAliases() parses once and reuses the result for all property checks.
 //                TryGet* methods parse independently; for multiple property extraction from the
