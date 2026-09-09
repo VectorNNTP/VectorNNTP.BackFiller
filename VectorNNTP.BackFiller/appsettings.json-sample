@@ -12,6 +12,8 @@
 		"DirCerts": "certs",
 		"Listener": {
 			"ParserAccumulationMaxBytes": 262144,
+			"TlsHandshakeTimeoutSeconds": 30,
+			"IoProgressTimeoutSeconds": 60,
 			"AwaitingReceiptAckTimeoutSeconds": 30,
 			"MaxQueuedFoundPayloadBytes": 67108864,
 			"MaxActiveConnections": 1024
