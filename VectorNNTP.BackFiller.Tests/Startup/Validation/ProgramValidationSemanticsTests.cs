@@ -31,36 +31,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// </remarks>
     public class ProgramValidationSemanticsTests
     {
-        private const string DeterministicAcmeAccountPrivateKeyPem = """
------BEGIN PRIVATE KEY-----
-MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC8S+Vlahtt53SM
-Wjz4CrpXdfudSM3YZFo0tKnEPt6NWUr+N460QtyNnNQv0OCWMe+UpXrur16r17r0
-Mvp3ye45V4yhJn0RKWAV19O/+U/6oO/q3PHL6Q4hBimSah7aGYhxRHofEPbDBL3j
-X3OrkWY4m2gJ9bHPLJBTl9ruNKmzINn8rxgcHPJjfqSC3fZe1LdggXFlw21+ZWc8
-e8N1q/ZptmeadOdSGeRrpWBtlSr1/T+uRZ4K9FbdRA8N8e/66bCXRVdFvJerLjrY
-My4+mqqp/pwzQq+dkf6O8WaHq6hwGALLZycuOULJezt/nGOWc43NdIICAxcDtR4j
-8XKCn235AgMBAAECggEAa5207dFG+/lc0xp/3gPDnFkCBVKm0xYHuDfJDzAfYgm2
-orR+CuhrxUPswadPtIe1te8d42y3Xt9dKlQ4cl4mmP9AkJm+wSA0mkdP7lg/La7t
-b/328+Ou/5DWEag1GdGd+Z55bWf0oGEFZf4Xzea71X58Z7TUeuOtWRlhNuNCWe1g
-tVeiNBOKh2/OsPQ8ROodhwhjXImlpzmIm8WtMAa6rZhC7vL2cfmIKVRdWdRQYVav
-kOzxZBq2GqAD3ZXbEce+ku6Hz8y1nyrp9T2G6z1AuzrG4C/niogGx5YjAPSW8rr5
-rlcD6wEJiDUatVHeRvKwoqc2cGWR7MRFS0vI6uJHQQKBgQDv51v7ACwMm2HVfiQ/
-wYnvrO5QsD7EeqH269ZMVmi5eyFyVeEa14VmC5vj2c93VV73Og8y1ynLqDBFWlnX
-dYVXBVBe8WKhgCTSqRaSsdfj4XtnmVq8ojGihGHdXQRvzfIrz3FJ6NZQP2yOnJrE
-Za6MNbNDC3UDfIfYBKNxK4ASGwKBgQDI7h5aYJOgmCT36Xned2lh/lVFay1hRZnG
-j1GHYIVTGfnHnhlIyBzmPiknZuzj7HZcvfESZh8BYjL24azsZhjkfMMH3ouSWu45
-fQfbPm8lwTdoeEmo4JZfNxbYSohwPrsiRCFDSRIaZALYVrowPoqrDnXylNGkTE0x
-BQ1Y/1fhewKBgA8gIyh8JkrVMSHoxhhO94do+82SjyKMKNIMpIJDoG6xWLaAu6SZ
-mguJB9ch0HbRpx8nRfYKotP4UrLMs4VmH3YRG7Qgu/s6vRebGZU+KUJw4PrzLElg
-YIjCl/kA+FqkPXSNq7LhP0Hn/cwwC4H+dzbX2+mKO2Jw44+3GybzeyupAoGACFYQ
-vlEpbs1BI2P1YWx029LweLvUmyeHFLzXdhVkEqmOOmDtzZ43zLmhfXgAtggWdQyQ
-VuITwTvwv1tnkDtAJyKh+M6b3cuV/J6aV9dERz237canz7DZrEOd2AVnmbiQjQBk
-nOUIMj4Z/B3FBcFigWxNKm5QME/WGAWMozeczscCgYAkWIdz+Xvo64/gWFYkEvHU
-fif1op+LT2MP5v/YoWurwoJ2zCQxnBRdCT9ROU2dTKJo+Igfa2Ff6M/TVBEHigcq
-b8yweDnjswaKaxOq1NcSHqakx0rquV7Yn/IH51vddEAEb/F+Voh+GKaVcWSbJyMi
-hU7TNuUJ5CCJI07waX4maw==
------END PRIVATE KEY-----
-""";
+        private const string DeterministicAcmeAccountPrivateKeyPkcs8DerBase64 = "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC8S+Vlahtt53SMWjz4CrpXdfudSM3YZFo0tKnEPt6NWUr+N460QtyNnNQv0OCWMe+UpXrur16r17r0Mvp3ye45V4yhJn0RKWAV19O/+U/6oO/q3PHL6Q4hBimSah7aGYhxRHofEPbDBL3jX3OrkWY4m2gJ9bHPLJBTl9ruNKmzINn8rxgcHPJjfqSC3fZe1LdggXFlw21+ZWc8e8N1q/ZptmeadOdSGeRrpWBtlSr1/T+uRZ4K9FbdRA8N8e/66bCXRVdFvJerLjrYMy4+mqqp/pwzQq+dkf6O8WaHq6hwGALLZycuOULJezt/nGOWc43NdIICAxcDtR4j8XKCn235AgMBAAECggEAa5207dFG+/lc0xp/3gPDnFkCBVKm0xYHuDfJDzAfYgm2orR+CuhrxUPswadPtIe1te8d42y3Xt9dKlQ4cl4mmP9AkJm+wSA0mkdP7lg/La7tb/328+Ou/5DWEag1GdGd+Z55bWf0oGEFZf4Xzea71X58Z7TUeuOtWRlhNuNCWe1gtVeiNBOKh2/OsPQ8ROodhwhjXImlpzmIm8WtMAa6rZhC7vL2cfmIKVRdWdRQYVavkOzxZBq2GqAD3ZXbEce+ku6Hz8y1nyrp9T2G6z1AuzrG4C/niogGx5YjAPSW8rr5rlcD6wEJiDUatVHeRvKwoqc2cGWR7MRFS0vI6uJHQQKBgQDv51v7ACwMm2HVfiQ/wYnvrO5QsD7EeqH269ZMVmi5eyFyVeEa14VmC5vj2c93VV73Og8y1ynLqDBFWlnXdYVXBVBe8WKhgCTSqRaSsdfj4XtnmVq8ojGihGHdXQRvzfIrz3FJ6NZQP2yOnJrEZa6MNbNDC3UDfIfYBKNxK4ASGwKBgQDI7h5aYJOgmCT36Xned2lh/lVFay1hRZnGj1GHYIVTGfnHnhlIyBzmPiknZuzj7HZcvfESZh8BYjL24azsZhjkfMMH3ouSWu45fQfbPm8lwTdoeEmo4JZfNxbYSohwPrsiRCFDSRIaZALYVrowPoqrDnXylNGkTE0xBQ1Y/1fhewKBgA8gIyh8JkrVMSHoxhhO94do+82SjyKMKNIMpIJDoG6xWLaAu6SZmguJB9ch0HbRpx8nRfYKotP4UrLMs4VmH3YRG7Qgu/s6vRebGZU+KUJw4PrzLElgYIjCl/kA+FqkPXSNq7LhP0Hn/cwwC4H+dzbX2+mKO2Jw44+3GybzeyupAoGACFYQvlEpbs1BI2P1YWx029LweLvUmyeHFLzXdhVkEqmOOmDtzZ43zLmhfXgAtggWdQyQVuITwTvwv1tnkDtAJyKh+M6b3cuV/J6aV9dERz237canz7DZrEOd2AVnmbiQjQBknOUIMj4Z/B3FBcFigWxNKm5QME/WGAWMozeczscCgYAkWIdz+Xvo64/gWFYkEvHUfif1op+LT2MP5v/YoWurwoJ2zCQxnBRdCT9ROU2dTKJo+Igfa2Ff6M/TVBEHigcqb8yweDnjswaKaxOq1NcSHqakx0rquV7Yn/IH51vddEAEb/F+Voh+GKaVcWSbJyMihU7TNuUJ5CCJI07waX4maw==";
 
         /// <summary>
         /// Confirms shared command/startup success fixtures include mandatory listener ACME configuration values.
@@ -149,43 +120,52 @@ hU7TNuUJ5CCJI07waX4maw==
         [Fact]
         public void EnsureRelativeAcmeAccountKeyPemFile_WhenExistingFileIsPartial_ReplacesWithValidPrivateKeyPem()
         {
-            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
             _ = Directory.CreateDirectory(certDirectory);
             string keyFilePath = Path.Combine(certDirectory, "account.key");
 
             File.WriteAllText(keyFilePath, "-----BEGIN PRIVATE KEY-----\npartial\n");
 
-            string returnedFileName = EnsureRelativeAcmeAccountKeyPemFile();
+            try
+            {
+                string returnedFileName = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
 
-            Assert.Equal("account.key", returnedFileName);
-            Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
-            Assert.False(string.IsNullOrWhiteSpace(pem));
+                Assert.Equal("account.key", returnedFileName);
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out string pem));
+                Assert.False(string.IsNullOrWhiteSpace(pem));
+            }
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
         }
 
         [Fact]
         public void EnsureRelativeAcmeAccountKeyPemFile_WhenRecreatedMultipleTimes_WritesDeterministicPemContent()
         {
-            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            string certDirectory = Path.Combine(Path.GetTempPath(), "VectorNNTP.BackFiller.Tests", Guid.NewGuid().ToString("N"));
             _ = Directory.CreateDirectory(certDirectory);
             string keyFilePath = Path.Combine(certDirectory, "account.key");
 
-            if (File.Exists(keyFilePath))
+            try
             {
+                _ = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                string first = File.ReadAllText(keyFilePath);
+
                 File.Delete(keyFilePath);
+
+                _ = EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
+                string second = File.ReadAllText(keyFilePath);
+
+                Assert.Equal(GetDeterministicAcmeAccountPrivateKeyPem(), first);
+                Assert.Equal(GetDeterministicAcmeAccountPrivateKeyPem(), second);
+                Assert.Equal(first, second);
+                Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
             }
-
-            _ = EnsureRelativeAcmeAccountKeyPemFile();
-            string first = File.ReadAllText(keyFilePath);
-
-            File.Delete(keyFilePath);
-
-            _ = EnsureRelativeAcmeAccountKeyPemFile();
-            string second = File.ReadAllText(keyFilePath);
-
-            Assert.Equal(DeterministicAcmeAccountPrivateKeyPem, first);
-            Assert.Equal(DeterministicAcmeAccountPrivateKeyPem, second);
-            Assert.Equal(first, second);
-            Assert.True(TryReadValidPrivateKeyPem(keyFilePath, out _));
+            finally
+            {
+                Directory.Delete(certDirectory, recursive: true);
+            }
         }
 
         /// <summary>
@@ -3583,9 +3563,11 @@ hU7TNuUJ5CCJI07waX4maw==
             return BuildConfigurationForCommandTests(values, includeRabbitMqBaseline);
         }
 
-        private static string EnsureRelativeAcmeAccountKeyPemFile()
+        private static string EnsureRelativeAcmeAccountKeyPemFile(string? fixtureDirectory = null)
         {
-            string certDirectory = Path.Combine(AppContext.BaseDirectory, "certs");
+            string certDirectory = string.IsNullOrWhiteSpace(fixtureDirectory)
+                ? Path.Combine(AppContext.BaseDirectory, "certs")
+                : fixtureDirectory;
             _ = Directory.CreateDirectory(certDirectory);
 
             string fileName = "account.key";
@@ -3602,7 +3584,7 @@ hU7TNuUJ5CCJI07waX4maw==
                 using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     using StreamWriter writer = new(stream);
-                    writer.Write(DeterministicAcmeAccountPrivateKeyPem);
+                    writer.Write(GetDeterministicAcmeAccountPrivateKeyPem());
                     writer.Flush();
                     stream.Flush(true);
                 }
@@ -3623,6 +3605,12 @@ hU7TNuUJ5CCJI07waX4maw==
             }
 
             return fileName;
+        }
+
+        private static string GetDeterministicAcmeAccountPrivateKeyPem()
+        {
+            byte[] pkcs8Der = Convert.FromBase64String(DeterministicAcmeAccountPrivateKeyPkcs8DerBase64);
+            return PemEncoding.WriteString("PRIVATE KEY", pkcs8Der);
         }
 
         private static bool TryReadValidPrivateKeyPem(string keyFilePath, out string pem)
