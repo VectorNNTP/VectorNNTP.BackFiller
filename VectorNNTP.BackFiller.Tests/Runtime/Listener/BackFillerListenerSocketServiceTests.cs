@@ -1155,27 +1155,36 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
         private sealed class ConnectionSlotReleasePhaseObserver
         {
+            private readonly object _gate = new();
             private int _releasedCount;
             private int _releaseTarget = int.MaxValue;
             private TaskCompletionSource<bool> _releaseObserved = CreatePhaseTaskCompletionSource();
 
             internal void OnConnectionSlotReleased()
             {
-                int current = Interlocked.Increment(ref _releasedCount);
-                TaskCompletionSource<bool> observed = Volatile.Read(ref _releaseObserved);
-                int target = Volatile.Read(ref _releaseTarget);
-                if (current >= target)
+                TaskCompletionSource<bool>? observed = null;
+
+                lock (_gate)
                 {
-                    observed.TrySetResult(true);
+                    _releasedCount++;
+                    if (_releasedCount >= _releaseTarget)
+                    {
+                        observed = _releaseObserved;
+                    }
                 }
+
+                observed?.TrySetResult(true);
             }
 
             internal Task BeginNextPhaseAndGetTask()
             {
-                TaskCompletionSource<bool> nextObserved = CreatePhaseTaskCompletionSource();
-                Volatile.Write(ref _releaseObserved, nextObserved);
-                Volatile.Write(ref _releaseTarget, Volatile.Read(ref _releasedCount) + 1);
-                return nextObserved.Task;
+                lock (_gate)
+                {
+                    TaskCompletionSource<bool> nextObserved = CreatePhaseTaskCompletionSource();
+                    _releaseTarget = _releasedCount + 1;
+                    _releaseObserved = nextObserved;
+                    return nextObserved.Task;
+                }
             }
 
             private static TaskCompletionSource<bool> CreatePhaseTaskCompletionSource()
