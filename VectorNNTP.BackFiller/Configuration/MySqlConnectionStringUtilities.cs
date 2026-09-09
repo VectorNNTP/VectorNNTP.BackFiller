@@ -511,21 +511,26 @@ namespace VectorNNTP.Backfiller.Configuration
 
             while (i < length)
             {
-                // Skip whitespace
-                while (i < length && char.IsWhiteSpace(connectionString[i]))
+                // Skip whitespace and provider-valid empty segments between separators.
+                while (i < length)
                 {
-                    i++;
+                    while (i < length && char.IsWhiteSpace(connectionString[i]))
+                    {
+                        i++;
+                    }
+
+                    if (i < length && connectionString[i] == ';')
+                    {
+                        i++;
+                        continue;
+                    }
+
+                    break;
                 }
 
                 if (i >= length)
                 {
                     break;
-                }
-
-                // Check for consecutive semicolons or leading semicolon (invalid syntax)
-                if (connectionString[i] == ';')
-                {
-                    throw new ArgumentException("Malformed connection string: empty key-value pair", nameof(connectionString));
                 }
 
                 // Read key until '='
