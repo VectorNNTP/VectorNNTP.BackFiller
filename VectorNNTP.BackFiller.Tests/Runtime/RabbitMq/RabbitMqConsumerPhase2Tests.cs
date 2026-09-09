@@ -112,11 +112,44 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.Equal(payload, delivery.Payload.ToArray());
 
             Assert.False(consumerChannel.LastConsumeAutoAck);
+            Assert.Null(consumerChannel.LastPrefetchCount);
 
             await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None).ConfigureAwait(false);
             await session.DisposeAsync().ConfigureAwait(false);
             await manager.DisposeAsync().ConfigureAwait(false);
         }
+
+        /// <summary>
+        /// Verifies consumer startup accepts and applies the maximum supported RabbitMQ prefetch count.
+        /// </summary>
+        [Fact]
+        public async Task StartAsync_ConfiguresMaximumPrefetchWhenSpecified()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            TrackingBrokerConnector connector = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(prefetchCount: 65535, maxConsecutiveRecoveryFailures: 1);
+            RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
+            RecordingDeliverySink sink = new();
+
+            RabbitMqBackboneConsumerSession session = new(
+                CreateIdentity("Giganews", connectionNumber: 24, connectionLimit: 100),
+                manager,
+                topologyInitializer,
+                sink,
+                NullLogger<RabbitMqBackboneConsumerSession>.Instance,
+                prefetchCount: 65535);
+
+            await session.StartAsync(CancellationToken.None);
+
+            TrackingChannel consumerChannel = connector.RequireLastConnection().Channels.Single(static channel => channel.ConsumeCallCount == 1);
+            Assert.Equal((ushort)65535, consumerChannel.LastPrefetchCount);
+
+            await session.StopAsync(cancelAdmittedWork: true, cancellationToken: CancellationToken.None);
+            await session.DisposeAsync();
+            await manager.DisposeAsync();
+        }
+
         /// <summary>
         /// Confirms an oversized delivery still releases local drain accounting when the broker NACK fails.
         /// </summary>

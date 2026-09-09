@@ -1776,6 +1776,15 @@ namespace VectorNNTP.Backfiller.Configuration
                     ValidationSeverity.Warning));
             }
 
+            string consumerPrefetchSetting = $"{settingPrefix}:RabbitMQ:ConsumerPrefetchCount";
+            if (rabbitMq.ConsumerPrefetchCount is 0)
+            {
+                diagnostics.Add(new RabbitMqValidationResult(
+                    consumerPrefetchSetting,
+                    "ConsumerPrefetchCount must be between 1 and 65535",
+                    ValidationSeverity.Error));
+            }
+
             string requestedChannelMaxSetting = $"{settingPrefix}:RabbitMQ:RequestedChannelMax";
             if (rabbitMq.RequestedChannelMax is null)
             {
