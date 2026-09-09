@@ -43,11 +43,10 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
 
             try
             {
+                byte[] payload = Encoding.UTF8.GetBytes(canonicalPem);
                 using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    using StreamWriter writer = new(stream, Encoding.UTF8);
-                    writer.Write(canonicalPem);
-                    writer.Flush();
+                    stream.Write(payload, 0, payload.Length);
                     stream.Flush(true);
                 }
 
