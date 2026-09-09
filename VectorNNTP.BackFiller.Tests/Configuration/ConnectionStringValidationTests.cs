@@ -6,7 +6,7 @@
 // Focused tests for connection string validation, covering configuration and validation contracts; dependency integration and failure handling.
 // Primary responsibility: documents the executable contracts covered by the connection string validation test suite.
 
-using System.Data.Common;
+using MySqlConnector;
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
 
@@ -809,10 +809,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         [InlineData("  ;  Server=localhost ; ; Database=GrabberDB ; User ID=admin ;  ")]
         public void Validate_ProviderValidSeparatorSyntax_ExtractorAndValidatorMatchProvider(string connectionString)
         {
-            DbConnectionStringBuilder providerBuilder = new()
-            {
-                ConnectionString = connectionString,
-            };
+            MySqlConnectionStringBuilder providerBuilder = new(connectionString);
 
             bool extractedServer = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
             List<ConnectionStringValidationResult> diagnostics = ConnectionStringValidator.Validate(
