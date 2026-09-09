@@ -59,6 +59,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 configWarnings,
                 new PhysicalSystemMemoryProvider(),
                 includeListenerCertificateValidation: false));
+            ConfigurationValidator.AppendObsoleteLetsEncryptEnabledError(configuration, configErrors);
 
             BackFillerRuntimeOptions? runtimeOptions = null;
             if (configErrors.Count == 0)
@@ -129,6 +130,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
 
             // Validate BackFiller section.
             configErrors.AddRange(ConfigurationValidator.ValidateBackFillerOptions(backFiller, configWarnings));
+            ConfigurationValidator.AppendObsoleteLetsEncryptEnabledError(configuration, configErrors);
 
             BackFillerRuntimeOptions? runtimeOptions = null;
             if (configErrors.Count == 0)

@@ -519,6 +519,130 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.Empty(configResult.Errors);
             Assert.DoesNotContain(configResult.Warnings, static w => w.Setting == "BackFiller:LetsEncrypt:Enabled");
         }
+
+        /// <summary>
+        /// Confirms validate-config production binding rejects obsolete LetsEncrypt.Enabled=false with explicit migration guidance.
+        /// </summary>
+        [Fact]
+        public void BuildValidateConfigCommandResult_WhenLegacyLetsEncryptEnabledFalseProvided_ReturnsObsoleteSettingError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:LetsEncrypt:Enabled"] = "false",
+            });
+
+            BackFillerOptions? backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>();
+            List<(string Setting, string Error)> objectPathErrors = ConfigurationValidator.ValidateBackFillerOptions(
+                backFiller,
+                warnings: [],
+                new PhysicalSystemMemoryProvider(),
+                includeListenerCertificateValidation: false);
+            ConfigurationValidationResult result = ValidateConfigCommandHandler.BuildValidateConfigCommandResult(configuration);
+
+            Assert.DoesNotContain(objectPathErrors, static e => e.Setting == "BackFiller:LetsEncrypt:Enabled");
+            Assert.Contains(result.Errors, static e =>
+                e.Setting == "BackFiller:LetsEncrypt:Enabled" &&
+                e.Error.Contains("no longer supported", StringComparison.OrdinalIgnoreCase) &&
+                e.Error.Contains("must be removed", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Confirms validate-config production binding rejects obsolete LetsEncrypt.Enabled=true with explicit migration guidance.
+        /// </summary>
+        [Fact]
+        public void BuildValidateConfigCommandResult_WhenLegacyLetsEncryptEnabledTrueProvided_ReturnsObsoleteSettingError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:LetsEncrypt:Enabled"] = "true",
+            });
+
+            ConfigurationValidationResult result = ValidateConfigCommandHandler.BuildValidateConfigCommandResult(configuration);
+
+            Assert.Contains(result.Errors, static e =>
+                e.Setting == "BackFiller:LetsEncrypt:Enabled" &&
+                e.Error.Contains("no longer supported", StringComparison.OrdinalIgnoreCase) &&
+                e.Error.Contains("must be removed", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Confirms non-listener startup validation rejects obsolete LetsEncrypt.Enabled values in production-style pipeline execution.
+        /// </summary>
+        /// <param name="legacyValue">Legacy enabled value supplied by configuration providers.</param>
+        [Theory]
+        [InlineData("false")]
+        [InlineData("true")]
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenLegacyLetsEncryptEnabledProvided_ReturnsObsoleteSettingError(string legacyValue)
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:LetsEncrypt:Enabled"] = legacyValue,
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult) =
+                await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.Contains(configResult.Errors, static e =>
+                e.Setting == "BackFiller:LetsEncrypt:Enabled" &&
+                e.Error.Contains("no longer supported", StringComparison.OrdinalIgnoreCase) &&
+                e.Error.Contains("must be removed", StringComparison.OrdinalIgnoreCase));
+            Assert.True(dependencyResult.IsValid);
+        }
+
+        /// <summary>
+        /// Confirms non-listener startup validation does not emit obsolete-key errors when LetsEncrypt.Enabled is absent.
+        /// </summary>
+        [Fact]
+        public async Task ValidateConfigurationAndDependenciesAsync_WhenLegacyLetsEncryptEnabledMissing_DoesNotReturnObsoleteSettingError()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+            });
+
+            (ConfigurationValidationResult configResult, _) =
+                await StartupValidationPipeline.ValidateConfigurationAndDependenciesAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.DoesNotContain(configResult.Errors, static e => e.Setting == "BackFiller:LetsEncrypt:Enabled");
+        }
+
+        /// <summary>
+        /// Confirms full startup validation path rejects obsolete LetsEncrypt.Enabled in production runtime-options flow.
+        /// </summary>
+        /// <param name="legacyValue">Legacy enabled value supplied by configuration providers.</param>
+        [Theory]
+        [InlineData("false")]
+        [InlineData("true")]
+        public async Task ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync_WhenLegacyLetsEncryptEnabledProvided_ReturnsObsoleteSettingError(string legacyValue)
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret",
+                ["BackFiller:LetsEncrypt:Enabled"] = legacyValue,
+            });
+
+            (ConfigurationValidationResult configResult, DependencyValidationResult dependencyResult, BackFillerRuntimeOptions? runtimeOptions) =
+                await StartupValidationPipeline.ValidateConfigurationDependenciesAndBuildRuntimeOptionsAsync(
+                    configuration,
+                    TimeSpan.FromSeconds(1),
+                    CancellationToken.None);
+
+            Assert.Contains(configResult.Errors, static e =>
+                e.Setting == "BackFiller:LetsEncrypt:Enabled" &&
+                e.Error.Contains("no longer supported", StringComparison.OrdinalIgnoreCase) &&
+                e.Error.Contains("must be removed", StringComparison.OrdinalIgnoreCase));
+            Assert.True(dependencyResult.IsValid);
+            Assert.Null(runtimeOptions);
+        }
         /// <summary>
         /// Confirms non-listener validation scope ignores listener-only ACME certificate readiness settings.
         /// </summary>
