@@ -642,6 +642,23 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
             Assert.Equal("testdb", database);
         }
 
+        /// <summary>
+        /// Confirms the raw parser accepts provider-valid empty separator segments and preserves extraction semantics.
+        /// </summary>
+        /// <param name="connectionString">Connection string containing provider-valid separator patterns.</param>
+        [Theory]
+        [InlineData(";Server=localhost;Database=test;User ID=admin")]
+        [InlineData("Server=localhost;;Database=test;User ID=admin")]
+        [InlineData("Server=localhost;Database=test;User ID=admin;")]
+        [InlineData("  ;  Server=localhost ; ; Database=test ; User ID=admin ;  ")]
+        public void TryGetServer_WhenConnectionStringContainsProviderValidEmptySegments_ExtractsServer(string connectionString)
+        {
+            bool result = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
+
+            Assert.True(result);
+            Assert.Equal("localhost", server);
+        }
+
         #endregion
 
         #region Quoted Values Tests
@@ -1625,7 +1642,7 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
         [InlineData("Server=''", true, false)]
         [InlineData(";Server=db01", true, false)]
         [InlineData("Server=db01;", true, false)]
-        [InlineData("Server=db01;;Host=db02", true, false)]
+        [InlineData("Server=db01;;Host=db02", true, true)]
         public void RawParser_RejectsExactlySameSyntaxAsProvider(
             string connectionString,
             bool providerShouldAcceptSyntax,

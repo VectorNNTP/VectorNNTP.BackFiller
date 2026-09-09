@@ -49,8 +49,10 @@
 //                any canonical value. The raw parser preserves ALL key/value pairs including
 //                duplicates, quoted values (both single and double quotes per ADO.NET spec),
 //                and escaped quotes (e.g., 'it''s' → it's, "say ""hi""" → say "hi"),
-//                then validates syntax to match DbConnectionStringBuilder behavior
-//                (e.g., rejects empty keys, consecutive semicolons, unterminated quoted values,
+//                then validates syntax to match DbConnectionStringBuilder/MySqlConnector behavior.
+//                Provider-valid empty segments between separators (leading, repeated, trailing)
+//                are skipped/ignored, while malformed key/value syntax is still rejected
+//                (e.g., empty keys, missing '=', unterminated quoted values,
 //                and unexpected text after closing quotes).
 //                HasAmbiguousAliases() parses once and reuses the result for all property checks.
 //                TryGet* methods parse independently; for multiple property extraction from the
@@ -511,21 +513,26 @@ namespace VectorNNTP.Backfiller.Configuration
 
             while (i < length)
             {
-                // Skip whitespace
-                while (i < length && char.IsWhiteSpace(connectionString[i]))
+                // Skip whitespace and provider-valid empty segments between separators.
+                while (i < length)
                 {
-                    i++;
+                    while (i < length && char.IsWhiteSpace(connectionString[i]))
+                    {
+                        i++;
+                    }
+
+                    if (i < length && connectionString[i] == ';')
+                    {
+                        i++;
+                        continue;
+                    }
+
+                    break;
                 }
 
                 if (i >= length)
                 {
                     break;
-                }
-
-                // Check for consecutive semicolons or leading semicolon (invalid syntax)
-                if (connectionString[i] == ';')
-                {
-                    throw new ArgumentException("Malformed connection string: empty key-value pair", nameof(connectionString));
                 }
 
                 // Read key until '='

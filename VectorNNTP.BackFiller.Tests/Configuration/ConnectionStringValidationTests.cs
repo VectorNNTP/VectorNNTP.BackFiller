@@ -6,6 +6,7 @@
 // Focused tests for connection string validation, covering configuration and validation contracts; dependency integration and failure handling.
 // Primary responsibility: documents the executable contracts covered by the connection string validation test suite.
 
+using MySqlConnector;
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
 
@@ -774,6 +775,77 @@ namespace VectorNNTP.BackFiller.Tests.Configuration
 
             // Assert - Redundant but consistent configuration should be accepted (no errors)
             Assert.DoesNotContain(diagnostics, d => d.Severity == ValidationSeverity.Error);
+        }
+
+        /// <summary>
+        /// Confirms provider-valid separator forms are accepted by startup validation without false alias-conflict diagnostics.
+        /// </summary>
+        /// <param name="connectionString">Connection string containing provider-valid empty separator segments.</param>
+        [Theory]
+        [InlineData(";Server=localhost;Database=GrabberDB;User ID=admin")]
+        [InlineData("Server=localhost;;Database=GrabberDB;User ID=admin")]
+        [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;")]
+        [InlineData("  ;  Server=localhost ; ; Database=GrabberDB ; User ID=admin ;  ")]
+        public void Validate_ProviderValidSeparatorSyntax_DoesNotReportAliasConflict(string connectionString)
+        {
+            List<ConnectionStringValidationResult> diagnostics = ConnectionStringValidator.Validate(
+                connectionString,
+                "ConnectionStrings:GrabberDB");
+
+            Assert.DoesNotContain(
+                diagnostics,
+                d => d.Severity == ValidationSeverity.Error &&
+                     d.Message.Contains("conflicting", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Confirms extractor and validator interpretation agree with provider syntax acceptance for separator boundaries.
+        /// </summary>
+        /// <param name="connectionString">Connection string under parity comparison.</param>
+        [Theory]
+        [InlineData(";Server=localhost;Database=GrabberDB;User ID=admin")]
+        [InlineData("Server=localhost;;Database=GrabberDB;User ID=admin")]
+        [InlineData("Server=localhost;Database=GrabberDB;User ID=admin;")]
+        [InlineData("  ;  Server=localhost ; ; Database=GrabberDB ; User ID=admin ;  ")]
+        public void Validate_ProviderValidSeparatorSyntax_ExtractorAndValidatorMatchProvider(string connectionString)
+        {
+            MySqlConnectionStringBuilder providerBuilder = new(connectionString);
+
+            bool extractedServer = MySqlConnectionStringUtilities.TryGetServer(connectionString, out string? server);
+            List<ConnectionStringValidationResult> diagnostics = ConnectionStringValidator.Validate(
+                connectionString,
+                "ConnectionStrings:GrabberDB");
+
+            Assert.True(extractedServer);
+            Assert.Equal("localhost", server);
+            bool providerHasServerAlias = providerBuilder.ContainsKey("Server") ||
+                                          providerBuilder.ContainsKey("Host") ||
+                                          providerBuilder.ContainsKey("Data Source") ||
+                                          providerBuilder.ContainsKey("DataSource") ||
+                                          providerBuilder.ContainsKey("Address") ||
+                                          providerBuilder.ContainsKey("Addr") ||
+                                          providerBuilder.ContainsKey("Network Address");
+
+            Assert.True(providerHasServerAlias);
+            Assert.DoesNotContain(diagnostics, d => d.Severity == ValidationSeverity.Error);
+        }
+
+        /// <summary>
+        /// Confirms conflicting aliases remain rejected even when provider-valid empty separator segments are present.
+        /// </summary>
+        [Fact]
+        public void Validate_ConflictingAliasesWithProviderValidEmptySegments_RemainsRejected()
+        {
+            string connectionString = " ; Server=db01 ;; Host=db02 ; Database=GrabberDB ; User ID=admin ; ";
+
+            List<ConnectionStringValidationResult> diagnostics = ConnectionStringValidator.Validate(
+                connectionString,
+                "ConnectionStrings:GrabberDB");
+
+            Assert.Contains(
+                diagnostics,
+                d => d.Severity == ValidationSeverity.Error &&
+                     d.Message.Contains("conflicting server/host aliases", StringComparison.OrdinalIgnoreCase));
         }
 
         #endregion
