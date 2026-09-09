@@ -16,6 +16,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
@@ -738,7 +739,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
-        public async Task StartAsync_WhenEstablishedClientIsIdle_TerminatesSessionAfterIoProgressTimeoutAndReleasesCapacity()
+        public async Task StartAsync_WhenEstablishedClientIsIdle_TerminatesSessionAfterIoProgressTimeoutAndLogsConnectionTimedOut()
         {
             int port = ReserveEphemeralTcpPort();
             using X509Certificate2 cert = CreateServerCertificate("bf-listener-h10-idle-timeout.example.com");
@@ -754,12 +755,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             BackFillerCertificateState state = new();
             state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
             ShutdownCoordinator shutdown = new();
+            CapturingLoggerProvider loggerProvider = new();
             BackFillerListenerSocketService service = new(
                 runtime,
                 state,
                 shutdown,
                 retentionAuthority,
-                NullLogger<BackFillerListenerSocketService>.Instance);
+                loggerProvider.CreateLogger<BackFillerListenerSocketService>());
 
             using CancellationTokenSource runCts = new();
             Task runTask = service.StartAsync(runCts.Token);
@@ -786,6 +788,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 TaskCompletionSource<bool> idleReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 releaseObserved = idleReleaseObserved;
                 Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
+                int scenarioLogStartIndex = loggerProvider.Entries.Count;
 
                 using TcpClient idleClient = new();
                 await idleClient.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
@@ -801,6 +804,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
                 Assert.Equal(0, read);
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(8));
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
+                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2705);
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2706);
 
                 using TcpClient recovered = new();
                 await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
@@ -824,7 +830,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
-        public async Task StartAsync_WhenClientStopsReadingButKeepsSending_WriterTimeoutTerminatesSessionAndReleasesCapacity()
+        public async Task StartAsync_WhenClientStopsReadingButKeepsSending_WriterTimeoutTerminatesSessionAndLogsConnectionTimedOut()
         {
             const string messageId = "<stage6d-h10-writer-timeout@example.com>";
 
@@ -844,12 +850,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             BackFillerCertificateState state = new();
             state.Publish(new BackFillerCertificateBundle(CloneForState(cert), "memory", DateTimeOffset.UtcNow));
             ShutdownCoordinator shutdown = new();
+            CapturingLoggerProvider loggerProvider = new();
             BackFillerListenerSocketService service = new(
                 runtime,
                 state,
                 shutdown,
                 retentionAuthority,
-                NullLogger<BackFillerListenerSocketService>.Instance);
+                loggerProvider.CreateLogger<BackFillerListenerSocketService>());
 
             using CancellationTokenSource runCts = new();
             Task runTask = service.StartAsync(runCts.Token);
@@ -876,6 +883,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 TaskCompletionSource<bool> writerTimeoutReleaseObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 releaseObserved = writerTimeoutReleaseObserved;
                 Volatile.Write(ref releaseTarget, Volatile.Read(ref releasedCount) + 1);
+                int scenarioLogStartIndex = loggerProvider.Entries.Count;
 
                 using TcpClient stalled = new();
                 await stalled.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
@@ -896,6 +904,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 timeoutStopwatch.Stop();
 
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
+                IReadOnlyList<CapturingLoggerProvider.LogEntry> scenarioLogs = loggerProvider.Entries[scenarioLogStartIndex..];
+                Assert.Contains(scenarioLogs, static entry => entry.EventId.Id == 2705);
+                Assert.DoesNotContain(scenarioLogs, static entry => entry.EventId.Id == 2706);
 
                 using TcpClient recovered = new();
                 await recovered.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
@@ -1179,6 +1190,64 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
 
             throw new TimeoutException($"Timed out waiting for listener readiness at {address}:{port}.");
+        }
+
+        private sealed class CapturingLoggerProvider
+        {
+            private readonly object _gate = new();
+
+            internal List<LogEntry> Entries { get; } = [];
+
+            internal ILogger<T> CreateLogger<T>()
+            {
+                return new CapturingLogger<T>(Entries, _gate);
+            }
+
+            internal sealed record LogEntry(EventId EventId, LogLevel LogLevel, string Message, Exception? Exception, IReadOnlyDictionary<string, object?> StateValues);
+
+            private sealed class CapturingLogger<T>(List<LogEntry> entries, object gate) : ILogger<T>
+            {
+                private readonly List<LogEntry> _entries = entries;
+                private readonly object _gate = gate;
+
+                public IDisposable BeginScope<TState>(TState state) where TState : notnull
+                {
+                    return NullScope.Instance;
+                }
+
+                public bool IsEnabled(LogLevel logLevel)
+                {
+                    _ = logLevel;
+                    return true;
+                }
+
+                public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                {
+                    string message = formatter(state, exception);
+                    Dictionary<string, object?> stateValues = [];
+                    if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+                    {
+                        foreach (KeyValuePair<string, object?> item in structuredState)
+                        {
+                            stateValues[item.Key] = item.Value;
+                        }
+                    }
+
+                    lock (_gate)
+                    {
+                        _entries.Add(new LogEntry(eventId, logLevel, message, exception, stateValues));
+                    }
+                }
+
+                private sealed class NullScope : IDisposable
+                {
+                    internal static readonly NullScope Instance = new();
+
+                    public void Dispose()
+                    {
+                    }
+                }
+            }
         }
 
         /// <summary>

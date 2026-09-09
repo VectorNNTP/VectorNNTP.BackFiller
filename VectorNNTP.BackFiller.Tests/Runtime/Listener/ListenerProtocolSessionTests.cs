@@ -720,7 +720,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         }
 
         [Fact]
-        public async Task RunAsync_WhenWriterFaultsWhileReaderRemainsActive_ForcesSessionTermination()
+        public async Task RunAsync_WhenWriterFaultsWhileReaderRemainsActive_RethrowsTimeoutException()
         {
             byte[] request = ListenerProtocolEncoder.EncodeGetRequest(501, "30edc94157aa16fe644a45a1f1ffe160");
             WriterFaultWhileReaderActiveTransport transport = new(request);
@@ -731,9 +731,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             await transport.WaitForReadBlockedAsync().ConfigureAwait(false);
             await transport.WaitForWriteAttemptAsync().ConfigureAwait(false);
 
-            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(async () => await runTask.ConfigureAwait(false)).ConfigureAwait(false);
-            Assert.Equal("Listener protocol session terminated due to writer failure.", exception.Message);
-            Assert.IsType<TimeoutException>(exception.InnerException);
+            TimeoutException exception = await Assert.ThrowsAsync<TimeoutException>(async () => await runTask.ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.Contains("Simulated writer timeout", exception.Message, StringComparison.Ordinal);
             Assert.Equal(ListenerProtocolSessionState.Completed, session.State);
         }
 

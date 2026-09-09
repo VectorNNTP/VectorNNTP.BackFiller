@@ -224,6 +224,16 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
             writerFault ??= await ObserveFaultAsync(writerTask, sessionToken).ConfigureAwait(false);
             readFault ??= await ObserveFaultAsync(readerTask, sessionToken).ConfigureAwait(false);
 
+            if (writerFault is TimeoutException)
+            {
+                throw writerFault;
+            }
+
+            if (readFault is TimeoutException)
+            {
+                throw readFault;
+            }
+
             if (writerFault is not null)
             {
                 throw new InvalidOperationException("Listener protocol session terminated due to writer failure.", writerFault);
