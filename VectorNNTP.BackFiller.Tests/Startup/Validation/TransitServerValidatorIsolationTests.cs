@@ -9,6 +9,7 @@
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
 using System.Text;
+using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using VectorNNTP.Backfiller.Startup.Validation;
 using Xunit;
@@ -27,7 +28,6 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
     /// <returns>The value returned by the transit server validator isolation tests helper.</returns>
     public class TransitServerValidatorIsolationTests(ITestOutputHelper output)
     {
-        private const string CanonicalAcmeFixtureRelativePath = "VectorNNTP.BackFiller.Tests/Fixtures/Acme/account-private-key.pem";
 
         /// <summary>
         /// Supplies  out for the fixture or scenario under test.
@@ -67,7 +67,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             _ = Directory.CreateDirectory(certDirectory);
 
             string canonicalPem = LoadCanonicalAcmeFixturePem();
-            byte[] canonicalPrivateKey = ReadPrivateKeyPkcs8Bytes(canonicalPem);
+            byte[] canonicalPrivateKey = TestAcmeAccountKeyFixture.Pkcs8Bytes;
 
             string fileName = "account.key";
             string keyFilePath = Path.Combine(certDirectory, fileName);
@@ -108,41 +108,9 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 
         private static string LoadCanonicalAcmeFixturePem()
         {
-            string fixturePath = ResolveCanonicalAcmeFixturePath();
-            string pem = File.ReadAllText(fixturePath);
-            if (string.IsNullOrWhiteSpace(pem))
-            {
-                throw new InvalidOperationException($"Canonical ACME fixture at '{fixturePath}' is empty.");
-            }
-
+            string pem = TestAcmeAccountKeyFixture.Pem;
             _ = ReadPrivateKeyPkcs8Bytes(pem);
             return pem;
-        }
-
-        private static string ResolveCanonicalAcmeFixturePath()
-        {
-            const string SolutionMarker = "VectorNNTP.BackFiller.slnx";
-            string? current = AppContext.BaseDirectory;
-
-            while (!string.IsNullOrWhiteSpace(current))
-            {
-                string markerPath = Path.Combine(current, SolutionMarker);
-                if (File.Exists(markerPath))
-                {
-                    string fixturePath = Path.Combine(current, CanonicalAcmeFixtureRelativePath.Replace('/', Path.DirectorySeparatorChar));
-                    if (File.Exists(fixturePath))
-                    {
-                        return fixturePath;
-                    }
-
-                    break;
-                }
-
-                DirectoryInfo? parent = Directory.GetParent(current);
-                current = parent?.FullName;
-            }
-
-            throw new DirectoryNotFoundException("Could not locate canonical ACME account key fixture file.");
         }
 
         private static byte[] ReadPrivateKeyPkcs8Bytes(string pem)
