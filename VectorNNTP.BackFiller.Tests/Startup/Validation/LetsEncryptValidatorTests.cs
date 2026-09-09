@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the lets encrypt validator test suite.
 
 using System.Security.Cryptography;
+using Microsoft.Extensions.Configuration;
 using VectorNNTP.Backfiller.Configuration;
 using Xunit;
 
@@ -191,6 +192,140 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
                 DeleteDirectoryIfExists(certDirectory);
             }
         }
+        /// <summary>
+        /// Confirms the validate acme account key pem when absolute dir certs contains surrounding whitespace resolves using canonical certificate directory behavior.
+        /// </summary>
+        [Fact]
+        public void ValidateAcmeAccountKeyPem_WhenAbsoluteDirCertsContainsSurroundingWhitespace_UsesCanonicalDirectory()
+        {
+            string certDirectory = CreateUniqueTempDirectory();
+            string keyFileName = "account-key.pem";
+            string keyFilePath = Path.Combine(certDirectory, keyFileName);
+            string configuredDirCerts = $"  {certDirectory}  ";
+
+            using RSA rsa = RSA.Create(2048);
+            File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["BackFiller:DirCerts"] = configuredDirCerts,
+                })
+                .Build();
+
+            try
+            {
+                string resolvedByOperationalValidator = OperationalDirectoryValidator.ResolveAndValidateCertificateDirectory(configuration);
+                List<LetsEncryptValidationResult> diagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
+                    acmeAccountKeyPem: keyFileName,
+                    dirCerts: configuredDirCerts,
+                    settingPrefix: "BackFiller:LetsEncrypt");
+
+                Assert.Equal(Path.GetFullPath(certDirectory), resolvedByOperationalValidator);
+                Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(certDirectory);
+            }
+        }
+
+        /// <summary>
+        /// Confirms the validate acme account key pem when relative dir certs contains surrounding whitespace resolves using canonical certificate directory behavior.
+        /// </summary>
+        [Fact]
+        public void ValidateAcmeAccountKeyPem_WhenRelativeDirCertsContainsSurroundingWhitespace_UsesCanonicalDirectory()
+        {
+            string uniqueRoot = $"vectornntp-letsencrypt-relative-{Guid.NewGuid():N}";
+            string relativeCertDirectory = Path.Combine(uniqueRoot, "certs");
+            string configuredDirCerts = $"  {relativeCertDirectory}  ";
+            string expectedCertificateDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, relativeCertDirectory));
+            string keyFileName = "account-key.pem";
+
+            _ = Directory.CreateDirectory(expectedCertificateDirectory);
+
+            string keyFilePath = Path.Combine(expectedCertificateDirectory, keyFileName);
+            using RSA rsa = RSA.Create(2048);
+            File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["BackFiller:DirCerts"] = configuredDirCerts,
+                })
+                .Build();
+
+            try
+            {
+                string resolvedByOperationalValidator = OperationalDirectoryValidator.ResolveAndValidateCertificateDirectory(configuration);
+                List<LetsEncryptValidationResult> diagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
+                    acmeAccountKeyPem: keyFileName,
+                    dirCerts: configuredDirCerts,
+                    settingPrefix: "BackFiller:LetsEncrypt");
+
+                Assert.Equal(expectedCertificateDirectory, resolvedByOperationalValidator);
+                Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, uniqueRoot)));
+            }
+        }
+
+        /// <summary>
+        /// Confirms the validate acme account key pem when absolute dir certs is already normalized succeeds without changing behavior.
+        /// </summary>
+        [Fact]
+        public void ValidateAcmeAccountKeyPem_WhenAbsoluteDirCertsIsAlreadyNormalized_PreservesExistingSuccessBehavior()
+        {
+            string certDirectory = CreateUniqueTempDirectory();
+            string keyFileName = "account-key.pem";
+            string keyFilePath = Path.Combine(certDirectory, keyFileName);
+
+            using RSA rsa = RSA.Create(2048);
+            File.WriteAllText(keyFilePath, rsa.ExportPkcs8PrivateKeyPem());
+
+            try
+            {
+                List<LetsEncryptValidationResult> diagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
+                    acmeAccountKeyPem: keyFileName,
+                    dirCerts: certDirectory,
+                    settingPrefix: "BackFiller:LetsEncrypt");
+
+                Assert.DoesNotContain(diagnostics, static d => d.Severity == ValidationSeverity.Error);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(certDirectory);
+            }
+        }
+
+        /// <summary>
+        /// Confirms the validate acme account key pem when absolute dir certs contains surrounding whitespace and key is missing returns missing-file error behavior.
+        /// </summary>
+        [Fact]
+        public void ValidateAcmeAccountKeyPem_WhenAbsoluteDirCertsContainsSurroundingWhitespaceAndKeyMissing_ReturnsMissingFileError()
+        {
+            string certDirectory = CreateUniqueTempDirectory();
+            string configuredDirCerts = $"  {certDirectory}  ";
+
+            try
+            {
+                List<LetsEncryptValidationResult> diagnostics = LetsEncryptValidator.ValidateAcmeAccountKeyPem(
+                    acmeAccountKeyPem: "missing-account-key.pem",
+                    dirCerts: configuredDirCerts,
+                    settingPrefix: "BackFiller:LetsEncrypt");
+
+                LetsEncryptValidationResult error = Assert.Single(diagnostics);
+                Assert.Equal("BackFiller:LetsEncrypt:AcmeAccountKeyPem", error.Setting);
+                Assert.Contains("does not exist", error.Message, StringComparison.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(certDirectory);
+            }
+        }
+
         /// <summary>
         /// Confirms the lets encrypt options defaults acme account email to security at usenet ninja behavior.
         /// </summary>

@@ -2903,9 +2903,10 @@ namespace VectorNNTP.Backfiller.Configuration
                 return diagnostics;
             }
 
-            string resolvedCertDirectory = Path.IsPathRooted(dirCerts)
-                ? Path.GetFullPath(dirCerts)
-                : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, dirCerts.Trim()));
+            string normalizedCertDirectory = dirCerts.Trim();
+            string resolvedCertDirectory = Path.IsPathRooted(normalizedCertDirectory)
+                ? Path.GetFullPath(normalizedCertDirectory)
+                : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, normalizedCertDirectory));
 
             string resolvedKeyPath = Path.GetFullPath(Path.Combine(resolvedCertDirectory, normalizedFileName));
 
