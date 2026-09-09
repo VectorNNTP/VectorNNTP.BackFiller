@@ -122,6 +122,298 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             }
         }
 
+        [Fact]
+        public async Task TryRenewIfDueAsync_WhenReplacementSucceeds_DisposesEvaluatedBundle()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 10);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(5));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                using BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new FakeAcmeCertificateIssuer("bf-01.example.com"),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle => observedEvaluatedBundle = bundle);
+
+                bool renewed = await service.TryRenewIfDueAsync(runtime, CancellationToken.None);
+
+                Assert.True(renewed);
+                Assert.NotNull(observedEvaluatedBundle);
+                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+
+                using X509Certificate2? clone = state.GetCurrentCertificateClone();
+                Assert.NotNull(clone);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenReusingEvaluatedBundle_TransfersOwnershipAndEvaluatorDoesNotDispose()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 7);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new UnexpectedIssueAcmeCertificateIssuer(),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle => observedEvaluatedBundle = bundle);
+
+                await service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
+
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.True(state.HasCertificate);
+                AssertCertificateUsable(observedEvaluatedBundle!.Certificate);
+
+                state.Dispose();
+                AssertCertificateDisposed(observedEvaluatedBundle.Certificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task TryRenewIfDueAsync_WhenReplacementCanceledAfterEvaluation_DisposesEvaluatedBundle()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 10);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(5));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new CanceledIssueAcmeCertificateIssuer(),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle => observedEvaluatedBundle = bundle);
+
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.TryRenewIfDueAsync(runtime, CancellationToken.None));
+
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.False(state.HasCertificate);
+                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task TryRenewIfDueAsync_WhenObserverThrows_PropagatesAndDisposesUntransferredEvaluatedBundle()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 10);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(5));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                InvalidOperationException expected = new("observer failed");
+                BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new UnexpectedIssueAcmeCertificateIssuer(),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle =>
+                    {
+                        observedEvaluatedBundle = bundle;
+                        throw expected;
+                    });
+
+                InvalidOperationException actual = await Assert.ThrowsAsync<InvalidOperationException>(() => service.TryRenewIfDueAsync(runtime, CancellationToken.None));
+
+                Assert.Same(expected, actual);
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.False(state.HasCertificate);
+                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenObserverThrows_PropagatesAndDisposesUntransferredEvaluatedBundle()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 7);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                InvalidOperationException expected = new("observer failed");
+                BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new UnexpectedIssueAcmeCertificateIssuer(),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle =>
+                    {
+                        observedEvaluatedBundle = bundle;
+                        throw expected;
+                    });
+
+                InvalidOperationException actual = await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None));
+
+                Assert.Same(expected, actual);
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.False(state.HasCertificate);
+                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenProvisioningFailsWithUsableEvaluation_TransfersFallbackAndEvaluatorDoesNotDispose()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 10);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                WriteValidPfx(letsEncrypt.CertificatePfxPath, letsEncrypt.PfxExportPassword, "bf-01.example.com", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(5));
+
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+                using BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new ThrowingIssueAcmeCertificateIssuer(new InvalidOperationException("renewal failed")),
+                    evaluateExistingCertificateAsync: null,
+                    evaluatedBundleObserver: bundle => observedEvaluatedBundle = bundle);
+
+                await service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None);
+
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.True(state.HasCertificate);
+                AssertCertificateUsable(observedEvaluatedBundle!.Certificate);
+                using X509Certificate2? clone = state.GetCurrentCertificateClone();
+                Assert.NotNull(clone);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task EnsureCertificateAvailabilityAsync_WhenProvisioningFailsWithoutUsableFallback_DisposesEvaluatedBundleAndPropagatesException()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                BackFillerLetsEncryptRuntimeOptions letsEncrypt = CreateLetsEncryptOptions(tempDir, "bf-01.example.com", renewBeforeExpiryDays: 10);
+                BackFillerRuntimeOptions runtime = CreateRuntimeOptions(letsEncrypt);
+                BackFillerCertificateBundle evaluatedBundle = CreateInMemoryBundle("bf-01.example.com");
+                BackFillerCertificateBundle? observedEvaluatedBundle = null;
+
+                BackFillerCertificateState state = new();
+                BackFillerCertificateProvisioningService service = CreateServiceForOwnershipTests(
+                    state,
+                    new ThrowingIssueAcmeCertificateIssuer(new InvalidOperationException("provision failed")),
+                    (_, _, _) => Task.FromResult(new CertificateEvaluationResult(
+                        HasCertificate: true,
+                        IsUsable: false,
+                        RequiresRenewal: true,
+                        Reason: "unusable but loaded",
+                        Certificate: evaluatedBundle)),
+                    bundle => observedEvaluatedBundle = bundle);
+
+                await Assert.ThrowsAsync<InvalidOperationException>(() => service.EnsureCertificateAvailabilityAsync(runtime, CancellationToken.None));
+
+                Assert.NotNull(observedEvaluatedBundle);
+                Assert.False(state.HasCertificate);
+                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        /// <summary>
+        /// Creates a provisioning service configured for deterministic ownership tests while exercising real production disposal behavior.
+        /// </summary>
+        /// <param name="state">Runtime certificate state that receives ownership when publication occurs.</param>
+        /// <param name="acmeIssuer">Issuer controlling provisioning outcome for the scenario.</param>
+        /// <param name="evaluateExistingCertificateAsync">Optional evaluation delegate for scenarios that cannot be produced by persisted-certificate inputs.</param>
+        /// <param name="evaluatedBundleObserver">Optional observer receiving the evaluated bundle before ownership resolution.</param>
+        /// <returns>A provisioning service instance wired for ownership assertions.</returns>
+        private static BackFillerCertificateProvisioningService CreateServiceForOwnershipTests(
+            BackFillerCertificateState state,
+            IAcmeCertificateIssuer acmeIssuer,
+            Func<BackFillerLetsEncryptRuntimeOptions, TimeProvider, CancellationToken, Task<CertificateEvaluationResult>>? evaluateExistingCertificateAsync,
+            Action<BackFillerCertificateBundle>? evaluatedBundleObserver)
+        {
+            BackFillerCertificateStore store = new();
+            return new BackFillerCertificateProvisioningService(
+                store,
+                acmeIssuer,
+                state,
+                NullLogger<BackFillerCertificateProvisioningService>.Instance,
+                TimeProvider.System,
+                evaluateExistingCertificateAsync,
+                evaluatedBundleObserver);
+        }
+
+        /// <summary>
+        /// Creates one in-memory listener certificate bundle for deterministic ownership/disposal assertions.
+        /// </summary>
+        /// <param name="fqdn">FQDN written into CN/SAN.</param>
+        /// <returns>A certificate bundle owned by the caller.</returns>
+        private static BackFillerCertificateBundle CreateInMemoryBundle(string fqdn)
+        {
+            using RSA rsa = RSA.Create(2048);
+            CertificateRequest request = new(
+                $"CN={fqdn}",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            SubjectAlternativeNameBuilder sanBuilder = new();
+            sanBuilder.AddDnsName(fqdn);
+            request.CertificateExtensions.Add(sanBuilder.Build());
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
+            OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, true));
+
+            using X509Certificate2 cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+            const string bundlePassword = "BackFiller-ProvisioningServiceTests-Bundle";
+            byte[] pfx = cert.Export(X509ContentType.Pkcs12, bundlePassword);
+            X509Certificate2 owned = new(
+                pfx,
+                bundlePassword,
+                X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+
+            return new BackFillerCertificateBundle(owned, "memory", DateTimeOffset.UtcNow);
+        }
+
         /// <summary>
         /// Confirms the create runtime options behavior.
         /// </summary>
@@ -214,36 +506,26 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
-        /// Confirms the fake acme certificate issuer behavior.
+        /// Throws when issuance is unexpectedly invoked in reuse scenarios.
         /// </summary>
-        /// <returns>The value returned by the fake acme certificate issuer helper.</returns>
+        private sealed class UnexpectedIssueAcmeCertificateIssuer : IAcmeCertificateIssuer
+        {
+            public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
+            {
+                throw new InvalidOperationException("Issuance should not be invoked for this scenario.");
+            }
+        }
+
         /// <summary>
-        /// Confirms the fake acme certificate issuer behavior.
+        /// Returns a deterministic successful issuance result for replacement-success scenarios.
         /// </summary>
-        /// <param name="fqdn">The fqdn used by this test scenario.</param>
-        /// <returns>The value returned by the fake acme certificate issuer helper.</returns>
+        /// <param name="fqdn">FQDN encoded into the issued certificate artifacts.</param>
         private sealed class FakeAcmeCertificateIssuer(string fqdn) : IAcmeCertificateIssuer
         {
-            /// <summary>
-            /// Supplies  fqdn for the fixture or scenario under test.
-            /// </summary>
             private readonly string _fqdn = fqdn;
 
-            /// <summary>
-            /// Supplies issue call count for the fixture or scenario under test.
-            /// </summary>
             internal int IssueCallCount { get; private set; }
 
-            /// <summary>
-            /// Confirms the issue certificate async behavior.
-            /// </summary>
-            /// <returns>The value returned by the issue certificate async helper.</returns>
-            /// <summary>
-            /// Confirms the issue certificate async behavior.
-            /// </summary>
-            /// <param name="letsEncryptOptions">The lets encrypt options used by this test scenario.</param>
-            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
-            /// <returns>The value returned by the issue certificate async helper.</returns>
             public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
             {
                 IssueCallCount++;
@@ -266,6 +548,49 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
                 return Task.FromResult(result);
             }
+        }
+
+        /// <summary>
+        /// Throws a deterministic cancellation when issuance is requested.
+        /// </summary>
+        private sealed class CanceledIssueAcmeCertificateIssuer : IAcmeCertificateIssuer
+        {
+            public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
+            {
+                return Task.FromCanceled<AcmeOrderIssueResult>(new CancellationToken(canceled: true));
+            }
+        }
+
+        /// <summary>
+        /// Throws a configured deterministic exception when issuance is requested.
+        /// </summary>
+        /// <param name="exception">Exception instance to throw from issuance.</param>
+        private sealed class ThrowingIssueAcmeCertificateIssuer(Exception exception) : IAcmeCertificateIssuer
+        {
+            private readonly Exception _exception = exception;
+
+            public Task<AcmeOrderIssueResult> IssueCertificateAsync(BackFillerLetsEncryptRuntimeOptions letsEncryptOptions, CancellationToken cancellationToken)
+            {
+                return Task.FromException<AcmeOrderIssueResult>(_exception);
+            }
+        }
+
+        /// <summary>
+        /// Asserts that a certificate instance remains usable and has not been disposed.
+        /// </summary>
+        /// <param name="certificate">Certificate to validate.</param>
+        private static void AssertCertificateUsable(X509Certificate2 certificate)
+        {
+            _ = certificate.Export(X509ContentType.Cert);
+        }
+
+        /// <summary>
+        /// Asserts that a certificate instance has been disposed.
+        /// </summary>
+        /// <param name="certificate">Certificate expected to be disposed.</param>
+        private static void AssertCertificateDisposed(X509Certificate2 certificate)
+        {
+            _ = Assert.ThrowsAny<CryptographicException>(() => certificate.Export(X509ContentType.Cert));
         }
 
         /// <summary>
