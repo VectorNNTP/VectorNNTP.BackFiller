@@ -1084,12 +1084,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             byte[] single = new byte[1];
             while (true)
             {
-                int read = await sslStream.ReadAsync(single.AsMemory(0, 1)).ConfigureAwait(false);
-                if (read == 0)
+                try
+                {
+                    int read = await sslStream.ReadAsync(single.AsMemory(0, 1)).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        return;
+                    }
+                }
+                catch (IOException ex) when (IsExpectedTlsAbruptClosure(ex))
                 {
                     return;
                 }
             }
+        }
+
+        private static bool IsExpectedTlsAbruptClosure(IOException exception)
+        {
+            ArgumentNullException.ThrowIfNull(exception);
+
+            return exception.Message.Contains("unexpected EOF", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("0 bytes", StringComparison.OrdinalIgnoreCase);
         }
 
         private static async Task AssertTaskRemainsIncompleteAsync(Task task)
