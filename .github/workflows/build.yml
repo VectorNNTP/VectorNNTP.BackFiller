@@ -28,10 +28,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup .NET
+      - name: Setup .NET SDK (repo pin)
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Restore solution
         run: dotnet restore VectorNNTP.BackFiller.slnx
@@ -262,10 +262,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup .NET
+      - name: Setup .NET SDK (repo pin)
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Restore solution
         run: dotnet restore VectorNNTP.BackFiller.slnx
@@ -303,10 +303,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup .NET
+      - name: Setup .NET SDK (repo pin)
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Restore solution
         run: dotnet restore VectorNNTP.BackFiller.slnx
