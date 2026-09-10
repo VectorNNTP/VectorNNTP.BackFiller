@@ -30,10 +30,6 @@ internal static class TransitServerStressRunner
     /// </summary>
     private const int DefaultWarmupSeconds = 10;
     /// <summary>
-    /// Gets or sets the validation Seconds.
-    /// </summary>
-    private const int ValidationSeconds = 10;
-    /// <summary>
     /// Gets or sets the default GeneratorMeasurementSeconds.
     /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;

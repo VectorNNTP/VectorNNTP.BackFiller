@@ -13,12 +13,12 @@ using Xunit;
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Validates benchmark entrypoint behavioral contracts for mode routing, duration planning, and forensic identity compatibility.
+    /// Validates benchmark entrypoint behavioral contracts for mode planning, duration planning, and forensic identity compatibility.
     /// </summary>
     public sealed class TransitEntrypointOptionContractTests
     {
         /// <summary>
-        /// Proves transit-validate planning preserves a caller-supplied duration override.
+        /// Verifies that transit-validate planning preserves a caller-supplied duration override.
         /// </summary>
         [Fact]
         public void BuildEntrypointPlan_WhenTransitValidateDurationProvided_UsesProvidedDuration()
@@ -30,7 +30,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Proves transit-benchmark-fakeserver planning preserves a caller-supplied duration override.
+        /// Verifies that transit-benchmark-fakeserver planning preserves a caller-supplied duration override.
         /// </summary>
         [Fact]
         public void BuildEntrypointPlan_WhenTransitFakeServerDurationProvided_UsesProvidedDuration()
@@ -42,7 +42,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Proves transit-single-trace planning preserves a caller-supplied duration override.
+        /// Verifies that transit-single-trace planning preserves a caller-supplied duration override.
         /// </summary>
         [Fact]
         public void BuildEntrypointPlan_WhenTransitSingleTraceDurationProvided_UsesProvidedDuration()
@@ -54,7 +54,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Proves validation-mode planning retains the existing default duration when no duration override is supplied.
+        /// Verifies that validation planning preserves existing default duration behavior when no duration override is supplied.
         /// </summary>
         [Fact]
         public void BuildEntrypointPlan_WhenTransitValidateDurationOmitted_UsesDefaultValidationDuration()
@@ -66,7 +66,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Proves documented mode tokens map to intended production entrypoint kinds.
+        /// Verifies documented mode tokens map to the intended production entrypoint kinds.
         /// </summary>
         [Theory]
         [InlineData("transit-validate", nameof(TransitEntrypointKind.TransitValidate))]
@@ -82,15 +82,74 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         /// <summary>
-        /// Proves forensic mode options remain compatible with the actual runtime identity guard contract using deterministic in-memory configuration.
+        /// Verifies that the transit benchmark configuration boundary consumes a supplied measurement duration exactly.
+        /// </summary>
+        [Theory]
+        [InlineData(37)]
+        [InlineData(10)]
+        public void LoadFromConfiguration_WhenDurationProvided_UsesExactMeasurementDuration(int durationSeconds)
+        {
+            TransitBenchmarkCliOptions options = new(
+                DurationSeconds: null,
+                WarmupSeconds: 10,
+                ConnectionPoolSize: 4,
+                PipelineDepth: 8,
+                DispatchWorkers: 32,
+                QueueMegabytes: 256,
+                QueueArticles: 256,
+                ArticleKilobytes: 1024,
+                GeneratorWorkers: 1,
+                WriteBatchCoalesceMicroseconds: 250,
+                ExpectedAssemblyPath: RuntimeIdentity.RuntimeAssemblyPath,
+                ExpectedAssemblyVersion: RuntimeIdentity.RuntimeAssemblyVersion,
+                ExpectedFileVersion: RuntimeIdentity.AssemblyFileVersion,
+                ExpectedConfiguration: RuntimeIdentity.Configuration,
+                ExpectedPlatform: RuntimeIdentity.Platform,
+                ExpectedTargetFramework: RuntimeIdentity.TargetFramework,
+                ExpectedRuntimeIdentifier: RuntimeIdentity.RuntimeIdentifier,
+                ExpectedArchitecture: RuntimeIdentity.Architecture,
+                ExpectedProductionAssemblyPath: RuntimeIdentity.ProductionDependencyPath,
+                ExpectedProductionAssemblyVersion: RuntimeIdentity.ProductionDependencyAssemblyVersion,
+                ExpectedProductionFileVersion: RuntimeIdentity.ProductionDependencyFileVersion);
+
+            TransitBenchmarkConfig config = TransitBenchmarkConfig.LoadFromConfiguration(
+                TimeSpan.FromSeconds(durationSeconds),
+                BenchmarkMode.Validation,
+                options,
+                BuildTransitConfiguration(),
+                appSettingsPath: "in-memory:test");
+
+            Assert.Equal(TimeSpan.FromSeconds(durationSeconds), config.MeasurementDuration);
+        }
+
+        /// <summary>
+        /// Verifies forensic mode options remain compatible with the actual runtime identity guard contract using deterministic in-memory configuration.
         /// </summary>
         [Fact]
         public void CreateForensicModeOptions_WhenLoadedFromInMemoryConfig_PassesRuntimeIdentityGuard()
         {
-            RuntimeExecutionIdentity runtimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
             TransitBenchmarkCliOptions options = TransitServerStressRunner.CreateForensicModeOptions(generatorWorkers: 32);
 
-            IConfiguration configuration = new ConfigurationBuilder()
+            TransitBenchmarkConfig config = TransitBenchmarkConfig.LoadFromConfiguration(
+                TimeSpan.FromSeconds(30),
+                BenchmarkMode.Forensic,
+                options,
+                BuildTransitConfiguration(),
+                appSettingsPath: "in-memory:test");
+
+            RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, RuntimeIdentity);
+
+            Assert.Equal(BenchmarkMode.Forensic, config.Mode);
+            Assert.Equal(32, config.GeneratorWorkerCount);
+        }
+
+        /// <summary>
+        /// Builds deterministic transit endpoint configuration for configuration-boundary tests.
+        /// </summary>
+        /// <returns>An in-memory configuration root containing required transit endpoint values.</returns>
+        private static IConfiguration BuildTransitConfiguration()
+        {
+            return new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["BackFiller:TransitServer:Host"] = "incoming.usenet.ninja",
@@ -98,18 +157,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                     ["BackFiller:TransitServer:UseSsl"] = "true",
                 })
                 .Build();
-
-            TransitBenchmarkConfig config = TransitBenchmarkConfig.LoadFromConfiguration(
-                TimeSpan.FromSeconds(30),
-                BenchmarkMode.Forensic,
-                options,
-                configuration,
-                appSettingsPath: "in-memory:test");
-
-            RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, runtimeIdentity);
-
-            Assert.Equal(BenchmarkMode.Forensic, config.Mode);
-            Assert.Equal(32, config.GeneratorWorkerCount);
         }
+
+        /// <summary>
+        /// Captures runtime identity from the same authoritative source used by production benchmark execution.
+        /// </summary>
+        private static RuntimeExecutionIdentity RuntimeIdentity { get; } = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
     }
 }
