@@ -21,14 +21,17 @@ jobs:
     name: Linux Build and Test
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/.dotnet
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Set .NET installation directory
+        shell: bash
+        run: |
+          echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/.dotnet" >> "$GITHUB_ENV"
 
       - name: Setup .NET SDK (repo pin)
         id: setup-dotnet
@@ -291,14 +294,17 @@ jobs:
     name: Linux Benchmark Contract Tests
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/.dotnet
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Set .NET installation directory
+        shell: bash
+        run: |
+          echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/.dotnet" >> "$GITHUB_ENV"
 
       - name: Setup .NET SDK (repo pin)
         id: setup-dotnet
