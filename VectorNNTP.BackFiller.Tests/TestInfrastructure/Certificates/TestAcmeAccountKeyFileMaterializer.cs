@@ -5,7 +5,6 @@
 // VectorNNTP.Backfiller Tests / Runtime and startup
 // Shared test helper that materializes the process-scoped ACME account key fixture file.
 
-using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using VectorNNTP.Backfiller.Runtime.Certificates;
@@ -17,8 +16,6 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
     /// </summary>
     internal static class TestAcmeAccountKeyFileMaterializer
     {
-        private static readonly ConcurrentDictionary<string, PathLockState> PathLocks = new(StringComparer.Ordinal);
-
         /// <summary>
         /// Ensures the relative ACME account-key fixture file exists and contains the shared process-scoped private key.
         /// </summary>
@@ -33,60 +30,45 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             _ = Directory.CreateDirectory(certDirectory);
 
             const string fileName = "account.key";
-            string keyFilePath = Path.GetFullPath(Path.Combine(certDirectory, fileName));
-            string lockKey = GetPathLockKey(keyFilePath);
+            string keyFilePath = TestAcmeAccountKeyPathLockCoordinator.GetAccountKeyPath(certDirectory);
 
-            PathLockState lockState = PathLocks.GetOrAdd(lockKey, static _ => new PathLockState());
-            Interlocked.Increment(ref lockState.ReferenceCount);
+            using IDisposable pathLock = TestAcmeAccountKeyPathLockCoordinator.Acquire(keyFilePath);
+
+            string canonicalPem = TestAcmeAccountKeyFixture.Pem;
+            byte[] canonicalPrivateKey = TestAcmeAccountKeyFixture.Pkcs8Bytes;
+
+            if (TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] existingPrivateKey) && existingPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
+            {
+                return fileName;
+            }
+
+            string tempPath = CertificateFileConventions.BuildAtomicTempPath(keyFilePath);
 
             try
             {
-                lock (lockState.Gate)
+                byte[] payload = Encoding.UTF8.GetBytes(canonicalPem);
+                using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    string canonicalPem = TestAcmeAccountKeyFixture.Pem;
-                    byte[] canonicalPrivateKey = TestAcmeAccountKeyFixture.Pkcs8Bytes;
-
-                    if (TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] existingPrivateKey) && existingPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
-                    {
-                        return fileName;
-                    }
-
-                    string tempPath = CertificateFileConventions.BuildAtomicTempPath(keyFilePath);
-
-                    try
-                    {
-                        byte[] payload = Encoding.UTF8.GetBytes(canonicalPem);
-                        using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                        {
-                            stream.Write(payload, 0, payload.Length);
-                            stream.Flush(true);
-                        }
-
-                        File.Move(tempPath, keyFilePath, overwrite: true);
-                    }
-                    finally
-                    {
-                        if (File.Exists(tempPath))
-                        {
-                            File.Delete(tempPath);
-                        }
-                    }
-
-                    if (!TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] finalPrivateKey) || !finalPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
-                    {
-                        throw new InvalidOperationException("Failed to create a valid process-scoped ACME account key test fixture.");
-                    }
-
-                    return fileName;
+                    stream.Write(payload, 0, payload.Length);
+                    stream.Flush(true);
                 }
+
+                File.Move(tempPath, keyFilePath, overwrite: true);
             }
             finally
             {
-                if (Interlocked.Decrement(ref lockState.ReferenceCount) == 0)
+                if (File.Exists(tempPath))
                 {
-                    _ = PathLocks.TryRemove(new KeyValuePair<string, PathLockState>(lockKey, lockState));
+                    File.Delete(tempPath);
                 }
             }
+
+            if (!TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] finalPrivateKey) || !finalPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
+            {
+                throw new InvalidOperationException("Failed to create a valid process-scoped ACME account key test fixture.");
+            }
+
+            return fileName;
         }
 
         private static bool TryReadPrivateKeyPkcs8Bytes(string keyFilePath, out byte[] privateKey)
@@ -116,18 +98,5 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             }
         }
 
-        private static string GetPathLockKey(string keyFilePath)
-        {
-            return OperatingSystem.IsWindows()
-                ? keyFilePath.ToUpperInvariant()
-                : keyFilePath;
-        }
-
-        private sealed class PathLockState
-        {
-            internal object Gate { get; } = new();
-
-            internal int ReferenceCount;
-        }
     }
 }
