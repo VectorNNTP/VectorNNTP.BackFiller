@@ -13,6 +13,7 @@ using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;
 using Xunit;
 using static VectorNNTP.BackFiller.Tests.Startup.Validation.ArticleRetentionPhysicalMemoryPolicyTests;
+using System.Security.Cryptography;
 
 namespace VectorNNTP.BackFiller.Tests.Startup.Validation
 {

@@ -123,7 +123,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private bool _disposeRequested;
 
         /// <summary>
-        /// Number of currently active leases.
+        /// Number of currently active article leases acquired through <see cref="AcquireAsync(string, CancellationToken)"/>.
         /// </summary>
         private int _activeLeases;
 
@@ -441,6 +441,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     }
 
                     slot.Busy = true;
+                    slot.HasArticleLease = true;
                     if (_activeLeases == 0)
                     {
                         _allLeasesReturned = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -466,6 +467,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             NntpArticleAcquisitionSession? retiredSession = null;
             bool shouldRecycle = !NntpArticleSessionHealthClassifier.IsSessionReusable(failureCode);
             bool reconnectAfterRetire;
+            bool releaseOwnsArticleLease;
 
             lock (_gate)
             {
@@ -475,6 +477,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     return;
                 }
 
+                releaseOwnsArticleLease = slot.HasArticleLease;
+                slot.HasArticleLease = false;
                 slot.Busy = false;
                 slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
                 slot.LastKeepAliveProbeUtc = null;
@@ -543,16 +547,19 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             }
 
             TaskCompletionSource<bool>? leasesCompleted = null;
-            lock (_gate)
+            if (releaseOwnsArticleLease)
             {
-                if (_activeLeases > 0)
+                lock (_gate)
                 {
-                    _activeLeases--;
-                }
+                    if (_activeLeases > 0)
+                    {
+                        _activeLeases--;
+                    }
 
-                if (_activeLeases == 0)
-                {
-                    leasesCompleted = _allLeasesReturned;
+                    if (_activeLeases == 0)
+                    {
+                        leasesCompleted = _allLeasesReturned;
+                    }
                 }
             }
 
@@ -608,6 +615,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 {
                     slot.Session = null;
                     slot.Busy = false;
+                    slot.HasArticleLease = false;
                 }
             }
 
@@ -1129,9 +1137,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             internal ILogger<NntpArticleAcquisitionSession> Logger { get; }
 
             /// <summary>
-            /// Gets or sets a value indicating whether the slot is currently leased.
+            /// Gets or sets a value indicating whether the slot is currently occupied by an active operation.
             /// </summary>
+            /// <remarks>
+            /// <see cref="Busy"/> is set for both article-lease execution and maintenance/retirement work and therefore does not, by itself, imply article-lease ownership.
+            /// </remarks>
             internal bool Busy { get; set; }
+
+            /// <summary>
+            /// Gets or sets a value indicating whether the slot currently owns an acquired article lease.
+            /// </summary>
+            /// <remarks>
+            /// This flag is the ownership source for aggregate lease accounting and is set only by <see cref="AcquireAsync(string, CancellationToken)"/>.
+            /// </remarks>
+            internal bool HasArticleLease { get; set; }
 
             /// <summary>
             /// Gets or sets the UTC time of the most recently completed ARTICLE operation for this slot.
