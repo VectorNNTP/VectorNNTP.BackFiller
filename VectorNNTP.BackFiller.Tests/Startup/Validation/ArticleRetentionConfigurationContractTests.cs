@@ -5,6 +5,7 @@
 // VectorNNTP.Backfiller Tests / Startup validation
 // Focused tests for article-retention configuration contract binding, validation, and runtime projection.
 
+using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Configuration;
