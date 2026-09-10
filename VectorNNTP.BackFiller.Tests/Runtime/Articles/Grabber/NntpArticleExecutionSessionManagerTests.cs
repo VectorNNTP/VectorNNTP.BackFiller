@@ -854,35 +854,48 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         [Fact]
         public async Task ReconcileAccountAsync_WhenIdleSlotRetiresWhileAnotherLeaseActive_DoesNotDecrementUnrelatedActiveLease()
         {
-            TaskCompletionSource<bool> articleAObserved = CreateSignal();
-            TaskCompletionSource<bool> allowArticleAResponse = CreateSignal();
-            TaskCompletionSource<bool> articleBObserved = CreateSignal();
+            TaskCompletionSource<bool> activeArticleObserved = CreateSignal();
+            TaskCompletionSource<bool> allowActiveArticleResponse = CreateSignal();
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
 
-                string firstCommand = await FakeArticleServer.ReadAsciiLineAsync(stream, CancellationToken.None).ConfigureAwait(false);
-                if (string.Equals(firstCommand, "ARTICLE <active-a@test>", StringComparison.Ordinal))
+                try
                 {
-                    _ = articleAObserved.TrySetResult(true);
-                    _ = await allowArticleAResponse.Task.ConfigureAwait(false);
-                    await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <active-a@test> article follows").ConfigureAwait(false);
-                    await FakeArticleServer.WriteBytesAsync(stream, BuildArticleBytes("<active-a@test>", "body-a\r\n")).ConfigureAwait(false);
-                    await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
-                    return;
-                }
+                    string command = await FakeArticleServer.ReadAsciiLineAsync(stream, CancellationToken.None).ConfigureAwait(false);
+                    if (string.Equals(command, "QUIT", StringComparison.Ordinal))
+                    {
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
+                        return;
+                    }
 
-                if (string.Equals(firstCommand, "ARTICLE <post-retire@test>", StringComparison.Ordinal))
+                    if (string.Equals(command, "ARTICLE <retired-idle@test>", StringComparison.Ordinal))
+                    {
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <retired-idle@test> article follows").ConfigureAwait(false);
+                        await FakeArticleServer.WriteBytesAsync(stream, BuildArticleBytes("<retired-idle@test>", "idle-body\r\n")).ConfigureAwait(false);
+                        await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (string.Equals(command, "ARTICLE <active-higher@test>", StringComparison.Ordinal))
+                    {
+                        _ = activeArticleObserved.TrySetResult(true);
+                        _ = await allowActiveArticleResponse.Task.ConfigureAwait(false);
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <active-higher@test> article follows").ConfigureAwait(false);
+                        await FakeArticleServer.WriteBytesAsync(stream, BuildArticleBytes("<active-higher@test>", "active-body\r\n")).ConfigureAwait(false);
+                        await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+                        return;
+                    }
+
+                    Assert.Fail($"Unexpected command: {command}");
+                }
+                catch (EndOfStreamException)
                 {
-                    _ = articleBObserved.TrySetResult(true);
-                    await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <post-retire@test> article follows").ConfigureAwait(false);
-                    await FakeArticleServer.WriteBytesAsync(stream, BuildArticleBytes("<post-retire@test>", "body-b\r\n")).ConfigureAwait(false);
-                    await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
-                    return;
                 }
-
-                Assert.Fail($"Unexpected command: {firstCommand}");
+                catch (IOException)
+                {
+                }
             }, acceptConnectionCount: 2).ConfigureAwait(false);
 
             Guid accountId = Guid.NewGuid();
@@ -891,28 +904,53 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
 
             await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
             await manager.InitializeAsync([initialAccount], CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(2, manager.ActiveSessionCount);
 
-            NntpArticleSessionLease activeLease = await manager.AcquireAsync("<active-a@test>", CancellationToken.None).ConfigureAwait(false);
-            ValueTask<NntpArticleAcquisitionResult> activeArticleTask = activeLease.Session.DownloadArticleAsync("<active-a@test>", CancellationToken.None);
-            await articleAObserved.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            NntpArticleSessionLease firstLease = await manager.AcquireAsync("<lease-a@test>", CancellationToken.None).ConfigureAwait(false);
+            NntpArticleSessionLease secondLease = await manager.AcquireAsync("<lease-b@test>", CancellationToken.None).ConfigureAwait(false);
+
+            NntpArticleSessionLease lowerSlotLease = firstLease.SlotId < secondLease.SlotId ? firstLease : secondLease;
+            NntpArticleSessionLease higherSlotLease = firstLease.SlotId < secondLease.SlotId ? secondLease : firstLease;
+
+            Assert.Equal(0, lowerSlotLease.SlotId);
+            Assert.Equal(1, higherSlotLease.SlotId);
+            Assert.Equal(2, GetActiveLeaseCount(manager));
+
+            using (NntpArticleAcquisitionResult lowerSlotResult = await lowerSlotLease.Session.DownloadArticleAsync("<retired-idle@test>", CancellationToken.None).ConfigureAwait(false))
+            {
+                lowerSlotLease.ReportAcquisitionOutcome(lowerSlotResult.FailureCode);
+                Assert.True(lowerSlotResult.IsSuccess);
+            }
+
+            await lowerSlotLease.DisposeAsync().ConfigureAwait(false);
+            Assert.Equal(1, GetActiveLeaseCount(manager));
+
+            ValueTask<NntpArticleAcquisitionResult> higherSlotArticleTask = higherSlotLease.Session.DownloadArticleAsync("<active-higher@test>", CancellationToken.None);
+            await activeArticleObserved.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+            Assert.Equal(1, GetActiveLeaseCount(manager));
 
             NntpAccountSessionReconcileResult reconcileResult = await manager.ReconcileAccountAsync(desiredAccount, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Equal(1, reconcileResult.RetiredSessionCount);
             Assert.Equal(1, GetActiveLeaseCount(manager));
+            Assert.Equal(1, manager.ActiveSessionCount);
 
             ValueTask disposeTask = manager.DisposeAsync();
             Assert.False(disposeTask.IsCompleted);
 
-            _ = allowArticleAResponse.TrySetResult(true);
-            using NntpArticleAcquisitionResult activeResult = await activeArticleTask.ConfigureAwait(false);
-            activeLease.ReportAcquisitionOutcome(activeResult.FailureCode);
-            await activeLease.DisposeAsync().ConfigureAwait(false);
-            Assert.True(activeResult.IsSuccess);
+            _ = allowActiveArticleResponse.TrySetResult(true);
+            using (NntpArticleAcquisitionResult higherSlotResult = await higherSlotArticleTask.ConfigureAwait(false))
+            {
+                higherSlotLease.ReportAcquisitionOutcome(higherSlotResult.FailureCode);
+                Assert.True(higherSlotResult.IsSuccess);
+            }
 
+            await higherSlotLease.DisposeAsync().ConfigureAwait(false);
             await disposeTask.ConfigureAwait(false);
 
             Assert.Equal(0, GetActiveLeaseCount(manager));
+            Assert.Equal(0, manager.ActiveSessionCount);
         }
 
         /// <summary>
@@ -939,6 +977,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
 
             Assert.Equal(1, reconcileResult.RetiredSessionCount);
             Assert.Equal(0, GetActiveLeaseCount(manager));
+            Assert.Equal(0, manager.ActiveSessionCount);
 
             ValueTask disposeTask = manager.DisposeAsync();
             Assert.True(disposeTask.IsCompleted);
@@ -975,6 +1014,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             NntpArticleSessionLease lease = await manager.AcquireAsync("<deferred@test>", CancellationToken.None).ConfigureAwait(false);
             ValueTask<NntpArticleAcquisitionResult> articleTask = lease.Session.DownloadArticleAsync("<deferred@test>", CancellationToken.None);
             await articleObserved.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            Assert.Equal(1, GetActiveLeaseCount(manager));
 
             NntpAccountSessionReconcileResult reconcileResult = await manager.ReconcileAccountAsync(desiredAccount, CancellationToken.None).ConfigureAwait(false);
 
@@ -2012,13 +2052,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             /// <returns>The value returned by the accept loop async helper.</returns>
             private async Task AcceptLoopAsync()
             {
+                List<Task> sessionTasks = [];
+
                 try
                 {
                     for (int i = 0; i < _acceptConnectionCount; i++)
                     {
-                        using TcpClient client = await _listener.AcceptTcpClientAsync(_shutdown.Token).ConfigureAwait(false);
-                        using NetworkStream stream = client.GetStream();
-                        await _session(stream).ConfigureAwait(false);
+                        TcpClient client = await _listener.AcceptTcpClientAsync(_shutdown.Token).ConfigureAwait(false);
+                        sessionTasks.Add(HandleAcceptedClientAsync(client));
                     }
                 }
                 catch (OperationCanceledException)
@@ -2026,6 +2067,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                 }
                 catch (ObjectDisposedException)
                 {
+                }
+
+                await Task.WhenAll(sessionTasks).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Runs one accepted client session and handles shutdown-related transport teardown.
+            /// </summary>
+            /// <param name="client">Accepted TCP client.</param>
+            /// <returns>A task that completes when the scripted session finishes.</returns>
+            private async Task HandleAcceptedClientAsync(TcpClient client)
+            {
+                using (client)
+                using (NetworkStream stream = client.GetStream())
+                {
+                    try
+                    {
+                        await _session(stream).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
+                    {
+                    }
+                    catch (ObjectDisposedException) when (_shutdown.IsCancellationRequested)
+                    {
+                    }
+                    catch (IOException) when (_shutdown.IsCancellationRequested)
+                    {
+                    }
+                    catch (EndOfStreamException) when (_shutdown.IsCancellationRequested)
+                    {
+                    }
                 }
             }
         }
