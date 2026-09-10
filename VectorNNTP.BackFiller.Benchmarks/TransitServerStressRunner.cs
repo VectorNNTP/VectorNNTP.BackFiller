@@ -30,10 +30,6 @@ internal static class TransitServerStressRunner
     /// </summary>
     private const int DefaultWarmupSeconds = 10;
     /// <summary>
-    /// Gets or sets the validation Seconds.
-    /// </summary>
-    private const int ValidationSeconds = 10;
-    /// <summary>
     /// Gets or sets the default GeneratorMeasurementSeconds.
     /// </summary>
     private const int DefaultGeneratorMeasurementSeconds = 30;
@@ -59,9 +55,9 @@ internal static class TransitServerStressRunner
     /// <summary>
     /// Runs ValidationAsync.
     /// </summary>
-    internal static async Task RunValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
+    internal static async Task RunValidationAsync(TimeSpan validationDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
-        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(ValidationSeconds), BenchmarkMode.Validation, cliOptions);
+        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(validationDuration, BenchmarkMode.Validation, cliOptions);
         await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
     }
 
@@ -71,12 +67,12 @@ internal static class TransitServerStressRunner
     /// <param name="cliOptions">The benchmark CLI options.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A task that completes when benchmark execution has finished.</returns>
-    internal static async Task RunFakeServerValidationAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
+    internal static async Task RunFakeServerValidationAsync(TimeSpan validationDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         await using BenchmarkDevNullTransitServer fakeServer = await BenchmarkDevNullTransitServer.StartAsync(IPAddress.Loopback, cancellationToken: cancellationToken).ConfigureAwait(false);
 
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(
-            TimeSpan.FromSeconds(ValidationSeconds),
+            validationDuration,
             BenchmarkMode.Validation,
             cliOptions,
             endpointHostOverride: IPAddress.Loopback.ToString(),
@@ -121,17 +117,7 @@ internal static class TransitServerStressRunner
             Console.WriteLine();
             Console.WriteLine($"=== Generator worker sweep run: workers={generatorWorkers} ===");
 
-            TransitBenchmarkCliOptions options = new(
-                DurationSeconds: 30,
-                WarmupSeconds: 10,
-                ConnectionPoolSize: 64,
-                PipelineDepth: 16,
-                DispatchWorkers: 512,
-                QueueMegabytes: 2048,
-                QueueArticles: 2048,
-                ArticleKilobytes: 1024,
-                GeneratorWorkers: generatorWorkers,
-                WriteBatchCoalesceMicroseconds: 250);
+            TransitBenchmarkCliOptions options = CreateForensicModeOptions(generatorWorkers);
 
             TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(30), BenchmarkMode.Forensic, options);
             await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
@@ -143,6 +129,19 @@ internal static class TransitServerStressRunner
     /// </summary>
     internal static async Task RunForensic32WorkerAsync(CancellationToken cancellationToken = default)
     {
+        TransitBenchmarkCliOptions options = CreateForensicModeOptions(generatorWorkers: 32);
+
+        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(30), BenchmarkMode.Forensic, options);
+        await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates validated forensic mode options with runtime identity expectations required by the runtime identity guard.
+    /// </summary>
+    /// <param name="generatorWorkers">The generator worker count for the forensic workload profile.</param>
+    /// <returns>The forensic mode options including required hard identity expectations.</returns>
+    internal static TransitBenchmarkCliOptions CreateForensicModeOptions(int generatorWorkers)
+    {
         TransitBenchmarkCliOptions options = new(
             DurationSeconds: 30,
             WarmupSeconds: 10,
@@ -152,11 +151,22 @@ internal static class TransitServerStressRunner
             QueueMegabytes: 2048,
             QueueArticles: 2048,
             ArticleKilobytes: 1024,
-            GeneratorWorkers: 32,
-            WriteBatchCoalesceMicroseconds: 250);
+            GeneratorWorkers: generatorWorkers,
+            WriteBatchCoalesceMicroseconds: 250,
+            ExpectedAssemblyPath: RuntimeIdentity.RuntimeAssemblyPath,
+            ExpectedAssemblyVersion: RuntimeIdentity.RuntimeAssemblyVersion,
+            ExpectedFileVersion: RuntimeIdentity.AssemblyFileVersion,
+            ExpectedConfiguration: RuntimeIdentity.Configuration,
+            ExpectedPlatform: RuntimeIdentity.Platform,
+            ExpectedTargetFramework: RuntimeIdentity.TargetFramework,
+            ExpectedRuntimeIdentifier: RuntimeIdentity.RuntimeIdentifier,
+            ExpectedArchitecture: RuntimeIdentity.Architecture,
+            ExpectedProductionAssemblyPath: RuntimeIdentity.ProductionDependencyPath,
+            ExpectedProductionAssemblyVersion: RuntimeIdentity.ProductionDependencyAssemblyVersion,
+            ExpectedProductionFileVersion: RuntimeIdentity.ProductionDependencyFileVersion);
 
-        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(30), BenchmarkMode.Forensic, options);
-        await RunCoreAsync(config, cancellationToken).ConfigureAwait(false);
+        EnsureRequiredRuntimeIdentityExpectationsPresent(options);
+        return options;
     }
 
     /// <summary>
@@ -170,11 +180,11 @@ internal static class TransitServerStressRunner
     /// <summary>
     /// Runs SingleTraceAsync.
     /// </summary>
-    internal static async Task RunSingleTraceAsync(TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
+    internal static async Task RunSingleTraceAsync(TimeSpan validationDuration, TransitBenchmarkCliOptions cliOptions, CancellationToken cancellationToken = default)
     {
         await TransitSingleTraceRunner.RunAsync(
             cliOptions,
-            ValidationSeconds,
+            validationDuration,
             RuntimeIdentity,
             CreateTransitPublisherLogger,
             cancellationToken).ConfigureAwait(false);
@@ -193,6 +203,27 @@ internal static class TransitServerStressRunner
             RunMeasurementAsync,
             WriteStructuredResultArtifacts,
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates that required hard-identity expectations are populated before runtime identity guard enforcement.
+    /// </summary>
+    /// <param name="options">The options to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown when required hard-identity values are missing.</exception>
+    private static void EnsureRequiredRuntimeIdentityExpectationsPresent(TransitBenchmarkCliOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ExpectedAssemblyPath) ||
+            string.IsNullOrWhiteSpace(options.ExpectedAssemblyVersion) ||
+            string.IsNullOrWhiteSpace(options.ExpectedFileVersion) ||
+            string.IsNullOrWhiteSpace(options.ExpectedTargetFramework) ||
+            string.IsNullOrWhiteSpace(options.ExpectedArchitecture) ||
+            string.IsNullOrWhiteSpace(options.ExpectedProductionAssemblyPath) ||
+            string.IsNullOrWhiteSpace(options.ExpectedProductionAssemblyVersion) ||
+            string.IsNullOrWhiteSpace(options.ExpectedProductionFileVersion))
+        {
+            throw new InvalidOperationException(
+                "Forensic benchmark modes require captured runtime identity expectations for benchmark and production artifacts before execution.");
+        }
     }
 
     /// <summary>
