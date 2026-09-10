@@ -42,8 +42,17 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
 
             observer?.OnAcquireAttempt(lockKey);
             Monitor.Enter(gate);
-            observer?.OnEntered(lockKey);
-            return new Releaser(gate, lockKey, observer);
+
+            try
+            {
+                observer?.OnEntered(lockKey);
+                return new Releaser(gate, lockKey, observer);
+            }
+            catch
+            {
+                Monitor.Exit(gate);
+                throw;
+            }
         }
 
         /// <summary>
@@ -65,9 +74,17 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
                 return false;
             }
 
-            observer?.OnEntered(lockKey);
-            releaser = new Releaser(gate, lockKey, observer);
-            return true;
+            try
+            {
+                observer?.OnEntered(lockKey);
+                releaser = new Releaser(gate, lockKey, observer);
+                return true;
+            }
+            catch
+            {
+                Monitor.Exit(gate);
+                throw;
+            }
         }
 
         /// <summary>

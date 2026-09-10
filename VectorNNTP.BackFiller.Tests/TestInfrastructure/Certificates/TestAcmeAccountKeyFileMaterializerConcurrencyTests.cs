@@ -30,6 +30,8 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             string keyFilePath = TestAcmeAccountKeyPathLockCoordinator.GetAccountKeyPath(certDirectory);
 
             IDisposable? occupiedPathLock = null;
+            Task<string>? materializerTaskA = null;
+            Task<string>? materializerTaskB = null;
             try
             {
                 string stalePem;
@@ -45,29 +47,21 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
                 using GateAcquireObserver observer = new();
                 using IDisposable observationScope = TestAcmeAccountKeyPathLockCoordinator.BeginObservation(observer);
 
-                Task<string> blockedCaller = Task.Run(() =>
+                materializerTaskA = Task.Run(() =>
                     TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory));
+                observer.WaitForAttemptCount(keyFilePath, expectedCount: 1);
 
-                observer.WaitForAttempt(keyFilePath);
+                materializerTaskB = Task.Run(() =>
+                    TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory));
+                observer.WaitForAttemptCount(keyFilePath, expectedCount: 2);
+
                 Assert.False(observer.HasEntered(keyFilePath));
-
-                Task<bool> contenderAttempt = Task.Run(() =>
-                {
-                    bool acquired = TestAcmeAccountKeyPathLockCoordinator.TryAcquire(keyFilePath, out IDisposable? contenderLock);
-                    contenderLock?.Dispose();
-                    return acquired;
-                });
-
-                Assert.False(contenderAttempt.GetAwaiter().GetResult());
 
                 occupiedPathLock.Dispose();
                 occupiedPathLock = null;
 
-                string blockedCallerResult = await blockedCaller;
-                Assert.Equal("account.key", blockedCallerResult);
-
-                string secondCallerResult = TestAcmeAccountKeyFileMaterializer.EnsureRelativeAcmeAccountKeyPemFile(certDirectory);
-                Assert.Equal("account.key", secondCallerResult);
+                string[] results = await Task.WhenAll(materializerTaskA, materializerTaskB);
+                Assert.All(results, static value => Assert.Equal("account.key", value));
 
                 Assert.Equal(TestAcmeAccountKeyFixture.Pem, File.ReadAllText(keyFilePath));
 
@@ -86,6 +80,8 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             finally
             {
                 occupiedPathLock?.Dispose();
+                await AwaitIfStartedAsync(materializerTaskA);
+                await AwaitIfStartedAsync(materializerTaskB);
                 if (Directory.Exists(certDirectory))
                 {
                     Directory.Delete(certDirectory, recursive: true);
@@ -243,7 +239,8 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
 
         private sealed class GateAcquireObserver : TestAcmeAccountKeyPathLockCoordinator.IAcquireObserver, IDisposable
         {
-            private readonly ConcurrentDictionary<string, ManualResetEventSlim> _attempted = new(StringComparer.Ordinal);
+            private readonly ConcurrentDictionary<string, int> _attemptCounts = new(StringComparer.Ordinal);
+            private readonly ConcurrentDictionary<string, ManualResetEventSlim> _attemptReached = new(StringComparer.Ordinal);
             private readonly ConcurrentDictionary<string, ManualResetEventSlim> _entered = new(StringComparer.Ordinal);
             private readonly ConcurrentDictionary<string, ManualResetEventSlim> _entryBlocks = new(StringComparer.Ordinal);
 
@@ -255,8 +252,12 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
 
             public void OnAcquireAttempt(string lockKey)
             {
-                ManualResetEventSlim attempted = _attempted.GetOrAdd(lockKey, _ => new ManualResetEventSlim(false));
-                attempted.Set();
+                int attemptCount = _attemptCounts.AddOrUpdate(lockKey, static _ => 1, static (_, current) => checked(current + 1));
+                string eventKey = BuildAttemptReachedKey(lockKey, attemptCount);
+                if (_attemptReached.TryGetValue(eventKey, out ManualResetEventSlim? reachedEvent))
+                {
+                    reachedEvent.Set();
+                }
             }
 
             public void OnEntered(string lockKey)
@@ -274,18 +275,37 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             {
             }
 
-            public void WaitForAttempt(string keyFilePath)
+            public void WaitForAttemptCount(string keyFilePath, int expectedCount)
             {
+                ArgumentOutOfRangeException.ThrowIfNegativeOrZero(expectedCount);
                 string lockKey = GetLockKey(keyFilePath);
-                ManualResetEventSlim attempted = _attempted.GetOrAdd(lockKey, _ => new ManualResetEventSlim(false));
-                attempted.Wait();
+                int currentCount = _attemptCounts.GetOrAdd(lockKey, 0);
+                if (currentCount >= expectedCount)
+                {
+                    return;
+                }
+
+                string eventKey = BuildAttemptReachedKey(lockKey, expectedCount);
+                ManualResetEventSlim reachedEvent = _attemptReached.GetOrAdd(eventKey, _ => new ManualResetEventSlim(false));
+
+                currentCount = _attemptCounts.GetOrAdd(lockKey, 0);
+                if (currentCount >= expectedCount)
+                {
+                    reachedEvent.Set();
+                }
+
+                Assert.True(
+                    reachedEvent.Wait(TimeSpan.FromSeconds(2)),
+                    $"Timed out waiting for acquire attempt count {expectedCount} for lock key '{lockKey}'. Current count: {_attemptCounts.GetOrAdd(lockKey, 0)}.");
             }
 
             public void WaitForEnter(string keyFilePath)
             {
                 string lockKey = GetLockKey(keyFilePath);
                 ManualResetEventSlim entered = _entered.GetOrAdd(lockKey, _ => new ManualResetEventSlim(false));
-                entered.Wait();
+                Assert.True(
+                    entered.Wait(TimeSpan.FromSeconds(2)),
+                    $"Timed out waiting for gate entry for lock key '{lockKey}'.");
             }
 
             public bool HasEntered(string keyFilePath)
@@ -296,9 +316,9 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
 
             public void Dispose()
             {
-                foreach (ManualResetEventSlim attempted in _attempted.Values)
+                foreach (ManualResetEventSlim reachedEvent in _attemptReached.Values)
                 {
-                    attempted.Dispose();
+                    reachedEvent.Dispose();
                 }
 
                 foreach (ManualResetEventSlim entered in _entered.Values)
@@ -313,6 +333,11 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
                 return OperatingSystem.IsWindows()
                     ? fullPath.ToUpperInvariant()
                     : fullPath;
+            }
+
+            private static string BuildAttemptReachedKey(string lockKey, int expectedCount)
+            {
+                return string.Concat(lockKey, "|", expectedCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
         }
     }
