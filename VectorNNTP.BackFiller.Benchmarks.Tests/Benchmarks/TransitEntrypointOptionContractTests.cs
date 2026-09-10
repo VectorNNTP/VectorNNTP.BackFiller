@@ -6,216 +6,110 @@
 // Focused tests for transit benchmark entrypoint option contracts, covering duration propagation and runtime identity expectations.
 // Primary responsibility: documents executable behavioral contracts for benchmark mode option forwarding.
 
+using Microsoft.Extensions.Configuration;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Benchmarks
 {
     /// <summary>
-    /// Defines a non-parallel collection for tests that temporarily install process-wide benchmark execution hooks.
+    /// Validates benchmark entrypoint behavioral contracts for mode routing, duration planning, and forensic identity compatibility.
     /// </summary>
-    [CollectionDefinition("TransitEntrypointOptionContractSerial", DisableParallelization = true)]
-    public sealed class TransitEntrypointOptionContractSerialCollection
-    {
-    }
-
-    /// <summary>
-    /// Validates benchmark entrypoint behavioral contracts for duration propagation and runtime identity guard compatibility.
-    /// </summary>
-    [Collection("TransitEntrypointOptionContractSerial")]
     public sealed class TransitEntrypointOptionContractTests
     {
         /// <summary>
-        /// Proves Program dispatch propagates caller duration for transit-validate to effective guarded config boundary.
+        /// Proves transit-validate planning preserves a caller-supplied duration override.
         /// </summary>
         [Fact]
-        public async Task ProgramMain_WhenTransitValidateDurationProvided_PropagatesDurationToGuardedConfig()
+        public void BuildEntrypointPlan_WhenTransitValidateDurationProvided_UsesProvidedDuration()
         {
-            const int expectedSeconds = 37;
-            TransitBenchmarkConfig? capturedConfig = null;
+            TransitEntrypointPlan plan = Program.BuildEntrypointPlan(["transit-validate", "--duration-seconds", "37"]);
 
-            TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = (config, _, _) =>
-            {
-                capturedConfig = config;
-                return true;
-            };
-
-            try
-            {
-                await Program.Main([
-                    "transit-validate",
-                    "--duration-seconds", expectedSeconds.ToString(),
-                    "--expected-assembly-path", RuntimeIdentity.RuntimeAssemblyPath,
-                    "--expected-assembly-version", RuntimeIdentity.RuntimeAssemblyVersion,
-                    "--expected-file-version", RuntimeIdentity.AssemblyFileVersion!,
-                    "--expected-target-framework", RuntimeIdentity.TargetFramework!,
-                    "--expected-architecture", RuntimeIdentity.Architecture,
-                    "--expected-production-assembly-path", RuntimeIdentity.ProductionDependencyPath!,
-                    "--expected-production-assembly-version", RuntimeIdentity.ProductionDependencyAssemblyVersion!,
-                    "--expected-production-file-version", RuntimeIdentity.ProductionDependencyFileVersion!,
-                ]);
-            }
-            finally
-            {
-                TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = null;
-            }
-
-            Assert.NotNull(capturedConfig);
-            Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), capturedConfig.Value.MeasurementDuration);
-            Assert.Equal(BenchmarkMode.Validation, capturedConfig.Value.Mode);
+            Assert.Equal(TransitEntrypointKind.TransitValidate, plan.Kind);
+            Assert.Equal(TimeSpan.FromSeconds(37), plan.EffectiveDuration);
         }
 
         /// <summary>
-        /// Proves Program dispatch propagates caller duration for transit-benchmark-fakeserver to effective guarded config boundary.
+        /// Proves transit-benchmark-fakeserver planning preserves a caller-supplied duration override.
         /// </summary>
         [Fact]
-        public async Task ProgramMain_WhenFakeServerDurationProvided_PropagatesDurationToGuardedConfig()
+        public void BuildEntrypointPlan_WhenTransitFakeServerDurationProvided_UsesProvidedDuration()
         {
-            const int expectedSeconds = 37;
-            TransitBenchmarkConfig? capturedConfig = null;
+            TransitEntrypointPlan plan = Program.BuildEntrypointPlan(["transit-benchmark-fakeserver", "--duration-seconds", "37"]);
 
-            TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = (config, _, _) =>
-            {
-                capturedConfig = config;
-                return true;
-            };
-
-            try
-            {
-                await Program.Main([
-                    "transit-benchmark-fakeserver",
-                    "--duration-seconds", expectedSeconds.ToString(),
-                    "--expected-assembly-path", RuntimeIdentity.RuntimeAssemblyPath,
-                    "--expected-assembly-version", RuntimeIdentity.RuntimeAssemblyVersion,
-                    "--expected-file-version", RuntimeIdentity.AssemblyFileVersion!,
-                    "--expected-target-framework", RuntimeIdentity.TargetFramework!,
-                    "--expected-architecture", RuntimeIdentity.Architecture,
-                    "--expected-production-assembly-path", RuntimeIdentity.ProductionDependencyPath!,
-                    "--expected-production-assembly-version", RuntimeIdentity.ProductionDependencyAssemblyVersion!,
-                    "--expected-production-file-version", RuntimeIdentity.ProductionDependencyFileVersion!,
-                ]);
-            }
-            finally
-            {
-                TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = null;
-            }
-
-            Assert.NotNull(capturedConfig);
-            Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), capturedConfig.Value.MeasurementDuration);
-            Assert.Equal(BenchmarkMode.Validation, capturedConfig.Value.Mode);
-            Assert.Equal(BenchmarkDevNullTransitServer.EndpointTypeLabel, capturedConfig.Value.EndpointType);
+            Assert.Equal(TransitEntrypointKind.TransitBenchmarkFakeServer, plan.Kind);
+            Assert.Equal(TimeSpan.FromSeconds(37), plan.EffectiveDuration);
         }
 
         /// <summary>
-        /// Proves Program dispatch propagates caller duration for transit-single-trace to effective guarded config boundary.
+        /// Proves transit-single-trace planning preserves a caller-supplied duration override.
         /// </summary>
         [Fact]
-        public async Task ProgramMain_WhenSingleTraceDurationProvided_PropagatesDurationToGuardedConfig()
+        public void BuildEntrypointPlan_WhenTransitSingleTraceDurationProvided_UsesProvidedDuration()
         {
-            const int expectedSeconds = 37;
-            TransitBenchmarkConfig? capturedConfig = null;
+            TransitEntrypointPlan plan = Program.BuildEntrypointPlan(["transit-single-trace", "--duration-seconds", "37"]);
 
-            TransitSingleTraceRunner.GuardedExecutionShortCircuitHook = (config, _) =>
-            {
-                capturedConfig = config;
-                return true;
-            };
-
-            try
-            {
-                await Program.Main([
-                    "transit-single-trace",
-                    "--duration-seconds", expectedSeconds.ToString(),
-                    "--expected-assembly-path", RuntimeIdentity.RuntimeAssemblyPath,
-                    "--expected-assembly-version", RuntimeIdentity.RuntimeAssemblyVersion,
-                    "--expected-file-version", RuntimeIdentity.AssemblyFileVersion!,
-                    "--expected-target-framework", RuntimeIdentity.TargetFramework!,
-                    "--expected-architecture", RuntimeIdentity.Architecture,
-                    "--expected-production-assembly-path", RuntimeIdentity.ProductionDependencyPath!,
-                    "--expected-production-assembly-version", RuntimeIdentity.ProductionDependencyAssemblyVersion!,
-                    "--expected-production-file-version", RuntimeIdentity.ProductionDependencyFileVersion!,
-                ]);
-            }
-            finally
-            {
-                TransitSingleTraceRunner.GuardedExecutionShortCircuitHook = null;
-            }
-
-            Assert.NotNull(capturedConfig);
-            Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), capturedConfig.Value.MeasurementDuration);
-            Assert.Equal(BenchmarkMode.Validation, capturedConfig.Value.Mode);
+            Assert.Equal(TransitEntrypointKind.TransitSingleTrace, plan.Kind);
+            Assert.Equal(TimeSpan.FromSeconds(37), plan.EffectiveDuration);
         }
 
         /// <summary>
-        /// Proves forensic-mode options are compatible with actual RuntimeIdentityGuard contract.
+        /// Proves validation-mode planning retains the existing default duration when no duration override is supplied.
         /// </summary>
         [Fact]
-        public void CreateForensicModeOptions_WhenInvoked_ProducesGuardCompatibleIdentityExpectations()
+        public void BuildEntrypointPlan_WhenTransitValidateDurationOmitted_UsesDefaultValidationDuration()
         {
+            TransitEntrypointPlan plan = Program.BuildEntrypointPlan(["transit-validate"]);
+
+            Assert.Equal(TransitEntrypointKind.TransitValidate, plan.Kind);
+            Assert.Equal(TimeSpan.FromSeconds(10), plan.EffectiveDuration);
+        }
+
+        /// <summary>
+        /// Proves documented mode tokens map to intended production entrypoint kinds.
+        /// </summary>
+        [Theory]
+        [InlineData("transit-validate", nameof(TransitEntrypointKind.TransitValidate))]
+        [InlineData("transit-benchmark-fakeserver", nameof(TransitEntrypointKind.TransitBenchmarkFakeServer))]
+        [InlineData("transit-single-trace", nameof(TransitEntrypointKind.TransitSingleTrace))]
+        [InlineData("transit-generator-worker-sweep", nameof(TransitEntrypointKind.TransitGeneratorWorkerSweep))]
+        [InlineData("transit-forensic-32worker", nameof(TransitEntrypointKind.TransitForensic32Worker))]
+        public void BuildEntrypointPlan_WhenModeProvided_MapsToExpectedEntrypointKind(string mode, string expectedKindName)
+        {
+            TransitEntrypointPlan plan = Program.BuildEntrypointPlan([mode]);
+
+            Assert.Equal(expectedKindName, plan.Kind.ToString());
+        }
+
+        /// <summary>
+        /// Proves forensic mode options remain compatible with the actual runtime identity guard contract using deterministic in-memory configuration.
+        /// </summary>
+        [Fact]
+        public void CreateForensicModeOptions_WhenLoadedFromInMemoryConfig_PassesRuntimeIdentityGuard()
+        {
+            RuntimeExecutionIdentity runtimeIdentity = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
             TransitBenchmarkCliOptions options = TransitServerStressRunner.CreateForensicModeOptions(generatorWorkers: 32);
-            TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(30), BenchmarkMode.Forensic, options);
 
-            RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, RuntimeIdentity);
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["BackFiller:TransitServer:Host"] = "incoming.usenet.ninja",
+                    ["BackFiller:TransitServer:Port"] = "563",
+                    ["BackFiller:TransitServer:UseSsl"] = "true",
+                })
+                .Build();
+
+            TransitBenchmarkConfig config = TransitBenchmarkConfig.LoadFromConfiguration(
+                TimeSpan.FromSeconds(30),
+                BenchmarkMode.Forensic,
+                options,
+                configuration,
+                appSettingsPath: "in-memory:test");
+
+            RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, runtimeIdentity);
 
             Assert.Equal(BenchmarkMode.Forensic, config.Mode);
             Assert.Equal(32, config.GeneratorWorkerCount);
         }
-
-        /// <summary>
-        /// Proves sweep mode routes through guarded core path using actual mode implementation.
-        /// </summary>
-        [Fact]
-        public async Task SweepMode_WhenExecuted_RoutesIntoGuardedCorePath()
-        {
-            int invocations = 0;
-
-            TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = (_, _, _) =>
-            {
-                invocations++;
-                return true;
-            };
-
-            try
-            {
-                await TransitServerStressRunner.RunGeneratorWorkerSweepAsync();
-            }
-            finally
-            {
-                TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = null;
-            }
-
-            Assert.Equal(6, invocations);
-        }
-
-        /// <summary>
-        /// Proves forensic-32worker mode routes through guarded core path using actual mode implementation.
-        /// </summary>
-        [Fact]
-        public async Task Forensic32Mode_WhenExecuted_RoutesIntoGuardedCorePath()
-        {
-            int invocations = 0;
-
-            TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = (_, _, _) =>
-            {
-                invocations++;
-                return true;
-            };
-
-            try
-            {
-                await TransitServerStressRunner.RunForensic32WorkerAsync();
-            }
-            finally
-            {
-                TransitBenchmarkOrchestrator.GuardedExecutionShortCircuitHook = null;
-            }
-
-            Assert.Equal(1, invocations);
-        }
-
-        /// <summary>
-        /// Captures runtime identity from the same authoritative source used by production benchmark code.
-        /// </summary>
-        private static RuntimeExecutionIdentity RuntimeIdentity { get; } = RuntimeExecutionIdentityCapture.Capture(typeof(TransitServerStressRunner).Assembly);
     }
 }

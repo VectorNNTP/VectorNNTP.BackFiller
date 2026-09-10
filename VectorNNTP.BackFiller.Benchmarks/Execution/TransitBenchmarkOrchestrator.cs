@@ -18,11 +18,6 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal static class TransitBenchmarkOrchestrator
 {
     /// <summary>
-    /// Allows deterministic tests to short-circuit benchmark execution after runtime identity guard validation.
-    /// </summary>
-    internal static Func<TransitBenchmarkConfig, RuntimeExecutionIdentity, string, bool>? GuardedExecutionShortCircuitHook;
-
-    /// <summary>
     /// Runs CoreAsync.
     /// </summary>
     internal static async Task RunCoreAsync(
@@ -35,11 +30,6 @@ internal static class TransitBenchmarkOrchestrator
         CancellationToken cancellationToken)
     {
         RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, runtimeIdentity);
-
-        if (GuardedExecutionShortCircuitHook?.Invoke(config, runtimeIdentity, benchmarkBuildVersion) == true)
-        {
-            return;
-        }
 
         Console.WriteLine("=== Transit Publisher Production-Path Benchmark ===");
         Console.WriteLine("Benchmark execution policy: NEVER use --no-build. ALWAYS run clean -> build -> verify output identity -> execute.");

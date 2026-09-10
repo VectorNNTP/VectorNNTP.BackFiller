@@ -16,11 +16,6 @@ namespace VectorNNTP.BackFiller.Benchmarks;
 internal static class TransitSingleTraceRunner
 {
     /// <summary>
-    /// Allows deterministic tests to short-circuit single-trace execution after runtime identity guard validation.
-    /// </summary>
-    internal static Func<TransitBenchmarkConfig, RuntimeExecutionIdentity, bool>? GuardedExecutionShortCircuitHook;
-
-    /// <summary>
     /// Gets or sets the small ArticleMinBytes.
     /// </summary>
     private const int SmallArticleMinBytes = 64;
@@ -331,11 +326,6 @@ internal static class TransitSingleTraceRunner
         TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(validationDuration, BenchmarkMode.Validation, cliOptions);
 
         RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, runtimeIdentity);
-
-        if (GuardedExecutionShortCircuitHook?.Invoke(config, runtimeIdentity) == true)
-        {
-            return;
-        }
 
         Console.WriteLine("=== Transit Publisher Single Transaction Trace ===");
         Console.WriteLine("Benchmark execution policy: NEVER use --no-build. ALWAYS run clean -> build -> verify output identity -> execute.");
