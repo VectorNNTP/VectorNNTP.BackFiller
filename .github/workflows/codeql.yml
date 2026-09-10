@@ -37,10 +37,10 @@ jobs:
         with:
           languages: csharp
 
-      - name: Setup .NET
+      - name: Setup .NET SDK (repo pin)
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
 
       - name: Build solution
         run: dotnet build VectorNNTP.BackFiller.slnx --configuration Release /p:TreatWarningsAsErrors=false
