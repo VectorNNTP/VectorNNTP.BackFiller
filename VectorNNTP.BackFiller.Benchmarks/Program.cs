@@ -38,14 +38,16 @@ namespace VectorNNTP.BackFiller.Benchmarks
             if (args.Length > 0 && string.Equals(args[0], "transit-validate", StringComparison.OrdinalIgnoreCase))
             {
                 TransitBenchmarkCliOptions options = TransitBenchmarkCliOptions.Parse([.. args.Skip(1)]);
-                await TransitServerStressRunner.RunValidationAsync(options).ConfigureAwait(false);
+                int durationSeconds = options.DurationSeconds ?? 10;
+                await TransitServerStressRunner.RunValidationAsync(TimeSpan.FromSeconds(durationSeconds), options).ConfigureAwait(false);
                 return;
             }
 
             if (args.Length > 0 && string.Equals(args[0], "transit-benchmark-fakeserver", StringComparison.OrdinalIgnoreCase))
             {
                 TransitBenchmarkCliOptions options = TransitBenchmarkCliOptions.Parse([.. args.Skip(1)]);
-                await TransitServerStressRunner.RunFakeServerValidationAsync(options).ConfigureAwait(false);
+                int durationSeconds = options.DurationSeconds ?? 10;
+                await TransitServerStressRunner.RunFakeServerValidationAsync(TimeSpan.FromSeconds(durationSeconds), options).ConfigureAwait(false);
                 return;
             }
 
@@ -60,7 +62,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
             if (args.Length > 0 && string.Equals(args[0], "transit-single-trace", StringComparison.OrdinalIgnoreCase))
             {
                 TransitBenchmarkCliOptions options = TransitBenchmarkCliOptions.Parse([.. args.Skip(1)]);
-                await TransitServerStressRunner.RunSingleTraceAsync(options).ConfigureAwait(false);
+                int durationSeconds = options.DurationSeconds ?? 10;
+                await TransitServerStressRunner.RunSingleTraceAsync(TimeSpan.FromSeconds(durationSeconds), options).ConfigureAwait(false);
                 return;
             }
 
