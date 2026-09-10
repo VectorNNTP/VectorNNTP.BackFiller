@@ -5,6 +5,7 @@
 // VectorNNTP.Backfiller Tests / Startup validation
 // Focused tests for article-retention 80%-of-physical-memory configuration policy.
 
+using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using System.Security.Cryptography;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;

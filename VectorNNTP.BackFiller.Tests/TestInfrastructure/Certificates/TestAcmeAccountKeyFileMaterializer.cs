@@ -26,13 +26,16 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             string certDirectory = string.IsNullOrWhiteSpace(fixtureDirectory)
                 ? Path.Combine(AppContext.BaseDirectory, "certs")
                 : fixtureDirectory;
+            certDirectory = Path.GetFullPath(certDirectory);
             _ = Directory.CreateDirectory(certDirectory);
+
+            const string fileName = "account.key";
+            string keyFilePath = TestAcmeAccountKeyPathLockCoordinator.GetAccountKeyPath(certDirectory);
+
+            using IDisposable pathLock = TestAcmeAccountKeyPathLockCoordinator.Acquire(keyFilePath);
 
             string canonicalPem = TestAcmeAccountKeyFixture.Pem;
             byte[] canonicalPrivateKey = TestAcmeAccountKeyFixture.Pkcs8Bytes;
-
-            const string fileName = "account.key";
-            string keyFilePath = Path.Combine(certDirectory, fileName);
 
             if (TryReadPrivateKeyPkcs8Bytes(keyFilePath, out byte[] existingPrivateKey) && existingPrivateKey.AsSpan().SequenceEqual(canonicalPrivateKey))
             {
@@ -94,5 +97,6 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
                 return false;
             }
         }
+
     }
 }
