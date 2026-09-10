@@ -31,6 +31,16 @@ namespace VectorNNTP.BackFiller.Benchmarks
         private const string LocalFqdn = "bf01.usenet.ninja";
 
         /// <summary>
+        /// Optional single-part yEnc body override used only by benchmark contract tests.
+        /// </summary>
+        private readonly byte[]? _yencSingleBodyOverride;
+
+        /// <summary>
+        /// Optional multi-part yEnc body override used only by benchmark contract tests.
+        /// </summary>
+        private readonly byte[]? _yencMultipartBodyOverride;
+
+        /// <summary>
         /// Parser instance reused across benchmark invocations.
         /// </summary>
         private NntpArticleParser _parser = null!;
@@ -81,6 +91,24 @@ namespace VectorNNTP.BackFiller.Benchmarks
         private byte[] _largeBinary = null!;
 
         /// <summary>
+        /// Initializes parser benchmarks with production fixture generation.
+        /// </summary>
+        public NntpArticleParserBenchmarks()
+        {
+        }
+
+        /// <summary>
+        /// Initializes parser benchmarks with optional deterministic yEnc fixture overrides for contract tests.
+        /// </summary>
+        /// <param name="yencSingleBodyOverride">Optional single-part yEnc body bytes used by <see cref="Setup"/> when provided.</param>
+        /// <param name="yencMultipartBodyOverride">Optional multi-part yEnc body bytes used by <see cref="Setup"/> when provided.</param>
+        internal NntpArticleParserBenchmarks(byte[]? yencSingleBodyOverride, byte[]? yencMultipartBodyOverride)
+        {
+            _yencSingleBodyOverride = yencSingleBodyOverride;
+            _yencMultipartBodyOverride = yencMultipartBodyOverride;
+        }
+
+        /// <summary>
         /// Builds deterministic benchmark fixtures.
         /// </summary>
         [GlobalSetup]
@@ -129,7 +157,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     "Newsgroups: alt.binaries.test",
                     "From: user@example.test",
                 ],
-                bodyBytes: BuildSyntheticSinglePartYEnc(4096, "single.bin"));
+                bodyBytes: _yencSingleBodyOverride ?? BuildSyntheticSinglePartYEnc(4096, "single.bin"));
 
             _yencMultipart = BuildArticle(
                 headers:
@@ -139,7 +167,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     "Newsgroups: alt.binaries.test",
                     "From: user@example.test",
                 ],
-                bodyBytes: BuildSyntheticMultiPartYEnc(8192, "multi.bin", partIndex: 1));
+                bodyBytes: _yencMultipartBodyOverride ?? BuildSyntheticMultiPartYEnc(8192, "multi.bin", partIndex: 1));
 
             _malformed = Encoding.ASCII.GetBytes(
                 "Date Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
