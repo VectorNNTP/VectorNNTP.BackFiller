@@ -12,6 +12,7 @@ using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
+using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 
 namespace VectorNNTP.BackFiller.Benchmarks
 {
@@ -128,7 +129,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     "Newsgroups: alt.binaries.test",
                     "From: user@example.test",
                 ],
-                body: BuildSyntheticSinglePartYEnc(4096, "single.bin"));
+                bodyBytes: BuildSyntheticSinglePartYEnc(4096, "single.bin"));
 
             _yencMultipart = BuildArticle(
                 headers:
@@ -138,7 +139,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     "Newsgroups: alt.binaries.test",
                     "From: user@example.test",
                 ],
-                body: BuildSyntheticMultiPartYEnc(8192, "multi.bin", partIndex: 1));
+                bodyBytes: BuildSyntheticMultiPartYEnc(8192, "multi.bin", partIndex: 1));
 
             _malformed = Encoding.ASCII.GetBytes(
                 "Date Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
@@ -169,6 +170,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     "Content-Transfer-Encoding: binary",
                 ],
                 bodyBytes: BuildBinaryBody(2_097_152));
+
+            ValidateYEncFixtureAccepted(_parser, _yencSingle, YEncArticleValidationStatus.ValidSinglePart);
+            ValidateYEncFixtureAccepted(_parser, _yencMultipart, YEncArticleValidationStatus.ValidMultiPart);
         }
 
         /// <summary>
@@ -304,6 +308,23 @@ namespace VectorNNTP.BackFiller.Benchmarks
         }
 
         /// <summary>
+        /// Validates that a benchmark yEnc fixture is accepted through the production parser and yEnc validator path.
+        /// </summary>
+        /// <param name="parser">Parser instance used by the benchmark.</param>
+        /// <param name="article">Fixture article bytes.</param>
+        /// <param name="expectedStatus">Expected terminal yEnc validator status.</param>
+        /// <exception cref="InvalidOperationException">Thrown when the fixture is rejected or validates to an unexpected status.</exception>
+        private static void ValidateYEncFixtureAccepted(NntpArticleParser parser, byte[] article, YEncArticleValidationStatus expectedStatus)
+        {
+            NntpArticleParseResult parseResult = parser.Parse(article);
+            if (!parseResult.IsAccepted || parseResult.ArticleType != NntpArticleType.YEnc || !parseResult.YEncDetected || parseResult.YEncValidation.Status != expectedStatus)
+            {
+                throw new InvalidOperationException(
+                    $"Benchmark yEnc fixture validation failed. Accepted={parseResult.IsAccepted}, Type={parseResult.ArticleType}, Detected={parseResult.YEncDetected}, Status={parseResult.YEncValidation.Status}.");
+            }
+        }
+
+        /// <summary>
         /// Builds deterministic repeated text lines.
         /// </summary>
         /// <param name="line">Line content.</param>
@@ -366,14 +387,19 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <param name="payloadLength">Decoded payload length.</param>
         /// <param name="name">File name metadata.</param>
         /// <returns>Valid yEnc body bytes.</returns>
-        private static string BuildSyntheticSinglePartYEnc(int payloadLength, string name)
+        private static byte[] BuildSyntheticSinglePartYEnc(int payloadLength, string name)
         {
             byte[] payload = BuildPayload(payloadLength, seed: 17);
-            EncodeYEncPayload(payload, out string encoded, out uint crc);
+            EncodeYEncPayload(payload, out byte[] encoded, out uint crc);
 
-            return $"=ybegin line=128 size={payload.Length} name={name}\r\n"
-                + encoded
-                + $"=yend size={payload.Length} crc32={crc:x8}\r\n";
+            byte[] prefix = Encoding.ASCII.GetBytes($"=ybegin line=128 size={payload.Length} name={name}\r\n");
+            byte[] suffix = Encoding.ASCII.GetBytes($"=yend size={payload.Length} crc32={crc:x8}\r\n");
+
+            byte[] body = new byte[prefix.Length + encoded.Length + suffix.Length];
+            Buffer.BlockCopy(prefix, 0, body, 0, prefix.Length);
+            Buffer.BlockCopy(encoded, 0, body, prefix.Length, encoded.Length);
+            Buffer.BlockCopy(suffix, 0, body, prefix.Length + encoded.Length, suffix.Length);
+            return body;
         }
 
         /// <summary>
@@ -383,15 +409,19 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <param name="name">File name metadata.</param>
         /// <param name="partIndex">Part index marker.</param>
         /// <returns>Valid multipart yEnc body bytes.</returns>
-        private static string BuildSyntheticMultiPartYEnc(int payloadLength, string name, int partIndex)
+        private static byte[] BuildSyntheticMultiPartYEnc(int payloadLength, string name, int partIndex)
         {
             byte[] payload = BuildPayload(payloadLength, seed: 23);
-            EncodeYEncPayload(payload, out string encoded, out uint crc);
+            EncodeYEncPayload(payload, out byte[] encoded, out uint crc);
 
-            return $"=ybegin part={partIndex} line=128 size={payload.Length} name={name}\r\n"
-                + $"=ypart begin=1 end={payload.Length}\r\n"
-                + encoded
-                + $"=yend size={payload.Length} pcrc32={crc:x8}\r\n";
+            byte[] prefix = Encoding.ASCII.GetBytes($"=ybegin part={partIndex} line=128 size={payload.Length} name={name}\r\n=ypart begin=1 end={payload.Length}\r\n");
+            byte[] suffix = Encoding.ASCII.GetBytes($"=yend size={payload.Length} pcrc32={crc:x8}\r\n");
+
+            byte[] body = new byte[prefix.Length + encoded.Length + suffix.Length];
+            Buffer.BlockCopy(prefix, 0, body, 0, prefix.Length);
+            Buffer.BlockCopy(encoded, 0, body, prefix.Length, encoded.Length);
+            Buffer.BlockCopy(suffix, 0, body, prefix.Length + encoded.Length, suffix.Length);
+            return body;
         }
 
         /// <summary>
@@ -409,15 +439,15 @@ namespace VectorNNTP.BackFiller.Benchmarks
         }
 
         /// <summary>
-        /// Encodes payload bytes to yEnc text and computes CRC32.
+        /// Encodes payload bytes to yEnc payload bytes and computes CRC32.
         /// </summary>
         /// <param name="payload">Decoded payload bytes.</param>
-        /// <param name="encoded">Encoded yEnc text.</param>
+        /// <param name="encoded">Encoded yEnc payload bytes.</param>
         /// <param name="crc">CRC32 of decoded payload.</param>
-        private static void EncodeYEncPayload(byte[] payload, out string encoded, out uint crc)
+        private static void EncodeYEncPayload(byte[] payload, out byte[] encoded, out uint crc)
         {
             uint crcValue = 0xFFFFFFFFu;
-            StringBuilder sb = new(payload.Length + (payload.Length / 4));
+            List<byte> output = new(payload.Length + (payload.Length / 4));
 
             int lineLength = 0;
             for (int i = 0; i < payload.Length; i++)
@@ -434,31 +464,33 @@ namespace VectorNNTP.BackFiller.Benchmarks
                 bool escape = encodedByte is 0 or ((byte)'\r') or ((byte)'\n') or ((byte)'=');
                 if (escape)
                 {
-                    _ = sb.Append('=');
+                    output.Add((byte)'=');
                     encodedByte = (byte)((encodedByte + 64) & 0xFF);
-                    _ = sb.Append((char)encodedByte);
+                    output.Add(encodedByte);
                     lineLength += 2;
                 }
                 else
                 {
-                    _ = sb.Append((char)encodedByte);
+                    output.Add(encodedByte);
                     lineLength++;
                 }
 
                 if (lineLength >= 128)
                 {
-                    _ = sb.Append("\r\n");
+                    output.Add((byte)'\r');
+                    output.Add((byte)'\n');
                     lineLength = 0;
                 }
             }
 
             if (lineLength > 0)
             {
-                _ = sb.Append("\r\n");
+                output.Add((byte)'\r');
+                output.Add((byte)'\n');
             }
 
             crc = ~crcValue;
-            encoded = sb.ToString();
+            encoded = [.. output];
         }
     }
 }
