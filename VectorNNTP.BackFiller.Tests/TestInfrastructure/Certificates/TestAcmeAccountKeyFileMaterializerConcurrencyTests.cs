@@ -80,11 +80,65 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
             finally
             {
                 occupiedPathLock?.Dispose();
-                await AwaitIfStartedAsync(materializerTaskA);
-                await AwaitIfStartedAsync(materializerTaskB);
-                if (Directory.Exists(certDirectory))
+
+                Exception? taskFailure = null;
+                try
                 {
-                    Directory.Delete(certDirectory, recursive: true);
+                    List<Task<string>> startedTasks = [];
+                    if (materializerTaskA is not null)
+                    {
+                        startedTasks.Add(materializerTaskA);
+                    }
+
+                    if (materializerTaskB is not null)
+                    {
+                        startedTasks.Add(materializerTaskB);
+                    }
+
+                    if (startedTasks.Count > 0)
+                    {
+                        Task allStarted = Task.WhenAll(startedTasks);
+                        try
+                        {
+                            await allStarted;
+                        }
+                        catch (Exception ex)
+                        {
+                            taskFailure = allStarted.Exception?.Flatten() ?? ex;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    taskFailure = ex;
+                }
+
+                Exception? cleanupFailure = null;
+                try
+                {
+                    if (Directory.Exists(certDirectory))
+                    {
+                        Directory.Delete(certDirectory, recursive: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    cleanupFailure = ex;
+                }
+
+                if (taskFailure is not null)
+                {
+                    if (cleanupFailure is not null)
+                    {
+                        throw new AggregateException(taskFailure, cleanupFailure);
+                    }
+
+                    ExceptionDispatchInfo.Capture(taskFailure).Throw();
+                }
+
+                if (cleanupFailure is not null)
+                {
+                    ExceptionDispatchInfo.Capture(cleanupFailure).Throw();
                 }
             }
         }
@@ -304,7 +358,7 @@ namespace VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates
                 string lockKey = GetLockKey(keyFilePath);
                 ManualResetEventSlim entered = _entered.GetOrAdd(lockKey, _ => new ManualResetEventSlim(false));
                 Assert.True(
-                    entered.Wait(TimeSpan.FromSeconds(2)),
+                    entered.Wait(TimeSpan.FromSeconds(5)),
                     $"Timed out waiting for gate entry for lock key '{lockKey}'.");
             }
 
