@@ -6,6 +6,7 @@
 // Focused tests for article-retention 80%-of-physical-memory configuration policy.
 
 using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Startup.Configuration;

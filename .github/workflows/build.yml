@@ -33,6 +33,12 @@ jobs:
         run: |
           echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/.dotnet" >> "$GITHUB_ENV"
 
+      - name: Set expected SDK version from global.json
+        shell: bash
+        run: |
+          EXPECTED_SDK_VERSION="$(python3 -c "import json; print(json.load(open('global.json', encoding='utf-8'))['sdk']['version'])")"
+          echo "EXPECTED_SDK_VERSION=$EXPECTED_SDK_VERSION" >> "$GITHUB_ENV"
+
       - name: Setup .NET SDK (repo pin)
         id: setup-dotnet
         uses: actions/setup-dotnet@v6
@@ -49,11 +55,12 @@ jobs:
           echo "DOTNET_ROOT=${DOTNET_ROOT:-<unset>}"
           echo "Before runtime install dotnet path: $BEFORE_DOTNET_PATH"
           echo "Before runtime install dotnet realpath: $BEFORE_DOTNET_REALPATH"
-          test -d "$DOTNET_INSTALL_DIR/sdk/9.0.317"
-          curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
-          chmod +x dotnet-install.sh
-          ./dotnet-install.sh --runtime dotnet --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
-          ./dotnet-install.sh --runtime aspnetcore --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
+          test -d "$DOTNET_INSTALL_DIR/sdk/$EXPECTED_SDK_VERSION"
+          DOTNET_INSTALL_SCRIPT="$RUNNER_TEMP/dotnet-install.sh"
+          curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$DOTNET_INSTALL_SCRIPT"
+          chmod +x "$DOTNET_INSTALL_SCRIPT"
+          "$DOTNET_INSTALL_SCRIPT" --runtime dotnet --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
+          "$DOTNET_INSTALL_SCRIPT" --runtime aspnetcore --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
           AFTER_DOTNET_PATH="$(command -v dotnet)"
           AFTER_DOTNET_REALPATH="$(readlink -f "$AFTER_DOTNET_PATH")"
           echo "After runtime install dotnet path: $AFTER_DOTNET_PATH"
@@ -69,7 +76,7 @@ jobs:
           dotnet --version
           dotnet --list-sdks
           dotnet --list-runtimes
-          dotnet --list-sdks | grep "9.0.317"
+          dotnet --list-sdks | grep "$EXPECTED_SDK_VERSION"
           dotnet --list-runtimes | grep "Microsoft.NETCore.App 8.0.31"
 
       - name: Restore solution
@@ -306,6 +313,12 @@ jobs:
         run: |
           echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/.dotnet" >> "$GITHUB_ENV"
 
+      - name: Set expected SDK version from global.json
+        shell: bash
+        run: |
+          EXPECTED_SDK_VERSION="$(python3 -c "import json; print(json.load(open('global.json', encoding='utf-8'))['sdk']['version'])")"
+          echo "EXPECTED_SDK_VERSION=$EXPECTED_SDK_VERSION" >> "$GITHUB_ENV"
+
       - name: Setup .NET SDK (repo pin)
         id: setup-dotnet
         uses: actions/setup-dotnet@v6
@@ -322,11 +335,12 @@ jobs:
           echo "DOTNET_ROOT=${DOTNET_ROOT:-<unset>}"
           echo "Before runtime install dotnet path: $BEFORE_DOTNET_PATH"
           echo "Before runtime install dotnet realpath: $BEFORE_DOTNET_REALPATH"
-          test -d "$DOTNET_INSTALL_DIR/sdk/9.0.317"
-          curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
-          chmod +x dotnet-install.sh
-          ./dotnet-install.sh --runtime dotnet --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
-          ./dotnet-install.sh --runtime aspnetcore --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
+          test -d "$DOTNET_INSTALL_DIR/sdk/$EXPECTED_SDK_VERSION"
+          DOTNET_INSTALL_SCRIPT="$RUNNER_TEMP/dotnet-install.sh"
+          curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$DOTNET_INSTALL_SCRIPT"
+          chmod +x "$DOTNET_INSTALL_SCRIPT"
+          "$DOTNET_INSTALL_SCRIPT" --runtime dotnet --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
+          "$DOTNET_INSTALL_SCRIPT" --runtime aspnetcore --version 8.0.31 --install-dir "$DOTNET_INSTALL_DIR" --skip-non-versioned-files
           AFTER_DOTNET_PATH="$(command -v dotnet)"
           AFTER_DOTNET_REALPATH="$(readlink -f "$AFTER_DOTNET_PATH")"
           echo "After runtime install dotnet path: $AFTER_DOTNET_PATH"
@@ -342,7 +356,7 @@ jobs:
           dotnet --version
           dotnet --list-sdks
           dotnet --list-runtimes
-          dotnet --list-sdks | grep "9.0.317"
+          dotnet --list-sdks | grep "$EXPECTED_SDK_VERSION"
           dotnet --list-runtimes | grep "Microsoft.NETCore.App 8.0.31"
 
       - name: Restore solution
