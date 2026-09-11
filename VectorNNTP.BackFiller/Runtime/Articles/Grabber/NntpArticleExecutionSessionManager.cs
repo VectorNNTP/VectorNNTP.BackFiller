@@ -133,6 +133,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private int _pendingAcquireWaiters;
 
         /// <summary>
+        /// Total number of availability tokens successfully published into the ready-slot channel.
+        /// </summary>
+        private long _availabilityTokenWriteCount;
+
+        /// <summary>
+        /// Total number of availability tokens consumed from the ready-slot channel.
+        /// </summary>
+        private long _availabilityTokenReadCount;
+
+        /// <summary>
+        /// Total number of consumed ready-slot tokens that were stale when evaluated under gate ownership.
+        /// </summary>
+        private long _availabilityTokenStaleReadCount;
+
+        /// <summary>
         /// Fixed maintenance cadence used while scanning for idle keepalive work.
         /// </summary>
         private static readonly TimeSpan KeepAliveMaintenanceInterval = TimeSpan.FromSeconds(1);
@@ -179,6 +194,40 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 }
             }
         }
+
+        /// <summary>
+        /// Gets the current logical count of outstanding availability tokens tracked by slot state.
+        /// </summary>
+        internal int OutstandingAvailabilityTokenCount
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _slots.Count(static slot => slot.Enqueued);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the total number of availability tokens successfully published into the ready-slot channel.
+        /// </summary>
+        internal long AvailabilityTokenWriteCount => Interlocked.Read(ref _availabilityTokenWriteCount);
+
+        /// <summary>
+        /// Gets the total number of availability tokens consumed from the ready-slot channel.
+        /// </summary>
+        internal long AvailabilityTokenReadCount => Interlocked.Read(ref _availabilityTokenReadCount);
+
+        /// <summary>
+        /// Gets the total number of consumed tokens that were stale when validated under gate-owned slot state.
+        /// </summary>
+        internal long AvailabilityTokenStaleReadCount => Interlocked.Read(ref _availabilityTokenStaleReadCount);
+
+        /// <summary>
+        /// Gets the estimated number of physical queue entries currently retained in the ready-slot channel.
+        /// </summary>
+        internal long EstimatedAvailabilityQueueDepth => Math.Max(0L, AvailabilityTokenWriteCount - AvailabilityTokenReadCount);
 
         /// <summary>
         /// Connects and authenticates acquisition sessions for every configured account slot in the supplied snapshot.
@@ -415,6 +464,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 try
                 {
                     slotIndex = await _availableSlots.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    _ = Interlocked.Increment(ref _availabilityTokenReadCount);
                 }
                 finally
                 {
@@ -437,6 +487,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     slot.Enqueued = false;
                     if (slot.Session is null || slot.Busy || slot.RetireRequested)
                     {
+                        _ = Interlocked.Increment(ref _availabilityTokenStaleReadCount);
                         continue;
                     }
 
@@ -527,20 +578,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 }
             }
 
-            bool requeueSlot;
-            lock (_gate)
-            {
-                requeueSlot = !_disposeRequested && slot.Session is not null && !slot.Enqueued;
-                if (requeueSlot)
-                {
-                    slot.Enqueued = true;
-                }
-            }
-
-            if (requeueSlot)
-            {
-                _ = _availableSlots.Writer.TryWrite(slotIndex);
-            }
+            _ = TryQueueAvailabilityToken(slotIndex, slot);
 
             TaskCompletionSource<bool>? leasesCompleted = null;
             lock (_gate)
@@ -664,12 +702,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 _slots.Add(new SessionSlot(slotIndex, account, endpoint, connectedSession, sessionLogger, _timeProvider.GetUtcNow()));
             }
 
-            lock (_gate)
-            {
-                _slots[slotIndex].Enqueued = true;
-            }
-
-            _ = _availableSlots.Writer.TryWrite(slotIndex);
+            _ = TryQueueAvailabilityToken(slotIndex, _slots[slotIndex]);
             if (connectionLoggingContext is not null)
             {
                 using IDisposable connectionScope = connectionLoggingContext.Push();
@@ -748,7 +781,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     }
 
                     slot.Busy = true;
-                    slot.Enqueued = false;
                     candidates.Add((slotIndex, slot));
                 }
             }
@@ -772,22 +804,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             NntpArticleAcquisitionSession? session = slot.Session;
             if (session is null)
             {
-                bool shouldRequeue;
                 lock (_gate)
                 {
                     slot.Busy = false;
-                    shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                    if (shouldRequeue)
-                    {
-                        slot.Enqueued = true;
-                    }
                 }
 
-                if (shouldRequeue)
-                {
-                    _ = _availableSlots.Writer.TryWrite(slotIndex);
-                }
-
+                _ = TryQueueAvailabilityToken(slotIndex, slot);
                 return;
             }
 
@@ -799,45 +821,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             {
                 if (keepAliveResult.FailureCode == NntpArticleAcquisitionFailureCode.None)
                 {
-                    bool shouldRequeue;
                     lock (_gate)
                     {
                         slot.Busy = false;
                         slot.LastKeepAliveProbeUtc = probeUtc;
-                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                        if (shouldRequeue)
-                        {
-                            slot.Enqueued = true;
-                        }
                     }
 
                     LogSessionKeepAliveSucceeded(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
-                    if (shouldRequeue)
-                    {
-                        _ = _availableSlots.Writer.TryWrite(slotIndex);
-                    }
-
+                    _ = TryQueueAvailabilityToken(slotIndex, slot);
                     return;
                 }
 
                 if (keepAliveResult.FailureCode == NntpArticleAcquisitionFailureCode.Cancelled && cancellationToken.IsCancellationRequested)
                 {
-                    bool shouldRequeue;
                     lock (_gate)
                     {
                         slot.Busy = false;
-                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                        if (shouldRequeue)
-                        {
-                            slot.Enqueued = true;
-                        }
                     }
 
-                    if (shouldRequeue)
-                    {
-                        _ = _availableSlots.Writer.TryWrite(slotIndex);
-                    }
-
+                    _ = TryQueueAvailabilityToken(slotIndex, slot);
                     return;
                 }
 
@@ -864,7 +866,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 retiredSession = slot.Session;
                 slot.Session = null;
                 slot.Busy = false;
-                slot.Enqueued = false;
             }
 
             if (retiredSession is not null)
@@ -887,17 +888,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             {
                 if (replacement is not null)
                 {
-                    bool shouldRequeue;
                     lock (_gate)
                     {
                         slot.Session = replacement;
                         slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
                         slot.LastKeepAliveProbeUtc = null;
-                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                        if (shouldRequeue)
-                        {
-                            slot.Enqueued = true;
-                        }
                     }
 
                     if (connectionLoggingContext is not null)
@@ -909,10 +904,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     {
                         LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
                     }
-                    if (shouldRequeue)
-                    {
-                        _ = _availableSlots.Writer.TryWrite(slotIndex);
-                    }
+
+                    _ = TryQueueAvailabilityToken(slotIndex, slot);
                 }
                 else
                 {
@@ -962,7 +955,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     if (!slot.Busy)
                     {
                         slot.Busy = true;
-                        slot.Enqueued = false;
                         immediateRetirements.Add(slot);
                     }
                 }
@@ -986,6 +978,49 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 cancellationToken.ThrowIfCancellationRequested();
                 await ReleaseAsync(slot.SlotId, NntpArticleAcquisitionFailureCode.None).ConfigureAwait(false);
             }
+        }
+
+        /// <summary>
+        /// Publishes one availability token for a slot when and only when no logical token is already outstanding.
+        /// </summary>
+        /// <param name="slotIndex">Slot index to publish.</param>
+        /// <param name="slot">Slot state associated with <paramref name="slotIndex"/>.</param>
+        /// <returns><see langword="true"/> when a token was published; otherwise <see langword="false"/>.</returns>
+        /// <remarks>
+        /// This method is the sole writer for logical availability tokens. It preserves the invariant that each slot has at most one
+        /// logically valid outstanding token by setting <see cref="SessionSlot.Enqueued"/> only on successful publication and never
+        /// clearing it except when <see cref="AcquireAsync(string, CancellationToken)"/> consumes a channel token.
+        /// </remarks>
+        private bool TryQueueAvailabilityToken(int slotIndex, SessionSlot slot)
+        {
+            bool shouldWrite;
+            lock (_gate)
+            {
+                shouldWrite = !_disposeRequested && slot.Session is not null && !slot.Busy && !slot.RetireRequested && !slot.Enqueued;
+                if (shouldWrite)
+                {
+                    slot.Enqueued = true;
+                }
+            }
+
+            if (!shouldWrite)
+            {
+                return false;
+            }
+
+            bool wrote = _availableSlots.Writer.TryWrite(slotIndex);
+            if (!wrote)
+            {
+                lock (_gate)
+                {
+                    slot.Enqueued = false;
+                }
+
+                return false;
+            }
+
+            _ = Interlocked.Increment(ref _availabilityTokenWriteCount);
+            return true;
         }
 
         /// <summary>
@@ -1144,8 +1179,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             internal DateTimeOffset? LastKeepAliveProbeUtc { get; set; }
 
             /// <summary>
-            /// Gets or sets a value indicating whether a ready-slot token is currently present in the lease queue.
+            /// Gets or sets a value indicating whether one logically valid availability token is currently outstanding for this slot.
             /// </summary>
+            /// <remarks>
+            /// This flag tracks logical token ownership, not lease state. It is set only when this manager successfully publishes an
+            /// availability token and cleared only when <see cref="AcquireAsync(string, CancellationToken)"/> consumes a token from the channel.
+            /// </remarks>
             internal bool Enqueued { get; set; }
 
             /// <summary>
