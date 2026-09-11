@@ -743,13 +743,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 
             NntpArticleAcquisitionSession connectedSession = session;
             int slotIndex;
+            SessionSlot slot;
             lock (_gate)
             {
                 slotIndex = _slots.Count;
-                _slots.Add(new SessionSlot(slotIndex, account, endpoint, connectedSession, sessionLogger, _timeProvider.GetUtcNow()));
+                slot = new SessionSlot(slotIndex, account, endpoint, connectedSession, sessionLogger, _timeProvider.GetUtcNow());
+                _slots.Add(slot);
             }
 
-            _ = TryQueueAvailabilityToken(slotIndex, _slots[slotIndex]);
+            _ = TryQueueAvailabilityToken(slotIndex, slot);
             if (connectionLoggingContext is not null)
             {
                 using IDisposable connectionScope = connectionLoggingContext.Push();
@@ -868,19 +870,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
             {
                 if (keepAliveResult.FailureCode == NntpArticleAcquisitionFailureCode.None)
                 {
-<<<<<<< HEAD
-                    lock (_gate)
-                    {
-                        slot.Busy = false;
-                        slot.LastKeepAliveProbeUtc = probeUtc;
-                    }
-
-                    LogSessionKeepAliveSucceeded(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
-                    _ = TryQueueAvailabilityToken(slotIndex, slot);
-=======
                     NntpArticleAcquisitionSession? retiredSession = null;
                     bool reconnectAfterRetire = false;
-                    bool shouldRequeue;
 
                     lock (_gate)
                     {
@@ -898,17 +889,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                                 slot.RetireRequested = false;
                                 slot.ReconnectOnRelease = false;
                             }
-
-                            shouldRequeue = false;
                         }
                         else
                         {
                             slot.LastKeepAliveProbeUtc = probeUtc;
-                            shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                            if (shouldRequeue)
-                            {
-                                slot.Enqueued = true;
-                            }
                         }
                     }
 
@@ -957,12 +941,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                                             slot.LastKeepAliveProbeUtc = null;
                                             slot.RetireRequested = false;
                                             slot.ReconnectOnRelease = false;
-
-                                            shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                                            if (shouldRequeue)
-                                            {
-                                                slot.Enqueued = true;
-                                            }
                                         }
 
                                         LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
@@ -975,7 +953,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                                             slot.ReconnectOnRelease = false;
                                         }
 
-                                        shouldRequeue = false;
                                         LogSessionReconnectFailed(_logger, slot.SlotId, slot.Account.EntryId, connectResult.FailureCode, connectResult.ResponseCode, connectResult.ResponseText);
                                     }
                                 }
@@ -991,18 +968,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                                 throw;
                             }
                         }
-                        else
-                        {
-                            shouldRequeue = false;
-                        }
                     }
 
-                    if (shouldRequeue)
-                    {
-                        _ = _availableSlots.Writer.TryWrite(slotIndex);
-                    }
-
->>>>>>> f6e811b793d18287ae0fef41dd40ebb339bdf740
+                    _ = TryQueueAvailabilityToken(slotIndex, slot);
                     return;
                 }
 
@@ -1161,9 +1129,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="slot">Slot state associated with <paramref name="slotIndex"/>.</param>
         /// <returns><see langword="true"/> when a token was published; otherwise <see langword="false"/>.</returns>
         /// <remarks>
-        /// This method is the sole writer for logical availability tokens. It preserves the invariant that each slot has at most one
-        /// logically valid outstanding token by setting <see cref="SessionSlot.Enqueued"/> only on successful publication and never
-        /// clearing it except when <see cref="AcquireAsync(string, CancellationToken)"/> consumes a channel token.
+        /// This method is the sole availability-token publication path and enforces at most one logically outstanding token per slot.
+        /// It first reserves logical ownership by setting <see cref="SessionSlot.Enqueued"/> while holding <see cref="_gate"/>, then
+        /// attempts <see cref="ChannelWriter{T}.TryWrite(T)"/> outside the lock to publish one physical channel entry.
+        /// If publication fails, no physical token was published and the logical reservation is rolled back by clearing
+        /// <see cref="SessionSlot.Enqueued"/>. After successful publication, <see cref="SessionSlot.Enqueued"/> remains set until
+        /// <see cref="AcquireAsync(string, CancellationToken)"/> consumes that physical token.
+        /// A successfully published physical token can later become stale if slot state changes after publication (for example,
+        /// retirement, disposal, busy transition, or reconnect/replacement); stale consumption is validated and discarded during acquire.
         /// </remarks>
         private bool TryQueueAvailabilityToken(int slotIndex, SessionSlot slot)
         {
