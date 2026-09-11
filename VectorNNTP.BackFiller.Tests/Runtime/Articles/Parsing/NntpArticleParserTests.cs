@@ -269,6 +269,214 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Verifies folded and unfolded Date values with equivalent semantics produce equivalent canonical UTC results.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenDateIsFoldedAndSemanticallyValid_AcceptsAndMatchesUnfoldedCanonicalDate()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] unfoldedArticle = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0200",
+                    "Message-ID: <m11a@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            byte[] foldedArticle = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024\r\n" +
+                "\t07:30:10 +0200\r\n" +
+                "Message-ID: <m11b@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            byte[] foldedArticleBeforeParse = [.. foldedArticle];
+
+            NntpArticleParseResult unfoldedResult = parser.Parse(unfoldedArticle);
+            NntpArticleParseResult foldedResult = parser.Parse(foldedArticle);
+
+            Assert.True(unfoldedResult.IsAccepted);
+            Assert.True(foldedResult.IsAccepted);
+            Assert.Equal(unfoldedResult.CanonicalUtcDate, foldedResult.CanonicalUtcDate);
+            Assert.Equal(NntpArticleHeaderName.Date, foldedResult.SelectedDateHeaderName);
+            Assert.Equal("Fri, 23 Aug 2024\r\n\t07:30:10 +0200", Encoding.ASCII.GetString(foldedResult.OriginalDateValue.Span));
+            Assert.Equal(foldedArticleBeforeParse, foldedArticle);
+            Assert.Equal(foldedArticle, foldedResult.ArticleBytes.ToArray());
+        }
+
+        /// <summary>
+        /// Verifies Date values spanning multiple continuation lines are unfolded consistently for semantic date parsing.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenDateUsesMultipleContinuationLines_AcceptsAndCanonicalizes()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: Fri,\r\n" +
+                " 23 Aug\r\n" +
+                " 2024 07:30:10\r\n" +
+                " +0200\r\n" +
+                "Message-ID: <m11c@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal("Fri, 23 Aug 2024 05:30:10 +0000", result.CanonicalUtcDate);
+            Assert.Equal("Fri,\r\n 23 Aug\r\n 2024 07:30:10\r\n +0200", Encoding.ASCII.GetString(result.OriginalDateValue.Span));
+        }
+
+        /// <summary>
+        /// Verifies semantically invalid folded Date values remain rejected.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenFoldedDateIsSemanticallyInvalid_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: BAD\r\n" +
+                " DATE\r\n" +
+                "Message-ID: <m11d@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.MissingOrInvalidDate, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies malformed folded Date values still allow existing candidate fallback resolution.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenFoldedDateMalformedAndInjectionDateValid_UsesFallbackAndAccepts()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: BAD\r\n" +
+                " DATE\r\n" +
+                "Injection-Date: Fri, 23 Aug 2024 07:30:10 +0200\r\n" +
+                "Message-ID: <m11e@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(NntpArticleHeaderName.InjectionDate, result.SelectedDateHeaderName);
+            Assert.Equal("Fri, 23 Aug 2024 05:30:10 +0000", result.CanonicalUtcDate);
+        }
+
+        /// <summary>
+        /// Verifies folded and unfolded From values with equivalent semantics produce equivalent acceptance behavior.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenFromIsFoldedAndSemanticallyEquivalent_MatchesUnfoldedAcceptance()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] unfoldedArticle = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m11f@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: poster <user@example.test>",
+                ],
+                body: "body\r\n");
+
+            byte[] foldedArticle = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                "Message-ID: <m11g@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: poster\r\n" +
+                " <user@example.test>\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult unfoldedResult = parser.Parse(unfoldedArticle);
+            NntpArticleParseResult foldedResult = parser.Parse(foldedArticle);
+
+            Assert.True(unfoldedResult.IsAccepted);
+            Assert.True(foldedResult.IsAccepted);
+            Assert.Equal(unfoldedResult.IsAccepted, foldedResult.IsAccepted);
+        }
+
+        /// <summary>
+        /// Verifies semantically invalid folded From values remain rejected after unfolding.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenFoldedFromIsSemanticallyInvalid_Rejects()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                "Message-ID: <m11h@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: invalid\r\n" +
+                " value-without-at-sign\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.InvalidFrom, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies folded From semantic length at the existing maximum boundary is accepted and one byte beyond remains rejected.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenFoldedFromSemanticLengthAtLimit_EnforcesBoundary()
+        {
+            const int maxFromLength = 2048;
+            NntpArticleParser parser = new(LocalFqdn);
+
+            string localAtLimit = new('a', 1023);
+            string domainAtLimit = new('b', maxFromLength - localAtLimit.Length - 2);
+            string semanticAtLimitBeforeFold = localAtLimit + "@" + domainAtLimit;
+            string foldedAtLimit = semanticAtLimitBeforeFold[..1024] + "\r\n\t" + semanticAtLimitBeforeFold[1024..];
+
+            byte[] acceptedArticle = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                "Message-ID: <m11i@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: " + foldedAtLimit + "\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            string domainTooLong = new('b', domainAtLimit.Length + 1);
+            string semanticTooLongBeforeFold = localAtLimit + "@" + domainTooLong;
+            string foldedTooLong = semanticTooLongBeforeFold[..1024] + "\r\n\t" + semanticTooLongBeforeFold[1024..];
+            byte[] rejectedArticle = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                "Message-ID: <m11j@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: " + foldedTooLong + "\r\n" +
+                "\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult acceptedResult = parser.Parse(acceptedArticle);
+            NntpArticleParseResult rejectedResult = parser.Parse(rejectedArticle);
+
+            Assert.True(acceptedResult.IsAccepted);
+            Assert.False(rejectedResult.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.InvalidFrom, rejectedResult.FailureCode);
+        }
+
+        /// <summary>
         /// Verifies continuation without a preceding header is rejected.
         /// </summary>
         [Fact]
