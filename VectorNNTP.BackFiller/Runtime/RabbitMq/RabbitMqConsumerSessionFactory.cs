@@ -145,6 +145,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private readonly SemaphoreSlim _stateGate = new(1, 1);
         /// <summary>
+        /// Gate that serializes end-to-end reconciliation execution across background and explicit invocations.
+        /// </summary>
+        private readonly SemaphoreSlim _reconcileGate = new(1, 1);
+        /// <summary>
         /// Cancellation source used to stop reconciliation and connection-replacement processing.
         /// </summary>
         private readonly CancellationTokenSource _shutdownCts = new();
@@ -177,6 +181,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Single-bit guard that prevents lifecycle callback disposal from running twice.
         /// </summary>
         private int _callbacksDisposed;
+        /// <summary>
+        /// Optional lifecycle observer invoked when shutdown reaches the reconcile serialization boundary.
+        /// </summary>
+        private readonly Action? _stopAllSessionsBoundaryReached;
 
         /// <summary>
         /// Initializes the consumer service with the default always-available backbone capacity provider.
@@ -188,7 +196,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IRabbitMqConsumerSessionFactory sessionFactory,
             ShutdownCoordinator shutdownCoordinator,
             ILogger<RabbitMqConsumerService> logger)
-            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger)
+            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger, null)
         {
         }
 
@@ -202,7 +210,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IRabbitMqConsumerSessionFactory sessionFactory,
             ShutdownCoordinator shutdownCoordinator,
             IBackboneUsableCapacityProvider capacityProvider,
-            ILogger<RabbitMqConsumerService> logger)
+            ILogger<RabbitMqConsumerService> logger,
+            Action? stopAllSessionsBoundaryReached = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(accountSnapshotProvider);
@@ -218,6 +227,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _shutdownCoordinator = shutdownCoordinator;
             _capacityProvider = capacityProvider;
             _logger = logger;
+            _stopAllSessionsBoundaryReached = stopAllSessionsBoundaryReached;
 
             _consumerOptions = RabbitMqConsumerInfrastructureOptions.FromRuntimeOptions(runtimeOptions);
             _deliveryChannel = Channel.CreateBounded<RabbitMqArticleDelivery>(new BoundedChannelOptions(_consumerOptions.DeliveryBufferCapacity)
@@ -467,126 +477,134 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private async Task ReconcileSessionsAsync(CancellationToken cancellationToken)
         {
-            List<RetirementOperation> retirements = [];
-            List<SessionRuntimeState> starts = [];
-            Dictionary<string, RabbitMqConsumerSessionIdentity> desiredSessions;
-            int activeCount;
-
-            await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _reconcileGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                if (_shutdownRequested)
+                List<RetirementOperation> retirements = [];
+                List<SessionRuntimeState> starts = [];
+                Dictionary<string, RabbitMqConsumerSessionIdentity> desiredSessions;
+                int activeCount;
+
+                await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
                 {
-                    return;
-                }
-
-                PruneCompletedRetirementsNoLock();
-
-                foreach (SessionRuntimeState runtime in _sessionRuntimes.Values)
-                {
-                    runtime.Desired = false;
-                }
-
-                NntpAccountSnapshotState snapshot = _accountSnapshotProvider.CurrentSnapshot;
-                desiredSessions = BuildDesiredSessions(snapshot, ResolveBackboneUsableCapacity);
-
-                foreach ((string sessionKey, RabbitMqConsumerSessionIdentity desiredIdentity) in desiredSessions)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (_retiringSessionRuntimes.TryGetValue(sessionKey, out RetiringSessionRuntimeState? retiring))
+                    if (_shutdownRequested)
                     {
-                        if (!retiring.RetirementTask.IsCompletedSuccessfully)
+                        return;
+                    }
+
+                    PruneCompletedRetirementsNoLock();
+
+                    foreach (SessionRuntimeState runtime in _sessionRuntimes.Values)
+                    {
+                        runtime.Desired = false;
+                    }
+
+                    NntpAccountSnapshotState snapshot = _accountSnapshotProvider.CurrentSnapshot;
+                    desiredSessions = BuildDesiredSessions(snapshot, ResolveBackboneUsableCapacity);
+
+                    foreach ((string sessionKey, RabbitMqConsumerSessionIdentity desiredIdentity) in desiredSessions)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (_retiringSessionRuntimes.TryGetValue(sessionKey, out RetiringSessionRuntimeState? retiring))
                         {
-                            continue;
+                            if (!retiring.RetirementTask.IsCompletedSuccessfully)
+                            {
+                                continue;
+                            }
+
+                            _ = _retiringSessionRuntimes.Remove(sessionKey);
                         }
 
-                        _ = _retiringSessionRuntimes.Remove(sessionKey);
+                        if (!_sessionRuntimes.TryGetValue(sessionKey, out SessionRuntimeState? runtimeState))
+                        {
+                            IRabbitMqConsumerSession created = _sessionFactory.CreateSession(
+                                desiredIdentity,
+                                new RabbitMqDeliveryChannelSink(_deliveryChannel.Writer),
+                                _consumerOptions.PrefetchCount);
+
+                            runtimeState = new SessionRuntimeState(desiredIdentity, created);
+                            _sessionRuntimes[sessionKey] = runtimeState;
+
+                            LogConsumerSessionCreated(
+                                _logger,
+                                desiredIdentity.Backbone,
+                                desiredIdentity.AccountUsername,
+                                desiredIdentity.ConnectionNumber,
+                                desiredIdentity.ConnectionLimit,
+                                sessionKey);
+                        }
+                        else if (RequiresSessionReplacement(runtimeState.Identity, desiredIdentity))
+                        {
+                            TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                            _retiringSessionRuntimes[sessionKey] = new RetiringSessionRuntimeState(runtimeState.Identity, completionSource.Task);
+                            retirements.Add(new RetirementOperation(sessionKey, runtimeState, completionSource));
+                            _ = _sessionRuntimes.Remove(sessionKey);
+
+                            LogConsumerSessionReplaced(
+                                _logger,
+                                desiredIdentity.Backbone,
+                                desiredIdentity.AccountUsername,
+                                desiredIdentity.ConnectionNumber,
+                                desiredIdentity.ConnectionLimit,
+                                sessionKey);
+
+                            continue;
+                        }
+                        else
+                        {
+                            runtimeState.Identity = desiredIdentity;
+                        }
+
+                        runtimeState.Desired = true;
+
+                        if (!runtimeState.Session.IsRunning)
+                        {
+                            starts.Add(runtimeState);
+                        }
                     }
 
-                    if (!_sessionRuntimes.TryGetValue(sessionKey, out SessionRuntimeState? runtimeState))
+                    List<KeyValuePair<string, SessionRuntimeState>> staleSessions = [.. _sessionRuntimes.Where(static kvp => !kvp.Value.Desired)];
+                    for (int i = 0; i < staleSessions.Count; i++)
                     {
-                        IRabbitMqConsumerSession created = _sessionFactory.CreateSession(
-                            desiredIdentity,
-                            new RabbitMqDeliveryChannelSink(_deliveryChannel.Writer),
-                            _consumerOptions.PrefetchCount);
-
-                        runtimeState = new SessionRuntimeState(desiredIdentity, created);
-                        _sessionRuntimes[sessionKey] = runtimeState;
-
-                        LogConsumerSessionCreated(
-                            _logger,
-                            desiredIdentity.Backbone,
-                            desiredIdentity.AccountUsername,
-                            desiredIdentity.ConnectionNumber,
-                            desiredIdentity.ConnectionLimit,
-                            sessionKey);
-                    }
-                    else if (RequiresSessionReplacement(runtimeState.Identity, desiredIdentity))
-                    {
+                        KeyValuePair<string, SessionRuntimeState> stale = staleSessions[i];
                         TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                        _retiringSessionRuntimes[sessionKey] = new RetiringSessionRuntimeState(runtimeState.Identity, completionSource.Task);
-                        retirements.Add(new RetirementOperation(sessionKey, runtimeState, completionSource));
-                        _ = _sessionRuntimes.Remove(sessionKey);
-
-                        LogConsumerSessionReplaced(
-                            _logger,
-                            desiredIdentity.Backbone,
-                            desiredIdentity.AccountUsername,
-                            desiredIdentity.ConnectionNumber,
-                            desiredIdentity.ConnectionLimit,
-                            sessionKey);
-
-                        continue;
-                    }
-                    else
-                    {
-                        runtimeState.Identity = desiredIdentity;
+                        _retiringSessionRuntimes[stale.Key] = new RetiringSessionRuntimeState(stale.Value.Identity, completionSource.Task);
+                        retirements.Add(new RetirementOperation(stale.Key, stale.Value, completionSource));
+                        _ = _sessionRuntimes.Remove(stale.Key);
                     }
 
-                    runtimeState.Desired = true;
-
-                    if (!runtimeState.Session.IsRunning)
-                    {
-                        starts.Add(runtimeState);
-                    }
+                    activeCount = _sessionRuntimes.Count;
                 }
-
-                List<KeyValuePair<string, SessionRuntimeState>> staleSessions = [.. _sessionRuntimes.Where(static kvp => !kvp.Value.Desired)];
-                for (int i = 0; i < staleSessions.Count; i++)
+                finally
                 {
-                    KeyValuePair<string, SessionRuntimeState> stale = staleSessions[i];
-                    TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                    _retiringSessionRuntimes[stale.Key] = new RetiringSessionRuntimeState(stale.Value.Identity, completionSource.Task);
-                    retirements.Add(new RetirementOperation(stale.Key, stale.Value, completionSource));
-                    _ = _sessionRuntimes.Remove(stale.Key);
+                    foreach (SessionRuntimeState runtime in _sessionRuntimes.Values)
+                    {
+                        runtime.Desired = false;
+                    }
+
+                    _ = _stateGate.Release();
                 }
 
-                activeCount = _sessionRuntimes.Count;
+                Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
+                if (retirementFailure is not null)
+                {
+                    throw retirementFailure;
+                }
+
+                for (int i = 0; i < starts.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await starts[i].Session.StartAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                LogConsumerReconcileCompleted(_logger, desiredSessions.Count, activeCount);
             }
             finally
             {
-                foreach (SessionRuntimeState runtime in _sessionRuntimes.Values)
-                {
-                    runtime.Desired = false;
-                }
-
-                _ = _stateGate.Release();
+                _ = _reconcileGate.Release();
             }
-
-            Exception? retirementFailure = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: false, cancellationToken).ConfigureAwait(false);
-            if (retirementFailure is not null)
-            {
-                throw retirementFailure;
-            }
-
-            for (int i = 0; i < starts.Count; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                await starts[i].Session.StartAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            LogConsumerReconcileCompleted(_logger, desiredSessions.Count, activeCount);
         }
 
         /// <summary>
@@ -651,39 +669,58 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private async Task StopAllSessionsAsync(CancellationToken cancellationToken)
         {
-            List<RetirementOperation> retirements = [];
-
-            await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _stopAllSessionsBoundaryReached?.Invoke();
+            await _reconcileGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                PruneCompletedRetirementsNoLock();
+                List<RetirementOperation> retirements = [];
 
-                foreach ((string sessionKey, SessionRuntimeState runtime) in _sessionRuntimes)
+                await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
                 {
-                    TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                    _retiringSessionRuntimes[sessionKey] = new RetiringSessionRuntimeState(runtime.Identity, completionSource.Task);
-                    retirements.Add(new RetirementOperation(sessionKey, runtime, completionSource));
+                    PruneCompletedRetirementsNoLock();
+
+                    foreach ((string sessionKey, SessionRuntimeState runtime) in _sessionRuntimes)
+                    {
+                        TaskCompletionSource<bool> completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        _retiringSessionRuntimes[sessionKey] = new RetiringSessionRuntimeState(runtime.Identity, completionSource.Task);
+                        retirements.Add(new RetirementOperation(sessionKey, runtime, completionSource));
+                    }
+
+                    _sessionRuntimes.Clear();
+                }
+                finally
+                {
+                    _ = _stateGate.Release();
                 }
 
-                _sessionRuntimes.Clear();
+                _ = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: true, cancellationToken).ConfigureAwait(false);
+
+                Task[] pendingRetirements;
+                await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    pendingRetirements = [.. _retiringSessionRuntimes.Values.Select(static runtime => runtime.RetirementTask)];
+                }
+                finally
+                {
+                    _ = _stateGate.Release();
+                }
+
+                for (int i = 0; i < pendingRetirements.Length; i++)
+                {
+                    try
+                    {
+                        await pendingRetirements[i].ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                    }
+                }
             }
             finally
             {
-                _ = _stateGate.Release();
-            }
-
-            _ = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: true, cancellationToken).ConfigureAwait(false);
-
-            Task[] pendingRetirements = [.. _retiringSessionRuntimes.Values.Select(static runtime => runtime.RetirementTask)];
-            for (int i = 0; i < pendingRetirements.Length; i++)
-            {
-                try
-                {
-                    await pendingRetirements[i].ConfigureAwait(false);
-                }
-                catch
-                {
-                }
+                _ = _reconcileGate.Release();
             }
         }
 

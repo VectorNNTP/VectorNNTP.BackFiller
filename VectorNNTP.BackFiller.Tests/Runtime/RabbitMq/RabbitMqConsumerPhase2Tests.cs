@@ -2582,9 +2582,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
             RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
             BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
-            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+            CapacityStateBackboneCapacityProvider capacityProvider = new();
+            capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: true);
+            TaskCompletionSource<bool> stopBoundaryReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            RabbitMqConsumerService service = new(
+                runtimeOptions,
+                snapshotProvider.Provider,
+                manager,
+                sessionFactory,
+                shutdownCoordinator,
+                capacityProvider,
+                NullLogger<RabbitMqConsumerService>.Instance,
+                () => _ = stopBoundaryReached.TrySetResult(true));
 
             Guid accountId = Guid.NewGuid();
+            string sessionKey1 = $"{accountId:N}:1";
             string sessionKey2 = $"{accountId:N}:2";
             string sessionKey3 = $"{accountId:N}:3";
 
@@ -2615,10 +2627,42 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.True(session3.DisposeCalled);
 
             await service.StartAsync(timeoutToken).ConfigureAwait(false);
-            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
-            shutdownCoordinator.SignalForcedShutdown();
-            await service.StopAsync(timeoutToken).ConfigureAwait(false);
 
+            sessionFactory.BlockStartForSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey3);
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+
+            Task reconcileWhileStartingTask = service.ReconcileOnceAsync(timeoutToken);
+            await sessionFactory.WaitForStartEnteredAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+
+            sessionFactory.RequireStopBoundaryAfterStartExited(sessionKey3);
+            shutdownCoordinator.SignalForcedShutdown();
+            Task stopTask = service.StopAsync(timeoutToken);
+
+            await stopBoundaryReached.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
+            Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
+
+            sessionFactory.ReleaseStart(sessionKey3);
+            await sessionFactory.WaitForStartExitedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            await reconcileWhileStartingTask.ConfigureAwait(false);
+
+            await sessionFactory.WaitForStopBoundaryReachedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            sessionFactory.ReleaseStop(sessionKey3);
+            await stopTask.ConfigureAwait(false);
+
+            BlockingStopTrackingSession session1AtShutdown = sessionFactory.RequireLatestSession(sessionKey1);
+            BlockingStopTrackingSession restartedSession3 = sessionFactory.RequireLatestSession(sessionKey3);
+            Assert.True(session1AtShutdown.DisposeCalled);
+            Assert.True(session1AtShutdown.StopCallCount >= 1);
+            Assert.Equal(1, restartedSession3.StartCallCount);
+            Assert.True(restartedSession3.DisposeCalled);
+            Assert.True(restartedSession3.StopCallCount >= 1);
+            Assert.False(restartedSession3.IsRunning);
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey1));
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey2));
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey3));
+            Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
             Assert.Equal(0, service.ActiveSessionCount);
 
             service.Dispose();
@@ -3005,9 +3049,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopStarted = new(StringComparer.Ordinal);
             /// <summary>
+            /// Confirms stop has reached the deterministic lifecycle boundary for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _stopBoundaryReached = new(StringComparer.Ordinal);
+            /// <summary>
             /// Confirms stop cancellation observed behavior.
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopCancellationObserved = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms deterministic start blocking behavior for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _startBlocks = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms start entered behavior for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _startEntered = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms start exited behavior for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _startExited = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms whether start exit has been observed for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, bool> _startExitedObserved = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms whether stop-boundary checks should enforce prior start-exit signaling per session.
+            /// </summary>
+            private readonly Dictionary<string, bool> _stopBoundaryRequiresStartExited = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms whether stop-boundary entry was observed before required start-exit signaling.
+            /// </summary>
+            private readonly Dictionary<string, bool> _stopBoundaryReachedBeforeStartExited = new(StringComparer.Ordinal);
             /// <summary>
             /// Confirms  gate behavior.
             /// </summary>
@@ -3117,6 +3189,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 {
                     _stopBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _stopStarted[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _stopBoundaryReached[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _stopCancellationObserved[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
@@ -3139,6 +3212,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     if (!_stopStarted.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         throw new InvalidOperationException($"No stop-start signal exists for session '{sessionKey}'.");
+                    }
+
+                    task = source.Task;
+                }
+
+                await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Waits until stop has reached the deterministic lifecycle boundary for the selected session.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task WaitForStopBoundaryReachedAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task task;
+                lock (_gate)
+                {
+                    if (!_stopBoundaryReached.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No stop-boundary signal exists for session '{sessionKey}'.");
                     }
 
                     task = source.Task;
@@ -3183,6 +3277,145 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             }
 
             /// <summary>
+            /// Configures deterministic blocking for StartAsync on the selected session key.
+            /// </summary>
+            /// <param name="sessionKey">Session key whose next start should block until released.</param>
+            internal void BlockStartForSession(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    _startBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _startEntered[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _startExited[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _startExitedObserved[sessionKey] = false;
+                }
+            }
+
+            /// <summary>
+            /// Waits until the selected session has entered the deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task WaitForStartEnteredAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task task;
+                lock (_gate)
+                {
+                    if (!_startEntered.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No start-entered signal exists for session '{sessionKey}'.");
+                    }
+
+                    task = source.Task;
+                }
+
+                await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Releases a previously configured deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to release.</param>
+            internal void ReleaseStart(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    if (_startBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        _ = source.TrySetResult(true);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Waits for deterministic start-gate release when configured for a session.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task AwaitStartGateAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task? gateTask = null;
+                TaskCompletionSource<bool>? enteredSignal = null;
+                TaskCompletionSource<bool>? exitedSignal = null;
+
+                lock (_gate)
+                {
+                    _ = _startEntered.TryGetValue(sessionKey, out enteredSignal);
+                    _ = _startExited.TryGetValue(sessionKey, out exitedSignal);
+                    if (_startBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        gateTask = source.Task;
+                    }
+                }
+
+                _ = enteredSignal?.TrySetResult(true);
+
+                if (gateTask is not null)
+                {
+                    await gateTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                lock (_gate)
+                {
+                    _startExitedObserved[sessionKey] = true;
+                }
+
+                _ = exitedSignal?.TrySetResult(true);
+            }
+
+            /// <summary>
+            /// Gets the raw start-exited signal task for the selected session.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <returns>Underlying signal task that completes when the deterministic start block exits.</returns>
+            internal Task GetStartExitedSignalTask(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    if (!_startExited.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No start-exited signal exists for session '{sessionKey}'.");
+                    }
+
+                    return source.Task;
+                }
+            }
+
+            /// <summary>
+            /// Waits until the selected session has exited the deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task WaitForStartExitedAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                await GetStartExitedSignalTask(sessionKey).WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Requires stop-boundary entry for the selected session to occur only after the session has exited the deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to enforce.</param>
+            internal void RequireStopBoundaryAfterStartExited(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    _stopBoundaryRequiresStartExited[sessionKey] = true;
+                    _stopBoundaryReachedBeforeStartExited[sessionKey] = false;
+                }
+            }
+
+            /// <summary>
+            /// Returns whether stop-boundary entry was observed before required start-exit signaling.
+            /// </summary>
+            internal bool AnyStopBoundaryReachedBeforeStartExited()
+            {
+                lock (_gate)
+                {
+                    return _stopBoundaryReachedBeforeStartExited.Values.Any(static value => value);
+                }
+            }
+
+            /// <summary>
             /// Confirms the await stop gate async behavior.
             /// </summary>
             /// <returns>The value returned by the await stop gate async helper.</returns>
@@ -3197,11 +3430,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 Task? gateTask = null;
                 TaskCompletionSource<bool>? startedSignal = null;
                 TaskCompletionSource<bool>? cancellationObservedSignal = null;
+                bool requiresStartExited = false;
+                bool startExitedObserved = false;
 
                 lock (_gate)
                 {
                     _ = _stopStarted.TryGetValue(sessionKey, out startedSignal);
                     _ = _stopCancellationObserved.TryGetValue(sessionKey, out cancellationObservedSignal);
+                    _ = _stopBoundaryRequiresStartExited.TryGetValue(sessionKey, out requiresStartExited);
+                    _ = _startExitedObserved.TryGetValue(sessionKey, out startExitedObserved);
                     if (_stopBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         gateTask = source.Task;
@@ -3209,6 +3446,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 }
 
                 _ = startedSignal?.TrySetResult(true);
+
+                if (requiresStartExited && !startExitedObserved)
+                {
+                    lock (_gate)
+                    {
+                        _stopBoundaryReachedBeforeStartExited[sessionKey] = true;
+                    }
+                }
+
+                _ = _stopBoundaryReached.TryGetValue(sessionKey, out TaskCompletionSource<bool>? boundarySignal);
+                _ = boundarySignal?.TrySetResult(true);
 
                 if (gateTask is null)
                 {
@@ -3843,6 +4091,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 IsRunning = true;
                 StartCallCount++;
                 _ = _deliverySink;
+
+                await _owner.AwaitStartGateAsync(Identity.SessionKey, cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
