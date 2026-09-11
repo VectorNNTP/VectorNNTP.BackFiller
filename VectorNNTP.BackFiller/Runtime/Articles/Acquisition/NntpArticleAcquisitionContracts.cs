@@ -125,10 +125,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
     }
 
     /// <summary>
-    /// Owns a rented pooled buffer containing one successfully received raw article.
+    /// Owns a rented pooled buffer containing one successfully received transport-normalized article.
     /// </summary>
     /// <remarks>
     /// The acquisition path transfers buffer ownership into this wrapper so downstream parsing can read the article without copying it.
+    /// Payload bytes exclude NNTP multiline terminator framing and include exactly one transport dot-unstuffing pass for line-start dots.
     /// Disposing the wrapper returns the rented array to <see cref="ArrayPool{T}.Shared"/> exactly once.
     /// </remarks>
     internal sealed class DownloadedArticleBuffer : IDisposable

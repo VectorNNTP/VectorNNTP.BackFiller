@@ -6,6 +6,7 @@
 // Focused tests for y enc article validator, covering configuration and validation contracts; NNTP article and transport behavior.
 // Primary responsibility: documents the executable contracts covered by the yenc article validator test suite.
 
+using System.Text;
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using Xunit;
 
@@ -25,6 +26,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         /// Absolute directory path containing offline SABCTools yEnc fixtures for theory-driven tests.
         /// </summary>
         private static readonly string FixtureRoot = ResolveFixtureRoot();
+
+        /// <summary>
+        /// Fixture names whose payload bytes are preserved in NNTP wire form and therefore require one transport dot-unstuffing pass before direct validator use.
+        /// </summary>
+        private static readonly HashSet<string> WireFormDotStuffedFixtureNames = new(StringComparer.Ordinal)
+        {
+            "test_regular.yenc",
+            "test_regular_2.yenc",
+            "test_special_chars.yenc",
+            "test_bad_crc_end.yenc",
+        };
 
         /// <summary>
         /// Provides fixture cases expected to validate successfully.
@@ -75,7 +87,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         [MemberData(nameof(ValidFixtureCases))]
         public void Validate_WhenFixtureIsValid_ReturnsExpectedSuccessStatus(string fixtureName, string expectedStatusName)
         {
-            ReadOnlySpan<byte> body = LoadFixtureBytes(fixtureName);
+            byte[] fixtureBytes = LoadFixtureBytes(fixtureName);
+            byte[] body = NormalizeFixtureBodyForValidatorContract(fixtureName, fixtureBytes);
 
             YEncArticleValidationResult result = YEncArticleValidator.Validate(body);
             YEncArticleValidationStatus expected = Enum.Parse<YEncArticleValidationStatus>(expectedStatusName);
@@ -107,7 +120,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         [MemberData(nameof(InvalidFixtureCases))]
         public void Validate_WhenFixtureIsInvalidOrNonYEnc_ReturnsExpectedStatus(string fixtureName, string expectedStatusName)
         {
-            ReadOnlySpan<byte> body = LoadFixtureBytes(fixtureName);
+            byte[] fixtureBytes = LoadFixtureBytes(fixtureName);
+            byte[] body = NormalizeFixtureBodyForValidatorContract(fixtureName, fixtureBytes);
 
             YEncArticleValidationResult result = YEncArticleValidator.Validate(body);
             YEncArticleValidationStatus expected = Enum.Parse<YEncArticleValidationStatus>(expectedStatusName);
@@ -323,18 +337,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         }
 
         /// <summary>
-        /// Verifies NNTP dot-stuffed payload handling where <c>..</c> at line start decodes to a logical single leading dot.
+        /// Verifies a logical encoded payload line beginning with <c>.</c> validates successfully when provided as transport-normalized bytes.
         /// </summary>
         [Fact]
-        public void Validate_WhenDotStuffedPayloadHasLeadingDot_ValidatesSuccessfully()
+        public void Validate_WhenLogicalPayloadHasLeadingDot_ValidatesSuccessfully()
         {
             byte[] decodedPayload = [4];
             uint crc = Crc32(decodedPayload);
-            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <message-id>\r\n\r\n=ybegin line=128 size=1 name=test.bin\r\n..\r\n=yend size=1 crc32={crc:x8}\r\n.\r\n");
+            byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <message-id>\r\n\r\n=ybegin line=128 size=1 name=test.bin\r\n.\r\n=yend size=1 crc32={crc:x8}\r\n.\r\n");
 
             YEncArticleValidationResult result = YEncArticleValidator.Validate(article);
 
             Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, result.Status);
+        }
+
+        /// <summary>
+        /// Verifies that wire-level dot-stuffed input is rejected when passed directly to the validator.
+        /// </summary>
+        [Fact]
+        public void Validate_WhenWireDotStuffedPayloadProvided_ReturnsDecodedSizeMismatch()
+        {
+            byte[] decodedPayload = [4];
+            uint crc = Crc32(decodedPayload);
+            byte[] wireStuffedArticle = System.Text.Encoding.ASCII.GetBytes($"220 0 <message-id>\r\n\r\n=ybegin line=128 size=1 name=test.bin\r\n..\r\n=yend size=1 crc32={crc:x8}\r\n.\r\n");
+
+            YEncArticleValidationResult result = YEncArticleValidator.Validate(wireStuffedArticle);
+
+            Assert.Equal(YEncArticleValidationStatus.DecodedSizeMismatch, result.Status);
         }
 
         /// <summary>
@@ -850,7 +879,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         }
 
         /// <summary>
-        /// Verifies explicit dot-stuffing line patterns decode using logical content semantics.
+        /// Verifies leading-dot line patterns validate using logical encoded bytes without transport dot normalization.
         /// </summary>
         [Theory]
         [InlineData(".")]
@@ -860,9 +889,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         [InlineData("..=...")]
         [InlineData("...=...")]
         [InlineData("..=y")]
-        public void Validate_WhenDotStuffedPatternIsUsed_ValidatesLogicalDecodedContent(string payloadLine)
+        public void Validate_WhenLogicalLeadingDotPatternIsUsed_ValidatesLogicalDecodedContent(string payloadLine)
         {
-            byte[] decoded = DecodeLiteralPayloadLine(payloadLine);
+            byte[] decoded = DecodeLogicalPayloadLine(payloadLine);
             uint crc = Crc32(decoded);
             byte[] article = System.Text.Encoding.ASCII.GetBytes($"220 0 <id>\r\n\r\n=ybegin line=128 size={decoded.Length} name=test.bin\r\n{payloadLine}\r\n=yend size={decoded.Length} crc32={crc:x8}\r\n.\r\n");
 
@@ -935,14 +964,105 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         /// </summary>
         /// <param name="fixtureName">Fixture file name under the SABCTools fixture directory.</param>
         /// <returns>Raw fixture bytes.</returns>
-        /// <summary>
-        /// Confirms the load fixture bytes behavior.
-        /// </summary>
-        /// <returns>The value returned by the load fixture bytes helper.</returns>
-        private static ReadOnlySpan<byte> LoadFixtureBytes(string fixtureName)
+        private static byte[] LoadFixtureBytes(string fixtureName)
         {
             string path = Path.Combine(FixtureRoot, fixtureName);
             return File.ReadAllBytes(path);
+        }
+
+        /// <summary>
+        /// Normalizes fixture bytes to the validator input contract for fixture-driven tests that bypass acquisition.
+        /// </summary>
+        /// <param name="fixtureName">Fixture file name under the SABCTools fixture directory.</param>
+        /// <param name="fixtureBytes">Raw fixture bytes.</param>
+        /// <returns>Logical body bytes suitable for direct transport-agnostic validator input.</returns>
+        private static byte[] NormalizeFixtureBodyForValidatorContract(string fixtureName, byte[] fixtureBytes)
+        {
+            if (!WireFormDotStuffedFixtureNames.Contains(fixtureName))
+            {
+                return fixtureBytes;
+            }
+
+            int payloadStart = FindPayloadStartOffset(fixtureBytes);
+            int yEndLineStart = FindYEndLineStartOffset(fixtureBytes, payloadStart);
+            if (payloadStart < 0 || yEndLineStart < 0 || yEndLineStart < payloadStart)
+            {
+                return fixtureBytes;
+            }
+
+            byte[] normalizedPayload = UnstuffNntpWireDotPrefixedLines(fixtureBytes.AsSpan(payloadStart, yEndLineStart - payloadStart));
+            byte[] normalized = new byte[payloadStart + normalizedPayload.Length + (fixtureBytes.Length - yEndLineStart)];
+            Buffer.BlockCopy(fixtureBytes, 0, normalized, 0, payloadStart);
+            Buffer.BlockCopy(normalizedPayload, 0, normalized, payloadStart, normalizedPayload.Length);
+            Buffer.BlockCopy(fixtureBytes, yEndLineStart, normalized, payloadStart + normalizedPayload.Length, fixtureBytes.Length - yEndLineStart);
+            return normalized;
+        }
+
+        /// <summary>
+        /// Finds payload start offset immediately after the multipart <c>=ypart</c> line when present, otherwise after <c>=ybegin</c>.
+        /// </summary>
+        /// <param name="fixtureBytes">Fixture bytes.</param>
+        /// <returns>Zero-based payload start offset, or -1 when markers are missing.</returns>
+        private static int FindPayloadStartOffset(byte[] fixtureBytes)
+        {
+            string text = Encoding.ASCII.GetString(fixtureBytes);
+            int partIndex = text.IndexOf("=ypart ", StringComparison.Ordinal);
+            int beginIndex = text.IndexOf("=ybegin ", StringComparison.Ordinal);
+            int anchor = partIndex >= 0 ? partIndex : beginIndex;
+            if (anchor < 0)
+            {
+                return -1;
+            }
+
+            int lineFeed = text.IndexOf('\n', anchor);
+            return lineFeed < 0 ? -1 : lineFeed + 1;
+        }
+
+        /// <summary>
+        /// Finds the byte offset of the <c>=yend</c> control line start that terminates payload bytes.
+        /// </summary>
+        /// <param name="fixtureBytes">Fixture bytes.</param>
+        /// <param name="searchStart">Offset where payload begins.</param>
+        /// <returns>Zero-based offset of the <c>=yend</c> line start, or -1 when not found.</returns>
+        private static int FindYEndLineStartOffset(byte[] fixtureBytes, int searchStart)
+        {
+            string text = Encoding.ASCII.GetString(fixtureBytes);
+            int crlfCandidate = text.IndexOf("\r\n=yend ", searchStart, StringComparison.Ordinal);
+            if (crlfCandidate >= 0)
+            {
+                return crlfCandidate + 2;
+            }
+
+            int lfCandidate = text.IndexOf("\n=yend ", searchStart, StringComparison.Ordinal);
+            return lfCandidate >= 0 ? lfCandidate + 1 : -1;
+        }
+
+        /// <summary>
+        /// Removes exactly one NNTP transport dot from line-start <c>..</c> sequences while preserving all other payload bytes.
+        /// </summary>
+        /// <param name="payload">Payload bytes between data start and <c>=yend</c>.</param>
+        /// <returns>Payload bytes after one line-start transport dot-unstuffing pass.</returns>
+        private static byte[] UnstuffNntpWireDotPrefixedLines(ReadOnlySpan<byte> payload)
+        {
+            List<byte> output = new(payload.Length);
+            bool atLineStart = true;
+
+            for (int i = 0; i < payload.Length; i++)
+            {
+                byte current = payload[i];
+                if (atLineStart && current == (byte)'.' && i + 1 < payload.Length && payload[i + 1] == (byte)'.')
+                {
+                    output.Add((byte)'.');
+                    i++;
+                    atLineStart = false;
+                    continue;
+                }
+
+                output.Add(current);
+                atLineStart = current is (byte)'\r' or (byte)'\n';
+            }
+
+            return [.. output];
         }
 
         /// <summary>
@@ -1237,21 +1357,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.YEnc
         }
 
         /// <summary>
-        /// Decodes one literal yEnc payload line as the validator would decode it.
+        /// Decodes one logical encoded payload line as the validator should decode transport-normalized input.
         /// </summary>
-        /// <param name="payloadLine">Payload line without CRLF terminator.</param>
-        /// <returns>Decoded bytes for CRC generation in dot-stuffing tests.</returns>
+        /// <param name="payloadLine">Logical encoded payload line without CRLF terminator.</param>
+        /// <returns>Decoded bytes for CRC generation in logical leading-dot tests.</returns>
         /// <summary>
-        /// Confirms the decode literal payload line behavior.
+        /// Confirms the decode logical payload line behavior.
         /// </summary>
-        /// <returns>The value returned by the decode literal payload line helper.</returns>
-        private static byte[] DecodeLiteralPayloadLine(string payloadLine)
+        /// <returns>The value returned by the decode logical payload line helper.</returns>
+        private static byte[] DecodeLogicalPayloadLine(string payloadLine)
         {
             ReadOnlySpan<byte> line = System.Text.Encoding.ASCII.GetBytes(payloadLine);
-            if (line.Length >= 2 && line[0] == (byte)'.' && line[1] == (byte)'.')
-            {
-                line = line[1..];
-            }
 
             List<byte> decoded = new(line.Length);
             for (int i = 0; i < line.Length; i++)

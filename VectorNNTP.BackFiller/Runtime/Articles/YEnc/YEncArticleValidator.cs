@@ -12,11 +12,13 @@ using System.Runtime.CompilerServices;
 namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
 {
     /// <summary>
-    /// Validates yEnc correctness for raw NNTP article body bytes without materializing decoded payload output.
+    /// Validates yEnc correctness for transport-normalized NNTP article body bytes without materializing decoded payload output.
     /// </summary>
     /// <remarks>
     /// <para>The validator scans for <c>=ybegin</c> sections, optionally handles <c>=ypart</c>, decodes payload bytes
     /// directly into a streaming CRC accumulator, and validates trailer metadata from <c>=yend</c>.</para>
+    /// <para>Input must already have NNTP transport framing removed and line-start dot-stuffing normalized by the acquisition layer.
+    /// This validator does not perform NNTP transport dot-unstuffing.</para>
     /// <para>Control lines are recognized on CRLF and LF-only boundaries via <see cref="ArticleLineScanner"/>; CR-only framing remains part of the payload and therefore typically yields <see cref="YEncArticleValidationStatus.Truncated"/>.</para>
     /// <para>Corrupt or malformed remote article data is reported through <see cref="YEncArticleValidationResult"/>
     /// instead of exceptions so callers can classify failures as yEnc decoding failed and retry alternate backbones.</para>
@@ -84,9 +86,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         private static ReadOnlySpan<byte> YEncPartEndKeyWithLeadingSpace => " end="u8;
 
         /// <summary>
-        /// Validates the yEnc sections contained in a raw NNTP article body.
+        /// Validates the yEnc sections contained in a transport-normalized NNTP article body.
         /// </summary>
-        /// <param name="articleBody">Raw article body bytes.</param>
+        /// <param name="articleBody">Article body bytes after NNTP transport framing removal and dot-unstuffing.</param>
         /// <returns>Allocation-free validation result containing the terminal status and the number of independently validated sections.</returns>
         /// <remarks>
         /// <para>The validator performs a single forward scan through section metadata and encoded payload lines.</para>
@@ -359,7 +361,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
         /// Decodes yEnc payload bytes and computes CRC and decoded length in a single pass.
         /// </summary>
         /// <remarks>
-        /// <para>NNTP dot-stuffed lines are normalized by removing one leading dot when the encoded line starts with <c>..</c>.</para>
+        /// <para>Encoded payload bytes are decoded exactly as supplied by parser-provided body bytes.</para>
         /// <para>Invalid trailing escape markers are classified as <see cref="YEncArticleValidationStatus.InvalidEscapeSequence"/>.</para>
         /// </remarks>
         /// <param name="encodedPayload">Encoded payload bytes between data start and <c>=yend</c>.</param>
@@ -386,11 +388,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.YEnc
                 bool isFinalLine = lineEnd < 0;
                 int lineContentEnd = isFinalLine ? encodedPayload.Length : lineEnd;
                 ReadOnlySpan<byte> line = encodedPayload[lineStart..lineContentEnd];
-
-                if (line.Length >= 2 && line[0] == (byte)'.' && line[1] == (byte)'.')
-                {
-                    line = line[1..];
-                }
 
                 for (int i = 0; i < line.Length; i++)
                 {

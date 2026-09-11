@@ -245,13 +245,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Issues <c>ARTICLE</c> for one validated Message-ID and, on success, returns the downloaded raw article bytes.
+        /// Issues <c>ARTICLE</c> for one validated Message-ID and, on success, returns transport-normalized article bytes.
         /// </summary>
         /// <param name="messageId">Message-ID argument.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A deterministic acquisition result whose payload buffer is present only when the ARTICLE command completed successfully.</returns>
         /// <remarks>
         /// Invalid Message-IDs are rejected before any protocol write. On payload-producing success the caller assumes ownership of the returned pooled buffer and should dispose the result after parsing.
+        /// The acquired payload excludes the NNTP terminator line and has one level of line-start transport dot-stuffing removed.
         /// </remarks>
         internal async ValueTask<NntpArticleAcquisitionResult> DownloadArticleAsync(string messageId, CancellationToken cancellationToken)
         {

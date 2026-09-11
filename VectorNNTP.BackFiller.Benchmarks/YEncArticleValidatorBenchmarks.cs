@@ -59,7 +59,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         private byte[] _nonYEnc = null!;
 
         /// <summary>
-        /// Cached dot-stuffed valid yEnc sample.
+        /// Cached logical leading-dot valid yEnc sample.
         /// </summary>
         private byte[] _dotStuffed = null!;
 
@@ -74,22 +74,22 @@ namespace VectorNNTP.BackFiller.Benchmarks
         [GlobalSetup]
         public void Setup()
         {
-            _validSmall = BuildSinglePartArticle(BuildPayload(512, 7), false);
-            _validLarge = BuildSinglePartArticle(BuildPayload(256 * 1024, 11), false);
+            _validSmall = BuildSinglePartArticle(BuildPayload(512, 7));
+            _validLarge = BuildSinglePartArticle(BuildPayload(256 * 1024, 11));
             _validMultipart = BuildMultiPartArticle(BuildPayload(16 * 1024, 13), 1, 16 * 1024);
             _malformedMetadata = "=ybegin line=128 name=test.bin\r\nabc\r\n=yend size=3 crc32=352441c2\r\n"u8.ToArray();
 
-            _crcMismatch = BuildSinglePartArticle(BuildPayload(4096, 17), false);
+            _crcMismatch = BuildSinglePartArticle(BuildPayload(4096, 17));
             int crcMismatchPayloadOffset = FindPayloadOffset(_crcMismatch);
             _crcMismatch[crcMismatchPayloadOffset + 123] ^= 0x40;
 
-            _invalidEscape = BuildSinglePartArticle(BuildPayload(4096, 19), false);
+            _invalidEscape = BuildSinglePartArticle(BuildPayload(4096, 19));
             int invalidEscapePayloadOffset = FindPayloadOffset(_invalidEscape);
             int invalidEscapeLineEnd = Array.IndexOf(_invalidEscape, (byte)'\n', invalidEscapePayloadOffset);
             _invalidEscape[invalidEscapeLineEnd - 1] = (byte)'=';
 
             _nonYEnc = Encoding.ASCII.GetBytes("Subject: plain\r\n\r\nThis is a plain article body without yEnc control lines.\r\n");
-            _dotStuffed = BuildSinglePartArticle(BuildPayload(4096, 23), true);
+            _dotStuffed = BuildLogicalLeadingDotArticle();
 
             _metadataHeavy = BuildMetadataHeavyArticle(BuildPayload(8192, 29));
         }
@@ -151,7 +151,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         public int ValidateNonYEnc() => (int)YEncArticleValidator.Validate(_nonYEnc).Status;
 
         /// <summary>
-        /// Measures dot-stuffed yEnc handling throughput.
+        /// Measures logical leading-dot yEnc handling throughput.
         /// </summary>
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
         [Benchmark(Description = "DotStuffedValid")]
@@ -170,15 +170,10 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Builds one synthetic single-part yEnc article body.
         /// </summary>
         /// <param name="decodedPayload">Decoded bytes used to produce encoded content.</param>
-        /// <param name="dotStuffed">Whether line-start dots are NNTP dot-stuffed.</param>
         /// <returns>Article body bytes containing yEnc control lines and encoded payload.</returns>
-        private static byte[] BuildSinglePartArticle(byte[] decodedPayload, bool dotStuffed)
+        private static byte[] BuildSinglePartArticle(byte[] decodedPayload)
         {
             byte[] encoded = EncodeYEnc(decodedPayload);
-            if (dotStuffed)
-            {
-                encoded = DotStuffLineStarts(encoded);
-            }
 
             uint crc = Crc32(decodedPayload);
             byte[] prefix = Encoding.ASCII.GetBytes($"=ybegin line=128 size={decodedPayload.Length} name=test.bin\r\n");
@@ -188,6 +183,17 @@ namespace VectorNNTP.BackFiller.Benchmarks
             Buffer.BlockCopy(encoded, 0, result, prefix.Length, encoded.Length);
             Buffer.BlockCopy(suffix, 0, result, prefix.Length + encoded.Length, suffix.Length);
             return result;
+        }
+
+        /// <summary>
+        /// Builds one logical leading-dot single-part yEnc article body.
+        /// </summary>
+        /// <returns>Article bytes whose payload line begins with a logical leading dot.</returns>
+        private static byte[] BuildLogicalLeadingDotArticle()
+        {
+            byte[] decoded = [4];
+            uint crc = Crc32(decoded);
+            return Encoding.ASCII.GetBytes($"=ybegin line=128 size={decoded.Length} name=dot-leading.bin\r\n.\r\n=yend size={decoded.Length} crc32={crc:x8}\r\n");
         }
 
         /// <summary>
@@ -267,31 +273,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
             {
                 output.Add((byte)'\r');
                 output.Add((byte)'\n');
-            }
-
-            return [.. output];
-        }
-
-        /// <summary>
-        /// Applies NNTP dot-stuffing for payload line starts.
-        /// </summary>
-        /// <param name="payload">Encoded payload bytes.</param>
-        /// <returns>Dot-stuffed encoded payload bytes.</returns>
-        private static byte[] DotStuffLineStarts(byte[] payload)
-        {
-            List<byte> output = new(payload.Length + 32);
-            bool atLineStart = true;
-
-            for (int i = 0; i < payload.Length; i++)
-            {
-                byte b = payload[i];
-                if (atLineStart && b == (byte)'.')
-                {
-                    output.Add((byte)'.');
-                }
-
-                output.Add(b);
-                atLineStart = b == (byte)'\n';
             }
 
             return [.. output];

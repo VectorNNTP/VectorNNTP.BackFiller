@@ -30,6 +30,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         private static readonly string FixtureRoot = ResolveFixtureRoot();
 
         /// <summary>
+        /// Fixture names whose payload bytes are preserved in NNTP wire form and require one transport dot-unstuffing pass when parser tests bypass acquisition.
+        /// </summary>
+        private static readonly HashSet<string> WireFormDotStuffedFixtureNames = new(StringComparer.Ordinal)
+        {
+            "test_bad_crc_end.yenc",
+        };
+
+        /// <summary>
         /// Verifies basic text article parsing and canonical metadata extraction.
         /// </summary>
         [Fact]
@@ -630,7 +638,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         public void Parse_WhenYEncFixtureInvalid_RejectsAsYEncDecodingFailed()
         {
             NntpArticleParser parser = new(LocalFqdn);
-            byte[] body = File.ReadAllBytes(Path.Combine(FixtureRoot, "test_bad_crc_end.yenc"));
+            byte[] fixtureBytes = File.ReadAllBytes(Path.Combine(FixtureRoot, "test_bad_crc_end.yenc"));
+            byte[] body = NormalizeFixtureBodyForParserContract("test_bad_crc_end.yenc", fixtureBytes);
             byte[] article = BuildArticle(
                 headers:
                 [
@@ -1520,6 +1529,101 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             }
 
             return ~crc;
+        }
+
+        /// <summary>
+        /// Normalizes fixture bytes to parser contract semantics for tests that bypass acquisition.
+        /// </summary>
+        /// <param name="fixtureName">Fixture file name under the SABCTools fixture directory.</param>
+        /// <param name="fixtureBytes">Raw fixture bytes.</param>
+        /// <returns>Logical body bytes suitable for parser input.</returns>
+        private static byte[] NormalizeFixtureBodyForParserContract(string fixtureName, byte[] fixtureBytes)
+        {
+            if (!WireFormDotStuffedFixtureNames.Contains(fixtureName))
+            {
+                return fixtureBytes;
+            }
+
+            int payloadStart = FindPayloadStartOffset(fixtureBytes);
+            int yEndLineStart = FindYEndLineStartOffset(fixtureBytes, payloadStart);
+            if (payloadStart < 0 || yEndLineStart < 0 || yEndLineStart < payloadStart)
+            {
+                return fixtureBytes;
+            }
+
+            byte[] normalizedPayload = UnstuffNntpWireDotPrefixedLines(fixtureBytes.AsSpan(payloadStart, yEndLineStart - payloadStart));
+            byte[] normalized = new byte[payloadStart + normalizedPayload.Length + (fixtureBytes.Length - yEndLineStart)];
+            Buffer.BlockCopy(fixtureBytes, 0, normalized, 0, payloadStart);
+            Buffer.BlockCopy(normalizedPayload, 0, normalized, payloadStart, normalizedPayload.Length);
+            Buffer.BlockCopy(fixtureBytes, yEndLineStart, normalized, payloadStart + normalizedPayload.Length, fixtureBytes.Length - yEndLineStart);
+            return normalized;
+        }
+
+        /// <summary>
+        /// Finds payload start offset immediately after the multipart <c>=ypart</c> line when present, otherwise after <c>=ybegin</c>.
+        /// </summary>
+        /// <param name="fixtureBytes">Fixture bytes.</param>
+        /// <returns>Zero-based payload start offset, or -1 when markers are missing.</returns>
+        private static int FindPayloadStartOffset(byte[] fixtureBytes)
+        {
+            string text = Encoding.ASCII.GetString(fixtureBytes);
+            int partIndex = text.IndexOf("=ypart ", StringComparison.Ordinal);
+            int beginIndex = text.IndexOf("=ybegin ", StringComparison.Ordinal);
+            int anchor = partIndex >= 0 ? partIndex : beginIndex;
+            if (anchor < 0)
+            {
+                return -1;
+            }
+
+            int lineFeed = text.IndexOf('\n', anchor);
+            return lineFeed < 0 ? -1 : lineFeed + 1;
+        }
+
+        /// <summary>
+        /// Finds the byte offset of the <c>=yend</c> control line start that terminates payload bytes.
+        /// </summary>
+        /// <param name="fixtureBytes">Fixture bytes.</param>
+        /// <param name="searchStart">Offset where payload begins.</param>
+        /// <returns>Zero-based offset of the <c>=yend</c> line start, or -1 when not found.</returns>
+        private static int FindYEndLineStartOffset(byte[] fixtureBytes, int searchStart)
+        {
+            string text = Encoding.ASCII.GetString(fixtureBytes);
+            int crlfCandidate = text.IndexOf("\r\n=yend ", searchStart, StringComparison.Ordinal);
+            if (crlfCandidate >= 0)
+            {
+                return crlfCandidate + 2;
+            }
+
+            int lfCandidate = text.IndexOf("\n=yend ", searchStart, StringComparison.Ordinal);
+            return lfCandidate >= 0 ? lfCandidate + 1 : -1;
+        }
+
+        /// <summary>
+        /// Removes exactly one NNTP transport dot from line-start <c>..</c> sequences while preserving all other payload bytes.
+        /// </summary>
+        /// <param name="payload">Payload bytes between data start and <c>=yend</c>.</param>
+        /// <returns>Payload bytes after one line-start transport dot-unstuffing pass.</returns>
+        private static byte[] UnstuffNntpWireDotPrefixedLines(ReadOnlySpan<byte> payload)
+        {
+            List<byte> output = new(payload.Length);
+            bool atLineStart = true;
+
+            for (int i = 0; i < payload.Length; i++)
+            {
+                byte current = payload[i];
+                if (atLineStart && current == (byte)'.' && i + 1 < payload.Length && payload[i + 1] == (byte)'.')
+                {
+                    output.Add((byte)'.');
+                    i++;
+                    atLineStart = false;
+                    continue;
+                }
+
+                output.Add(current);
+                atLineStart = current is (byte)'\r' or (byte)'\n';
+            }
+
+            return [.. output];
         }
 
         /// <summary>

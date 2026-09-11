@@ -19,7 +19,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
+using VectorNNTP.Backfiller.Runtime.Articles.Processing;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
+using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using Xunit;
 
@@ -585,19 +587,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Confirms dot-stuffed payload lines are unstuffed and payload bytes are preserved.
+        /// Confirms acquisition removes one transport dot only for line-start dot-stuffed payload lines.
         /// </summary>
         [Fact]
-        public async Task DownloadArticleAsync_WhenDotStuffed_UnstuffsAndPreservesPayload()
+        public async Task DownloadArticleAsync_WhenDotStuffed_UnstuffsExactlyOneLeadingTransportDot()
         {
-            byte[] stuffedArticle = BuildArticleBytes("<dot@test>", "..begins\r\nplain\r\n");
+            byte[] wireArticle = BuildArticleBytes("<dot@test>", ".begins\r\n..double\r\n...triple\r\nmiddle.dot\r\n");
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <dot@test>");
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <dot@test> article follows");
-                await FakeArticleServer.WriteBytesAsync(stream, stuffedArticle);
+                await FakeArticleServer.WriteBytesAsync(stream, wireArticle);
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
             });
 
@@ -613,8 +615,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<dot@test>", CancellationToken.None);
                 Assert.True(result.IsSuccess);
                 string text = Encoding.ASCII.GetString(result.ArticleBytes.Span);
-                Assert.Contains(".begins", text, StringComparison.Ordinal);
-                Assert.DoesNotContain("..begins", text, StringComparison.Ordinal);
+                Assert.Contains("\r\n.begins\r\n", text, StringComparison.Ordinal);
+                Assert.Contains("\r\n.double\r\n", text, StringComparison.Ordinal);
+                Assert.Contains("\r\n..triple\r\n", text, StringComparison.Ordinal);
+                Assert.Contains("\r\nmiddle.dot\r\n", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("\r\n...triple\r\n", text, StringComparison.Ordinal);
             }
         }
 
@@ -654,6 +659,113 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<fragment@test>", CancellationToken.None);
                 Assert.True(result.IsSuccess);
                 Assert.Equal(article, result.ArticleBytes.ToArray());
+            }
+        }
+
+        /// <summary>
+        /// Proves standalone validator and real acquisition-parser-canonical path agree for dot-prefixed yEnc payload lines.
+        /// </summary>
+        [Fact]
+        public async Task DotStuffingContract_WhenValidatedStandaloneAndThroughAcquisition_MatchesDecodedBytesCrcAndCanonicalBody()
+        {
+            const string messageId = "<issue63-dot-contract@test>";
+
+            byte[] firstLineEncodedTailBytes = [0x21, 0x13];
+            byte[] secondLineEncodedTailBytes = [0x2F, 0x10];
+            byte[] thirdLineEncodedTailBytes = [0x2A, 0x01];
+
+            string logicalLineStartingWithSingleDot = "." + EncodeYEncLine(firstLineEncodedTailBytes.AsSpan(0, 1)) + "." + EncodeYEncLine(firstLineEncodedTailBytes.AsSpan(1, 1));
+            string logicalLineStartingWithDoubleDot = ".." + EncodeYEncLine(secondLineEncodedTailBytes);
+            string logicalLineStartingWithTripleDot = "..." + EncodeYEncLine(thirdLineEncodedTailBytes);
+
+            Assert.StartsWith(".", logicalLineStartingWithSingleDot, StringComparison.Ordinal);
+            Assert.StartsWith("..", logicalLineStartingWithDoubleDot, StringComparison.Ordinal);
+            Assert.StartsWith("...", logicalLineStartingWithTripleDot, StringComparison.Ordinal);
+            Assert.Contains(".", logicalLineStartingWithSingleDot.AsSpan(1).ToString(), StringComparison.Ordinal);
+            Assert.Contains("=", logicalLineStartingWithSingleDot, StringComparison.Ordinal);
+
+            byte[] expectedDecodedBytes = [
+                0x04,
+                0x21,
+                0x04,
+                0x13,
+                0x04,
+                0x04,
+                0x2F,
+                0x10,
+                0x04,
+                0x04,
+                0x04,
+                0x2A,
+                0x01,
+            ];
+
+            uint expectedCrc = Crc32(expectedDecodedBytes);
+            string logicalEncodedPayload = string.Join(
+                "\r\n",
+                logicalLineStartingWithSingleDot,
+                logicalLineStartingWithDoubleDot,
+                logicalLineStartingWithTripleDot) + "\r\n";
+
+            byte[] logicalPayloadBytes = Encoding.ASCII.GetBytes(logicalEncodedPayload);
+            byte[] wirePayloadBytes = DotStuffLineStarts(logicalPayloadBytes);
+            string wireEncodedPayload = Encoding.ASCII.GetString(wirePayloadBytes);
+
+            byte[] logicalBody = Encoding.ASCII.GetBytes($"=ybegin line=128 size={expectedDecodedBytes.Length} name=issue63.bin\r\n{logicalEncodedPayload}=yend size={expectedDecodedBytes.Length} crc32={expectedCrc:x8}\r\n");
+            byte[] wireArticle = BuildArticleBytes(messageId, Encoding.ASCII.GetBytes($"=ybegin line=128 size={expectedDecodedBytes.Length} name=issue63.bin\r\n{wireEncodedPayload}=yend size={expectedDecodedBytes.Length} crc32={expectedCrc:x8}\r\n"));
+
+            YEncArticleValidationResult standaloneValidation = YEncArticleValidator.Validate(logicalBody);
+            Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, standaloneValidation.Status);
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, $"ARTICLE {messageId}");
+                await FakeArticleServer.WriteAsciiLineAsync(stream, $"220 0 {messageId} article follows");
+                await FakeArticleServer.WriteBytesAsync(stream, wireArticle);
+                await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
+            });
+
+            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+                server.CreateEndpoint(),
+                NntpArticleAcquisitionOptions.Default,
+                NullLogger<NntpArticleAcquisitionSession>.Instance,
+                CancellationToken.None);
+
+            Assert.NotNull(session);
+            await using (session)
+            {
+                using NntpArticleAcquisitionResult acquisition = await session.DownloadArticleAsync(messageId, CancellationToken.None);
+                Assert.True(acquisition.IsSuccess);
+
+                ReadOnlyMemory<byte> acquiredArticle = acquisition.ArticleBytes;
+                string acquiredText = Encoding.ASCII.GetString(acquiredArticle.Span);
+                Assert.Contains($"\r\n{logicalEncodedPayload}=yend", acquiredText, StringComparison.Ordinal);
+                Assert.DoesNotContain($"\r\n{wireEncodedPayload}=yend", acquiredText, StringComparison.Ordinal);
+                Assert.DoesNotContain("\r\n.\r\n", acquiredText, StringComparison.Ordinal);
+
+                NntpArticleParser parser = new("bf01.usenet.ninja");
+                NntpArticleParseResult parseResult = parser.Parse(acquiredArticle);
+                Assert.True(parseResult.IsAccepted);
+                Assert.True(parseResult.YEncDetected);
+                Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, parseResult.YEncValidation.Status);
+
+                YEncArticleValidationResult reparsedBodyValidation = YEncArticleValidator.Validate(parseResult.BodyBytes.Span);
+                Assert.Equal(YEncArticleValidationStatus.ValidSinglePart, reparsedBodyValidation.Status);
+
+                byte[] standaloneDecoded = DecodeSinglePartYEncBody(logicalBody);
+                byte[] acquiredDecoded = DecodeSinglePartYEncBody(parseResult.BodyBytes.Span.ToArray());
+                Assert.Equal(expectedDecodedBytes, standaloneDecoded);
+                Assert.Equal(expectedDecodedBytes, acquiredDecoded);
+                Assert.Equal(expectedCrc, Crc32(standaloneDecoded));
+                Assert.Equal(expectedCrc, Crc32(acquiredDecoded));
+                Assert.Equal(expectedDecodedBytes.Length, standaloneDecoded.Length);
+                Assert.Equal(expectedDecodedBytes.Length, acquiredDecoded.Length);
+
+                using DownloadedArticleBuffer canonical = NntpArticleCanonicalMaterializer.Materialize(parseResult);
+                byte[] canonicalBody = GetBodyBytes(canonical.Memory.Span);
+                Assert.Equal(parseResult.BodyBytes.ToArray(), canonicalBody);
+                Assert.Equal(logicalBody, canonicalBody);
             }
         }
 
@@ -1121,6 +1233,178 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 Assert.Null(session);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, connectResult.FailureCode);
             }
+        }
+
+        /// <summary>
+        /// Decodes a single-part yEnc body into decoded bytes for contract verification assertions.
+        /// </summary>
+        /// <param name="body">Article body bytes containing one yEnc section.</param>
+        /// <returns>Decoded payload bytes represented by the section.</returns>
+        private static string EncodeYEncLine(ReadOnlySpan<byte> decoded)
+        {
+            byte[] encoded = EncodeYEncPayload(decoded);
+            return Encoding.ASCII.GetString(encoded).TrimEnd('\r', '\n');
+        }
+
+        private static byte[] EncodeYEncPayload(ReadOnlySpan<byte> decoded)
+        {
+            List<byte> output = new(decoded.Length + (decoded.Length / 32));
+            int lineCount = 0;
+
+            for (int i = 0; i < decoded.Length; i++)
+            {
+                byte encoded = unchecked((byte)(decoded[i] + 42));
+                bool mustEscape = encoded is 0 or 9 or 10 or 13 or 32 or 46 or 61;
+
+                if (mustEscape)
+                {
+                    output.Add((byte)'=');
+                    output.Add(unchecked((byte)(encoded + 64)));
+                    lineCount += 2;
+                }
+                else
+                {
+                    output.Add(encoded);
+                    lineCount++;
+                }
+
+                if (lineCount >= 128)
+                {
+                    output.Add((byte)'\r');
+                    output.Add((byte)'\n');
+                    lineCount = 0;
+                }
+            }
+
+            if (output.Count == 0 || output[^1] != (byte)'\n')
+            {
+                output.Add((byte)'\r');
+                output.Add((byte)'\n');
+            }
+
+            return [.. output];
+        }
+
+        private static byte[] DotStuffLineStarts(ReadOnlySpan<byte> payload)
+        {
+            List<byte> output = new(payload.Length + 32);
+            bool atLineStart = true;
+
+            for (int i = 0; i < payload.Length; i++)
+            {
+                byte current = payload[i];
+                if (atLineStart && current == (byte)'.')
+                {
+                    output.Add((byte)'.');
+                }
+
+                output.Add(current);
+                atLineStart = current == (byte)'\n';
+            }
+
+            return [.. output];
+        }
+
+        private static byte[] DecodeSinglePartYEncBody(ReadOnlySpan<byte> body)
+        {
+            int beginLineStart = body.IndexOf("=ybegin "u8);
+            Assert.True(beginLineStart >= 0, "Expected =ybegin marker.");
+
+            int beginLineEnd = body[beginLineStart..].IndexOf("\r\n"u8);
+            Assert.True(beginLineEnd >= 0, "Expected CRLF-terminated =ybegin line.");
+            int payloadStart = beginLineStart + beginLineEnd + 2;
+
+            int endLineStart = body[payloadStart..].IndexOf("\r\n=yend "u8);
+            Assert.True(endLineStart >= 0, "Expected =yend marker after payload.");
+            int payloadEndExclusive = payloadStart + endLineStart;
+
+            ReadOnlySpan<byte> encodedPayload = body[payloadStart..payloadEndExclusive];
+            byte[] decodedBuffer = new byte[encodedPayload.Length];
+            int decodedCount = 0;
+            int lineStart = 0;
+
+            while (lineStart < encodedPayload.Length)
+            {
+                int lineEnd = encodedPayload[lineStart..].IndexOf("\r\n"u8);
+                bool finalLine = lineEnd < 0;
+                int lineLength = finalLine ? encodedPayload.Length - lineStart : lineEnd;
+                ReadOnlySpan<byte> line = encodedPayload.Slice(lineStart, lineLength);
+
+                for (int i = 0; i < line.Length; i++)
+                {
+                    byte current = line[i];
+                    if (current == (byte)'=')
+                    {
+                        Assert.True(i + 1 < line.Length, "Expected escaped payload byte after '='.");
+                        decodedBuffer[decodedCount++] = unchecked((byte)(line[i + 1] - 42 - 64));
+                        i++;
+                    }
+                    else
+                    {
+                        decodedBuffer[decodedCount++] = unchecked((byte)(current - 42));
+                    }
+                }
+
+                lineStart = finalLine ? encodedPayload.Length : lineStart + lineEnd + 2;
+            }
+
+            byte[] decoded = new byte[decodedCount];
+            Buffer.BlockCopy(decodedBuffer, 0, decoded, 0, decodedCount);
+            return decoded;
+        }
+
+        /// <summary>
+        /// Computes CRC-32 for deterministic decoded-byte assertions.
+        /// </summary>
+        /// <param name="payload">Decoded payload bytes.</param>
+        /// <returns>CRC-32 value.</returns>
+        private static uint Crc32(ReadOnlySpan<byte> payload)
+        {
+            uint crc = 0xFFFFFFFFu;
+            for (int i = 0; i < payload.Length; i++)
+            {
+                crc = (crc >> 8) ^ CrcTable[(int)((crc ^ payload[i]) & 0xFF)];
+            }
+
+            return crc ^ 0xFFFFFFFFu;
+        }
+
+        /// <summary>
+        /// Gets the CRLF-separated body bytes from a complete article payload.
+        /// </summary>
+        /// <param name="article">Complete article bytes.</param>
+        /// <returns>Body bytes following the first CRLFCRLF separator.</returns>
+        private static byte[] GetBodyBytes(ReadOnlySpan<byte> article)
+        {
+            int separator = article.IndexOf("\r\n\r\n"u8);
+            Assert.True(separator >= 0, "Expected CRLFCRLF header/body separator.");
+            return article[(separator + 4)..].ToArray();
+        }
+
+        /// <summary>
+        /// CRC-32 lookup table for deterministic decoded-byte assertions.
+        /// </summary>
+        private static readonly uint[] CrcTable = CreateCrcTable();
+
+        /// <summary>
+        /// Creates the CRC-32 lookup table used by <see cref="Crc32(ReadOnlySpan{byte})"/>.
+        /// </summary>
+        /// <returns>Initialized 256-entry lookup table.</returns>
+        private static uint[] CreateCrcTable()
+        {
+            uint[] table = new uint[256];
+            for (uint i = 0; i < table.Length; i++)
+            {
+                uint value = i;
+                for (int bit = 0; bit < 8; bit++)
+                {
+                    value = (value & 1) == 0 ? value >> 1 : (value >> 1) ^ 0xEDB88320u;
+                }
+
+                table[i] = value;
+            }
+
+            return table;
         }
 
         /// <summary>
