@@ -311,6 +311,138 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Null(response.Uri);
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
         }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenInvalidRequestMissingCorrelationId_DoesNotPublishAndNacksWithoutRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: "{invalid",
+                correlationId: null,
+                replyTo: "rpc.responses",
+                deliveryTag: 10031,
+                connectionGeneration: 460,
+                settlement: settlement);
+
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.InvalidRequest,
+                requestId: Guid.Empty,
+                messageId: string.Empty,
+                backbone: "BackboneA");
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, result.InvalidRequestReplyability);
+            Assert.Equal(10031UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Empty(publisher.OperationLog);
+            Assert.Null(publisher.LastResponsePayload);
+            Assert.Equal(["nack"], settlement.OperationLog);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenInvalidRequestMissingReplyTo_DoesNotPublishAndNacksWithoutRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: "{invalid",
+                correlationId: "corr-invalid-missing-replyto",
+                replyTo: null,
+                deliveryTag: 10032,
+                connectionGeneration: 461,
+                settlement: settlement);
+
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.InvalidRequest,
+                requestId: Guid.Empty,
+                messageId: string.Empty,
+                backbone: "BackboneA");
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, result.InvalidRequestReplyability);
+            Assert.Equal(10032UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Empty(publisher.OperationLog);
+            Assert.Null(publisher.LastResponsePayload);
+            Assert.Equal(["nack"], settlement.OperationLog);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenInvalidRequestMissingCorrelationIdAndReplyTo_DoesNotPublishAndNacksWithoutRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: "{invalid",
+                correlationId: null,
+                replyTo: null,
+                deliveryTag: 10033,
+                connectionGeneration: 462,
+                settlement: settlement);
+
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.InvalidRequest,
+                requestId: Guid.Empty,
+                messageId: string.Empty,
+                backbone: "BackboneA");
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, result.InvalidRequestReplyability);
+            Assert.Equal(10033UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+            Assert.Equal(0, publisher.PublishCallCount);
+            Assert.Empty(publisher.OperationLog);
+            Assert.Null(publisher.LastResponsePayload);
+            Assert.Equal(["nack"], settlement.OperationLog);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenReplyableInvalidRequestPublishFails_DoesNotAckAndNacksRequeueTrueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: "{invalid",
+                correlationId: "corr-invalid-request-publish-failure",
+                replyTo: "rpc.responses",
+                deliveryTag: 10034,
+                connectionGeneration: 463,
+                settlement: settlement);
+
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.InvalidRequest,
+                requestId: Guid.Empty,
+                messageId: string.Empty,
+                backbone: "BackboneA");
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Failed);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(InvalidRequestReplyability.Replyable, result.InvalidRequestReplyability);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(10034UL, settlement.NackDeliveryTag);
+            Assert.True(settlement.NackRequeue);
+            Assert.Equal(1, publisher.PublishCallCount);
+            Assert.Equal(["publish"], publisher.OperationLog);
+            Assert.Equal(["nack"], settlement.OperationLog);
+        }
         /// <summary>
         /// Confirms the on processed async when provider failure nacks with requeue async behavior.
         /// </summary>
@@ -880,8 +1012,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         private static RabbitMqArticleDelivery CreateDelivery(
             string payloadText,
             string backbone = "BackboneA",
-            string correlationId = "corr-phase4",
-            string replyTo = "rpc.responses",
+            string? correlationId = "corr-phase4",
+            string? replyTo = "rpc.responses",
             ulong deliveryTag = 1,
             long connectionGeneration = 1,
             IRabbitMqDeliverySettlement? settlement = null,

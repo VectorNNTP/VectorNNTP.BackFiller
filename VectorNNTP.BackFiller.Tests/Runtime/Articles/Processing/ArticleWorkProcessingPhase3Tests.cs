@@ -396,6 +396,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 .ParseAsync(CreateDelivery(payload, correlationId: null, replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, parseResult.Failure?.InvalidRequestReplyability);
         }
         /// <summary>
         /// Confirms the parse async when reply to missing in amqp properties returns invalid request async behavior.
@@ -408,6 +409,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 .ParseAsync(CreateDelivery(payload, correlationId: "rpc-missing-replyto", replyTo: null), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, parseResult.Failure?.InvalidRequestReplyability);
+        }
+
+        [Fact]
+        public async Task ParseAsync_WhenCorrelationIdAndReplyToMissingInAmqpProperties_ReturnsNonReplyableInvalidRequestAsync()
+        {
+            string payload = CreateValidJsonPayload(Guid.NewGuid(), "<missing-both@example.com>", "BackboneA");
+            RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
+                .ParseAsync(CreateDelivery(payload, correlationId: null, replyTo: null), CancellationToken.None);
+
+            AssertInvalidRequest(parseResult);
+            Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, parseResult.Failure?.InvalidRequestReplyability);
         }
 
         /// <summary>

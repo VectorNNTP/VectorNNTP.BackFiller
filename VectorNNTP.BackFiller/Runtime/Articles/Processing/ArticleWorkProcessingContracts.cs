@@ -94,6 +94,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
+    /// Describes whether an invalid request can be replied to using the AMQP delivery envelope.
+    /// </summary>
+    internal enum InvalidRequestReplyability
+    {
+        /// <summary>
+        /// Delivery includes required AMQP reply metadata and can receive an RPC invalid-request response.
+        /// </summary>
+        Replyable = 0,
+
+        /// <summary>
+        /// Delivery is missing required AMQP reply metadata and cannot receive an RPC invalid-request response.
+        /// </summary>
+        NonReplyableMissingMetadata = 1,
+    }
+
+    /// <summary>
     /// Captures the deterministic result of parsing and processing one RabbitMQ article-work delivery.
     /// </summary>
     /// <remarks>
@@ -130,6 +146,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <value>The reply-to routing target used for RPC response publication, or <see langword="null"/> when the delivery was malformed.</value>
         internal string? ReplyTo => Delivery.ReplyTo;
+
+        /// <summary>
+        /// Gets whether this result represents an invalid request that can be replied to through AMQP metadata.
+        /// </summary>
+        internal InvalidRequestReplyability InvalidRequestReplyability =>
+            string.IsNullOrWhiteSpace(CorrelationId) || string.IsNullOrWhiteSpace(ReplyTo)
+                ? InvalidRequestReplyability.NonReplyableMissingMetadata
+                : InvalidRequestReplyability.Replyable;
 
         /// <summary>
         /// Attempts to detach ownership of the successful acquired payload for external retention ownership transfer.
