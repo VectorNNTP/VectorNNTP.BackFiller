@@ -12,7 +12,6 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -724,12 +723,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             timeProvider.Advance(TimeSpan.FromSeconds(2));
             await keepAliveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
-            Task<NntpArticleSessionLease> acquireTask = manager.AcquireAsync("<m03-race@test>", CancellationToken.None).AsTask();
-            await FlushBackgroundContinuationsAsync().ConfigureAwait(false);
-            Assert.False(acquireTask.IsCompleted);
+            using CancellationTokenSource blockedAcquireTimeout = new(TimeSpan.FromMilliseconds(300));
+            Task<NntpArticleSessionLease> blockedAcquireTask = manager.AcquireAsync("<m03-race@test>", blockedAcquireTimeout.Token).AsTask();
+            _ = await Assert.ThrowsAsync<OperationCanceledException>(
+                async () => await blockedAcquireTask.ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.Equal(1, manager.AvailabilityTokenReadCount);
+            Assert.Equal(1, manager.AvailabilityTokenStaleReadCount);
 
             _ = allowKeepAliveResponse.TrySetResult(true);
-            await using NntpArticleSessionLease lease = await acquireTask.ConfigureAwait(false);
+
+            await using NntpArticleSessionLease lease = await manager.AcquireAsync("<m03-race@test>", CancellationToken.None).ConfigureAwait(false);
             lease.ReportAcquisitionOutcome(NntpArticleAcquisitionFailureCode.None);
 
             await lease.DisposeAsync().ConfigureAwait(false);
@@ -763,7 +766,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             }, acceptConnectionCount: reconnectCycles).ConfigureAwait(false);
 
             Guid entryId = Guid.NewGuid();
-            NntpAccountSnapshot firstAccount = CreateAccount(firstServer.Port, maxConnections: 1, username: null, password: null, entryId: entryId, keepAliveSeconds: 2);
+            NntpAccountSnapshot firstAccount = CreateAccount(firstServer.Port, maxConnections: 1, username: null, password: null, entryId: entryId, keepAliveSeconds: 0);
             NntpAccountSnapshot secondAccount = firstAccount with { Port = (ushort)secondServer.Port };
 
             await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
@@ -798,6 +801,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
             TaskCompletionSource<bool> keepAliveStarted = CreateSignal();
             TaskCompletionSource<bool> allowKeepAliveResponse = CreateSignal();
+            TaskCompletionSource<bool> retiredSessionQuitReceived = CreateSignal();
 
             Guid entryId = Guid.NewGuid();
 
@@ -809,6 +813,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                 await allowKeepAliveResponse.Task.ConfigureAwait(false);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "111 20260826010101").ConfigureAwait(false);
                 await FakeArticleServer.ExpectAsciiLineAsync(stream, "QUIT").ConfigureAwait(false);
+                _ = retiredSessionQuitReceived.TrySetResult(true);
                 await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
             }).ConfigureAwait(false);
 
@@ -821,9 +826,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             timeProvider.Advance(TimeSpan.FromSeconds(2));
             await keepAliveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
-            NntpAccountSessionReconcileResult reconcileResult = await manager.ReconcileAccountAsync(retireAccount, CancellationToken.None).ConfigureAwait(false);
+            Task<NntpAccountSessionReconcileResult> reconcileTask = manager.ReconcileAccountAsync(retireAccount, CancellationToken.None);
             _ = allowKeepAliveResponse.TrySetResult(true);
-            await FlushBackgroundContinuationsAsync().ConfigureAwait(false);
+            NntpAccountSessionReconcileResult reconcileResult = await reconcileTask.ConfigureAwait(false);
+            await retiredSessionQuitReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
             Assert.Equal(1, reconcileResult.RetiredSessionCount);
             Assert.Equal(1, manager.AvailabilityTokenWriteCount);
@@ -1001,6 +1007,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             TaskCompletionSource<bool> retiredSessionQuitReceived = CreateSignal();
             TaskCompletionSource<bool> firstReconnectAttemptObserved = CreateSignal();
             TaskCompletionSource<bool> firstReconnectFailureSent = CreateSignal();
+            TaskCompletionSource<bool> firstReconnectFailureHandled = CreateSignal();
             TaskCompletionSource<bool> recoveredArticleReceived = CreateSignal();
             int retiredEndpointConnections = 0;
             int replacementEndpointConnections = 0;
@@ -1026,6 +1033,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                     _ = firstReconnectAttemptObserved.TrySetResult(true);
                     await FakeArticleServer.WriteAsciiLineAsync(stream, "malformed-greeting").ConfigureAwait(false);
                     _ = firstReconnectFailureSent.TrySetResult(true);
+                    byte[] probe = new byte[1];
+                    int eofRead = await stream.ReadAsync(probe, CancellationToken.None).ConfigureAwait(false);
+                    Assert.Equal(0, eofRead);
+                    _ = firstReconnectFailureHandled.TrySetResult(true);
                     return;
                 }
 
@@ -1060,17 +1071,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             await retiredSessionQuitReceived.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             await firstReconnectAttemptObserved.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
             await firstReconnectFailureSent.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-            await FlushBackgroundContinuationsAsync().ConfigureAwait(false);
+            await firstReconnectFailureHandled.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
             Assert.Equal(0, manager.ActiveSessionCount);
             Assert.Equal(1, manager.TotalSessionCount);
-            Assert.Equal(1, await DrainAvailableTokenCountAsync(manager).ConfigureAwait(false));
+            Assert.Equal(1, manager.OutstandingAvailabilityTokenCount);
+            Assert.Equal(1, manager.EstimatedAvailabilityQueueDepth);
 
             NntpAccountSessionReconcileResult recovery = await manager.ReconcileAccountAsync(desiredAccount, CancellationToken.None).ConfigureAwait(false);
             Assert.Equal(1, recovery.AddedSessionCount);
             Assert.Equal(1, recovery.ActiveSessionCountAfter);
             Assert.Equal(1, manager.ActiveSessionCount);
-            Assert.Equal(2, manager.TotalSessionCount);
+            Assert.Equal(1, manager.TotalSessionCount);
             Assert.Equal(0, CountPendingReconnectSlots(manager, accountId));
 
             await using NntpArticleSessionLease lease = await manager.AcquireAsync("<m02-recover@test>", CancellationToken.None).ConfigureAwait(false);
@@ -1155,8 +1167,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             secondLease.ReportAcquisitionOutcome(NntpArticleAcquisitionFailureCode.None);
             await secondLease.DisposeAsync().ConfigureAwait(false);
 
-            int queuedTokenCount = await DrainAvailableTokenCountAsync(manager).ConfigureAwait(false);
-            Assert.Equal(1, queuedTokenCount);
+            Assert.Equal(1, manager.OutstandingAvailabilityTokenCount);
+            Assert.Equal(1, manager.EstimatedAvailabilityQueueDepth);
         }
 
         /// <summary>
@@ -2095,31 +2107,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         {
             await Task.Yield();
             await Task.Yield();
-        }
-
-        /// <summary>
-        /// Drains queued slot tokens from the manager availability channel and returns the number consumed.
-        /// </summary>
-        /// <param name="manager">Session manager under inspection.</param>
-        /// <returns>Number of queued tokens currently available for immediate read.</returns>
-        private static async Task<int> DrainAvailableTokenCountAsync(NntpArticleExecutionSessionManager manager)
-        {
-            ArgumentNullException.ThrowIfNull(manager);
-
-            FieldInfo? availableSlotsField = typeof(NntpArticleExecutionSessionManager).GetField("_availableSlots", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(availableSlotsField);
-
-            Channel<int>? availableSlots = availableSlotsField.GetValue(manager) as Channel<int>;
-            Assert.NotNull(availableSlots);
-
-            int count = 0;
-            while (availableSlots.Reader.TryRead(out _))
-            {
-                count++;
-            }
-
-            await Task.CompletedTask.ConfigureAwait(false);
-            return count;
         }
 
         private static int CountPendingReconnectSlots(NntpArticleExecutionSessionManager manager, Guid accountId)

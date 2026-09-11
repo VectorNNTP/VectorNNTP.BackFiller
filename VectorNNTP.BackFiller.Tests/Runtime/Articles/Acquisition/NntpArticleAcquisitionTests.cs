@@ -1236,10 +1236,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         }
 
         /// <summary>
-        /// Decodes a single-part yEnc body into decoded bytes for contract verification assertions.
+        /// Encodes decoded payload bytes into a single yEnc payload line for contract verification fixtures.
         /// </summary>
-        /// <param name="body">Article body bytes containing one yEnc section.</param>
-        /// <returns>Decoded payload bytes represented by the section.</returns>
+        /// <param name="decoded">Decoded payload bytes to encode using yEnc escaping rules.</param>
+        /// <returns>ASCII yEnc payload text for one logical line without trailing CRLF.</returns>
         private static string EncodeYEncLine(ReadOnlySpan<byte> decoded)
         {
             byte[] encoded = EncodeYEncPayload(decoded);

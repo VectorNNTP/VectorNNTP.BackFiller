@@ -61,7 +61,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// <summary>
         /// Cached logical leading-dot valid yEnc sample.
         /// </summary>
-        private byte[] _dotStuffed = null!;
+        private byte[] _logicalLeadingDot = null!;
 
         /// <summary>
         /// Cached metadata-heavy valid yEnc sample.
@@ -89,7 +89,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
             _invalidEscape[invalidEscapeLineEnd - 1] = (byte)'=';
 
             _nonYEnc = Encoding.ASCII.GetBytes("Subject: plain\r\n\r\nThis is a plain article body without yEnc control lines.\r\n");
-            _dotStuffed = BuildLogicalLeadingDotArticle();
+            _logicalLeadingDot = BuildLogicalLeadingDotArticle();
 
             _metadataHeavy = BuildMetadataHeavyArticle(BuildPayload(8192, 29));
         }
@@ -154,9 +154,9 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// Measures logical leading-dot yEnc handling throughput.
         /// </summary>
         /// <returns>Validation status code to prevent dead-code elimination.</returns>
-        [Benchmark(Description = "DotStuffedValid")]
+        [Benchmark(Description = "LogicalLeadingDotValid")]
         [BenchmarkCategory("YEncValidator")]
-        public int ValidateDotStuffedValid() => (int)YEncArticleValidator.Validate(_dotStuffed).Status;
+        public int ValidateLogicalLeadingDotValid() => (int)YEncArticleValidator.Validate(_logicalLeadingDot).Status;
 
         /// <summary>
         /// Measures metadata-heavy yEnc validation throughput.
