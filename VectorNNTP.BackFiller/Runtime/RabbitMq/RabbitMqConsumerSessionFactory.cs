@@ -181,6 +181,10 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Single-bit guard that prevents lifecycle callback disposal from running twice.
         /// </summary>
         private int _callbacksDisposed;
+        /// <summary>
+        /// Optional lifecycle observer invoked when shutdown reaches the reconcile serialization boundary.
+        /// </summary>
+        private readonly Action? _stopAllSessionsBoundaryReached;
 
         /// <summary>
         /// Initializes the consumer service with the default always-available backbone capacity provider.
@@ -192,7 +196,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IRabbitMqConsumerSessionFactory sessionFactory,
             ShutdownCoordinator shutdownCoordinator,
             ILogger<RabbitMqConsumerService> logger)
-            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger)
+            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger, null)
         {
         }
 
@@ -206,7 +210,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IRabbitMqConsumerSessionFactory sessionFactory,
             ShutdownCoordinator shutdownCoordinator,
             IBackboneUsableCapacityProvider capacityProvider,
-            ILogger<RabbitMqConsumerService> logger)
+            ILogger<RabbitMqConsumerService> logger,
+            Action? stopAllSessionsBoundaryReached = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(accountSnapshotProvider);
@@ -222,6 +227,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _shutdownCoordinator = shutdownCoordinator;
             _capacityProvider = capacityProvider;
             _logger = logger;
+            _stopAllSessionsBoundaryReached = stopAllSessionsBoundaryReached;
 
             _consumerOptions = RabbitMqConsumerInfrastructureOptions.FromRuntimeOptions(runtimeOptions);
             _deliveryChannel = Channel.CreateBounded<RabbitMqArticleDelivery>(new BoundedChannelOptions(_consumerOptions.DeliveryBufferCapacity)
@@ -663,6 +669,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private async Task StopAllSessionsAsync(CancellationToken cancellationToken)
         {
+            _stopAllSessionsBoundaryReached?.Invoke();
             await _reconcileGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -689,7 +696,17 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
 
                 _ = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: true, cancellationToken).ConfigureAwait(false);
 
-                Task[] pendingRetirements = [.. _retiringSessionRuntimes.Values.Select(static runtime => runtime.RetirementTask)];
+                Task[] pendingRetirements;
+                await _stateGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    pendingRetirements = [.. _retiringSessionRuntimes.Values.Select(static runtime => runtime.RetirementTask)];
+                }
+                finally
+                {
+                    _ = _stateGate.Release();
+                }
+
                 for (int i = 0; i < pendingRetirements.Length; i++)
                 {
                     try

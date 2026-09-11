@@ -2582,7 +2582,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqConnectionManager manager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
             RabbitMqTopologyInitializer topologyInitializer = new(manager, NullLogger<RabbitMqTopologyInitializer>.Instance);
             BlockingStopSessionFactory sessionFactory = new(manager, topologyInitializer);
-            RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
+            CapacityStateBackboneCapacityProvider capacityProvider = new();
+            capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: true);
+            TaskCompletionSource<bool> stopBoundaryReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            RabbitMqConsumerService service = new(
+                runtimeOptions,
+                snapshotProvider.Provider,
+                manager,
+                sessionFactory,
+                shutdownCoordinator,
+                capacityProvider,
+                NullLogger<RabbitMqConsumerService>.Instance,
+                () => _ = stopBoundaryReached.TrySetResult(true));
 
             Guid accountId = Guid.NewGuid();
             string sessionKey1 = $"{accountId:N}:1";
@@ -2624,20 +2635,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Task reconcileWhileStartingTask = service.ReconcileOnceAsync(timeoutToken);
             await sessionFactory.WaitForStartEnteredAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
 
-            Task startExitedSignal = sessionFactory.GetStartExitedSignalTask(sessionKey3);
-            sessionFactory.RequireStopStartsAfterTaskCompletion(startExitedSignal);
+            sessionFactory.RequireStopBoundaryAfterStartExited(sessionKey3);
             shutdownCoordinator.SignalForcedShutdown();
             Task stopTask = service.StopAsync(timeoutToken);
 
-            Task stopStartedWhileStartBlocked = sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken);
-            Assert.False(startExitedSignal.IsCompleted);
-            Assert.False(stopTask.IsCompleted);
-            Assert.False(stopStartedWhileStartBlocked.IsCompleted);
+            await stopBoundaryReached.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
+            Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
 
             sessionFactory.ReleaseStart(sessionKey3);
             await sessionFactory.WaitForStartExitedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
             await reconcileWhileStartingTask.ConfigureAwait(false);
 
+            await sessionFactory.WaitForStopBoundaryReachedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
             await sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
             sessionFactory.ReleaseStop(sessionKey3);
             await stopTask.ConfigureAwait(false);
@@ -2653,7 +2662,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey1));
             Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey2));
             Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey3));
-            Assert.False(sessionFactory.AnyStopStartedBeforePrerequisiteCompletion());
+            Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
             Assert.Equal(0, service.ActiveSessionCount);
 
             service.Dispose();
@@ -3040,6 +3049,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopStarted = new(StringComparer.Ordinal);
             /// <summary>
+            /// Confirms stop has reached the deterministic lifecycle boundary for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _stopBoundaryReached = new(StringComparer.Ordinal);
+            /// <summary>
             /// Confirms stop cancellation observed behavior.
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopCancellationObserved = new(StringComparer.Ordinal);
@@ -3056,13 +3069,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _startExited = new(StringComparer.Ordinal);
             /// <summary>
-            /// Confirms per-session stop-start ordering prerequisites.
+            /// Confirms whether start exit has been observed for selected sessions.
             /// </summary>
-            private readonly Dictionary<string, Task> _stopStartPrerequisites = new(StringComparer.Ordinal);
+            private readonly Dictionary<string, bool> _startExitedObserved = new(StringComparer.Ordinal);
             /// <summary>
-            /// Confirms whether stop-start was observed before a configured prerequisite completed.
+            /// Confirms whether stop-boundary checks should enforce prior start-exit signaling per session.
             /// </summary>
-            private readonly Dictionary<string, bool> _stopStartedBeforePrerequisite = new(StringComparer.Ordinal);
+            private readonly Dictionary<string, bool> _stopBoundaryRequiresStartExited = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms whether stop-boundary entry was observed before required start-exit signaling.
+            /// </summary>
+            private readonly Dictionary<string, bool> _stopBoundaryReachedBeforeStartExited = new(StringComparer.Ordinal);
             /// <summary>
             /// Confirms  gate behavior.
             /// </summary>
@@ -3172,6 +3189,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 {
                     _stopBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _stopStarted[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _stopBoundaryReached[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _stopCancellationObserved[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
@@ -3194,6 +3212,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     if (!_stopStarted.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         throw new InvalidOperationException($"No stop-start signal exists for session '{sessionKey}'.");
+                    }
+
+                    task = source.Task;
+                }
+
+                await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Waits until stop has reached the deterministic lifecycle boundary for the selected session.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task WaitForStopBoundaryReachedAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task task;
+                lock (_gate)
+                {
+                    if (!_stopBoundaryReached.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No stop-boundary signal exists for session '{sessionKey}'.");
                     }
 
                     task = source.Task;
@@ -3248,6 +3287,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     _startBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _startEntered[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _startExited[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _startExitedObserved[sessionKey] = false;
                 }
             }
 
@@ -3315,6 +3355,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                     await gateTask.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
 
+                lock (_gate)
+                {
+                    _startExitedObserved[sessionKey] = true;
+                }
+
                 _ = exitedSignal?.TrySetResult(true);
             }
 
@@ -3347,34 +3392,26 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             }
 
             /// <summary>
-            /// Requires stop-start signaling for all currently running sessions to occur only after the prerequisite task has completed.
+            /// Requires stop-boundary entry for the selected session to occur only after the session has exited the deterministic StartAsync block.
             /// </summary>
-            /// <param name="prerequisite">Task that must be completed before stop start is permitted.</param>
-            internal void RequireStopStartsAfterTaskCompletion(Task prerequisite)
+            /// <param name="sessionKey">Session key to enforce.</param>
+            internal void RequireStopBoundaryAfterStartExited(string sessionKey)
             {
-                ArgumentNullException.ThrowIfNull(prerequisite);
-
                 lock (_gate)
                 {
-                    foreach ((string sessionKey, List<BlockingStopTrackingSession> sessions) in _sessionsByKey)
-                    {
-                        if (sessions.Count > 0 && sessions[^1].IsRunning)
-                        {
-                            _stopStartPrerequisites[sessionKey] = prerequisite;
-                            _stopStartedBeforePrerequisite[sessionKey] = false;
-                        }
-                    }
+                    _stopBoundaryRequiresStartExited[sessionKey] = true;
+                    _stopBoundaryReachedBeforeStartExited[sessionKey] = false;
                 }
             }
 
             /// <summary>
-            /// Returns whether stop-start was observed before prerequisite completion for any monitored session.
+            /// Returns whether stop-boundary entry was observed before required start-exit signaling.
             /// </summary>
-            internal bool AnyStopStartedBeforePrerequisiteCompletion()
+            internal bool AnyStopBoundaryReachedBeforeStartExited()
             {
                 lock (_gate)
                 {
-                    return _stopStartedBeforePrerequisite.Values.Any(static value => value);
+                    return _stopBoundaryReachedBeforeStartExited.Values.Any(static value => value);
                 }
             }
 
@@ -3393,28 +3430,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 Task? gateTask = null;
                 TaskCompletionSource<bool>? startedSignal = null;
                 TaskCompletionSource<bool>? cancellationObservedSignal = null;
-                Task? startPrerequisite = null;
+                bool requiresStartExited = false;
+                bool startExitedObserved = false;
 
                 lock (_gate)
                 {
                     _ = _stopStarted.TryGetValue(sessionKey, out startedSignal);
                     _ = _stopCancellationObserved.TryGetValue(sessionKey, out cancellationObservedSignal);
-                    _ = _stopStartPrerequisites.TryGetValue(sessionKey, out startPrerequisite);
+                    _ = _stopBoundaryRequiresStartExited.TryGetValue(sessionKey, out requiresStartExited);
+                    _ = _startExitedObserved.TryGetValue(sessionKey, out startExitedObserved);
                     if (_stopBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         gateTask = source.Task;
                     }
                 }
 
-                if (startPrerequisite is not null && !startPrerequisite.IsCompleted)
+                _ = startedSignal?.TrySetResult(true);
+
+                if (requiresStartExited && !startExitedObserved)
                 {
                     lock (_gate)
                     {
-                        _stopStartedBeforePrerequisite[sessionKey] = true;
+                        _stopBoundaryReachedBeforeStartExited[sessionKey] = true;
                     }
                 }
 
-                _ = startedSignal?.TrySetResult(true);
+                _ = _stopBoundaryReached.TryGetValue(sessionKey, out TaskCompletionSource<bool>? boundarySignal);
+                _ = boundarySignal?.TrySetResult(true);
 
                 if (gateTask is null)
                 {
