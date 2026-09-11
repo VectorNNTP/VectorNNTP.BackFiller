@@ -2624,16 +2624,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Task reconcileWhileStartingTask = service.ReconcileOnceAsync(timeoutToken);
             await sessionFactory.WaitForStartEnteredAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
 
-            sessionFactory.RequireStopStartsAfterTaskCompletion(reconcileWhileStartingTask);
+            Task startExitedSignal = sessionFactory.GetStartExitedSignalTask(sessionKey3);
+            sessionFactory.RequireStopStartsAfterTaskCompletion(startExitedSignal);
             shutdownCoordinator.SignalForcedShutdown();
             Task stopTask = service.StopAsync(timeoutToken);
 
             Task stopStartedWhileStartBlocked = sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken);
-            Assert.False(reconcileWhileStartingTask.IsCompleted);
+            Assert.False(startExitedSignal.IsCompleted);
             Assert.False(stopTask.IsCompleted);
             Assert.False(stopStartedWhileStartBlocked.IsCompleted);
 
             sessionFactory.ReleaseStart(sessionKey3);
+            await sessionFactory.WaitForStartExitedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
             await reconcileWhileStartingTask.ConfigureAwait(false);
 
             await sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
@@ -3050,6 +3052,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _startEntered = new(StringComparer.Ordinal);
             /// <summary>
+            /// Confirms start exited behavior for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _startExited = new(StringComparer.Ordinal);
+            /// <summary>
             /// Confirms per-session stop-start ordering prerequisites.
             /// </summary>
             private readonly Dictionary<string, Task> _stopStartPrerequisites = new(StringComparer.Ordinal);
@@ -3241,6 +3247,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 {
                     _startBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                     _startEntered[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _startExited[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
 
@@ -3289,10 +3296,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             {
                 Task? gateTask = null;
                 TaskCompletionSource<bool>? enteredSignal = null;
+                TaskCompletionSource<bool>? exitedSignal = null;
 
                 lock (_gate)
                 {
                     _ = _startEntered.TryGetValue(sessionKey, out enteredSignal);
+                    _ = _startExited.TryGetValue(sessionKey, out exitedSignal);
                     if (_startBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         gateTask = source.Task;
@@ -3301,12 +3310,40 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
                 _ = enteredSignal?.TrySetResult(true);
 
-                if (gateTask is null)
+                if (gateTask is not null)
                 {
-                    return;
+                    await gateTask.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
 
-                await gateTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                _ = exitedSignal?.TrySetResult(true);
+            }
+
+            /// <summary>
+            /// Gets the raw start-exited signal task for the selected session.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <returns>Underlying signal task that completes when the deterministic start block exits.</returns>
+            internal Task GetStartExitedSignalTask(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    if (!_startExited.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No start-exited signal exists for session '{sessionKey}'.");
+                    }
+
+                    return source.Task;
+                }
+            }
+
+            /// <summary>
+            /// Waits until the selected session has exited the deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task WaitForStartExitedAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                await GetStartExitedSignalTask(sessionKey).WaitAsync(cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
