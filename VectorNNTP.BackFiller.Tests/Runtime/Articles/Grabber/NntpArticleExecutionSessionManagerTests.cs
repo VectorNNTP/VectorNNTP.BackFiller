@@ -796,6 +796,109 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         }
 
         [Fact]
+        public async Task ReconcileAccountAsync_WhenMaxConnectionsFlapsBetweenOneAndZeroWithoutAcquire_KeepsSlotsAndAvailabilityBoundedAndReusable()
+        {
+            const int reconciliationCycles = 10;
+            const string messageId = "<reuse-bounded@test>";
+            byte[] article = BuildArticleBytes(messageId, "body\r\n");
+            int connectionCounter = 0;
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                _ = Interlocked.Increment(ref connectionCounter);
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+
+                while (true)
+                {
+                    string command;
+                    try
+                    {
+                        command = await FakeArticleServer.ReadAsciiLineAsync(stream, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (IOException)
+                    {
+                        return;
+                    }
+
+                    if (string.Equals(command, "QUIT", StringComparison.Ordinal))
+                    {
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (string.Equals(command, $"ARTICLE {messageId}", StringComparison.Ordinal))
+                    {
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, $"220 0 {messageId} article follows").ConfigureAwait(false);
+                        await FakeArticleServer.WriteBytesAsync(stream, article).ConfigureAwait(false);
+                        await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    Assert.Fail($"Unexpected command: {command}");
+                }
+            }, acceptConnectionCount: reconciliationCycles + 1).ConfigureAwait(false);
+
+            Guid entryId = Guid.NewGuid();
+            NntpAccountSnapshot enabledAccount = CreateAccount(server.Port, maxConnections: 1, username: null, password: null, entryId: entryId, keepAliveSeconds: 0);
+            NntpAccountSnapshot disabledAccount = enabledAccount with { MaxConnections = 0 };
+
+            await using NntpArticleExecutionSessionManager manager = new(NullLogger<NntpArticleExecutionSessionManager>.Instance);
+            await manager.InitializeAsync([enabledAccount], CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(1, manager.TotalSessionCount);
+            Assert.Equal(1, manager.ActiveSessionCount);
+            Assert.Equal(1, manager.OutstandingAvailabilityTokenCount);
+            Assert.Equal(1, manager.EstimatedAvailabilityQueueDepth);
+            Assert.Equal(1, manager.AvailabilityTokenWriteCount);
+            Assert.Equal(0, manager.AvailabilityTokenReadCount);
+            Assert.Equal(0, manager.AvailabilityTokenStaleReadCount);
+
+            for (int cycle = 0; cycle < reconciliationCycles; cycle++)
+            {
+                NntpAccountSessionReconcileResult scaleDown = await manager.ReconcileAccountAsync(disabledAccount, CancellationToken.None).ConfigureAwait(false);
+                Assert.Equal(1, scaleDown.RetiredSessionCount);
+                Assert.Equal(0, scaleDown.ActiveSessionCountAfter);
+                Assert.Equal(1, manager.TotalSessionCount);
+                Assert.Equal(0, manager.ActiveSessionCount);
+                Assert.Equal(1, manager.OutstandingAvailabilityTokenCount);
+                Assert.Equal(1, manager.EstimatedAvailabilityQueueDepth);
+                Assert.Equal(1, manager.AvailabilityTokenWriteCount);
+                Assert.Equal(0, manager.AvailabilityTokenReadCount);
+                Assert.Equal(0, manager.AvailabilityTokenStaleReadCount);
+
+                NntpAccountSessionReconcileResult scaleUp = await manager.ReconcileAccountAsync(enabledAccount, CancellationToken.None).ConfigureAwait(false);
+                Assert.Equal(1, scaleUp.AddedSessionCount);
+                Assert.Equal(1, scaleUp.ActiveSessionCountAfter);
+                Assert.Equal(1, manager.TotalSessionCount);
+                Assert.Equal(1, manager.ActiveSessionCount);
+                Assert.Equal(1, manager.OutstandingAvailabilityTokenCount);
+                Assert.Equal(1, manager.EstimatedAvailabilityQueueDepth);
+                Assert.Equal(1, manager.AvailabilityTokenWriteCount);
+                Assert.Equal(0, manager.AvailabilityTokenReadCount);
+                Assert.Equal(0, manager.AvailabilityTokenStaleReadCount);
+            }
+
+            Assert.Equal(reconciliationCycles + 1, Volatile.Read(ref connectionCounter));
+
+            await using NntpArticleSessionLease lease = await manager.AcquireAsync(messageId, CancellationToken.None).ConfigureAwait(false);
+            using NntpArticleAcquisitionResult acquisition = await lease.Session.DownloadArticleAsync(messageId, CancellationToken.None).ConfigureAwait(false);
+            lease.ReportAcquisitionOutcome(acquisition.FailureCode);
+
+            Assert.True(acquisition.IsSuccess);
+            Assert.Equal(1, manager.TotalSessionCount);
+            Assert.Equal(1, manager.ActiveSessionCount);
+            Assert.Equal(1, manager.AvailabilityTokenReadCount);
+            Assert.Equal(0, manager.AvailabilityTokenStaleReadCount);
+
+            await lease.DisposeAsync().ConfigureAwait(false);
+
+            Assert.Equal(1, manager.TotalSessionCount);
+            Assert.Equal(1, manager.ActiveSessionCount);
+            Assert.Equal(1, manager.OutstandingAvailabilityTokenCount);
+            Assert.Equal(1, manager.EstimatedAvailabilityQueueDepth);
+        }
+
+        [Fact]
         public async Task AvailabilityTokens_WhenRetirementRequestedDuringKeepAlive_PreservesRetirementIntentWithoutTokenGrowth()
         {
             ManualTimeProvider timeProvider = new(new DateTimeOffset(2026, 8, 26, 1, 1, 0, TimeSpan.Zero));
