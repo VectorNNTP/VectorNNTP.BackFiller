@@ -276,6 +276,14 @@ Clone the repository:
     git clone <repository-url>
     cd VectorNNTP.BackFiller
 
+SDK/toolchain requirement:
+
+- This repository is pinned via `global.json` and requires the specified .NET SDK feature band/patch.
+- Runtime targets remain .NET 8 (`net8.0`), but compilation requires the pinned SDK for repository language/solution capabilities.
+- Validate selection with:
+
+      dotnet --version
+
 Restore dependencies:
 
     dotnet restore

@@ -318,12 +318,12 @@ internal static class TransitSingleTraceRunner
     /// </summary>
     internal static async Task RunAsync(
         TransitBenchmarkCliOptions cliOptions,
-        int validationSeconds,
+        TimeSpan validationDuration,
         RuntimeExecutionIdentity runtimeIdentity,
         Func<ILoggerFactory, ILogger<TransitPublisher>> createTransitPublisherLogger,
         CancellationToken cancellationToken = default)
     {
-        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(TimeSpan.FromSeconds(validationSeconds), BenchmarkMode.Validation, cliOptions);
+        TransitBenchmarkConfig config = TransitBenchmarkConfig.Load(validationDuration, BenchmarkMode.Validation, cliOptions);
 
         RuntimeIdentityGuard.EnsureMatches(config.ExpectedRuntimeIdentity, runtimeIdentity);
 

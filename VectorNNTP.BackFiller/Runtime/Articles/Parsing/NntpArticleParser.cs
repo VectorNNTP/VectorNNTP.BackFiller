@@ -628,6 +628,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         private static bool TryValidateFrom(ReadOnlySpan<byte> articleSpan, HeaderParseOutcome headerOutcome, out NntpArticleParseFailureCode failureCode)
         {
             failureCode = NntpArticleParseFailureCode.None;
+            Span<byte> unfoldedFromBuffer = stackalloc byte[MaxFromLength];
 
             for (int i = 0; i < headerOutcome.Headers.Count; i++)
             {
@@ -637,13 +638,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     continue;
                 }
 
-                if (entry.ValueLength is 0 or > MaxFromLength)
+                if (entry.ValueLength == 0)
                 {
                     failureCode = NntpArticleParseFailureCode.InvalidFrom;
                     return false;
                 }
 
-                ReadOnlySpan<byte> value = articleSpan.Slice(entry.ValueOffset, entry.ValueLength);
+                ReadOnlySpan<byte> rawValue = articleSpan.Slice(entry.ValueOffset, entry.ValueLength);
+                if (!NntpArticleHeaderValueUnfolder.TryUnfold(rawValue, unfoldedFromBuffer, out int unfoldedLength))
+                {
+                    failureCode = NntpArticleParseFailureCode.InvalidFrom;
+                    return false;
+                }
+
+                ReadOnlySpan<byte> value = unfoldedFromBuffer[..unfoldedLength];
                 int at = value.IndexOf((byte)'@');
                 if (at <= 0 || at >= value.Length - 1)
                 {

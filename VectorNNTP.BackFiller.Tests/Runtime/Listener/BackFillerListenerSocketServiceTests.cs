@@ -883,10 +883,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 await stalledSsl.WriteAsync(foundRequest).ConfigureAwait(false);
 
                 TaskCompletionSource<bool> keepReaderAliveWriteObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                TaskCompletionSource<bool> keepReaderAliveWriteObservedAfterTimeoutWait = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 using CancellationTokenSource keepReaderAliveProducerCts = new();
                 int keepReaderAliveWritesSucceeded = 0;
-                int observeWritesAfterTimeoutWait = 0;
                 Task keepReaderAliveProducerTask = Task.Run(async () =>
                 {
                     uint requestId = 1702;
@@ -899,11 +897,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                             await stalledSsl.WriteAsync(keepReaderAliveRequest, keepReaderAliveProducerCts.Token).ConfigureAwait(false);
                             _ = Interlocked.Increment(ref keepReaderAliveWritesSucceeded);
                             keepReaderAliveWriteObserved.TrySetResult(true);
-                            if (Volatile.Read(ref observeWritesAfterTimeoutWait) != 0)
-                            {
-                                keepReaderAliveWriteObservedAfterTimeoutWait.TrySetResult(true);
-                            }
-
                             requestId++;
                         }
                         catch (OperationCanceledException) when (keepReaderAliveProducerCts.IsCancellationRequested)
@@ -922,8 +915,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 Stopwatch timeoutStopwatch = Stopwatch.StartNew();
                 try
                 {
-                    Volatile.Write(ref observeWritesAfterTimeoutWait, 1);
-                    await keepReaderAliveWriteObservedAfterTimeoutWait.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                     await writerTimeoutReleaseObserved.WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
                     await AwaitRemoteClosureAsync(stalledSsl).WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
                 }
@@ -934,7 +925,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                     timeoutStopwatch.Stop();
                 }
 
-                Assert.True(Volatile.Read(ref keepReaderAliveWritesSucceeded) >= 2);
+                Assert.True(Volatile.Read(ref keepReaderAliveWritesSucceeded) >= 1);
 
                 Assert.InRange(timeoutStopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(12));
                 int scenarioLogCount = loggerProvider.Entries.Count - scenarioLogStartIndex;

@@ -27,47 +27,44 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         {
             ArgumentNullException.ThrowIfNull(result);
 
-            if (cancellationToken.IsCancellationRequested)
+            return (cancellationToken.IsCancellationRequested, result.Outcome) switch
             {
-                return new RabbitMqDispositionPlan(
+                (true, _) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: true,
-                    PublishResponse: false);
-            }
+                    PublishResponse: false),
 
-            return result.Outcome switch
-            {
-                ArticleWorkProcessingOutcome.Success => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.Success) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Ack,
                     Requeue: false,
                     PublishResponse: true),
 
-                ArticleWorkProcessingOutcome.ArticleNotFound => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.ArticleNotFound) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: false,
                     PublishResponse: true),
 
-                ArticleWorkProcessingOutcome.InvalidArticle => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.InvalidArticle) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: false,
                     PublishResponse: true),
 
-                ArticleWorkProcessingOutcome.InvalidRequest => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.InvalidRequest) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: false,
-                    PublishResponse: true),
+                    PublishResponse: result.InvalidRequestReplyability is InvalidRequestReplyability.Replyable),
 
-                ArticleWorkProcessingOutcome.ProviderFailure => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.ProviderFailure) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: true,
                     PublishResponse: false),
 
-                ArticleWorkProcessingOutcome.Cancelled => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.Cancelled) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: true,
                     PublishResponse: false),
 
-                ArticleWorkProcessingOutcome.UnexpectedFailure => new RabbitMqDispositionPlan(
+                (_, ArticleWorkProcessingOutcome.UnexpectedFailure) => new RabbitMqDispositionPlan(
                     Action: RabbitMqDispositionAction.Nack,
                     Requeue: true,
                     PublishResponse: false),
