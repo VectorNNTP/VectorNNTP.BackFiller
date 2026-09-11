@@ -748,7 +748,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     }
 
                     slot.Busy = true;
-                    slot.Enqueued = false;
                     candidates.Add((slotIndex, slot));
                 }
             }
@@ -815,7 +814,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                             slot.Session = null;
                             slot.RetireRequested = false;
                             slot.ReconnectOnRelease = false;
-                            slot.Enqueued = false;
                             shouldRequeue = false;
                         }
                         else
@@ -931,7 +929,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 retiredSession = slot.Session;
                 slot.Session = null;
                 slot.Busy = false;
-                slot.Enqueued = false;
             }
 
             if (retiredSession is not null)
@@ -1029,7 +1026,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                     if (!slot.Busy)
                     {
                         slot.Busy = true;
-                        slot.Enqueued = false;
                         immediateRetirements.Add(slot);
                     }
                 }
