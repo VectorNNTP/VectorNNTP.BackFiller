@@ -8,6 +8,7 @@
 
 using System.Buffers;
 using System.Diagnostics;
+using System.Formats.Asn1;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -108,10 +109,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5));
 
-            IReadOnlyList<byte[]> presentedChain = await ConnectAndCaptureRemoteChainAsync(IPAddress.Loopback, port, chain.RootCertificate, "localhost");
+            TlsHandshakeObservation observation = await ConnectAndCaptureRemoteChainAsync(IPAddress.Loopback, port, chain.RootCertificate, "localhost");
 
-            Assert.Contains(presentedChain, raw => raw.AsSpan().SequenceEqual(chain.LeafCertificate.RawData));
-            Assert.Contains(presentedChain, raw => raw.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
+            bool containsLeaf = observation.PresentedCertificatesRawData.Any(raw => raw.AsSpan().SequenceEqual(chain.LeafCertificate.RawData));
+            bool containsIntermediate = observation.PresentedCertificatesRawData.Any(raw => raw.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
+            bool callbackUntrustedRootObserved = observation.CallbackChainStatusFlags.Contains(X509ChainStatusFlags.UntrustedRoot);
+
+            Assert.True(containsLeaf, BuildTlsObservationFailureMessage(observation, "Expected listener TLS handshake to present the leaf certificate."));
+            Assert.True(containsIntermediate, BuildTlsObservationFailureMessage(observation, "Expected listener TLS handshake to present the intermediate certificate."));
+            Assert.True(observation.HostnameMatched, BuildTlsObservationFailureMessage(observation, "Expected strict SAN DNS hostname validation to succeed for localhost."));
+            Assert.True(observation.CallbackAccepted, BuildTlsObservationFailureMessage(observation, "Expected callback validation to accept the custom-root trusted chain."));
+            Assert.True(observation.HandshakeSucceeded, BuildTlsObservationFailureMessage(observation, "TLS handshake failed after callback validation."));
+            Assert.False(callbackUntrustedRootObserved, BuildTlsObservationFailureMessage(observation, "Callback chain unexpectedly reported UntrustedRoot while custom root trust was enforced."));
 
             await service.StopAsync(CancellationToken.None);
             await runTask;
@@ -1116,7 +1125,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             return remote.GetCertHashString(HashAlgorithmName.SHA256);
         }
 
-        private static async Task<IReadOnlyList<byte[]>> ConnectAndCaptureRemoteChainAsync(
+        private static async Task<TlsHandshakeObservation> ConnectAndCaptureRemoteChainAsync(
             IPAddress address,
             int port,
             X509Certificate2 trustedRoot,
@@ -1126,23 +1135,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             ArgumentNullException.ThrowIfNull(trustedRoot);
             ArgumentException.ThrowIfNullOrWhiteSpace(targetHost);
 
-            List<byte[]> captured = [];
+            TlsHandshakeObservation observation = new();
             using TcpClient client = new();
             await client.ConnectAsync(address, port).ConfigureAwait(false);
 
             using SslStream sslStream = new(
                 client.GetStream(),
                 leaveInnerStreamOpen: false,
-                (sender, certificate, chain, errors) => CaptureAndValidateChain(certificate, chain, trustedRoot, targetHost, captured));
+                (sender, certificate, chain, errors) => CaptureAndValidateChain(certificate, chain, trustedRoot, targetHost, observation, errors));
 
-            await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+            try
             {
-                TargetHost = targetHost,
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-            }).ConfigureAwait(false);
+                await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                {
+                    TargetHost = targetHost,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                }).ConfigureAwait(false);
 
-            return captured;
+                observation.HandshakeSucceeded = true;
+                return observation;
+            }
+            catch (AuthenticationException ex)
+            {
+                observation.HandshakeException = ex;
+                observation.HandshakeSucceeded = false;
+                return observation;
+            }
         }
 
         private static bool CaptureAndValidateChain(
@@ -1150,23 +1169,40 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             X509Chain? remoteChain,
             X509Certificate2 trustedRoot,
             string targetHost,
-            List<byte[]> captured)
+            TlsHandshakeObservation observation,
+            SslPolicyErrors sslPolicyErrors)
         {
+            ArgumentNullException.ThrowIfNull(observation);
+
+            observation.SslPolicyErrors = sslPolicyErrors;
+            observation.PresentedCertificatesRawData.Clear();
+            observation.CallbackChainStatusFlags.Clear();
+            observation.CallbackChainStatusInformation.Clear();
+            observation.CustomValidationChainStatusFlags.Clear();
+            observation.CustomValidationChainStatusInformation.Clear();
+
             if (remoteCertificate is null)
             {
+                observation.CallbackAccepted = false;
+                observation.HostnameMatched = false;
                 return false;
             }
 
-            captured.Clear();
-            captured.Add(remoteCertificate.Export(X509ContentType.Cert));
+            observation.PresentedCertificatesRawData.Add(remoteCertificate.Export(X509ContentType.Cert));
 
             if (remoteChain is not null)
             {
+                foreach (X509ChainStatus chainStatus in remoteChain.ChainStatus)
+                {
+                    observation.CallbackChainStatusFlags.Add(chainStatus.Status);
+                    observation.CallbackChainStatusInformation.Add(chainStatus.StatusInformation?.Trim() ?? string.Empty);
+                }
+
                 foreach (X509ChainElement element in remoteChain.ChainElements)
                 {
-                    if (!captured.Any(raw => raw.AsSpan().SequenceEqual(element.Certificate.RawData)))
+                    if (!observation.PresentedCertificatesRawData.Any(raw => raw.AsSpan().SequenceEqual(element.Certificate.RawData)))
                     {
-                        captured.Add(element.Certificate.Export(X509ContentType.Cert));
+                        observation.PresentedCertificatesRawData.Add(element.Certificate.Export(X509ContentType.Cert));
                     }
                 }
             }
@@ -1181,27 +1217,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             verificationChain.ChainPolicy.DisableCertificateDownloads = true;
 
             List<X509Certificate2> extras = [];
-            for (int index = 1; index < captured.Count; index++)
+            for (int index = 1; index < observation.PresentedCertificatesRawData.Count; index++)
             {
-                X509Certificate2 extra = new(captured[index]);
+                X509Certificate2 extra = new(observation.PresentedCertificatesRawData[index]);
                 extras.Add(extra);
                 verificationChain.ChainPolicy.ExtraStore.Add(extra);
             }
 
-            using X509Certificate2 leaf = new(captured[0]);
+            using X509Certificate2 leaf = new(observation.PresentedCertificatesRawData[0]);
             bool chainValid = verificationChain.Build(leaf);
+
+            foreach (X509ChainStatus chainStatus in verificationChain.ChainStatus)
+            {
+                observation.CustomValidationChainStatusFlags.Add(chainStatus.Status);
+                observation.CustomValidationChainStatusInformation.Add(chainStatus.StatusInformation?.Trim() ?? string.Empty);
+            }
+
+            observation.HostnameMatched = CertificateMatchesHostName(leaf, targetHost);
+            observation.CallbackAccepted = chainValid && observation.HostnameMatched;
 
             for (int index = 0; index < extras.Count; index++)
             {
                 extras[index].Dispose();
             }
 
-            if (!chainValid)
-            {
-                return false;
-            }
-
-            return CertificateMatchesHostName(leaf, targetHost);
+            return observation.CallbackAccepted;
         }
 
         private static bool CertificateMatchesHostName(X509Certificate2 certificate, string hostName)
@@ -1209,18 +1249,77 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             ArgumentNullException.ThrowIfNull(certificate);
             ArgumentException.ThrowIfNullOrWhiteSpace(hostName);
 
+            IEnumerable<string> dnsNames = EnumerateSubjectAlternativeDnsNames(certificate);
+            return dnsNames.Any(dnsName => string.Equals(dnsName, hostName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static IEnumerable<string> EnumerateSubjectAlternativeDnsNames(X509Certificate2 certificate)
+        {
+            ArgumentNullException.ThrowIfNull(certificate);
+
             const string DnsNameOid = "2.5.29.17";
             X509Extension? sanExtension = certificate.Extensions[DnsNameOid];
-            if (sanExtension is not null)
+            if (sanExtension is null)
             {
-                string formatted = sanExtension.Format(multiLine: true);
-                if (formatted.Contains($"DNS Name={hostName}", StringComparison.OrdinalIgnoreCase))
+                return [];
+            }
+
+            AsnReader topReader = new(sanExtension.RawData, AsnEncodingRules.DER);
+            AsnReader sequenceReader = topReader.ReadSequence();
+            List<string> dnsNames = [];
+
+            while (sequenceReader.HasData)
+            {
+                Asn1Tag tag = sequenceReader.PeekTag();
+                if (tag.TagClass == TagClass.ContextSpecific && tag.TagValue == 2)
                 {
-                    return true;
+                    dnsNames.Add(sequenceReader.ReadCharacterString(UniversalTagNumber.IA5String, new Asn1Tag(TagClass.ContextSpecific, 2)));
+                }
+                else
+                {
+                    _ = sequenceReader.ReadEncodedValue();
                 }
             }
 
-            return certificate.SubjectName.Name?.Contains($"CN={hostName}", StringComparison.OrdinalIgnoreCase) ?? false;
+            topReader.ThrowIfNotEmpty();
+            return dnsNames;
+        }
+
+        private static string BuildTlsObservationFailureMessage(TlsHandshakeObservation observation, string message)
+        {
+            ArgumentNullException.ThrowIfNull(observation);
+            ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+            string presented = observation.PresentedCertificatesRawData.Count == 0
+                ? "<none>"
+                : string.Join(" | ", observation.PresentedCertificatesRawData.Select(FormatCertificateIdentity));
+
+            string callbackStatuses = observation.CallbackChainStatusFlags.Count == 0
+                ? "<none>"
+                : string.Join(", ", observation.CallbackChainStatusFlags.Select(static status => status.ToString()));
+
+            string customStatuses = observation.CustomValidationChainStatusFlags.Count == 0
+                ? "<none>"
+                : string.Join(", ", observation.CustomValidationChainStatusFlags.Select(static status => status.ToString()));
+
+            string callbackStatusInfo = observation.CallbackChainStatusInformation.Count == 0
+                ? "<none>"
+                : string.Join(" | ", observation.CallbackChainStatusInformation.Where(static text => !string.IsNullOrWhiteSpace(text)));
+
+            string customStatusInfo = observation.CustomValidationChainStatusInformation.Count == 0
+                ? "<none>"
+                : string.Join(" | ", observation.CustomValidationChainStatusInformation.Where(static text => !string.IsNullOrWhiteSpace(text)));
+
+            string exceptionType = observation.HandshakeException?.GetType().Name ?? "<none>";
+            string exceptionMessage = observation.HandshakeException?.Message ?? "<none>";
+
+            return $"{message} SslPolicyErrors={observation.SslPolicyErrors}; CallbackAccepted={observation.CallbackAccepted}; HostnameMatched={observation.HostnameMatched}; HandshakeSucceeded={observation.HandshakeSucceeded}; Presented={presented}; CallbackChainStatus={callbackStatuses}; CallbackChainStatusInfo={callbackStatusInfo}; CustomChainStatus={customStatuses}; CustomChainStatusInfo={customStatusInfo}; HandshakeException={exceptionType}: {exceptionMessage}";
+        }
+
+        private static string FormatCertificateIdentity(byte[] rawData)
+        {
+            using X509Certificate2 certificate = new(rawData);
+            return $"{certificate.Subject} [{certificate.Thumbprint}]";
         }
 
         private static async Task<SslStream> AuthenticateClientAsync(TcpClient client)
@@ -1615,6 +1714,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 pfx,
                 pfxPassword,
                 X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+        }
+
+        private sealed class TlsHandshakeObservation
+        {
+            public bool HandshakeSucceeded { get; set; }
+
+            public Exception? HandshakeException { get; set; }
+
+            public SslPolicyErrors SslPolicyErrors { get; set; }
+
+            public bool HostnameMatched { get; set; }
+
+            public bool CallbackAccepted { get; set; }
+
+            public List<byte[]> PresentedCertificatesRawData { get; } = [];
+
+            public List<X509ChainStatusFlags> CallbackChainStatusFlags { get; } = [];
+
+            public List<string> CallbackChainStatusInformation { get; } = [];
+
+            public List<X509ChainStatusFlags> CustomValidationChainStatusFlags { get; } = [];
+
+            public List<string> CustomValidationChainStatusInformation { get; } = [];
         }
 
         private sealed class GeneratedCertificateChain(
