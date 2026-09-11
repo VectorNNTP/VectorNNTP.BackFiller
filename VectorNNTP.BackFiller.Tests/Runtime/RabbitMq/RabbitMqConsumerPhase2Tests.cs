@@ -2585,6 +2585,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             RabbitMqConsumerService service = new(runtimeOptions, snapshotProvider.Provider, manager, sessionFactory, shutdownCoordinator, NullLogger<RabbitMqConsumerService>.Instance);
 
             Guid accountId = Guid.NewGuid();
+            string sessionKey1 = $"{accountId:N}:1";
             string sessionKey2 = $"{accountId:N}:2";
             string sessionKey3 = $"{accountId:N}:3";
 
@@ -2615,10 +2616,42 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.True(session3.DisposeCalled);
 
             await service.StartAsync(timeoutToken).ConfigureAwait(false);
-            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
-            shutdownCoordinator.SignalForcedShutdown();
-            await service.StopAsync(timeoutToken).ConfigureAwait(false);
 
+            sessionFactory.BlockStartForSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey3);
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+
+            Task reconcileWhileStartingTask = service.ReconcileOnceAsync(timeoutToken);
+            await sessionFactory.WaitForStartEnteredAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+
+            sessionFactory.RequireStopStartsAfterTaskCompletion(reconcileWhileStartingTask);
+            shutdownCoordinator.SignalForcedShutdown();
+            Task stopTask = service.StopAsync(timeoutToken);
+
+            Task stopStartedWhileStartBlocked = sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken);
+            Assert.False(reconcileWhileStartingTask.IsCompleted);
+            Assert.False(stopTask.IsCompleted);
+            Assert.False(stopStartedWhileStartBlocked.IsCompleted);
+
+            sessionFactory.ReleaseStart(sessionKey3);
+            await reconcileWhileStartingTask.ConfigureAwait(false);
+
+            await sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            sessionFactory.ReleaseStop(sessionKey3);
+            await stopTask.ConfigureAwait(false);
+
+            BlockingStopTrackingSession session1AtShutdown = sessionFactory.RequireLatestSession(sessionKey1);
+            BlockingStopTrackingSession restartedSession3 = sessionFactory.RequireLatestSession(sessionKey3);
+            Assert.True(session1AtShutdown.DisposeCalled);
+            Assert.True(session1AtShutdown.StopCallCount >= 1);
+            Assert.Equal(1, restartedSession3.StartCallCount);
+            Assert.True(restartedSession3.DisposeCalled);
+            Assert.True(restartedSession3.StopCallCount >= 1);
+            Assert.False(restartedSession3.IsRunning);
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey1));
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey2));
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey3));
+            Assert.False(sessionFactory.AnyStopStartedBeforePrerequisiteCompletion());
             Assert.Equal(0, service.ActiveSessionCount);
 
             service.Dispose();
@@ -3009,6 +3042,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             private readonly Dictionary<string, TaskCompletionSource<bool>> _stopCancellationObserved = new(StringComparer.Ordinal);
             /// <summary>
+            /// Confirms deterministic start blocking behavior for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _startBlocks = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms start entered behavior for selected sessions.
+            /// </summary>
+            private readonly Dictionary<string, TaskCompletionSource<bool>> _startEntered = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms per-session stop-start ordering prerequisites.
+            /// </summary>
+            private readonly Dictionary<string, Task> _stopStartPrerequisites = new(StringComparer.Ordinal);
+            /// <summary>
+            /// Confirms whether stop-start was observed before a configured prerequisite completed.
+            /// </summary>
+            private readonly Dictionary<string, bool> _stopStartedBeforePrerequisite = new(StringComparer.Ordinal);
+            /// <summary>
             /// Confirms  gate behavior.
             /// </summary>
             private readonly object _gate = new();
@@ -3183,6 +3232,116 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             }
 
             /// <summary>
+            /// Configures deterministic blocking for StartAsync on the selected session key.
+            /// </summary>
+            /// <param name="sessionKey">Session key whose next start should block until released.</param>
+            internal void BlockStartForSession(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    _startBlocks[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _startEntered[sessionKey] = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+            }
+
+            /// <summary>
+            /// Waits until the selected session has entered the deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task WaitForStartEnteredAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task task;
+                lock (_gate)
+                {
+                    if (!_startEntered.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        throw new InvalidOperationException($"No start-entered signal exists for session '{sessionKey}'.");
+                    }
+
+                    task = source.Task;
+                }
+
+                await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Releases a previously configured deterministic StartAsync block.
+            /// </summary>
+            /// <param name="sessionKey">Session key to release.</param>
+            internal void ReleaseStart(string sessionKey)
+            {
+                lock (_gate)
+                {
+                    if (_startBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        _ = source.TrySetResult(true);
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Waits for deterministic start-gate release when configured for a session.
+            /// </summary>
+            /// <param name="sessionKey">Session key to observe.</param>
+            /// <param name="cancellationToken">Cancellation token.</param>
+            internal async Task AwaitStartGateAsync(string sessionKey, CancellationToken cancellationToken)
+            {
+                Task? gateTask = null;
+                TaskCompletionSource<bool>? enteredSignal = null;
+
+                lock (_gate)
+                {
+                    _ = _startEntered.TryGetValue(sessionKey, out enteredSignal);
+                    if (_startBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
+                    {
+                        gateTask = source.Task;
+                    }
+                }
+
+                _ = enteredSignal?.TrySetResult(true);
+
+                if (gateTask is null)
+                {
+                    return;
+                }
+
+                await gateTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            /// <summary>
+            /// Requires stop-start signaling for all currently running sessions to occur only after the prerequisite task has completed.
+            /// </summary>
+            /// <param name="prerequisite">Task that must be completed before stop start is permitted.</param>
+            internal void RequireStopStartsAfterTaskCompletion(Task prerequisite)
+            {
+                ArgumentNullException.ThrowIfNull(prerequisite);
+
+                lock (_gate)
+                {
+                    foreach ((string sessionKey, List<BlockingStopTrackingSession> sessions) in _sessionsByKey)
+                    {
+                        if (sessions.Count > 0 && sessions[^1].IsRunning)
+                        {
+                            _stopStartPrerequisites[sessionKey] = prerequisite;
+                            _stopStartedBeforePrerequisite[sessionKey] = false;
+                        }
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Returns whether stop-start was observed before prerequisite completion for any monitored session.
+            /// </summary>
+            internal bool AnyStopStartedBeforePrerequisiteCompletion()
+            {
+                lock (_gate)
+                {
+                    return _stopStartedBeforePrerequisite.Values.Any(static value => value);
+                }
+            }
+
+            /// <summary>
             /// Confirms the await stop gate async behavior.
             /// </summary>
             /// <returns>The value returned by the await stop gate async helper.</returns>
@@ -3197,14 +3356,24 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 Task? gateTask = null;
                 TaskCompletionSource<bool>? startedSignal = null;
                 TaskCompletionSource<bool>? cancellationObservedSignal = null;
+                Task? startPrerequisite = null;
 
                 lock (_gate)
                 {
                     _ = _stopStarted.TryGetValue(sessionKey, out startedSignal);
                     _ = _stopCancellationObserved.TryGetValue(sessionKey, out cancellationObservedSignal);
+                    _ = _stopStartPrerequisites.TryGetValue(sessionKey, out startPrerequisite);
                     if (_stopBlocks.TryGetValue(sessionKey, out TaskCompletionSource<bool>? source))
                     {
                         gateTask = source.Task;
+                    }
+                }
+
+                if (startPrerequisite is not null && !startPrerequisite.IsCompleted)
+                {
+                    lock (_gate)
+                    {
+                        _stopStartedBeforePrerequisite[sessionKey] = true;
                     }
                 }
 
@@ -3843,6 +4012,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 IsRunning = true;
                 StartCallCount++;
                 _ = _deliverySink;
+
+                await _owner.AwaitStartGateAsync(Identity.SessionKey, cancellationToken).ConfigureAwait(false);
             }
 
             /// <summary>
