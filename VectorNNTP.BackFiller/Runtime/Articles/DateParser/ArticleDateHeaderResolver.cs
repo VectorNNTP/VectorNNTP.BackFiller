@@ -60,7 +60,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
             }
 
             ReadOnlySpan<byte> articleSpan = articleBytes.Span;
-            byte[] unfoldedDateBuffer = new byte[DateParseOptions.Default.MaxInputLength];
+            Span<byte> unfoldedDateBuffer = stackalloc byte[DateParseOptions.Default.MaxInputLength];
             for (int i = 0; i < CandidateHeaderNames.Length; i++)
             {
                 NntpArticleHeaderName candidate = CandidateHeaderNames[i];
@@ -78,7 +78,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.DateParser
                         continue;
                     }
 
-                    string dateValue = Encoding.ASCII.GetString(unfoldedDateBuffer.AsSpan(0, unfoldedLength));
+                    string dateValue = Encoding.ASCII.GetString(unfoldedDateBuffer[..unfoldedLength]);
                     if (NewsDateParser.TryGetCanonicalDateValue(dateValue.AsSpan(), out canonicalValue, out failure))
                     {
                         originalValue = articleBytes.Slice(entry.ValueOffset, entry.ValueLength);

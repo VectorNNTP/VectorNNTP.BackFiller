@@ -309,6 +309,48 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Verifies folded Date values using single-character line terminators are semantically unfolded and canonicalized equivalently.
+        /// </summary>
+        /// <param name="lineTerminator">Header line terminator used for the folded Date boundary.</param>
+        [Theory]
+        [InlineData("\r")]
+        [InlineData("\n")]
+        public void Parse_WhenDateIsFoldedWithSingleCharacterTerminator_AcceptsAndMatchesUnfoldedCanonicalDate(string lineTerminator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] unfoldedArticle = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0200",
+                    "Message-ID: <m11crlfu@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: "body\r\n");
+
+            string foldedDateRaw = "Fri, 23 Aug 2024" + lineTerminator + " 07:30:10 +0200";
+            byte[] foldedArticle = Encoding.ASCII.GetBytes(
+                "Date: " + foldedDateRaw + lineTerminator +
+                "Message-ID: <m11k@example.test>" + lineTerminator +
+                "Newsgroups: alt.test" + lineTerminator +
+                "From: user@example.test" + lineTerminator +
+                lineTerminator +
+                "body" + lineTerminator);
+
+            byte[] foldedArticleBeforeParse = [.. foldedArticle];
+
+            NntpArticleParseResult unfoldedResult = parser.Parse(unfoldedArticle);
+            NntpArticleParseResult foldedResult = parser.Parse(foldedArticle);
+
+            Assert.True(unfoldedResult.IsAccepted);
+            Assert.True(foldedResult.IsAccepted);
+            Assert.Equal(unfoldedResult.CanonicalUtcDate, foldedResult.CanonicalUtcDate);
+            Assert.Equal(foldedDateRaw, Encoding.ASCII.GetString(foldedResult.OriginalDateValue.Span));
+            Assert.Equal(foldedArticleBeforeParse, foldedArticle);
+            Assert.Equal(foldedArticle, foldedResult.ArticleBytes.ToArray());
+        }
+
+        /// <summary>
         /// Verifies Date values spanning multiple continuation lines are unfolded consistently for semantic date parsing.
         /// </summary>
         [Fact]
@@ -411,6 +453,47 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             Assert.True(unfoldedResult.IsAccepted);
             Assert.True(foldedResult.IsAccepted);
             Assert.Equal(unfoldedResult.IsAccepted, foldedResult.IsAccepted);
+        }
+
+        /// <summary>
+        /// Verifies folded From values using single-character line terminators are semantically unfolded and accepted equivalently to unfolded values.
+        /// </summary>
+        /// <param name="lineTerminator">Header line terminator used for the folded From boundary.</param>
+        [Theory]
+        [InlineData("\r")]
+        [InlineData("\n")]
+        public void Parse_WhenFromIsFoldedWithSingleCharacterTerminator_AcceptsAndMatchesUnfoldedAcceptance(string lineTerminator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] unfoldedArticle = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m11l-unfolded@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: poster <user@example.test>",
+                ],
+                body: "body\r\n");
+
+            byte[] foldedArticle = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000" + lineTerminator +
+                "Message-ID: <m11l-folded@example.test>" + lineTerminator +
+                "Newsgroups: alt.test" + lineTerminator +
+                "From: poster" + lineTerminator +
+                " <user@example.test>" + lineTerminator +
+                lineTerminator +
+                "body" + lineTerminator);
+
+            byte[] foldedArticleBeforeParse = [.. foldedArticle];
+
+            NntpArticleParseResult unfoldedResult = parser.Parse(unfoldedArticle);
+            NntpArticleParseResult foldedResult = parser.Parse(foldedArticle);
+
+            Assert.True(unfoldedResult.IsAccepted);
+            Assert.True(foldedResult.IsAccepted);
+            Assert.Equal(unfoldedResult.IsAccepted, foldedResult.IsAccepted);
+            Assert.Equal(foldedArticleBeforeParse, foldedArticle);
+            Assert.Equal(foldedArticle, foldedResult.ArticleBytes.ToArray());
         }
 
         /// <summary>
