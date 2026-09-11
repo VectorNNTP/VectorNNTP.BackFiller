@@ -55,4 +55,3 @@ Builds enable .NET analyzers, code style, and generated documentation. Completio
 
 - Follow repository instruction files for C#/.NET, documentation, and performance changes: `.github/instructions/csharp.instructions.md`, `documentation.instructions.md`, and `performance.instructions.md`.
 - Follow repository instruction files for testing, performance, documentation, and C# conventions in VectorNNTP.BackFiller, including deterministic concurrency testing discipline, isolated regression gate usage for hung tests, and no weakening/skipping tests.
-- Use VectorNNTP.BackFiller repository instruction files for C#, testing, performance, and documentation standards; prefer deterministic async test coordination (no sleeps/yields/polling hacks), preserve #51/#52/#53 invariants, and avoid Git write operations unless explicitly requested.

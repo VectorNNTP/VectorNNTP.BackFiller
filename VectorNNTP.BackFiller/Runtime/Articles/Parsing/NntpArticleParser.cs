@@ -17,9 +17,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
     /// Parses untrusted NNTP article bytes into a compact structured result for downstream policy decisions.
     /// </summary>
     /// <remarks>
-    /// <para>Contract: input bytes are expected to be article-normalized payload bytes received after transport-level framing.</para>
+    /// <para>Contract: input bytes are expected to be transport-normalized article bytes received after acquisition removes NNTP terminator framing and performs transport dot-unstuffing exactly once.</para>
     /// <para>Header, body, and header-value slices in the returned result alias the caller-provided buffer and therefore inherit its lifetime.</para>
-    /// <para>The parser does not perform download, retry, queueing, or publish decisions; it only validates and classifies content.</para>
+    /// <para>The parser does not perform download, retry, queueing, publish decisions, or NNTP transport normalization; it only validates and classifies content.</para>
     /// </remarks>
     internal sealed class NntpArticleParser
     {
@@ -97,7 +97,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// <summary>
         /// Parses one NNTP article payload and returns deterministic acceptance, rejection, and normalization metadata.
         /// </summary>
-        /// <param name="articleBytes">Complete article bytes after ARTICLE framing has already been removed.</param>
+        /// <param name="articleBytes">Complete article bytes after acquisition has removed ARTICLE framing and transport dot-stuffing.</param>
         /// <returns>
         /// A parse result that preserves slices into the original buffer, validates required headers, canonicalizes Date and Path, and classifies yEnc and content-type hints.
         /// </returns>
