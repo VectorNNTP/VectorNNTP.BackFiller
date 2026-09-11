@@ -2589,7 +2589,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             string sessionKey3 = $"{accountId:N}:3";
 
             await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
-            await service.StartAsync(timeoutToken).ConfigureAwait(false);
             await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
 
             _ = sessionFactory.RequireLatestSession(sessionKey2);
@@ -2615,6 +2614,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             Assert.Equal(1, session3.StopCallCount);
             Assert.True(session3.DisposeCalled);
 
+            await service.StartAsync(timeoutToken).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
+            shutdownCoordinator.SignalForcedShutdown();
             await service.StopAsync(timeoutToken).ConfigureAwait(false);
 
             Assert.Equal(0, service.ActiveSessionCount);

@@ -485,44 +485,83 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 {
                     retiredSession = slot.Session;
                     slot.Session = null;
-                    slot.RetireRequested = false;
-                    slot.ReconnectOnRelease = false;
+
+                    if (!reconnectAfterRetire)
+                    {
+                        slot.RetireRequested = false;
+                        slot.ReconnectOnRelease = false;
+                    }
                 }
             }
 
             if (retiredSession is not null)
             {
-                await retiredSession.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    await retiredSession.DisposeAsync().ConfigureAwait(false);
+                }
+                catch when (reconnectAfterRetire)
+                {
+                    lock (_gate)
+                    {
+                        slot.RetireRequested = false;
+                        slot.ReconnectOnRelease = false;
+                    }
+
+                    throw;
+                }
+
                 NntpConnectionLogContext? connectionLoggingContext = CreateConnectionLogContext(slot.Account, slot.Endpoint, slot.SlotId + 1);
                 LogSessionRetired(_logger, slot.SlotId, slot.Account.EntryId, failureCode);
 
                 if (reconnectAfterRetire)
                 {
-                    (NntpArticleAcquisitionSession? replacement, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
-                        slot.Endpoint,
-                        _options,
-                        slot.Logger,
-                        CancellationToken.None,
-                        _serverCertificateValidationCallback,
-                        connectionLoggingContext).ConfigureAwait(false);
-
-                    using (connectResult)
+                    try
                     {
-                        if (replacement is not null)
-                        {
-                            lock (_gate)
-                            {
-                                slot.Session = replacement;
-                                slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
-                                slot.LastKeepAliveProbeUtc = null;
-                            }
+                        (NntpArticleAcquisitionSession? replacement, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+                            slot.Endpoint,
+                            _options,
+                            slot.Logger,
+                            CancellationToken.None,
+                            _serverCertificateValidationCallback,
+                            connectionLoggingContext).ConfigureAwait(false);
 
-                            LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
-                        }
-                        else
+                        using (connectResult)
                         {
-                            LogSessionReconnectFailed(_logger, slot.SlotId, slot.Account.EntryId, connectResult.FailureCode, connectResult.ResponseCode, connectResult.ResponseText);
+                            if (replacement is not null)
+                            {
+                                lock (_gate)
+                                {
+                                    slot.Session = replacement;
+                                    slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
+                                    slot.LastKeepAliveProbeUtc = null;
+                                    slot.RetireRequested = false;
+                                    slot.ReconnectOnRelease = false;
+                                }
+
+                                LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                            }
+                            else
+                            {
+                                lock (_gate)
+                                {
+                                    slot.RetireRequested = false;
+                                    slot.ReconnectOnRelease = false;
+                                }
+
+                                LogSessionReconnectFailed(_logger, slot.SlotId, slot.Account.EntryId, connectResult.FailureCode, connectResult.ResponseCode, connectResult.ResponseText);
+                            }
                         }
+                    }
+                    catch
+                    {
+                        lock (_gate)
+                        {
+                            slot.RetireRequested = false;
+                            slot.ReconnectOnRelease = false;
+                        }
+
+                        throw;
                     }
                 }
             }
@@ -812,8 +851,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                             retiredSession = slot.Session;
                             reconnectAfterRetire = retiredSession is not null && slot.ReconnectOnRelease;
                             slot.Session = null;
-                            slot.RetireRequested = false;
-                            slot.ReconnectOnRelease = false;
+
+                            if (!reconnectAfterRetire)
+                            {
+                                slot.RetireRequested = false;
+                                slot.ReconnectOnRelease = false;
+                            }
+
                             shouldRequeue = false;
                         }
                         else
@@ -831,44 +875,79 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 
                     if (retiredSession is not null)
                     {
-                        await retiredSession.DisposeAsync().ConfigureAwait(false);
+                        try
+                        {
+                            await retiredSession.DisposeAsync().ConfigureAwait(false);
+                        }
+                        catch when (reconnectAfterRetire)
+                        {
+                            lock (_gate)
+                            {
+                                slot.RetireRequested = false;
+                                slot.ReconnectOnRelease = false;
+                            }
+
+                            throw;
+                        }
+
                         NntpConnectionLogContext? reconnectLoggingContext = CreateConnectionLogContext(slot.Account, slot.Endpoint, slot.SlotId + 1);
                         LogSessionRetired(_logger, slot.SlotId, slot.Account.EntryId, NntpArticleAcquisitionFailureCode.None);
 
                         if (reconnectAfterRetire)
                         {
-                            (NntpArticleAcquisitionSession? replacement, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
-                                slot.Endpoint,
-                                _options,
-                                slot.Logger,
-                                CancellationToken.None,
-                                _serverCertificateValidationCallback,
-                                reconnectLoggingContext).ConfigureAwait(false);
-
-                            using (connectResult)
+                            try
                             {
-                                if (replacement is not null)
+                                (NntpArticleAcquisitionSession? replacement, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
+                                    slot.Endpoint,
+                                    _options,
+                                    slot.Logger,
+                                    CancellationToken.None,
+                                    _serverCertificateValidationCallback,
+                                    reconnectLoggingContext).ConfigureAwait(false);
+
+                                using (connectResult)
                                 {
-                                    lock (_gate)
+                                    if (replacement is not null)
                                     {
-                                        slot.Session = replacement;
-                                        slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
-                                        slot.LastKeepAliveProbeUtc = null;
-
-                                        shouldRequeue = !_disposeRequested && !slot.Enqueued;
-                                        if (shouldRequeue)
+                                        lock (_gate)
                                         {
-                                            slot.Enqueued = true;
-                                        }
-                                    }
+                                            slot.Session = replacement;
+                                            slot.LastArticleActivityUtc = _timeProvider.GetUtcNow();
+                                            slot.LastKeepAliveProbeUtc = null;
+                                            slot.RetireRequested = false;
+                                            slot.ReconnectOnRelease = false;
 
-                                    LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                                            shouldRequeue = !_disposeRequested && !slot.Enqueued;
+                                            if (shouldRequeue)
+                                            {
+                                                slot.Enqueued = true;
+                                            }
+                                        }
+
+                                        LogSessionReconnected(_logger, slot.SlotId, slot.Account.EntryId, slot.Endpoint.Host, slot.Endpoint.Port);
+                                    }
+                                    else
+                                    {
+                                        lock (_gate)
+                                        {
+                                            slot.RetireRequested = false;
+                                            slot.ReconnectOnRelease = false;
+                                        }
+
+                                        shouldRequeue = false;
+                                        LogSessionReconnectFailed(_logger, slot.SlotId, slot.Account.EntryId, connectResult.FailureCode, connectResult.ResponseCode, connectResult.ResponseText);
+                                    }
                                 }
-                                else
+                            }
+                            catch
+                            {
+                                lock (_gate)
                                 {
-                                    shouldRequeue = false;
-                                    LogSessionReconnectFailed(_logger, slot.SlotId, slot.Account.EntryId, connectResult.FailureCode, connectResult.ResponseCode, connectResult.ResponseText);
+                                    slot.RetireRequested = false;
+                                    slot.ReconnectOnRelease = false;
                                 }
+
+                                throw;
                             }
                         }
                         else
