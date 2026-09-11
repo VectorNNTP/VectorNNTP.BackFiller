@@ -58,7 +58,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.True(result.HasCertificate);
                 Assert.True(result.IsUsable);
                 Assert.False(result.RequiresRenewal);
-                result.Certificate?.Certificate.Dispose();
+                result.Certificate?.Dispose();
             }
             finally
             {
@@ -83,7 +83,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.True(result.HasCertificate);
                 Assert.True(result.IsUsable);
                 Assert.True(result.RequiresRenewal);
-                result.Certificate?.Certificate.Dispose();
+                result.Certificate?.Dispose();
             }
             finally
             {
@@ -147,7 +147,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
                 BackFillerCertificateBundle bundle = await BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
                 Assert.True(bundle.Certificate.HasPrivateKey);
-                bundle.Certificate.Dispose();
+                bundle.Dispose();
             }
             finally
             {
@@ -185,7 +185,72 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 BackFillerCertificateBundle bundle = await BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
                 Assert.True(bundle.Certificate.HasPrivateKey);
                 Assert.Equal("1.2.840.10045.2.1", bundle.Certificate.PublicKey.Oid?.Value);
-                bundle.Certificate.Dispose();
+                bundle.Dispose();
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task LoadCertificateBundleAsync_WhenPersistedPfxContainsIntermediate_PreservesIntermediateRawIdentity()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                string fqdn = "bf-chain.example.com";
+                BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn);
+                using GeneratedCertificateChain chain = CreateGeneratedCertificateChain(fqdn);
+
+                AcmeOrderIssueResult issueResult = new(
+                    LeafCertificateDer: chain.LeafCertificate.Export(X509ContentType.Cert),
+                    ChainDer: [chain.IntermediateCertificate.Export(X509ContentType.Cert)],
+                    CertificatePrivateKeyPem: chain.LeafPrivateKeyPem);
+
+                await BackFillerCertificateStore.PersistIssuedCertificateAsync(options, issueResult, CancellationToken.None);
+
+                using BackFillerCertificateBundle bundle = await BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None);
+
+                Assert.True(bundle.Certificate.HasPrivateKey);
+                Assert.Single(bundle.IntermediateCertificates);
+                Assert.Equal(chain.IntermediateCertificate.RawData, bundle.IntermediateCertificates[0].RawData);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task EvaluateExistingCertificateAsync_WhenIntermediateOnlyExistsInPersistedPfx_IsUsable()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                string fqdn = "bf-extrastore.example.com";
+                BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn);
+                using GeneratedCertificateChain chain = CreateGeneratedCertificateChain(fqdn);
+
+                AcmeOrderIssueResult issueResult = new(
+                    LeafCertificateDer: chain.LeafCertificate.Export(X509ContentType.Cert),
+                    ChainDer:
+                    [
+                        chain.IntermediateCertificate.Export(X509ContentType.Cert),
+                        chain.RootCertificate.Export(X509ContentType.Cert),
+                    ],
+                    CertificatePrivateKeyPem: chain.LeafPrivateKeyPem);
+
+                await BackFillerCertificateStore.PersistIssuedCertificateAsync(options, issueResult, CancellationToken.None);
+
+                CertificateEvaluationResult evaluation = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+
+                Assert.True(evaluation.HasCertificate);
+                Assert.True(evaluation.IsUsable);
+                Assert.NotNull(evaluation.Certificate);
+                Assert.Contains(evaluation.Certificate!.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
+                Assert.Contains(evaluation.Certificate.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.RootCertificate.RawData));
+                evaluation.Certificate.Dispose();
             }
             finally
             {
@@ -250,6 +315,89 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             using X509Certificate2 certificate = request.CreateSelfSigned(notBeforeUtc, notAfterUtc);
             byte[] pfx = certificate.Export(X509ContentType.Pkcs12, password);
             File.WriteAllBytes(pfxPath, pfx);
+        }
+
+        private static GeneratedCertificateChain CreateGeneratedCertificateChain(string fqdn)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
+
+            RSA rootKey = RSA.Create(2048);
+            CertificateRequest rootRequest = new(
+                "CN=BackFiller Test Root CA",
+                rootKey,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            rootRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            rootRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+            rootRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(rootRequest.PublicKey, false));
+
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            X509Certificate2 rootCertificate = rootRequest.CreateSelfSigned(now.AddDays(-2), now.AddDays(90));
+
+            RSA intermediateKey = RSA.Create(2048);
+            CertificateRequest intermediateRequest = new(
+                "CN=BackFiller Test Intermediate CA",
+                intermediateKey,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            intermediateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            intermediateRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+            intermediateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(intermediateRequest.PublicKey, false));
+
+            byte[] intermediateSerial = RandomNumberGenerator.GetBytes(16);
+            using X509Certificate2 intermediateSignedNoKey = intermediateRequest.Create(rootCertificate, now.AddDays(-2), now.AddDays(60), intermediateSerial);
+            X509Certificate2 intermediateCertificate = intermediateSignedNoKey.CopyWithPrivateKey(intermediateKey);
+
+            RSA leafKey = RSA.Create(2048);
+            CertificateRequest leafRequest = new(
+                $"CN={fqdn}",
+                leafKey,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            SubjectAlternativeNameBuilder sanBuilder = new();
+            sanBuilder.AddDnsName(fqdn);
+            leafRequest.CertificateExtensions.Add(sanBuilder.Build());
+            leafRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            leafRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
+            OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
+            leafRequest.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, true));
+            leafRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(leafRequest.PublicKey, false));
+
+            byte[] leafSerial = RandomNumberGenerator.GetBytes(16);
+            using X509Certificate2 leafSignedNoKey = leafRequest.Create(intermediateCertificate, now.AddDays(-1), now.AddDays(30), leafSerial);
+            X509Certificate2 leafCertificate = leafSignedNoKey.CopyWithPrivateKey(leafKey);
+
+            return new GeneratedCertificateChain(rootCertificate, rootKey, intermediateCertificate, intermediateKey, leafCertificate, leafKey.ExportPkcs8PrivateKeyPem());
+        }
+
+        private sealed class GeneratedCertificateChain(
+            X509Certificate2 rootCertificate,
+            RSA rootKey,
+            X509Certificate2 intermediateCertificate,
+            RSA intermediateKey,
+            X509Certificate2 leafCertificate,
+            string leafPrivateKeyPem) : IDisposable
+        {
+            public X509Certificate2 RootCertificate { get; } = rootCertificate;
+
+            public RSA RootKey { get; } = rootKey;
+
+            public X509Certificate2 IntermediateCertificate { get; } = intermediateCertificate;
+
+            public RSA IntermediateKey { get; } = intermediateKey;
+
+            public X509Certificate2 LeafCertificate { get; } = leafCertificate;
+
+            public string LeafPrivateKeyPem { get; } = leafPrivateKeyPem;
+
+            public void Dispose()
+            {
+                LeafCertificate.Dispose();
+                IntermediateCertificate.Dispose();
+                RootCertificate.Dispose();
+                IntermediateKey.Dispose();
+                RootKey.Dispose();
+            }
         }
 
         /// <summary>
