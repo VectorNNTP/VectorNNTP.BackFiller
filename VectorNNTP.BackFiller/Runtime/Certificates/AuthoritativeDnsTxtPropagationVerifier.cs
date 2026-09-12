@@ -46,6 +46,16 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolveHostAddressesAsync;
 
         /// <summary>
+        /// Receives one DNS UDP response from the configured nameserver endpoint.
+        /// </summary>
+        private readonly Func<Socket, Memory<byte>, EndPoint, CancellationToken, ValueTask<SocketReceiveFromResult>> _receiveDnsResponseAsync;
+
+        /// <summary>
+        /// Internal DNS UDP receive timeout used per query.
+        /// </summary>
+        private readonly TimeSpan _dnsUdpReceiveTimeout;
+
+        /// <summary>
         /// Initializes the authoritative TXT propagation verifier.
         /// </summary>
         /// <param name="timeProvider">Unified time provider.</param>
@@ -53,7 +63,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         public AuthoritativeDnsTxtPropagationVerifier(
             TimeProvider timeProvider,
             ILogger<AuthoritativeDnsTxtPropagationVerifier> logger)
-            : this(timeProvider, logger, null, null, null)
+            : this(timeProvider, logger, null, null, null, null, null)
         {
         }
 
@@ -66,21 +76,33 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="resolveSystemNameServers">Optional recursive-resolver discovery delegate.</param>
         /// <param name="sendDnsUdpQueryAsync">Optional DNS UDP transport delegate.</param>
         /// <param name="resolveHostAddressesAsync">Optional nameserver host-address resolution delegate.</param>
+        /// <param name="receiveDnsResponseAsync">Optional UDP receive delegate used to classify verifier-owned timeout cancellation deterministically.</param>
+        /// <param name="dnsUdpReceiveTimeout">Optional per-query DNS UDP receive timeout. Defaults to five seconds.</param>
         internal AuthoritativeDnsTxtPropagationVerifier(
             TimeProvider timeProvider,
             ILogger<AuthoritativeDnsTxtPropagationVerifier> logger,
             Func<string[]>? resolveSystemNameServers,
             Func<IPAddress, byte[], CancellationToken, Task<byte[]>>? sendDnsUdpQueryAsync,
-            Func<string, CancellationToken, Task<IPAddress[]>>? resolveHostAddressesAsync)
+            Func<string, CancellationToken, Task<IPAddress[]>>? resolveHostAddressesAsync,
+            Func<Socket, Memory<byte>, EndPoint, CancellationToken, ValueTask<SocketReceiveFromResult>>? receiveDnsResponseAsync = null,
+            TimeSpan? dnsUdpReceiveTimeout = null)
         {
             ArgumentNullException.ThrowIfNull(timeProvider);
             ArgumentNullException.ThrowIfNull(logger);
 
+            TimeSpan configuredReceiveTimeout = dnsUdpReceiveTimeout ?? TimeSpan.FromSeconds(5);
+            if (configuredReceiveTimeout < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(dnsUdpReceiveTimeout), "DNS UDP receive timeout must be non-negative.");
+            }
+
             _timeProvider = timeProvider;
             _logger = logger;
             _resolveSystemNameServers = resolveSystemNameServers ?? ResolveSystemNameServers;
+            _resolveHostAddressesAsync = resolveHostAddressesAsync ?? Dns.GetHostAddressesAsync;
+            _receiveDnsResponseAsync = receiveDnsResponseAsync ?? ((Socket socket, Memory<byte> buffer, EndPoint remoteEndPoint, CancellationToken cancellationToken) => socket.ReceiveFromAsync(buffer, SocketFlags.None, remoteEndPoint, cancellationToken));
+            _dnsUdpReceiveTimeout = configuredReceiveTimeout;
             _sendDnsUdpQueryAsync = sendDnsUdpQueryAsync ?? SendDnsUdpQueryAsync;
-            _resolveHostAddressesAsync = resolveHostAddressesAsync ?? ((hostName, cancellationToken) => Dns.GetHostAddressesAsync(hostName, cancellationToken));
         }
 
         /// <summary>
@@ -383,7 +405,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="request">Wire-format DNS query bytes.</param>
         /// <param name="cancellationToken">Cancellation token observed while sending and receiving.</param>
         /// <returns>The received DNS response bytes.</returns>
-        private static async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
+        private async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
         {
             using Socket socket = new(nameServer.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             EndPoint remoteEndPoint = new IPEndPoint(nameServer, 53);
@@ -392,11 +414,11 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             byte[] buffer = new byte[4096];
             using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            timeout.CancelAfter(_dnsUdpReceiveTimeout);
 
             try
             {
-                SocketReceiveFromResult result = await socket.ReceiveFromAsync(buffer, SocketFlags.None, remoteEndPoint, timeout.Token).ConfigureAwait(false);
+                SocketReceiveFromResult result = await _receiveDnsResponseAsync(socket, buffer, remoteEndPoint, timeout.Token).ConfigureAwait(false);
                 return buffer[..result.ReceivedBytes];
             }
             catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)

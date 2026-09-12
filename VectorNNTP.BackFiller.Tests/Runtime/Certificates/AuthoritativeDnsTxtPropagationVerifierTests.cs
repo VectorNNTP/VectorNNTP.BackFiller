@@ -11,11 +11,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Certificates;
 using Xunit;
+using Xunit.Sdk;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 {
     /// <summary>
-    /// Confirms the authoritative dns txt propagation verifier tests behavior.
+    /// Verifies authoritative DNS TXT propagation verifier behavior.
     /// </summary>
     public sealed class AuthoritativeDnsTxtPropagationVerifierTests
     {
@@ -412,7 +413,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
                     throw new InvalidOperationException("unexpected resolver");
                 },
-                resolveHostAddressesAsync: (hostName, _) => Task.FromResult(new[] { authorityAddress }));
+                resolveHostAddressesAsync: (hostName, _) => Task.FromResult(new[] { authorityAddress }),
+                receiveDnsResponseAsync: null,
+                dnsUdpReceiveTimeout: null);
 
             await verifier.WaitForPropagationAsync(fqdn, expectedValue, options, cts.Token);
 
@@ -420,19 +423,221 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
-        /// Builds one deterministic ACME options snapshot for authoritative propagation tests.
+        /// Verifies authoritative nameserver hostname resolution isolates SocketException failures and uses later successful nameserver addresses.
+        /// </summary>
+        [Fact]
+        public async Task WaitForPropagationAsync_WhenAuthoritativeHostResolutionFailsForOneNs_ContinuesWithRemainingAuthorities()
+        {
+            BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(
+                pollTimeoutSeconds: 2,
+                pollIntervalSeconds: 1,
+                quorumRatio: 0.6);
+
+            string fqdn = "_acme-challenge.backfiller01.usenet.ninja";
+            string expectedValue = "expected-token";
+
+            IPAddress authorityA = IPAddress.Parse("203.0.113.51");
+            IPAddress authorityB = IPAddress.Parse("203.0.113.52");
+            int resolvedGoodHostCount = 0;
+            int authorityAQueries = 0;
+            int authorityBQueries = 0;
+
+            AuthoritativeDnsTxtPropagationVerifier verifier = new(
+                TimeProvider.System,
+                NullLogger<AuthoritativeDnsTxtPropagationVerifier>.Instance,
+                resolveSystemNameServers: () => ["192.0.2.2"],
+                sendDnsUdpQueryAsync: (address, request, cancellationToken) =>
+                {
+                    if (address.Equals(IPAddress.Parse("192.0.2.2")))
+                    {
+                        return Task.FromResult(BuildNsResponse("ns-bad.example.net", "ns-good-a.example.net", "ns-good-b.example.net"));
+                    }
+
+                    if (address.Equals(authorityA))
+                    {
+                        authorityAQueries++;
+                        return Task.FromResult(BuildTxtResponse(expectedValue));
+                    }
+
+                    if (address.Equals(authorityB))
+                    {
+                        authorityBQueries++;
+                        return Task.FromResult(BuildTxtResponse(expectedValue));
+                    }
+
+                    throw new InvalidOperationException("unexpected nameserver");
+                },
+                resolveHostAddressesAsync: (hostName, _) =>
+                {
+                    if (string.Equals(hostName, "ns-bad.example.net", StringComparison.Ordinal))
+                    {
+                        throw new SocketException((int)SocketError.HostNotFound);
+                    }
+
+                    if (string.Equals(hostName, "ns-good-a.example.net", StringComparison.Ordinal))
+                    {
+                        resolvedGoodHostCount++;
+                        return Task.FromResult(new[] { authorityA });
+                    }
+
+                    if (string.Equals(hostName, "ns-good-b.example.net", StringComparison.Ordinal))
+                    {
+                        resolvedGoodHostCount++;
+                        return Task.FromResult(new[] { authorityB });
+                    }
+
+                    return Task.FromResult(Array.Empty<IPAddress>());
+                },
+                receiveDnsResponseAsync: null,
+                dnsUdpReceiveTimeout: null);
+
+            await verifier.WaitForPropagationAsync(fqdn, expectedValue, options, CancellationToken.None);
+
+            Assert.Equal(2, resolvedGoodHostCount);
+            Assert.Equal(1, authorityAQueries);
+            Assert.Equal(1, authorityBQueries);
+        }
+
+        /// <summary>
+        /// Verifies verifier-owned receive cancellation is converted to TimeoutException classification and resolver fallback continues.
+        /// </summary>
+        [Fact]
+        public async Task WaitForPropagationAsync_WhenReceiveCancelsFromInternalTimeout_ConvertsToTimeoutAndFallsBack()
+        {
+            BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(
+                pollTimeoutSeconds: 2,
+                pollIntervalSeconds: 1,
+                quorumRatio: 1.0);
+
+            string fqdn = "_acme-challenge.backfiller01.usenet.ninja";
+            string expectedValue = "expected-token";
+            IPAddress authorityAddress = IPAddress.Parse("203.0.113.61");
+
+            int internalTimeoutReceives = 0;
+            int healthyResolverQueries = 0;
+            using CancellationTokenSource callerCts = new();
+
+            AuthoritativeDnsTxtPropagationVerifier verifier = new(
+                TimeProvider.System,
+                NullLogger<AuthoritativeDnsTxtPropagationVerifier>.Instance,
+                resolveSystemNameServers: () => ["127.0.0.1", "192.0.2.2"],
+                sendDnsUdpQueryAsync: null,
+                resolveHostAddressesAsync: (hostName, _) => Task.FromResult(new[] { authorityAddress }),
+                receiveDnsResponseAsync: (socket, buffer, remoteEndPoint, cancellationToken) =>
+                {
+                    if (remoteEndPoint is not IPEndPoint endpoint)
+                    {
+                        throw new XunitException("Expected IPEndPoint remote endpoint.");
+                    }
+
+                    if (endpoint.Address.Equals(IPAddress.Loopback))
+                    {
+                        internalTimeoutReceives++;
+                        TaskCompletionSource<SocketReceiveFromResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
+                        return new ValueTask<SocketReceiveFromResult>(completion.Task);
+                    }
+
+                    if (endpoint.Address.Equals(IPAddress.Parse("192.0.2.2")))
+                    {
+                        healthyResolverQueries++;
+                        return new ValueTask<SocketReceiveFromResult>(new SocketReceiveFromResult
+                        {
+                            RemoteEndPoint = endpoint,
+                            ReceivedBytes = CopyPayload(buffer, BuildNsResponse("ns-good.example.net")),
+                        });
+                    }
+
+                    if (endpoint.Address.Equals(authorityAddress))
+                    {
+                        return new ValueTask<SocketReceiveFromResult>(new SocketReceiveFromResult
+                        {
+                            RemoteEndPoint = endpoint,
+                            ReceivedBytes = CopyPayload(buffer, BuildTxtResponse(expectedValue)),
+                        });
+                    }
+
+                    throw new InvalidOperationException("unexpected receive endpoint");
+                },
+                dnsUdpReceiveTimeout: TimeSpan.Zero);
+
+            await verifier.WaitForPropagationAsync(fqdn, expectedValue, options, callerCts.Token);
+
+            Assert.Equal(1, internalTimeoutReceives);
+            Assert.Equal(1, healthyResolverQueries);
+            Assert.False(callerCts.IsCancellationRequested);
+        }
+
+        /// <summary>
+        /// Verifies when every authoritative probe fails the operation ends with overall propagation timeout, not transport exception leakage.
+        /// </summary>
+        [Fact]
+        public async Task WaitForPropagationAsync_WhenAllAuthoritiesFail_ThrowsOverallPropagationTimeout()
+        {
+            BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(
+                pollTimeoutSeconds: 1,
+                pollIntervalSeconds: 1,
+                quorumRatio: 0.6);
+
+            string fqdn = "_acme-challenge.backfiller01.usenet.ninja";
+            string expectedValue = "expected-token";
+
+            IPAddress authorityA = IPAddress.Parse("203.0.113.71");
+            IPAddress authorityB = IPAddress.Parse("2001:db8::71");
+            int authorityFailures = 0;
+
+            AuthoritativeDnsTxtPropagationVerifier verifier = new(
+                TimeProvider.System,
+                NullLogger<AuthoritativeDnsTxtPropagationVerifier>.Instance,
+                resolveSystemNameServers: () => ["192.0.2.2"],
+                sendDnsUdpQueryAsync: (address, request, cancellationToken) =>
+                {
+                    if (address.Equals(IPAddress.Parse("192.0.2.2")))
+                    {
+                        return Task.FromResult(BuildNsResponse("ns-a.example.net", "ns-b.example.net"));
+                    }
+
+                    if (address.Equals(authorityA))
+                    {
+                        authorityFailures++;
+                        throw new SocketException((int)SocketError.NetworkUnreachable);
+                    }
+
+                    if (address.Equals(authorityB))
+                    {
+                        authorityFailures++;
+                        throw new TimeoutException("simulated per-authority timeout");
+                    }
+
+                    throw new InvalidOperationException("unexpected nameserver");
+                },
+                resolveHostAddressesAsync: (hostName, _) => Task.FromResult(hostName switch
+                {
+                    "ns-a.example.net" => new[] { authorityA },
+                    "ns-b.example.net" => new[] { authorityB },
+                    _ => Array.Empty<IPAddress>(),
+                }),
+                receiveDnsResponseAsync: null,
+                dnsUdpReceiveTimeout: null);
+
+            TimeoutException exception = await Assert.ThrowsAsync<TimeoutException>(
+                () => verifier.WaitForPropagationAsync(fqdn, expectedValue, options, CancellationToken.None));
+
+            Assert.Contains("Authoritative DNS TXT propagation timeout exceeded", exception.Message, StringComparison.Ordinal);
+            Assert.True(authorityFailures >= 2);
+        }
+
+        /// <summary>
+        /// Builds one deterministic ACME options snapshot for authoritative DNS propagation tests.
         /// </summary>
         private static BackFillerLetsEncryptRuntimeOptions CreateLetsEncryptOptions(int pollTimeoutSeconds, int pollIntervalSeconds, double quorumRatio)
         {
-            string tempDir = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-DnsVerifierTests-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(tempDir);
-
             return new BackFillerLetsEncryptRuntimeOptions(
                 CanonicalCertificateSubjectName: "backfiller01.usenet.ninja",
                 AcmeAccountEmail: "security@example.com",
-                AcmeAccountKeyPemPath: Path.Combine(tempDir, "account.key"),
-                CertificatePfxPath: Path.Combine(tempDir, "certificate.pfx"),
-                CertificatePrivateKeyPemPath: Path.Combine(tempDir, "certificate.key"),
+                AcmeAccountKeyPemPath: "account.key",
+                CertificatePfxPath: "certificate.pfx",
+                CertificatePrivateKeyPemPath: "certificate.key",
                 PfxExportPassword: "UnitTest-PfxPassword-123!",
                 RenewBeforeExpiryDays: 7,
                 RenewalCheckIntervalHours: 6,
@@ -551,6 +756,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             stream.WriteByte((byte)((value >> 16) & 0xFF));
             stream.WriteByte((byte)((value >> 8) & 0xFF));
             stream.WriteByte((byte)(value & 0xFF));
+        }
+
+        /// <summary>
+        /// Copies one wire-format DNS payload into the receive buffer and returns the received-byte count.
+        /// </summary>
+        private static int CopyPayload(Memory<byte> destination, byte[] payload)
+        {
+            payload.CopyTo(destination);
+            return payload.Length;
         }
     }
 }
