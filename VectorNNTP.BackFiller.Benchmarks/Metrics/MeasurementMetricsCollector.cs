@@ -160,10 +160,6 @@ internal sealed class MeasurementMetrics
     /// Gets or sets the _measurementEndUtcTicks.
     /// </summary>
     private long _measurementEndUtcTicks;
-    /// <summary>
-    /// Gets or sets the _measurementBoundarySet.
-    /// </summary>
-    private long _measurementBoundarySet;
 
     /// <summary>
     /// Gets or sets the _provenanceAggregates.
@@ -438,12 +434,12 @@ internal sealed class MeasurementMetrics
     /// <summary>
     /// Implements the on Admitted contract.
     /// </summary>
-    internal void OnAdmitted(int bytes, long dequeuedTick)
+    internal void OnAdmitted(int bytes, long admittedTick)
     {
         long admittedCount = Interlocked.Increment(ref _admittedCount);
         Interlocked.Add(ref _admittedBytes, bytes);
 
-        if (!IsPostMeasurementTick(dequeuedTick))
+        if (!IsPostMeasurementTick(admittedTick))
         {
             Interlocked.Increment(ref _admittedWithinWindowCount);
             Interlocked.Add(ref _admittedWithinWindowBytes, bytes);
@@ -478,7 +474,7 @@ internal sealed class MeasurementMetrics
             Interlocked.Add(ref _submittedWithinWindowBytes, bytes);
         }
 
-        long completionTick = completionTickOverride ?? Stopwatch.GetTimestamp();
+        long completionTick = completionTickOverride ?? publishEndTick;
         bool postMeasurementCompletion = IsPostMeasurementTick(completionTick);
 
         if (publishResult.Status == TransitPublishStatus.Accepted)
@@ -803,7 +799,6 @@ internal sealed class MeasurementMetrics
     {
         Interlocked.Exchange(ref _measurementEndUtcTicks, measurementEndUtc.UtcTicks);
         Interlocked.Exchange(ref _measurementEndStopwatchTick, measurementEndStopwatchTick);
-        Interlocked.Exchange(ref _measurementBoundarySet, 1);
     }
 
     /// <summary>
@@ -822,12 +817,6 @@ internal sealed class MeasurementMetrics
     internal bool IsPostMeasurementTick(long eventStopwatchTick)
     {
         if (eventStopwatchTick <= 0)
-        {
-            return false;
-        }
-
-        bool boundaryDefined = Interlocked.Read(ref _measurementBoundarySet) == 1;
-        if (!boundaryDefined)
         {
             return false;
         }
@@ -1078,9 +1067,8 @@ internal sealed class MeasurementMetrics
         }
 
         TransitPublishProvenance provenance = NormalizeProvenance(publishResult);
-        bool boundaryDefined = Interlocked.Read(ref _measurementBoundarySet) == 1;
-        long measurementEndTick = boundaryDefined ? Interlocked.Read(ref _measurementEndStopwatchTick) : 0;
-        bool isPostMeasurement = boundaryDefined && completionTick > measurementEndTick;
+        long measurementEndTick = Interlocked.Read(ref _measurementEndStopwatchTick);
+        bool isPostMeasurement = measurementEndTick > 0 && completionTick > measurementEndTick;
 
         _provenanceAggregates[(int)provenance].Record(completionTick, isPostMeasurement);
 

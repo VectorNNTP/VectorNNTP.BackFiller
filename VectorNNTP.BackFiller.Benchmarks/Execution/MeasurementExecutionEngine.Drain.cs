@@ -37,8 +37,8 @@ internal static partial class MeasurementExecutionEngine
     {
         DateTimeOffset measurementEndUtc = DateTimeOffset.UtcNow;
         long measurementEndTick = Stopwatch.GetTimestamp();
-        Console.WriteLine($"Measurement end UTC:   {measurementEndUtc:O}");
         metrics.MarkMeasurementBoundary(measurementEndUtc, measurementEndTick);
+        Console.WriteLine($"Measurement end UTC:   {measurementEndUtc:O}");
         TransitPublisher.MarkSubmissionPumpFaultMeasurementWindow(measurementStartStopwatchTick: 0, measurementEndStopwatchTick: measurementEndTick, measurementBoundaryObserved: true);
 
         producerStopCts.Cancel();
@@ -125,8 +125,8 @@ internal static partial class MeasurementExecutionEngine
             MeasurementStartStopwatchTick: measurementStartTick,
             MeasurementEndUtc: measurementEndUtc,
             MeasurementEndStopwatchTick: measurementEndTick,
-            DrainStartUtc: postMeasurementPreDrainUtc,
-            DrainStartStopwatchTick: postMeasurementPreDrainTick,
+            DrainStartUtc: measurementEndUtc,
+            DrainStartStopwatchTick: measurementEndTick,
             DrainCompletionUtc: postDrainFinalUtc,
             DrainCompletionStopwatchTick: postDrainFinalTick);
 

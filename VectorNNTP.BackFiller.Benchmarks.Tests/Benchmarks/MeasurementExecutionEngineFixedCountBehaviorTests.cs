@@ -6,6 +6,10 @@
 // Focused tests for fixed-count dispatch behavior across concurrent dispatchers.
 
 using System.Diagnostics;
+using System.Net;
+using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -26,7 +30,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             const int dispatcherCount = 8;
 
             string[] messageIds = [.. Enumerable.Range(1, totalQueued).Select(static i => $"<fixed-count-{i}@benchmark.usenet.ninja>")];
-            byte[] payload = [(byte)'D', (byte)'\n'];
+            byte[] payload = Encoding.ASCII.GetBytes("X\r\nY\r\n");
+
+            await using BenchmarkDevNullTransitServer server = await BenchmarkDevNullTransitServer.StartAsync(IPAddress.Loopback, port: 0);
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
 
             using BoundedArticleQueue queue = new(maxArticles: totalQueued, maxResidentBytes: 16L * 1024L * 1024L);
             MeasurementMetrics metrics = new(articleBytes: payload.Length);
@@ -48,7 +56,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             FixedArticleLimiter limiter = new(targetAdmitted);
             TaskCompletionSource finalReservationRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource contendersStaged = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            int publishCalls = 0;
             int waitingAtReservationGate = 0;
 
             ValueTask ReservationGateAsync()
@@ -67,40 +74,15 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 return new ValueTask(finalReservationRelease.Task);
             }
 
-            ValueTask<TransitPublishResult> PublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
-            {
-                _ = articlePayload;
-                _ = cancellationToken;
-                _ = Interlocked.Increment(ref publishCalls);
-
-                long tick = Stopwatch.GetTimestamp();
-                return ValueTask.FromResult(new TransitPublishResult(
-                    MessageId: messageId,
-                    Status: TransitPublishStatus.Accepted,
-                    ResponseCode: 239,
-                    ResponseText: "ok",
-                    T0PublishAsyncEnterTick: tick,
-                    T1DispatcherAssignedTick: tick,
-                    T2SocketWriteBeginTick: tick,
-                    T3SocketWriteEndTick: tick,
-                    T4ResponseAvailableTick: tick,
-                    T5ResponseParsedTick: tick,
-                    T6ResponseCorrelatedTick: tick,
-                    T7PublishAsyncCompleteTick: tick,
-                    Provenance: TransitPublishProvenance.OtherOrUnknown,
-                    ProvenanceTick: tick));
-            }
-
             Task[] dispatchers = [.. Enumerable.Range(0, dispatcherCount)
                 .Select(_ => Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(
                     queue,
-                    publisher: null,
+                    publisher,
                     metrics,
                     workload,
                     fixedCountAdmissionLimiter: limiter,
                     cancellationToken: CancellationToken.None,
                     enableForensicDiagnostics: false,
-                    publishAsyncOverride: PublishAsync,
                     reservationGateAsync: ReservationGateAsync)))];
 
             using CancellationTokenSource waitTimeout = new(TimeSpan.FromSeconds(10));
@@ -117,11 +99,34 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             MeasurementSnapshot snapshot = metrics.Snapshot();
 
-            Assert.Equal(targetAdmitted, publishCalls);
             Assert.Equal(targetAdmitted, snapshot.AdmittedCount);
             Assert.Equal(targetAdmitted, snapshot.CompletedCount);
-            Assert.Equal(targetAdmitted, snapshot.AcceptedCount);
-            Assert.True(publishCalls <= targetAdmitted);
+            Assert.Equal(targetAdmitted, snapshot.SubmittedCount);
+            Assert.True(snapshot.SubmittedCount <= targetAdmitted);
+            Assert.True(server.AcceptedArticles <= targetAdmitted);
+        }
+
+            private static TransitPublisher CreatePublisher(int port, int connectionPoolSize, int perConnectionPipelineDepth)
+            {
+                BackFillerRuntimeOptions options = new(
+                    CanonicalBackFillerFqdn: "bf.example.com",
+                    BackFillerId: 42,
+                    CanonicalDnsSuffix: "example.com",
+                    ValidatedLogDirectory: "C:\\logs",
+                    ValidatedCertificateDirectory: "C:\\certs",
+                    RabbitMqHosts: ["localhost"],
+                    RabbitMqPort: 5672,
+                    RabbitMqEnableSsl: false,
+                    TransitServerHost: IPAddress.Loopback.ToString(),
+                    TransitServerPort: port,
+                    TransitServerUseSsl: false,
+                    ShutdownGracePeriodSeconds: 60,
+                    ShutdownDrainQueuedWork: true,
+                    ShutdownFinishActiveArticles: true,
+                    RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
+                    WriteBatchCoalesceMicroseconds: 250);
+
+                return new TransitPublisher(options, TimeProvider.System, NullLogger<TransitPublisher>.Instance, connectionPoolSize, perConnectionPipelineDepth);
+            }
         }
     }
-}

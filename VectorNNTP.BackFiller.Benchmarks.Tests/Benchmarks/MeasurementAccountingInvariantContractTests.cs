@@ -6,6 +6,11 @@
 // Focused tests for measurement accounting invariants and mutation guards.
 
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Transit;
 using VectorNNTP.BackFiller.Benchmarks;
 using Xunit;
@@ -22,7 +27,9 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         {
             const int articleCount = 7;
             string[] messageIds = [.. Enumerable.Range(1, articleCount).Select(static i => $"<throw-{i}@benchmark.usenet.ninja>")];
-            byte[] payload = [(byte)'X', (byte)'\n'];
+            byte[] payload = [(byte)'X'];
+
+            await using TransitPublisher publisher = CreatePublisher(port: 1190, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
 
             using BoundedArticleQueue queue = new(maxArticles: 64, maxResidentBytes: 16L * 1024L * 1024L);
             MeasurementMetrics metrics = new(articleBytes: payload.Length);
@@ -36,14 +43,6 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             }
 
             queue.StopAdmission();
-
-            ValueTask<TransitPublishResult> ThrowingPublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
-            {
-                _ = messageId;
-                _ = articlePayload;
-                _ = cancellationToken;
-                throw new InvalidOperationException("forced publish failure");
-            }
 
             Dictionary<string, int> terminalCounts = new(StringComparer.Ordinal);
             Dictionary<string, TransitPublishStatus> terminalStatusByMessageId = new(StringComparer.Ordinal);
@@ -61,8 +60,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Task[] dispatchers =
             [
-                Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, null, metrics, workload, null, CancellationToken.None, false, ThrowingPublishAsync, terminalObserver: ObserveTerminal)),
-                Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, null, metrics, workload, null, CancellationToken.None, false, ThrowingPublishAsync, terminalObserver: ObserveTerminal))
+                Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, null, CancellationToken.None, false, terminalObserver: ObserveTerminal)),
+                Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, null, CancellationToken.None, false, terminalObserver: ObserveTerminal))
             ];
 
             await Task.WhenAll(dispatchers);
@@ -89,7 +88,11 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         {
             const int articleCount = 5;
             string[] messageIds = [.. Enumerable.Range(1, articleCount).Select(static i => $"<cancel-{i}@benchmark.usenet.ninja>")];
-            byte[] payload = [(byte)'Y', (byte)'\n'];
+            byte[] payload = Encoding.ASCII.GetBytes("Y\r\n");
+
+            await using CancellationBlockingTransitServer server = await CancellationBlockingTransitServer.StartAsync();
+            await using TransitPublisher publisher = CreatePublisher(server.Port, connectionPoolSize: 1, perConnectionPipelineDepth: 1);
+            await publisher.InitializeAsync(CancellationToken.None);
 
             using BoundedArticleQueue queue = new(maxArticles: 64, maxResidentBytes: 16L * 1024L * 1024L);
             MeasurementMetrics metrics = new(articleBytes: payload.Length);
@@ -104,15 +107,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             queue.StopAdmission();
 
-            ValueTask<TransitPublishResult> CanceledPublishAsync(string messageId, ReadOnlyMemory<byte> articlePayload, CancellationToken cancellationToken)
-            {
-                _ = messageId;
-                _ = articlePayload;
-                throw new OperationCanceledException("forced cancel", cancellationToken);
-            }
-
             using CancellationTokenSource cts = new();
-
             Dictionary<string, int> terminalCounts = new(StringComparer.Ordinal);
             Dictionary<string, TransitPublishStatus> terminalStatusByMessageId = new(StringComparer.Ordinal);
             object gate = new();
@@ -127,19 +122,25 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 }
             }
 
-            Task[] dispatchers =
-            [
-                Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, null, metrics, workload, null, cts.Token, false, CanceledPublishAsync, terminalObserver: ObserveTerminal)),
-                Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, null, metrics, workload, null, cts.Token, false, CanceledPublishAsync, terminalObserver: ObserveTerminal))
-            ];
+            Task[] dispatchers = [.. Enumerable.Range(0, articleCount)
+                .Select(_ => Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, null, cts.Token, false, terminalObserver: ObserveTerminal)))];
 
-            await Task.WhenAll(dispatchers);
+            await metrics.WaitForAdmittedCountAsync(articleCount, CancellationToken.None);
+            cts.Cancel();
+            try
+            {
+                await Task.WhenAll(dispatchers);
+            }
+            catch (OperationCanceledException)
+            {
+            }
 
             MeasurementSnapshot snapshot = metrics.Snapshot();
 
             Assert.Equal(articleCount, snapshot.AdmittedCount);
             Assert.Equal(articleCount, snapshot.CompletedCount);
             Assert.Equal(articleCount, snapshot.CanceledCount);
+            Assert.Equal(articleCount, snapshot.AmbiguousCount);
             Assert.True(snapshot.CompletedCount <= snapshot.AdmittedCount);
 
             Assert.Equal(articleCount, terminalCounts.Count);
@@ -193,11 +194,135 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Equal(1, result.AcceptedWithinWindowArticles);
             Assert.Equal(1, result.AcceptedPostMeasurementArticles);
             Assert.Equal(1, result.RejectedArticles);
-            Assert.Equal(result.CompletedArticles, result.AcceptedArticles + result.RejectedArticles + result.AmbiguousArticles + result.FailedArticles + result.UnavailableArticles + result.CanceledArticles);
+            Assert.Equal(result.CompletedArticles, result.AcceptedArticles + result.RejectedArticles + result.AmbiguousArticles);
             Assert.True(result.AcceptedArticles <= result.CompletedArticles);
             Assert.True(result.RejectedArticles <= result.CompletedArticles);
             Assert.True(result.AmbiguousArticles <= result.CompletedArticles);
             Assert.True(result.CompletedArticles <= result.AdmittedArticles);
+        }
+
+        private static TransitPublisher CreatePublisher(int port, int connectionPoolSize, int perConnectionPipelineDepth)
+        {
+            BackFillerRuntimeOptions options = new(
+                CanonicalBackFillerFqdn: "bf.example.com",
+                BackFillerId: 42,
+                CanonicalDnsSuffix: "example.com",
+                ValidatedLogDirectory: "C:\\logs",
+                ValidatedCertificateDirectory: "C:\\certs",
+                RabbitMqHosts: ["localhost"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: false,
+                TransitServerHost: IPAddress.Loopback.ToString(),
+                TransitServerPort: port,
+                TransitServerUseSsl: false,
+                ShutdownGracePeriodSeconds: 60,
+                ShutdownDrainQueuedWork: true,
+                ShutdownFinishActiveArticles: true,
+                RabbitMqMaximumShutdownDrainTimeoutSeconds: 120,
+                WriteBatchCoalesceMicroseconds: 250);
+
+            return new TransitPublisher(options, TimeProvider.System, NullLogger<TransitPublisher>.Instance, connectionPoolSize, perConnectionPipelineDepth);
+        }
+
+        private sealed class CancellationBlockingTransitServer : IAsyncDisposable
+        {
+            private readonly TcpListener _listener;
+            private readonly CancellationTokenSource _cts = new();
+            private readonly Task _sessionTask;
+
+            private CancellationBlockingTransitServer(TcpListener listener)
+            {
+                _listener = listener;
+                _sessionTask = Task.Run(RunSingleSessionAsync);
+            }
+
+            internal int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+            internal static Task<CancellationBlockingTransitServer> StartAsync()
+            {
+                TcpListener listener = new(IPAddress.Loopback, 0);
+                listener.Start();
+                return Task.FromResult(new CancellationBlockingTransitServer(listener));
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                _cts.Cancel();
+                _listener.Stop();
+                try
+                {
+                    await _sessionTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+                catch (SocketException)
+                {
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+
+            private async Task RunSingleSessionAsync()
+            {
+                using TcpClient client = await _listener.AcceptTcpClientAsync(_cts.Token).ConfigureAwait(false);
+                await using NetworkStream stream = client.GetStream();
+
+                await WriteLineAsync(stream, "200 transit ready", _cts.Token).ConfigureAwait(false);
+                await ExpectCommandAsync(stream, "CAPABILITIES", _cts.Token).ConfigureAwait(false);
+                await WriteLineAsync(stream, "101 Capability list:", _cts.Token).ConfigureAwait(false);
+                await WriteLineAsync(stream, "STREAMING", _cts.Token).ConfigureAwait(false);
+                await WriteLineAsync(stream, ".", _cts.Token).ConfigureAwait(false);
+                await ExpectCommandAsync(stream, "MODE STREAM", _cts.Token).ConfigureAwait(false);
+                await WriteLineAsync(stream, "203 Streaming permitted", _cts.Token).ConfigureAwait(false);
+
+                TaskCompletionSource holdOpen = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                await holdOpen.Task.WaitAsync(_cts.Token).ConfigureAwait(false);
+            }
+
+            private static async Task<string> ReadLineAsync(Stream stream, CancellationToken cancellationToken)
+            {
+                List<byte> buffer = [];
+                while (true)
+                {
+                    byte[] one = new byte[1];
+                    int read = await stream.ReadAsync(one, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        throw new EndOfStreamException("Stream closed while reading line.");
+                    }
+
+                    if (one[0] == (byte)'\n')
+                    {
+                        break;
+                    }
+
+                    buffer.Add(one[0]);
+                }
+
+                if (buffer.Count > 0 && buffer[^1] == (byte)'\r')
+                {
+                    buffer.RemoveAt(buffer.Count - 1);
+                }
+
+                return Encoding.ASCII.GetString([.. buffer]);
+            }
+
+            private static async Task ExpectCommandAsync(Stream stream, string expected, CancellationToken cancellationToken)
+            {
+                string line = await ReadLineAsync(stream, cancellationToken).ConfigureAwait(false);
+                Assert.Equal(expected, line);
+            }
+
+            private static Task WriteLineAsync(Stream stream, string line, CancellationToken cancellationToken)
+            {
+                byte[] bytes = Encoding.ASCII.GetBytes(line + "\r\n");
+                return stream.WriteAsync(bytes, cancellationToken).AsTask();
+            }
         }
     }
 }
