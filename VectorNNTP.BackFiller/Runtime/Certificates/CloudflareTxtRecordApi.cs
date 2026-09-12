@@ -79,14 +79,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             ArgumentException.ThrowIfNullOrWhiteSpace(recordName);
             ArgumentException.ThrowIfNullOrWhiteSpace(recordValue);
 
-            NewDnsRecord newDnsRecord = new()
-            {
-                Name = recordName,
-                Type = DnsRecordType.Txt,
-                Content = recordValue,
-                Proxied = false,
-                Ttl = 60,
-            };
+            NewDnsRecord newDnsRecord = CreateAcmeTxtRecordRequest(recordName, recordValue);
 
             CloudFlareResult<DnsRecord> addResult;
             try
@@ -113,6 +106,29 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 Tags: addResult.Result.Tags is null ? [] : [.. addResult.Result.Tags],
                 CreatedDateUtc: addResult.Result.CreatedDate,
                 ModifiedDateUtc: addResult.Result.ModifiedDate);
+        }
+
+        /// <summary>
+        /// Builds the provider create-request payload for one BackFiller ACME DNS-01 TXT record.
+        /// </summary>
+        /// <param name="recordName">Fully qualified TXT record host name.</param>
+        /// <param name="recordValue">TXT value required by the current ACME challenge.</param>
+        /// <returns>The Cloudflare provider request payload with canonical ownership metadata.</returns>
+        internal static NewDnsRecord CreateAcmeTxtRecordRequest(string recordName, string recordValue)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(recordName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(recordValue);
+
+            return new NewDnsRecord
+            {
+                Name = recordName,
+                Type = DnsRecordType.Txt,
+                Content = recordValue,
+                Proxied = false,
+                Ttl = 60,
+                Comment = AcmeDnsTxtRecordOwnership.OwnershipComment,
+                Tags = [AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag],
+            };
         }
 
         /// <inheritdoc/>

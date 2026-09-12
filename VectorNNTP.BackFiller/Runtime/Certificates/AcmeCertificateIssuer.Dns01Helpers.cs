@@ -81,12 +81,15 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Determines whether one TXT record is safe to treat as BackFiller-owned ACME challenge state.
         /// </summary>
         /// <remarks>
-        /// Ownership is inferred conservatively from metadata that the implementation itself can safely control.
-        /// Unrelated TXT values are never deleted.
+        /// Deletion authority is granted only when record identity (name and TXT type) and the canonical BackFiller
+        /// ownership tag both match exactly. Human-readable comments are informational and never authorize deletes.
         /// </remarks>
         /// <param name="record">TXT record candidate returned from Cloudflare.</param>
         /// <param name="recordName">Fully qualified ACME TXT host name expected for the challenge.</param>
-        /// <returns><see langword="true"/> when the record name/type match and BackFiller ownership markers are present.</returns>
+        /// <returns>
+        /// <see langword="true"/> when the record name/type match and the canonical ownership tag is present as an
+        /// exact tag value; otherwise <see langword="false"/>.
+        /// </returns>
         private static bool IsOwnedAcmeChallengeRecord(CloudflareTxtRecordInfo record, string recordName)
         {
             ArgumentNullException.ThrowIfNull(record);
@@ -97,20 +100,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 return false;
             }
 
-            if (record.Comment is not null && record.Comment.Contains("BackFiller", StringComparison.OrdinalIgnoreCase))
+            IReadOnlyList<string>? tags = record.Tags;
+            if (tags is null)
             {
-                return true;
+                return false;
             }
 
-            if (record.Tags is not null)
+            for (int index = 0; index < tags.Count; index++)
             {
-                for (int index = 0; index < record.Tags.Count; index++)
+                if (string.Equals(tags[index], AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag, StringComparison.Ordinal))
                 {
-                    if (record.Tags[index].Contains("BackFiller", StringComparison.OrdinalIgnoreCase) ||
-                        record.Tags[index].Contains("acme", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
 

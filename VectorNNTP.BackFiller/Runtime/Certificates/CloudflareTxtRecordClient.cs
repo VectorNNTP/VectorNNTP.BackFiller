@@ -125,6 +125,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 Content = recordValue,
                 Proxied = false,
                 Ttl = 60,
+                Comment = AcmeDnsTxtRecordOwnership.OwnershipComment,
+                Tags = [AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag],
             };
 
             CloudFlareResult<DnsRecord> addResult;
