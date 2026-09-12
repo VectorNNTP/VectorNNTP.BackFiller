@@ -135,10 +135,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 [
                     CreateRecord("suffix", RecoveryScenario.RecordName, "old-1", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment + "-extra"),
                     CreateRecord("prefix", RecoveryScenario.RecordName, "old-2", tags: [], comment: "legacy-" + AcmeDnsTxtRecordOwnership.OwnershipComment),
-                    CreateRecord("legacy-invalid", RecoveryScenario.RecordName, "old-3", tags: [], comment: "vectornntp.backfiller.acme-dns01"),
-                    CreateRecord("generic-acme", RecoveryScenario.RecordName, "old-4", tags: [], comment: "acme"),
-                    CreateRecord("backfiller-only", RecoveryScenario.RecordName, "old-5", tags: [], comment: "BackFiller"),
-                    CreateRecord("other-app", RecoveryScenario.RecordName, "old-6", tags: [], comment: "OtherApp:acme-dns01"),
+                    CreateRecord("different-case", RecoveryScenario.RecordName, "old-3", tags: [], comment: "vectornntp.backfiller:acme-dns01"),
+                    CreateRecord("legacy-invalid", RecoveryScenario.RecordName, "old-4", tags: [], comment: "vectornntp.backfiller.acme-dns01"),
+                    CreateRecord("generic-acme", RecoveryScenario.RecordName, "old-5", tags: [], comment: "acme"),
+                    CreateRecord("backfiller-only", RecoveryScenario.RecordName, "old-6", tags: [], comment: "BackFiller"),
+                    CreateRecord("other-app", RecoveryScenario.RecordName, "old-7", tags: [], comment: "OtherApp:acme-dns01"),
+                    CreateRecord("canonical-tag-only", RecoveryScenario.RecordName, "old-8", tags: ["vectornntp_backfiller:acme-dns01"], comment: null),
+                    CreateRecord("empty-comment", RecoveryScenario.RecordName, "old-9", tags: [], comment: string.Empty),
                     CreateRecord("exact-current", RecoveryScenario.RecordName, currentValue, tags: ["external"], comment: "external reuse")
                 ],
                 shouldFailValidation: false,
@@ -151,11 +154,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             Assert.Equal(0, result.Api.DeleteCallCount);
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "suffix", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "prefix", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "different-case", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "legacy-invalid", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "generic-acme", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "backfiller-only", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "other-app", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "canonical-tag-only", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "empty-comment", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "exact-current", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Verifies canonical comment ownership does not authorize deletion when record identity constraints fail.
+        /// </summary>
+        [Fact]
+        public async Task IssueCertificateAsync_WhenRecordIdentityDoesNotMatch_PreservesCanonicalCommentRecords()
+        {
+            RecoveryScenarioResult result = await ExecuteScenarioAsync(
+                initialRecords:
+                [
+                    CreateRecord("wrong-name", "_acme-challenge.other.example.net", "old-name", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("wrong-type", RecoveryScenario.RecordName, "old-type", type: DnsRecordType.A, tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment)
+                ],
+                shouldFailValidation: false,
+                shouldFailFinalize: false,
+                throwOnDelete: false,
+                cancellationToken: CancellationToken.None);
+
+            Assert.True(result.WasSuccessful);
+            Assert.Equal(1, result.Api.AddCallCount);
+            Assert.Equal(1, result.Api.DeleteCallCount);
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "wrong-name", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "wrong-type", StringComparison.Ordinal));
         }
 
         /// <summary>
