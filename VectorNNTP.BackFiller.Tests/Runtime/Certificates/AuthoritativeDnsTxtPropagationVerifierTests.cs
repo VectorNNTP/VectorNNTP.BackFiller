@@ -569,6 +569,70 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
+        /// Verifies caller cancellation during default DNS UDP receive propagates OperationCanceledException and does not fall back to another resolver.
+        /// </summary>
+        [Fact]
+        public async Task WaitForPropagationAsync_WhenCallerCancelsDuringDefaultDnsReceive_ThrowsOperationCanceledException()
+        {
+            BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(
+                pollTimeoutSeconds: 2,
+                pollIntervalSeconds: 1,
+                quorumRatio: 1.0);
+
+            string fqdn = "_acme-challenge.backfiller01.usenet.ninja";
+            string expectedValue = "expected-token";
+            TaskCompletionSource receiveEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            int resolver2ReceiveCalls = 0;
+
+            using CancellationTokenSource callerCts = new();
+
+            AuthoritativeDnsTxtPropagationVerifier verifier = new(
+                TimeProvider.System,
+                NullLogger<AuthoritativeDnsTxtPropagationVerifier>.Instance,
+                resolveSystemNameServers: () => ["127.0.0.1", "192.0.2.2"],
+                sendDnsUdpQueryAsync: null,
+                resolveHostAddressesAsync: (hostName, cancellationToken) => Task.FromResult(new[] { IPAddress.Parse("203.0.113.80") }),
+                receiveDnsResponseAsync: (socket, buffer, remoteEndPoint, cancellationToken) =>
+                {
+                    if (remoteEndPoint is not IPEndPoint endPoint)
+                    {
+                        throw new XunitException("Expected IPEndPoint remote endpoint.");
+                    }
+
+                    if (endPoint.Address.Equals(IPAddress.Loopback))
+                    {
+                        _ = receiveEntered.TrySetResult();
+                        TaskCompletionSource<SocketReceiveFromResult> blockedReceive = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        cancellationToken.Register(() => blockedReceive.TrySetCanceled(cancellationToken));
+                        return new ValueTask<SocketReceiveFromResult>(blockedReceive.Task);
+                    }
+
+                    if (endPoint.Address.Equals(IPAddress.Parse("192.0.2.2")))
+                    {
+                        resolver2ReceiveCalls++;
+                        return new ValueTask<SocketReceiveFromResult>(new SocketReceiveFromResult
+                        {
+                            RemoteEndPoint = endPoint,
+                            ReceivedBytes = CopyPayload(buffer, BuildNsResponse("ns-unused.example.net")),
+                        });
+                    }
+
+                    throw new InvalidOperationException("unexpected receive endpoint");
+                },
+                dnsUdpReceiveTimeout: TimeSpan.FromSeconds(30));
+
+            Task verificationTask = verifier.WaitForPropagationAsync(fqdn, expectedValue, options, callerCts.Token);
+            await receiveEntered.Task;
+            callerCts.Cancel();
+
+            OperationCanceledException exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => verificationTask);
+            Assert.IsType<TaskCanceledException>(exception);
+            Assert.IsNotType<TimeoutException>(exception);
+            Assert.True(callerCts.IsCancellationRequested);
+            Assert.Equal(0, resolver2ReceiveCalls);
+        }
+
+        /// <summary>
         /// Verifies when every authoritative probe fails the operation ends with overall propagation timeout, not transport exception leakage.
         /// </summary>
         [Fact]
