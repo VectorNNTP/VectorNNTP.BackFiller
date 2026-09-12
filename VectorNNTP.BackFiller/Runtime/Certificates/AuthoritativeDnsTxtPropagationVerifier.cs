@@ -31,6 +31,31 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         private readonly ILogger<AuthoritativeDnsTxtPropagationVerifier> _logger;
 
         /// <summary>
+        /// Returns recursive resolver addresses used for NS discovery.
+        /// </summary>
+        private readonly Func<string[]> _resolveSystemNameServers;
+
+        /// <summary>
+        /// Sends one DNS UDP query and returns one wire-format response.
+        /// </summary>
+        private readonly Func<IPAddress, byte[], CancellationToken, Task<byte[]>> _sendDnsUdpQueryAsync;
+
+        /// <summary>
+        /// Resolves one nameserver hostname to IP addresses.
+        /// </summary>
+        private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolveHostAddressesAsync;
+
+        /// <summary>
+        /// Receives one DNS UDP response from the configured nameserver endpoint.
+        /// </summary>
+        private readonly Func<Socket, Memory<byte>, EndPoint, CancellationToken, ValueTask<SocketReceiveFromResult>> _receiveDnsResponseAsync;
+
+        /// <summary>
+        /// Internal DNS UDP receive timeout used per query.
+        /// </summary>
+        private readonly TimeSpan _dnsUdpReceiveTimeout;
+
+        /// <summary>
         /// Initializes the authoritative TXT propagation verifier.
         /// </summary>
         /// <param name="timeProvider">Unified time provider.</param>
@@ -38,12 +63,46 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         public AuthoritativeDnsTxtPropagationVerifier(
             TimeProvider timeProvider,
             ILogger<AuthoritativeDnsTxtPropagationVerifier> logger)
+            : this(timeProvider, logger, null, null, null, null, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes the authoritative TXT propagation verifier with optional DNS operation delegates for deterministic
+        /// testing of timeout, fallback, and quorum behavior.
+        /// </summary>
+        /// <param name="timeProvider">Unified time provider.</param>
+        /// <param name="logger">Logger for propagation diagnostics.</param>
+        /// <param name="resolveSystemNameServers">Optional recursive-resolver discovery delegate.</param>
+        /// <param name="sendDnsUdpQueryAsync">Optional DNS UDP transport delegate.</param>
+        /// <param name="resolveHostAddressesAsync">Optional nameserver host-address resolution delegate.</param>
+        /// <param name="receiveDnsResponseAsync">Optional UDP receive delegate used to classify verifier-owned timeout cancellation deterministically.</param>
+        /// <param name="dnsUdpReceiveTimeout">Optional per-query DNS UDP receive timeout. Defaults to five seconds.</param>
+        internal AuthoritativeDnsTxtPropagationVerifier(
+            TimeProvider timeProvider,
+            ILogger<AuthoritativeDnsTxtPropagationVerifier> logger,
+            Func<string[]>? resolveSystemNameServers,
+            Func<IPAddress, byte[], CancellationToken, Task<byte[]>>? sendDnsUdpQueryAsync,
+            Func<string, CancellationToken, Task<IPAddress[]>>? resolveHostAddressesAsync,
+            Func<Socket, Memory<byte>, EndPoint, CancellationToken, ValueTask<SocketReceiveFromResult>>? receiveDnsResponseAsync = null,
+            TimeSpan? dnsUdpReceiveTimeout = null)
         {
             ArgumentNullException.ThrowIfNull(timeProvider);
             ArgumentNullException.ThrowIfNull(logger);
 
+            TimeSpan configuredReceiveTimeout = dnsUdpReceiveTimeout ?? TimeSpan.FromSeconds(5);
+            if (configuredReceiveTimeout < TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(dnsUdpReceiveTimeout), "DNS UDP receive timeout must be non-negative.");
+            }
+
             _timeProvider = timeProvider;
             _logger = logger;
+            _resolveSystemNameServers = resolveSystemNameServers ?? ResolveSystemNameServers;
+            _resolveHostAddressesAsync = resolveHostAddressesAsync ?? Dns.GetHostAddressesAsync;
+            _receiveDnsResponseAsync = receiveDnsResponseAsync ?? ((Socket socket, Memory<byte> buffer, EndPoint remoteEndPoint, CancellationToken cancellationToken) => socket.ReceiveFromAsync(buffer, SocketFlags.None, remoteEndPoint, cancellationToken));
+            _dnsUdpReceiveTimeout = configuredReceiveTimeout;
+            _sendDnsUdpQueryAsync = sendDnsUdpQueryAsync ?? SendDnsUdpQueryAsync;
         }
 
         /// <summary>
@@ -91,6 +150,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 await Task.Delay(initialDelay, cancellationToken).ConfigureAwait(false);
             }
 
+            double quorum = authoritativeNameServers.Count * options.DnsAuthoritativeQuorumRatio;
+            int requiredSuccesses = Math.Max(1, (int)Math.Ceiling(quorum));
+
             while (_timeProvider.GetUtcNow() <= deadline)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -98,28 +160,41 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 int successCount = 0;
                 for (int index = 0; index < authoritativeNameServers.Count; index++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     IPAddress nameServer = authoritativeNameServers[index];
-                    bool matched = await QueryTxtContainsValueAsync(nameServer, normalizedFqdn, expectedTxtValue, cancellationToken).ConfigureAwait(false);
+                    bool matched;
+                    try
+                    {
+                        matched = await QueryTxtContainsValueAsync(nameServer, normalizedFqdn, expectedTxtValue, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (TimeoutException)
+                    {
+                        matched = false;
+                    }
+                    catch (SocketException)
+                    {
+                        matched = false;
+                    }
+
                     if (matched)
                     {
                         successCount++;
-                    }
-                }
+                        if (successCount >= requiredSuccesses)
+                        {
+                            if (_logger.IsEnabled(LogLevel.Information))
+                            {
+                                LogAuthoritativeDnsTxtPropagationVerified(
+                                    _logger,
+                                    normalizedFqdn,
+                                    successCount,
+                                    requiredSuccesses,
+                                    authoritativeNameServers.Count);
+                            }
 
-                double quorum = authoritativeNameServers.Count * options.DnsAuthoritativeQuorumRatio;
-                int requiredSuccesses = Math.Max(1, (int)Math.Ceiling(quorum));
-                if (successCount >= requiredSuccesses)
-                {
-                    if (_logger.IsEnabled(LogLevel.Information))
-                    {
-                        LogAuthoritativeDnsTxtPropagationVerified(
-                            _logger,
-                            normalizedFqdn,
-                            successCount,
-                            requiredSuccesses,
-                            authoritativeNameServers.Count);
+                            return;
+                        }
                     }
-                    return;
                 }
 
                 await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
@@ -157,7 +232,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="fqdn">Normalized challenge host name whose authoritative zone should be discovered.</param>
         /// <param name="cancellationToken">Cancellation token observed while querying recursive resolvers and resolving nameserver host names.</param>
         /// <returns>The discovered authoritative nameserver addresses, or an empty list when discovery fails.</returns>
-        private static async Task<IReadOnlyList<IPAddress>> ResolveAuthoritativeNameServerAddressesAsync(string fqdn, CancellationToken cancellationToken)
+        private async Task<IReadOnlyList<IPAddress>> ResolveAuthoritativeNameServerAddressesAsync(string fqdn, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(fqdn);
 
@@ -179,7 +254,20 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     cancellationToken.ThrowIfCancellationRequested();
 
                     string nsName = nsNames[i];
-                    IPAddress[] hostAddresses = await Dns.GetHostAddressesAsync(nsName, cancellationToken).ConfigureAwait(false);
+                    IPAddress[] hostAddresses;
+                    try
+                    {
+                        hostAddresses = await _resolveHostAddressesAsync(nsName, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (SocketException)
+                    {
+                        continue;
+                    }
+
                     for (int j = 0; j < hostAddresses.Length; j++)
                     {
                         if (hostAddresses[j].AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
@@ -208,13 +296,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="zoneName">Candidate zone name whose NS records should be discovered.</param>
         /// <param name="cancellationToken">Cancellation token observed while querying the recursive resolvers.</param>
         /// <returns>Normalized nameserver host names returned by the first resolver that produces any NS answers.</returns>
-        private static async Task<IReadOnlyList<string>> QueryNsRecordNamesFromSystemResolversAsync(string zoneName, CancellationToken cancellationToken)
+        private async Task<IReadOnlyList<string>> QueryNsRecordNamesFromSystemResolversAsync(string zoneName, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(zoneName);
 
             byte[] request = DnsWireMessageBuilder.BuildQuery(zoneName, DnsRecordTypeCode.Ns);
 
-            string[] systemNameServers = ResolveSystemNameServers();
+            string[] systemNameServers = _resolveSystemNameServers();
             for (int index = 0; index < systemNameServers.Length; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -226,7 +314,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
                 try
                 {
-                    byte[] response = await SendDnsUdpQueryAsync(nameServerAddress, request, cancellationToken).ConfigureAwait(false);
+                    byte[] response = await _sendDnsUdpQueryAsync(nameServerAddress, request, cancellationToken).ConfigureAwait(false);
                     List<string> names = DnsWireMessageParser.ParseNsRecordNames(response);
                     if (names.Count > 0)
                     {
@@ -298,10 +386,10 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="expectedTxtValue">TXT payload expected in the nameserver response.</param>
         /// <param name="cancellationToken">Cancellation token observed while sending and receiving the DNS query.</param>
         /// <returns><see langword="true"/> when the nameserver response contains the expected TXT value.</returns>
-        private static async Task<bool> QueryTxtContainsValueAsync(IPAddress nameServer, string fqdn, string expectedTxtValue, CancellationToken cancellationToken)
+        private async Task<bool> QueryTxtContainsValueAsync(IPAddress nameServer, string fqdn, string expectedTxtValue, CancellationToken cancellationToken)
         {
             byte[] request = DnsWireMessageBuilder.BuildQuery(fqdn, DnsRecordTypeCode.Txt);
-            byte[] response = await SendDnsUdpQueryAsync(nameServer, request, cancellationToken).ConfigureAwait(false);
+            byte[] response = await _sendDnsUdpQueryAsync(nameServer, request, cancellationToken).ConfigureAwait(false);
             List<string> txtValues = DnsWireMessageParser.ParseTxtValues(response);
             return txtValues.Any(value => string.Equals(value, expectedTxtValue, StringComparison.Ordinal));
         }
@@ -317,7 +405,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <param name="request">Wire-format DNS query bytes.</param>
         /// <param name="cancellationToken">Cancellation token observed while sending and receiving.</param>
         /// <returns>The received DNS response bytes.</returns>
-        private static async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
+        private async Task<byte[]> SendDnsUdpQueryAsync(IPAddress nameServer, byte[] request, CancellationToken cancellationToken)
         {
             using Socket socket = new(nameServer.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             EndPoint remoteEndPoint = new IPEndPoint(nameServer, 53);
@@ -326,10 +414,17 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             byte[] buffer = new byte[4096];
             using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            timeout.CancelAfter(_dnsUdpReceiveTimeout);
 
-            SocketReceiveFromResult result = await socket.ReceiveFromAsync(buffer, SocketFlags.None, remoteEndPoint, timeout.Token).ConfigureAwait(false);
-            return buffer[..result.ReceivedBytes];
+            try
+            {
+                SocketReceiveFromResult result = await _receiveDnsResponseAsync(socket, buffer, remoteEndPoint, timeout.Token).ConfigureAwait(false);
+                return buffer[..result.ReceivedBytes];
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+            {
+                throw new TimeoutException("DNS UDP query timed out.", ex);
+            }
         }
 
         /// <summary>
