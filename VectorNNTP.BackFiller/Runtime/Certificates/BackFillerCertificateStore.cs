@@ -72,7 +72,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             if (!certificateBundle.Certificate.HasPrivateKey)
             {
-                certificateBundle.Certificate.Dispose();
+                certificateBundle.Dispose();
                 return new CertificateEvaluationResult(
                     HasCertificate: true,
                     IsUsable: false,
@@ -83,7 +83,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             if (nowUtc < certificateBundle.Certificate.NotBefore.ToUniversalTime())
             {
-                certificateBundle.Certificate.Dispose();
+                certificateBundle.Dispose();
                 return new CertificateEvaluationResult(
                     HasCertificate: true,
                     IsUsable: false,
@@ -94,7 +94,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             if (nowUtc > certificateBundle.Certificate.NotAfter.ToUniversalTime())
             {
-                certificateBundle.Certificate.Dispose();
+                certificateBundle.Dispose();
                 return new CertificateEvaluationResult(
                     HasCertificate: true,
                     IsUsable: false,
@@ -105,7 +105,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             if (!CertificateContainsDnsName(certificateBundle.Certificate, letsEncryptOptions.CanonicalCertificateSubjectName))
             {
-                certificateBundle.Certificate.Dispose();
+                certificateBundle.Dispose();
                 return new CertificateEvaluationResult(
                     HasCertificate: true,
                     IsUsable: false,
@@ -116,7 +116,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
             if (!HasServerAuthenticationUsage(certificateBundle.Certificate))
             {
-                certificateBundle.Certificate.Dispose();
+                certificateBundle.Dispose();
                 return new CertificateEvaluationResult(
                     HasCertificate: true,
                     IsUsable: false,
@@ -125,9 +125,9 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                     Certificate: null);
             }
 
-            if (!BuildCertificateChain(certificateBundle.Certificate, out string chainFailureReason))
+            if (!BuildCertificateChain(certificateBundle.Certificate, certificateBundle.IntermediateCertificates, out string chainFailureReason))
             {
-                certificateBundle.Certificate.Dispose();
+                certificateBundle.Dispose();
                 return new CertificateEvaluationResult(
                     HasCertificate: true,
                     IsUsable: false,
@@ -179,20 +179,87 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             try
             {
                 byte[] pfx = await File.ReadAllBytesAsync(letsEncryptOptions.CertificatePfxPath, cancellationToken).ConfigureAwait(false);
-                X509Certificate2 certificate = new(
-                    pfx,
-                    letsEncryptOptions.PfxExportPassword,
-                    X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
 
-                if (logger is not null)
+                X509Certificate2Collection collection = [];
+                try
                 {
-                    LogLoadedListenerCertificateBundle(
-                        logger,
-                        letsEncryptOptions.CanonicalCertificateSubjectName,
-                        letsEncryptOptions.CertificatePfxPath);
-                }
+                    collection.Import(
+                        pfx,
+                        letsEncryptOptions.PfxExportPassword,
+                        X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
 
-                return new BackFillerCertificateBundle(certificate, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
+                    X509Certificate2[] privateKeyCertificates = [.. collection.OfType<X509Certificate2>().Where(static cert => cert.HasPrivateKey)];
+                    if (privateKeyCertificates.Length != 1)
+                    {
+                        throw new CryptographicException($"Listener certificate PFX must contain exactly one private-key certificate but found {privateKeyCertificates.Length}.");
+                    }
+
+                    X509Certificate2 selectedLeaf = privateKeyCertificates[0];
+                    const string ReloadClonePassword = "BackFiller-CertificateStore-Reload";
+                    byte[] selectedLeafPfx = selectedLeaf.Export(X509ContentType.Pkcs12, ReloadClonePassword);
+                    X509Certificate2? ownedLeaf = null;
+                    List<X509Certificate2>? intermediates = null;
+
+                    try
+                    {
+                        ownedLeaf = new X509Certificate2(
+                            selectedLeafPfx,
+                            ReloadClonePassword,
+                            X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+
+                        intermediates = [];
+                        foreach (X509Certificate2 candidate in collection)
+                        {
+                            if (ReferenceEquals(candidate, selectedLeaf))
+                            {
+                                continue;
+                            }
+
+                            if (candidate.HasPrivateKey)
+                            {
+                                throw new CryptographicException("Listener certificate PFX includes additional private-key certificates that are not supported.");
+                            }
+
+                            if (!IsCertificateAuthority(candidate))
+                            {
+                                throw new CryptographicException("Listener certificate PFX includes non-CA certificates outside the leaf certificate entry.");
+                            }
+
+                            intermediates.Add(new X509Certificate2(candidate.RawData));
+                        }
+
+                        if (logger is not null)
+                        {
+                            LogLoadedListenerCertificateBundle(
+                                logger,
+                                letsEncryptOptions.CanonicalCertificateSubjectName,
+                                letsEncryptOptions.CertificatePfxPath);
+                        }
+
+                        BackFillerCertificateBundle bundle = new(ownedLeaf, intermediates, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
+                        ownedLeaf = null;
+                        intermediates = null;
+                        return bundle;
+                    }
+                    finally
+                    {
+                        ownedLeaf?.Dispose();
+                        if (intermediates is not null)
+                        {
+                            for (int index = 0; index < intermediates.Count; index++)
+                            {
+                                intermediates[index].Dispose();
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    foreach (X509Certificate2 importedCertificate in collection)
+                    {
+                        importedCertificate.Dispose();
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -347,16 +414,27 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// self-contained test material and environments with incomplete trust stores do not incorrectly block activation.
         /// </remarks>
         /// <param name="certificate">Certificate whose chain should be validated.</param>
+        /// <param name="intermediateCertificates">Persisted intermediates supplied from the loaded PFX bundle.</param>
         /// <param name="failureReason">Receives a human-readable reason when validation fails.</param>
         /// <returns><see langword="true"/> when the chain is acceptable for listener activation.</returns>
-        private static bool BuildCertificateChain(X509Certificate2 certificate, out string failureReason)
+        private static bool BuildCertificateChain(
+            X509Certificate2 certificate,
+            IReadOnlyList<X509Certificate2> intermediateCertificates,
+            out string failureReason)
         {
             ArgumentNullException.ThrowIfNull(certificate);
+            ArgumentNullException.ThrowIfNull(intermediateCertificates);
 
             using X509Chain chain = new();
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
             chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
             chain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
+            chain.ChainPolicy.DisableCertificateDownloads = true;
+
+            for (int index = 0; index < intermediateCertificates.Count; index++)
+            {
+                _ = chain.ChainPolicy.ExtraStore.Add(intermediateCertificates[index]);
+            }
 
             bool chainValid = chain.Build(certificate);
             if (chainValid)
@@ -386,6 +464,22 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 : $"Listener certificate chain validation failed: {status}";
 
             return false;
+        }
+
+        /// <summary>
+        /// Determines whether a certificate declares CA basic constraints.
+        /// </summary>
+        /// <param name="certificate">Certificate to classify.</param>
+        /// <returns><see langword="true"/> when the certificate explicitly permits certificate-signing.</returns>
+        private static bool IsCertificateAuthority(X509Certificate2 certificate)
+        {
+            ArgumentNullException.ThrowIfNull(certificate);
+
+            X509BasicConstraintsExtension? basicConstraints = certificate.Extensions
+                .OfType<X509BasicConstraintsExtension>()
+                .FirstOrDefault();
+
+            return basicConstraints?.CertificateAuthority ?? false;
         }
 
         /// <summary>

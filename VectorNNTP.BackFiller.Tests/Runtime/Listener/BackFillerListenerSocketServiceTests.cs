@@ -8,6 +8,7 @@
 
 using System.Buffers;
 using System.Diagnostics;
+using System.Formats.Asn1;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -84,6 +85,50 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             state.Dispose();
             shutdown.Dispose();
         }
+        [Fact]
+        public async Task StartAsync_WithIntermediateChainCertificate_ServerPresentsIntermediateDuringTlsHandshake()
+        {
+            int port = ReserveEphemeralTcpPort();
+            using GeneratedCertificateChain chain = CreateServerCertificateChain("bf-listener-chain.example.com");
+
+            BackFillerRuntimeOptions runtime = CreateRuntimeOptions(port, ["127.0.0.1"]);
+            await using ArticleRetentionAuthority retentionAuthority = new(runtime);
+            BackFillerCertificateState state = new();
+            state.Publish(CreateBundleForState(chain.LeafCertificate, chain.IntermediateCertificate));
+
+            ShutdownCoordinator shutdown = new();
+            BackFillerListenerSocketService service = new(
+                runtime,
+                state,
+                shutdown,
+                retentionAuthority,
+                NullLogger<BackFillerListenerSocketService>.Instance);
+
+            using CancellationTokenSource runCts = new();
+            Task runTask = service.StartAsync(runCts.Token);
+
+            await WaitForPortReadyAsync(IPAddress.Loopback, port, TimeSpan.FromSeconds(5));
+
+            TlsHandshakeObservation observation = await ConnectAndCaptureRemoteChainAsync(IPAddress.Loopback, port, chain.RootCertificate, "localhost");
+
+            bool containsLeaf = observation.PresentedCertificatesRawData.Any(raw => raw.AsSpan().SequenceEqual(chain.LeafCertificate.RawData));
+            bool containsIntermediate = observation.PresentedCertificatesRawData.Any(raw => raw.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
+            bool callbackUntrustedRootObserved = observation.CallbackChainStatusFlags.Contains(X509ChainStatusFlags.UntrustedRoot);
+
+            Assert.True(containsLeaf, BuildTlsObservationFailureMessage(observation, "Expected listener TLS handshake to present the leaf certificate."));
+            Assert.True(containsIntermediate, BuildTlsObservationFailureMessage(observation, "Expected listener TLS handshake to present the intermediate certificate."));
+            Assert.True(observation.HostnameMatched, BuildTlsObservationFailureMessage(observation, "Expected strict SAN DNS hostname validation to succeed for localhost."));
+            Assert.True(observation.CallbackAccepted, BuildTlsObservationFailureMessage(observation, "Expected callback validation to accept the custom-root trusted chain."));
+            Assert.True(observation.HandshakeSucceeded, BuildTlsObservationFailureMessage(observation, "TLS handshake failed after callback validation."));
+            Assert.False(callbackUntrustedRootObserved, BuildTlsObservationFailureMessage(observation, "Callback chain unexpectedly reported UntrustedRoot while custom root trust was enforced."));
+
+            await service.StopAsync(CancellationToken.None);
+            await runTask;
+
+            state.Dispose();
+            shutdown.Dispose();
+        }
+
         /// <summary>
         /// Confirms the start async when certificate state replaced new connections use new certificate behavior.
         /// </summary>
@@ -1080,6 +1125,203 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             return remote.GetCertHashString(HashAlgorithmName.SHA256);
         }
 
+        private static async Task<TlsHandshakeObservation> ConnectAndCaptureRemoteChainAsync(
+            IPAddress address,
+            int port,
+            X509Certificate2 trustedRoot,
+            string targetHost)
+        {
+            ArgumentNullException.ThrowIfNull(address);
+            ArgumentNullException.ThrowIfNull(trustedRoot);
+            ArgumentException.ThrowIfNullOrWhiteSpace(targetHost);
+
+            TlsHandshakeObservation observation = new();
+            using TcpClient client = new();
+            await client.ConnectAsync(address, port).ConfigureAwait(false);
+
+            using SslStream sslStream = new(
+                client.GetStream(),
+                leaveInnerStreamOpen: false,
+                (sender, certificate, chain, errors) => CaptureAndValidateChain(certificate, chain, trustedRoot, targetHost, observation, errors));
+
+            try
+            {
+                await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+                {
+                    TargetHost = targetHost,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                    CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                }).ConfigureAwait(false);
+
+                observation.HandshakeSucceeded = true;
+                return observation;
+            }
+            catch (AuthenticationException ex)
+            {
+                observation.HandshakeException = ex;
+                observation.HandshakeSucceeded = false;
+                return observation;
+            }
+        }
+
+        private static bool CaptureAndValidateChain(
+            X509Certificate? remoteCertificate,
+            X509Chain? remoteChain,
+            X509Certificate2 trustedRoot,
+            string targetHost,
+            TlsHandshakeObservation observation,
+            SslPolicyErrors sslPolicyErrors)
+        {
+            ArgumentNullException.ThrowIfNull(observation);
+
+            observation.SslPolicyErrors = sslPolicyErrors;
+            observation.PresentedCertificatesRawData.Clear();
+            observation.CallbackChainStatusFlags.Clear();
+            observation.CallbackChainStatusInformation.Clear();
+            observation.CustomValidationChainStatusFlags.Clear();
+            observation.CustomValidationChainStatusInformation.Clear();
+
+            if (remoteCertificate is null)
+            {
+                observation.CallbackAccepted = false;
+                observation.HostnameMatched = false;
+                return false;
+            }
+
+            observation.PresentedCertificatesRawData.Add(remoteCertificate.Export(X509ContentType.Cert));
+
+            if (remoteChain is not null)
+            {
+                foreach (X509ChainStatus chainStatus in remoteChain.ChainStatus)
+                {
+                    observation.CallbackChainStatusFlags.Add(chainStatus.Status);
+                    observation.CallbackChainStatusInformation.Add(chainStatus.StatusInformation?.Trim() ?? string.Empty);
+                }
+
+                foreach (X509ChainElement element in remoteChain.ChainElements)
+                {
+                    if (!observation.PresentedCertificatesRawData.Any(raw => raw.AsSpan().SequenceEqual(element.Certificate.RawData)))
+                    {
+                        observation.PresentedCertificatesRawData.Add(element.Certificate.Export(X509ContentType.Cert));
+                    }
+                }
+            }
+
+            using X509Chain verificationChain = new();
+            verificationChain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            verificationChain.ChainPolicy.CustomTrustStore.Add(trustedRoot);
+            verificationChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            verificationChain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
+            verificationChain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
+            verificationChain.ChainPolicy.VerificationTime = DateTime.UtcNow;
+            verificationChain.ChainPolicy.DisableCertificateDownloads = true;
+
+            List<X509Certificate2> extras = [];
+            for (int index = 1; index < observation.PresentedCertificatesRawData.Count; index++)
+            {
+                X509Certificate2 extra = new(observation.PresentedCertificatesRawData[index]);
+                extras.Add(extra);
+                verificationChain.ChainPolicy.ExtraStore.Add(extra);
+            }
+
+            using X509Certificate2 leaf = new(observation.PresentedCertificatesRawData[0]);
+            bool chainValid = verificationChain.Build(leaf);
+
+            foreach (X509ChainStatus chainStatus in verificationChain.ChainStatus)
+            {
+                observation.CustomValidationChainStatusFlags.Add(chainStatus.Status);
+                observation.CustomValidationChainStatusInformation.Add(chainStatus.StatusInformation?.Trim() ?? string.Empty);
+            }
+
+            observation.HostnameMatched = CertificateMatchesHostName(leaf, targetHost);
+            observation.CallbackAccepted = chainValid && observation.HostnameMatched;
+
+            for (int index = 0; index < extras.Count; index++)
+            {
+                extras[index].Dispose();
+            }
+
+            return observation.CallbackAccepted;
+        }
+
+        private static bool CertificateMatchesHostName(X509Certificate2 certificate, string hostName)
+        {
+            ArgumentNullException.ThrowIfNull(certificate);
+            ArgumentException.ThrowIfNullOrWhiteSpace(hostName);
+
+            IEnumerable<string> dnsNames = EnumerateSubjectAlternativeDnsNames(certificate);
+            return dnsNames.Any(dnsName => string.Equals(dnsName, hostName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static IEnumerable<string> EnumerateSubjectAlternativeDnsNames(X509Certificate2 certificate)
+        {
+            ArgumentNullException.ThrowIfNull(certificate);
+
+            const string DnsNameOid = "2.5.29.17";
+            X509Extension? sanExtension = certificate.Extensions[DnsNameOid];
+            if (sanExtension is null)
+            {
+                return [];
+            }
+
+            AsnReader topReader = new(sanExtension.RawData, AsnEncodingRules.DER);
+            AsnReader sequenceReader = topReader.ReadSequence();
+            List<string> dnsNames = [];
+
+            while (sequenceReader.HasData)
+            {
+                Asn1Tag tag = sequenceReader.PeekTag();
+                if (tag.TagClass == TagClass.ContextSpecific && tag.TagValue == 2)
+                {
+                    dnsNames.Add(sequenceReader.ReadCharacterString(UniversalTagNumber.IA5String, new Asn1Tag(TagClass.ContextSpecific, 2)));
+                }
+                else
+                {
+                    _ = sequenceReader.ReadEncodedValue();
+                }
+            }
+
+            topReader.ThrowIfNotEmpty();
+            return dnsNames;
+        }
+
+        private static string BuildTlsObservationFailureMessage(TlsHandshakeObservation observation, string message)
+        {
+            ArgumentNullException.ThrowIfNull(observation);
+            ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+            string presented = observation.PresentedCertificatesRawData.Count == 0
+                ? "<none>"
+                : string.Join(" | ", observation.PresentedCertificatesRawData.Select(FormatCertificateIdentity));
+
+            string callbackStatuses = observation.CallbackChainStatusFlags.Count == 0
+                ? "<none>"
+                : string.Join(", ", observation.CallbackChainStatusFlags.Select(static status => status.ToString()));
+
+            string customStatuses = observation.CustomValidationChainStatusFlags.Count == 0
+                ? "<none>"
+                : string.Join(", ", observation.CustomValidationChainStatusFlags.Select(static status => status.ToString()));
+
+            string callbackStatusInfo = observation.CallbackChainStatusInformation.Count == 0
+                ? "<none>"
+                : string.Join(" | ", observation.CallbackChainStatusInformation.Where(static text => !string.IsNullOrWhiteSpace(text)));
+
+            string customStatusInfo = observation.CustomValidationChainStatusInformation.Count == 0
+                ? "<none>"
+                : string.Join(" | ", observation.CustomValidationChainStatusInformation.Where(static text => !string.IsNullOrWhiteSpace(text)));
+
+            string exceptionType = observation.HandshakeException?.GetType().Name ?? "<none>";
+            string exceptionMessage = observation.HandshakeException?.Message ?? "<none>";
+
+            return $"{message} SslPolicyErrors={observation.SslPolicyErrors}; CallbackAccepted={observation.CallbackAccepted}; HostnameMatched={observation.HostnameMatched}; HandshakeSucceeded={observation.HandshakeSucceeded}; Presented={presented}; CallbackChainStatus={callbackStatuses}; CallbackChainStatusInfo={callbackStatusInfo}; CustomChainStatus={customStatuses}; CustomChainStatusInfo={customStatusInfo}; HandshakeException={exceptionType}: {exceptionMessage}";
+        }
+
+        private static string FormatCertificateIdentity(byte[] rawData)
+        {
+            using X509Certificate2 certificate = new(rawData);
+            return $"{certificate.Subject} [{certificate.Thumbprint}]";
+        }
+
         private static async Task<SslStream> AuthenticateClientAsync(TcpClient client)
         {
             SslStream sslStream = new(
@@ -1383,6 +1625,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         /// <returns>The value returned by the create server certificate helper.</returns>
         private static X509Certificate2 CreateServerCertificate(string dnsName)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(dnsName);
+
             using RSA rsa = RSA.Create(2048);
             CertificateRequest request = new(
                 $"CN={dnsName}",
@@ -1395,17 +1639,85 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             sanBuilder.AddDnsName(dnsName);
             sanBuilder.AddIpAddress(IPAddress.Loopback);
             request.CertificateExtensions.Add(sanBuilder.Build());
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
             request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: true));
             OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
             request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, critical: true));
+            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
 
-            string pfxPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
-            using X509Certificate2 cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(7));
-            byte[] pfx = cert.Export(X509ContentType.Pkcs12, pfxPassword);
-            return new X509Certificate2(
-                pfx,
-                pfxPassword,
-                X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            using X509Certificate2 selfSigned = request.CreateSelfSigned(now.AddDays(-1), now.AddDays(30));
+            return CloneForState(selfSigned);
+        }
+
+        private static GeneratedCertificateChain CreateServerCertificateChain(string dnsName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(dnsName);
+
+            RSA rootKey = RSA.Create(2048);
+            CertificateRequest rootRequest = new(
+                "CN=BackFiller Listener Test Root CA",
+                rootKey,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            rootRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            rootRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+            rootRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(rootRequest.PublicKey, false));
+
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            X509Certificate2 rootCertificate = rootRequest.CreateSelfSigned(now.AddDays(-2), now.AddDays(90));
+
+            RSA intermediateKey = RSA.Create(2048);
+            CertificateRequest intermediateRequest = new(
+                "CN=BackFiller Listener Test Intermediate CA",
+                intermediateKey,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+            intermediateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            intermediateRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+            intermediateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(intermediateRequest.PublicKey, false));
+
+            byte[] intermediateSerial = RandomNumberGenerator.GetBytes(16);
+            using X509Certificate2 intermediateSignedNoKey = intermediateRequest.Create(rootCertificate, now.AddDays(-2), now.AddDays(60), intermediateSerial);
+            X509Certificate2 intermediateCertificate = intermediateSignedNoKey.CopyWithPrivateKey(intermediateKey);
+
+            using RSA leafKey = RSA.Create(2048);
+            CertificateRequest leafRequest = new(
+                $"CN={dnsName}",
+                leafKey,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            SubjectAlternativeNameBuilder sanBuilder = new();
+            sanBuilder.AddDnsName("localhost");
+            sanBuilder.AddDnsName(dnsName);
+            sanBuilder.AddIpAddress(IPAddress.Loopback);
+            leafRequest.CertificateExtensions.Add(sanBuilder.Build());
+            leafRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            leafRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: true));
+            OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
+            leafRequest.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, critical: true));
+            leafRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(leafRequest.PublicKey, false));
+
+            byte[] leafSerial = RandomNumberGenerator.GetBytes(16);
+            using X509Certificate2 leafSignedNoKey = leafRequest.Create(intermediateCertificate, now.AddDays(-1), now.AddDays(30), leafSerial);
+            X509Certificate2 leafCertificate = leafSignedNoKey.CopyWithPrivateKey(leafKey);
+
+            return new GeneratedCertificateChain(rootCertificate, rootKey, intermediateCertificate, intermediateKey, leafCertificate);
+        }
+
+        private static BackFillerCertificateBundle CreateBundleForState(X509Certificate2 leafCertificate, X509Certificate2? intermediateCertificate = null)
+        {
+            ArgumentNullException.ThrowIfNull(leafCertificate);
+
+            X509Certificate2 clonedLeaf = CloneForState(leafCertificate);
+            List<X509Certificate2> intermediates = [];
+            if (intermediateCertificate is not null)
+            {
+                intermediates.Add(new X509Certificate2(intermediateCertificate.RawData));
+            }
+
+            return new BackFillerCertificateBundle(clonedLeaf, intermediates, "memory", DateTimeOffset.UtcNow);
         }
 
         /// <summary>
@@ -1423,6 +1735,56 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 pfx,
                 pfxPassword,
                 X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+        }
+
+        private sealed class TlsHandshakeObservation
+        {
+            public bool HandshakeSucceeded { get; set; }
+
+            public Exception? HandshakeException { get; set; }
+
+            public SslPolicyErrors SslPolicyErrors { get; set; }
+
+            public bool HostnameMatched { get; set; }
+
+            public bool CallbackAccepted { get; set; }
+
+            public List<byte[]> PresentedCertificatesRawData { get; } = [];
+
+            public List<X509ChainStatusFlags> CallbackChainStatusFlags { get; } = [];
+
+            public List<string> CallbackChainStatusInformation { get; } = [];
+
+            public List<X509ChainStatusFlags> CustomValidationChainStatusFlags { get; } = [];
+
+            public List<string> CustomValidationChainStatusInformation { get; } = [];
+        }
+
+        private sealed class GeneratedCertificateChain(
+            X509Certificate2 rootCertificate,
+            RSA rootKey,
+            X509Certificate2 intermediateCertificate,
+            RSA intermediateKey,
+            X509Certificate2 leafCertificate) : IDisposable
+        {
+            public X509Certificate2 RootCertificate { get; } = rootCertificate;
+
+            public RSA RootKey { get; } = rootKey;
+
+            public X509Certificate2 IntermediateCertificate { get; } = intermediateCertificate;
+
+            public RSA IntermediateKey { get; } = intermediateKey;
+
+            public X509Certificate2 LeafCertificate { get; } = leafCertificate;
+
+            public void Dispose()
+            {
+                LeafCertificate.Dispose();
+                IntermediateCertificate.Dispose();
+                RootCertificate.Dispose();
+                IntermediateKey.Dispose();
+                RootKey.Dispose();
+            }
         }
 
         /// <summary>

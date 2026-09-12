@@ -5,7 +5,7 @@
 // VectorNNTP.Backfiller.Runtime.Certificates
 // Owns the currently active listener certificate reference published to runtime consumers.
 
-using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 
 namespace VectorNNTP.Backfiller.Runtime.Certificates
 {
@@ -13,11 +13,64 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// Owns the currently active listener certificate bundle published to runtime consumers.
     /// </summary>
     /// <remarks>
-    /// Replacing the active bundle disposes the previously published certificate. Callers that need a reusable copy
-    /// must request a clone rather than holding on to the stored instance directly.
+    /// Replacing the active bundle disposes the previously published leaf and intermediate certificates. Callers that need
+    /// reusable TLS material must request an owned runtime clone and dispose that clone after use.
     /// </remarks>
     internal sealed class BackFillerCertificateState : IDisposable
     {
+        /// <summary>
+        /// Owned runtime clone of the active certificate bundle with prebuilt TLS certificate context.
+        /// </summary>
+        internal sealed class RuntimeCertificateMaterial : IDisposable
+        {
+            /// <summary>
+            /// Initializes owned runtime certificate material from a cloned bundle.
+            /// </summary>
+            /// <param name="bundle">Owned bundle clone.</param>
+            public RuntimeCertificateMaterial(BackFillerCertificateBundle bundle)
+            {
+                ArgumentNullException.ThrowIfNull(bundle);
+                Bundle = bundle;
+
+                try
+                {
+                    if (bundle.IntermediateCertificates.Count > 0)
+                    {
+                        System.Security.Cryptography.X509Certificates.X509Certificate2Collection intermediateCollection = [];
+                        for (int index = 0; index < bundle.IntermediateCertificates.Count; index++)
+                        {
+                            _ = intermediateCollection.Add(bundle.IntermediateCertificates[index]);
+                        }
+
+                        CertificateContext = SslStreamCertificateContext.Create(bundle.Certificate, intermediateCollection, offline: true);
+                    }
+                }
+                catch
+                {
+                    Bundle.Dispose();
+                    throw;
+                }
+            }
+
+            /// <summary>
+            /// Gets the owned certificate bundle clone.
+            /// </summary>
+            public BackFillerCertificateBundle Bundle { get; }
+
+            /// <summary>
+            /// Gets TLS certificate context carrying leaf and intermediates for server authentication.
+            /// </summary>
+            public SslStreamCertificateContext? CertificateContext { get; }
+
+            /// <summary>
+            /// Disposes the owned certificate bundle clone.
+            /// </summary>
+            public void Dispose()
+            {
+                Bundle.Dispose();
+            }
+        }
+
         /// <summary>
         /// Synchronizes publication, cloning, and disposal of the active certificate bundle.
         /// </summary>
@@ -44,7 +97,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         }
 
         /// <summary>
-        /// Publishes a new active certificate bundle and disposes the certificate from any previously active bundle.
+        /// Publishes a new active certificate bundle and disposes any previously active bundle.
         /// </summary>
         /// <param name="bundle">New listener certificate bundle whose ownership transfers into this state container.</param>
         public void Publish(BackFillerCertificateBundle bundle)
@@ -58,36 +111,26 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 _current = bundle;
             }
 
-            previous?.Certificate.Dispose();
+            previous?.Dispose();
         }
 
         /// <summary>
-        /// Creates an independent clone of the currently active listener certificate.
+        /// Creates an owned runtime clone containing leaf, intermediates, and TLS certificate context.
         /// </summary>
-        /// <returns>
-        /// A new <see cref="X509Certificate2"/> instance that the caller owns and must dispose, or
-        /// <see langword="null"/> when no active certificate is available.
-        /// </returns>
-        internal X509Certificate2? GetCurrentCertificateClone()
+        /// <returns>Owned runtime certificate material, or <see langword="null"/> when no active certificate exists.</returns>
+        internal RuntimeCertificateMaterial? GetCurrentRuntimeCertificateMaterialClone()
         {
+            BackFillerCertificateBundle? clone;
             lock (_gate)
             {
-                if (_current is null)
-                {
-                    return null;
-                }
-
-                const string ClonePassword = "BackFiller-CertificateState-Clone";
-                byte[] pfx = _current.Certificate.Export(X509ContentType.Pkcs12, ClonePassword);
-                return new X509Certificate2(
-                    pfx,
-                    ClonePassword,
-                    X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+                clone = _current?.CloneOwned();
             }
+
+            return clone is null ? null : new RuntimeCertificateMaterial(clone);
         }
 
         /// <summary>
-        /// Clears the active bundle and disposes its certificate.
+        /// Clears the active bundle and disposes it.
         /// </summary>
         public void Dispose()
         {
@@ -98,7 +141,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 _current = null;
             }
 
-            previous?.Certificate.Dispose();
+            previous?.Dispose();
         }
     }
 }

@@ -197,7 +197,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 {
                     if (!evaluationCertificateTransferred && evaluation.Certificate is not null)
                     {
-                        evaluation.Certificate.Certificate.Dispose();
+                        evaluation.Certificate.Dispose();
                     }
                 }
             }
@@ -261,7 +261,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             {
                 if (!evaluationCertificateTransferred && evaluation.Certificate is not null)
                 {
-                    evaluation.Certificate.Certificate.Dispose();
+                    evaluation.Certificate.Dispose();
                 }
             }
         }

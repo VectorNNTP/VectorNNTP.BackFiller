@@ -197,14 +197,22 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 using NetworkStream networkStream = client.GetStream();
                 using SslStream sslStream = new(networkStream, leaveInnerStreamOpen: false);
 
-                using X509Certificate2 serverCertificate = GetCurrentServerCertificateOrThrow();
+                using BackFillerCertificateState.RuntimeCertificateMaterial runtimeCertificateMaterial = GetCurrentServerCertificateMaterialOrThrow();
                 SslServerAuthenticationOptions tlsOptions = new()
                 {
-                    ServerCertificate = serverCertificate,
                     EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                     ClientCertificateRequired = false,
                     CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 };
+
+                if (runtimeCertificateMaterial.CertificateContext is not null)
+                {
+                    tlsOptions.ServerCertificateContext = runtimeCertificateMaterial.CertificateContext;
+                }
+                else
+                {
+                    tlsOptions.ServerCertificate = runtimeCertificateMaterial.Bundle.Certificate;
+                }
 
                 ListenerRuntimeOptions listenerOptions = _runtimeOptions.EffectiveListener;
                 using CancellationTokenSource handshakeTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -220,7 +228,7 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
                 }
 
                 tlsHandshakeCompleted = true;
-                string thumbprint = serverCertificate.Thumbprint ?? string.Empty;
+                string thumbprint = runtimeCertificateMaterial.Bundle.Certificate.Thumbprint ?? string.Empty;
                 LogTlsHandshakeSucceeded(_logger, remoteEndpoint, thumbprint);
 
                 StreamListenerProtocolSessionTransport transport = new(sslStream, listenerOptions.IoProgressTimeout);
@@ -394,20 +402,22 @@ namespace VectorNNTP.Backfiller.Runtime.Listener
         }
 
         /// <summary>
-        /// Retrieves a disposable clone of the current listener certificate and verifies that it can perform server authentication.
+        /// Retrieves owned runtime certificate material and verifies that the active leaf can perform server authentication.
         /// </summary>
-        /// <returns>Certificate clone that the caller must dispose after completing the handshake.</returns>
+        /// <returns>Owned runtime certificate material that the caller must dispose after completing the handshake.</returns>
         /// <exception cref="InvalidOperationException">Thrown when no active certificate exists or the active certificate lacks a private key.</exception>
-        private X509Certificate2 GetCurrentServerCertificateOrThrow()
+        private BackFillerCertificateState.RuntimeCertificateMaterial GetCurrentServerCertificateMaterialOrThrow()
         {
-            X509Certificate2? certificate = _certificateState.GetCurrentCertificateClone() ?? throw new InvalidOperationException("BackFiller listener cannot accept TLS connections because no active certificate is available.");
-            if (!certificate.HasPrivateKey)
+            BackFillerCertificateState.RuntimeCertificateMaterial certificateMaterial = _certificateState.GetCurrentRuntimeCertificateMaterialClone()
+                ?? throw new InvalidOperationException("BackFiller listener cannot accept TLS connections because no active certificate is available.");
+
+            if (!certificateMaterial.Bundle.Certificate.HasPrivateKey)
             {
-                certificate.Dispose();
+                certificateMaterial.Dispose();
                 throw new InvalidOperationException("BackFiller listener cannot accept TLS connections because the active certificate has no private key.");
             }
 
-            return certificate;
+            return certificateMaterial;
         }
 
 

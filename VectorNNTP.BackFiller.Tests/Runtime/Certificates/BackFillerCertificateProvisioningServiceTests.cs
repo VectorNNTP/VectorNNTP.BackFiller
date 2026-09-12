@@ -144,10 +144,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
                 Assert.True(renewed);
                 Assert.NotNull(observedEvaluatedBundle);
-                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+                AssertBundleDisposed(observedEvaluatedBundle!);
 
-                using X509Certificate2? clone = state.GetCurrentCertificateClone();
-                Assert.NotNull(clone);
+                using BackFillerCertificateState.RuntimeCertificateMaterial? runtimeMaterial = state.GetCurrentRuntimeCertificateMaterialClone();
+                Assert.NotNull(runtimeMaterial);
+                Assert.True(runtimeMaterial!.Bundle.Certificate.HasPrivateKey);
             }
             finally
             {
@@ -180,7 +181,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 AssertCertificateUsable(observedEvaluatedBundle!.Certificate);
 
                 state.Dispose();
-                AssertCertificateDisposed(observedEvaluatedBundle.Certificate);
+                AssertBundleDisposed(observedEvaluatedBundle);
             }
             finally
             {
@@ -210,7 +211,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
                 Assert.NotNull(observedEvaluatedBundle);
                 Assert.False(state.HasCertificate);
-                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+                AssertBundleDisposed(observedEvaluatedBundle!);
             }
             finally
             {
@@ -246,7 +247,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.Same(expected, actual);
                 Assert.NotNull(observedEvaluatedBundle);
                 Assert.False(state.HasCertificate);
-                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+                AssertBundleDisposed(observedEvaluatedBundle!);
             }
             finally
             {
@@ -282,7 +283,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.Same(expected, actual);
                 Assert.NotNull(observedEvaluatedBundle);
                 Assert.False(state.HasCertificate);
-                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+                AssertBundleDisposed(observedEvaluatedBundle!);
             }
             finally
             {
@@ -313,8 +314,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.NotNull(observedEvaluatedBundle);
                 Assert.True(state.HasCertificate);
                 AssertCertificateUsable(observedEvaluatedBundle!.Certificate);
-                using X509Certificate2? clone = state.GetCurrentCertificateClone();
-                Assert.NotNull(clone);
+                using BackFillerCertificateState.RuntimeCertificateMaterial? runtimeMaterial = state.GetCurrentRuntimeCertificateMaterialClone();
+                Assert.NotNull(runtimeMaterial);
+                Assert.True(runtimeMaterial!.Bundle.Certificate.HasPrivateKey);
             }
             finally
             {
@@ -349,7 +351,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
                 Assert.NotNull(observedEvaluatedBundle);
                 Assert.False(state.HasCertificate);
-                AssertCertificateDisposed(observedEvaluatedBundle!.Certificate);
+                AssertBundleDisposed(observedEvaluatedBundle!);
             }
             finally
             {
@@ -591,6 +593,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         private static void AssertCertificateDisposed(X509Certificate2 certificate)
         {
             _ = Assert.ThrowsAny<CryptographicException>(() => certificate.Export(X509ContentType.Cert));
+        }
+
+        /// <summary>
+        /// Asserts that every certificate owned by the bundle has been disposed.
+        /// </summary>
+        /// <param name="bundle">Certificate bundle expected to be disposed.</param>
+        private static void AssertBundleDisposed(BackFillerCertificateBundle bundle)
+        {
+            ArgumentNullException.ThrowIfNull(bundle);
+
+            AssertCertificateDisposed(bundle.Certificate);
+            for (int index = 0; index < bundle.IntermediateCertificates.Count; index++)
+            {
+                AssertCertificateDisposed(bundle.IntermediateCertificates[index]);
+            }
         }
 
         /// <summary>
