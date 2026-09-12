@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the acme certificate issuer dns01 recovery test suite.
 
 using System.Reflection;
+using CloudFlare.Client.Enumerators;
 using Certes;
 using Certes.Acme;
 using Certes.Acme.Resource;
@@ -23,28 +24,52 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
     public sealed class AcmeCertificateIssuerDns01RecoveryTests
     {
         /// <summary>
-        /// Confirms the issue certificate async when no existing txt record creates challenge and cleans up behavior.
+        /// Verifies production Cloudflare TXT request construction includes canonical ownership comment metadata and
+        /// does not require tags.
         /// </summary>
         [Fact]
-        public async Task IssueCertificateAsync_WhenNoExistingTxtRecord_CreatesChallengeAndCleansUp()
+        public void CreateAcmeTxtRecordRequest_UsesCanonicalOwnershipCommentWithoutTags()
+        {
+            const string recordName = RecoveryScenario.RecordName;
+            const string recordValue = "challenge-value";
+
+            CloudFlare.Client.Api.Zones.DnsRecord.NewDnsRecord request = CloudflareTxtRecordApi.CreateAcmeTxtRecordRequest(recordName, recordValue);
+
+            Assert.Equal(recordName, request.Name);
+            Assert.Equal(DnsRecordType.Txt, request.Type);
+            Assert.Equal(recordValue, request.Content);
+            Assert.False(request.Proxied);
+            Assert.Equal(60, request.Ttl);
+            Assert.Equal(AcmeDnsTxtRecordOwnership.OwnershipComment, request.Comment);
+            Assert.True(request.Tags is null || request.Tags.Count == 0);
+        }
+
+        /// <summary>
+        /// Confirms a newly created record carries canonical ownership metadata and is removed by same-attempt cleanup.
+        /// </summary>
+        [Fact]
+        public async Task IssueCertificateAsync_WhenNoExistingTxtRecord_CreatesOwnedChallengeAndCleansUp()
         {
             RecoveryScenarioResult result = await ExecuteScenarioAsync(initialRecords: [], shouldFailValidation: false, shouldFailFinalize: false, throwOnDelete: false, cancellationToken: CancellationToken.None);
 
             Assert.True(result.WasSuccessful);
             Assert.Equal(1, result.Api.AddCallCount);
             Assert.Equal(1, result.Api.DeleteCallCount);
+            Assert.Single(result.Api.AddedRecords);
+            Assert.True(RecordHasCanonicalOwnership(result.Api.AddedRecords[0]));
             Assert.Empty(result.Api.Records);
         }
         /// <summary>
-        /// Confirms the issue certificate async when stale challenge record exists deletes stale record and creates replacement behavior.
+        /// Verifies stale owned TXT records are removed, replacements are created with canonical ownership metadata,
+        /// and unrelated records remain untouched.
         /// </summary>
         [Fact]
-        public async Task IssueCertificateAsync_WhenStaleChallengeRecordExists_DeletesStaleRecordAndCreatesReplacement()
+        public async Task IssueCertificateAsync_WhenStaleOwnedRecordExists_DeletesOwnedStaleCreatesOwnedReplacementAndPreservesUnrelated()
         {
             RecoveryScenarioResult result = await ExecuteScenarioAsync(
                 initialRecords: [
-                    new CloudflareTxtRecordInfo("stale-1", RecoveryScenario.RecordName, "old-value", CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller stale challenge", ["acme"], null, null),
-                    new CloudflareTxtRecordInfo("unrelated-1", RecoveryScenario.RecordName, "unrelated-value", CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 120, "keep", ["other"], null, null)],
+                    CreateRecord("stale-1", RecoveryScenario.RecordName, "old-value", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("unrelated-1", RecoveryScenario.RecordName, "unrelated-value", tags: ["other-service:acme-dns01"], comment: "operator managed")],
                 shouldFailValidation: false,
                 shouldFailFinalize: false,
                 throwOnDelete: false,
@@ -53,17 +78,28 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             Assert.True(result.WasSuccessful);
             Assert.Equal(1, result.Api.AddCallCount);
             Assert.Equal(2, result.Api.DeleteCallCount);
-            Assert.Contains(result.Api.Records, record => record.Content == "unrelated-value");
-            Assert.DoesNotContain(result.Api.Records, record => record.Content == "old-value");
+            Assert.Contains("stale-1", result.Api.DeletedRecordIds);
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Content, "unrelated-value", StringComparison.Ordinal));
+            Assert.DoesNotContain(result.Api.Records, record => string.Equals(record.Content, "old-value", StringComparison.Ordinal));
+            Assert.Contains(result.Api.AddedRecords, record => RecordHasCanonicalOwnership(record));
         }
+
         /// <summary>
-        /// Confirms the issue certificate async when exact txt already exists reuses existing challenge value behavior.
+        /// Verifies an existing exact TXT challenge value is reused and not deleted by final cleanup when this attempt
+        /// did not create it.
         /// </summary>
         [Fact]
-        public async Task IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValue()
+        public async Task IssueCertificateAsync_WhenExactTxtAlreadyExists_ReusesExistingChallengeValueWithoutDeletingIt()
         {
+            CloudflareTxtRecordInfo existingRecord = CreateRecord(
+                "existing-unowned",
+                RecoveryScenario.RecordName,
+                RecoveryScenario.ExpectedTxtValue,
+                tags: ["external.workflow"],
+                comment: "external owner");
+
             RecoveryScenarioResult result = await ExecuteScenarioAsync(
-                initialRecords: [new CloudflareTxtRecordInfo("existing-owned", RecoveryScenario.RecordName, RecoveryScenario.ExpectedTxtValue, CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller challenge", ["acme"], null, null)],
+                initialRecords: [existingRecord],
                 shouldFailValidation: false,
                 shouldFailFinalize: false,
                 throwOnDelete: false,
@@ -72,6 +108,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             Assert.True(result.WasSuccessful);
             Assert.Equal(0, result.Api.AddCallCount);
             Assert.Equal(0, result.Api.DeleteCallCount);
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, existingRecord.Id, StringComparison.Ordinal));
         }
         /// <summary>
         /// Confirms the issue certificate async when issuance fails still attempts cleanup behavior.
@@ -87,6 +124,108 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
+        /// Verifies records with non-canonical or near-match metadata are preserved during reconciliation.
+        /// </summary>
+        [Fact]
+        public async Task IssueCertificateAsync_WhenOwnershipMetadataIsNonCanonical_PreservesRecords()
+        {
+            string currentValue = RecoveryScenario.ExpectedTxtValue;
+            RecoveryScenarioResult result = await ExecuteScenarioAsync(
+                initialRecords:
+                [
+                    CreateRecord("suffix", RecoveryScenario.RecordName, "old-1", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment + "-extra"),
+                    CreateRecord("prefix", RecoveryScenario.RecordName, "old-2", tags: [], comment: "legacy-" + AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("different-case", RecoveryScenario.RecordName, "old-3", tags: [], comment: "vectornntp.backfiller:acme-dns01"),
+                    CreateRecord("legacy-invalid", RecoveryScenario.RecordName, "old-4", tags: [], comment: "vectornntp.backfiller.acme-dns01"),
+                    CreateRecord("generic-acme", RecoveryScenario.RecordName, "old-5", tags: [], comment: "acme"),
+                    CreateRecord("backfiller-only", RecoveryScenario.RecordName, "old-6", tags: [], comment: "BackFiller"),
+                    CreateRecord("other-app", RecoveryScenario.RecordName, "old-7", tags: [], comment: "OtherApp:acme-dns01"),
+                    CreateRecord("canonical-tag-only", RecoveryScenario.RecordName, "old-8", tags: ["vectornntp_backfiller:acme-dns01"], comment: null),
+                    CreateRecord("empty-comment", RecoveryScenario.RecordName, "old-9", tags: [], comment: string.Empty),
+                    CreateRecord("exact-current", RecoveryScenario.RecordName, currentValue, tags: ["external"], comment: "external reuse")
+                ],
+                shouldFailValidation: false,
+                shouldFailFinalize: false,
+                throwOnDelete: false,
+                cancellationToken: CancellationToken.None);
+
+            Assert.True(result.WasSuccessful);
+            Assert.Equal(0, result.Api.AddCallCount);
+            Assert.Equal(0, result.Api.DeleteCallCount);
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "suffix", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "prefix", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "different-case", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "legacy-invalid", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "generic-acme", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "backfiller-only", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "other-app", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "canonical-tag-only", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "empty-comment", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "exact-current", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Verifies canonical comment ownership does not authorize deletion when record identity constraints fail,
+        /// even when provider list results include records outside the requested name.
+        /// </summary>
+        [Fact]
+        public async Task IssueCertificateAsync_WhenRecordIdentityDoesNotMatch_PreservesCanonicalCommentRecords()
+        {
+            RecoveryScenarioResult result = await ExecuteScenarioAsync(
+                initialRecords:
+                [
+                    CreateRecord("wrong-name", "_acme-challenge.other.example.net", "old-name", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("wrong-type", RecoveryScenario.RecordName, "old-type", type: DnsRecordType.A, tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment)
+                ],
+                shouldFailValidation: false,
+                shouldFailFinalize: false,
+                throwOnDelete: false,
+                cancellationToken: CancellationToken.None,
+                returnAllRecordsFromGet: true);
+
+            Assert.True(result.WasSuccessful);
+            Assert.Equal(1, result.Api.AddCallCount);
+            Assert.Equal(1, result.Api.DeleteCallCount);
+            Assert.DoesNotContain("wrong-name", result.Api.DeletedRecordIds);
+            Assert.DoesNotContain("wrong-type", result.Api.DeletedRecordIds);
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "wrong-name", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "wrong-type", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Models restart recovery: process A creates owned TXT and terminates before cleanup, then process B
+        /// reconciles the persisted stale-owned record and creates a replacement.
+        /// </summary>
+        [Fact]
+        public async Task IssueCertificateAsync_WhenProcessRestarts_ReconcilesPreviouslyOwnedStaleRecordOnly()
+        {
+            FakeCloudflareTxtRecordApi sharedProvider = new([], throwOnDelete: false);
+            CloudflareTxtRecordInfo staleOwnedRecord = await sharedProvider
+                .AddTxtRecordAsync("zone", RecoveryScenario.RecordName, RecoveryScenario.ExpectedTxtValue, CancellationToken.None)
+                .ConfigureAwait(false);
+
+            Assert.Single(sharedProvider.Records);
+            Assert.True(RecordHasCanonicalOwnership(staleOwnedRecord));
+
+            string replacementValue = RecoveryScenario.GetExpectedTxtValue("dns01-test-token-restart");
+            RecoveryScenarioResult secondAttempt = await ExecuteScenarioAsync(
+                initialRecords: [],
+                shouldFailValidation: false,
+                shouldFailFinalize: false,
+                throwOnDelete: false,
+                cancellationToken: CancellationToken.None,
+                challengeTokenOverride: "dns01-test-token-restart",
+                persistentApi: sharedProvider);
+
+            Assert.True(secondAttempt.WasSuccessful);
+            Assert.Equal(2, sharedProvider.AddCallCount);
+            Assert.Equal(2, sharedProvider.DeleteCallCount);
+            Assert.Contains(staleOwnedRecord.Id, sharedProvider.DeletedRecordIds);
+            Assert.Contains(sharedProvider.AddedRecords, record => string.Equals(record.Content, replacementValue, StringComparison.Ordinal));
+            Assert.DoesNotContain(sharedProvider.Records, record => string.Equals(record.Id, staleOwnedRecord.Id, StringComparison.Ordinal));
+        }
+
+        /// <summary>
         /// Executes one focused DNS-01 authorization scenario against the production ownership-aware challenge flow.
         /// </summary>
         /// <param name="initialRecords">Initial TXT records visible at the ACME challenge name.</param>
@@ -95,6 +234,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         /// <param name="throwOnDelete">Whether TXT-record cleanup should throw.</param>
         /// <param name="cancellationToken">Cancellation token for the scenario.</param>
         /// <param name="failChallengeAfterCreate">Whether the simulated challenge should throw immediately after record reconciliation/creation.</param>
+        /// <param name="challengeTokenOverride">
+        /// Optional challenge token override used to model a different issuance attempt, such as a restart where the
+        /// later process receives a different ACME DNS-01 token.
+        /// </param>
+        /// <param name="persistentApi">
+        /// Optional shared fake provider state used to model records surviving a process boundary and being observed by
+        /// a subsequent issuance attempt.
+        /// </param>
+        /// <param name="returnAllRecordsFromGet">
+        /// When <see langword="true"/>, the fake provider returns all seeded records without record-name filtering so
+        /// identity-negative tests can pass mismatched-name fixtures into production reconciliation logic.
+        /// </param>
         /// <returns>The scenario result capturing TXT API activity and any surfaced exception.</returns>
         private static async Task<RecoveryScenarioResult> ExecuteScenarioAsync(
             IReadOnlyList<CloudflareTxtRecordInfo> initialRecords,
@@ -102,7 +253,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             bool shouldFailFinalize,
             bool throwOnDelete,
             CancellationToken cancellationToken,
-            bool failChallengeAfterCreate = false)
+            bool failChallengeAfterCreate = false,
+            string? challengeTokenOverride = null,
+            FakeCloudflareTxtRecordApi? persistentApi = null,
+            bool returnAllRecordsFromGet = false)
         {
             _ = shouldFailFinalize;
             string tempDir = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-AcmeDns01-{Guid.NewGuid():N}");
@@ -111,10 +265,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             try
             {
                 BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir);
-                FakeCloudflareTxtRecordApi api = new(initialRecords, throwOnDelete);
+                FakeCloudflareTxtRecordApi api = persistentApi ?? new(initialRecords, throwOnDelete, returnAllRecordsFromGet);
+                if (persistentApi is not null)
+                {
+                    api.Seed(initialRecords);
+                }
+
                 FakeAuthoritativeDnsTxtPropagationVerifier verifier = new();
                 AcmeCertificateIssuer issuer = new(TimeProvider.System, NullLogger<AcmeCertificateIssuer>.Instance, verifier, _ => api);
-                FakeAuthorizationContext authorizationContext = new(shouldFailValidation, failChallengeAfterCreate);
+                FakeAuthorizationContext authorizationContext = new(shouldFailValidation, failChallengeAfterCreate, challengeTokenOverride ?? RecoveryScenario.ChallengeToken);
                 AcmeContext acmeContext = new(WellKnownServers.LetsEncryptStagingV2, RecoveryScenario.AccountKey);
 
                 MethodInfo completeAuthorizationMethod = typeof(AcmeCertificateIssuer).GetMethod(
@@ -208,6 +367,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// Supplies the expected TXT value derived from the same ACME account-key logic used in production.
             /// </summary>
             internal static string ExpectedTxtValue => AccountKey.DnsTxt(ChallengeToken);
+
+            /// <summary>
+            /// Derives the expected TXT value for one explicit challenge token.
+            /// </summary>
+            internal static string GetExpectedTxtValue(string challengeToken)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(challengeToken);
+                return AccountKey.DnsTxt(challengeToken);
+            }
         }
 
         /// <summary>
@@ -224,6 +392,28 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         private sealed record RecoveryScenarioResult(FakeCloudflareTxtRecordApi Api, bool WasSuccessful, Exception? Error);
 
         /// <summary>
+        /// Creates one deterministic TXT record fixture with explicit metadata.
+        /// </summary>
+        private static CloudflareTxtRecordInfo CreateRecord(
+            string id,
+            string name,
+            string value,
+            DnsRecordType type = DnsRecordType.Txt,
+            IReadOnlyList<string>? tags = null,
+            string? comment = null)
+        {
+            return new CloudflareTxtRecordInfo(id, name, value, type, false, 60, comment, tags ?? [], null, null);
+        }
+
+        /// <summary>
+        /// Determines whether a TXT record contains the canonical persisted ownership metadata.
+        /// </summary>
+        private static bool RecordHasCanonicalOwnership(CloudflareTxtRecordInfo record)
+        {
+            return string.Equals(record.Comment, AcmeDnsTxtRecordOwnership.OwnershipComment, StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// Confirms the fake cloudflare txt record api behavior.
         /// </summary>
         private sealed class FakeCloudflareTxtRecordApi : ICloudflareTxtRecordApi
@@ -237,6 +427,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// </summary>
             private readonly bool _throwOnDelete;
             /// <summary>
+            /// Controls whether list calls should bypass record-name filtering to exercise identity checks in
+            /// production reconciliation logic.
+            /// </summary>
+            private readonly bool _returnAllRecordsFromGet;
+            /// <summary>
             /// Supplies  next id for the fixture or scenario under test.
             /// </summary>
             private int _nextId = 1000;
@@ -244,16 +439,41 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// <summary>
             /// Confirms the fake cloudflare txt record api behavior.
             /// </summary>
-            internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete)
+            /// <param name="initialRecords">Initial provider records seeded for the scenario.</param>
+            /// <param name="throwOnDelete">Whether delete operations should throw to simulate cleanup failures.</param>
+            /// <param name="returnAllRecordsFromGet">
+            /// Whether list operations should bypass record-name filtering so identity-negative fixtures can reach
+            /// production reconciliation logic.
+            /// </param>
+            internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete, bool returnAllRecordsFromGet = false)
             {
                 _records = [.. initialRecords];
                 _throwOnDelete = throwOnDelete;
+                _returnAllRecordsFromGet = returnAllRecordsFromGet;
+            }
+
+            /// <summary>
+            /// Adds deterministic seed records to the provider state when modeling restart/reload boundaries.
+            /// </summary>
+            internal void Seed(IEnumerable<CloudflareTxtRecordInfo> records)
+            {
+                _records.AddRange(records);
             }
 
             /// <summary>
             /// Supplies records for the fixture or scenario under test.
             /// </summary>
             internal IReadOnlyList<CloudflareTxtRecordInfo> Records => _records;
+            /// <summary>
+            /// Captures provider-created records for request-mapping assertions.
+            /// </summary>
+            internal List<CloudflareTxtRecordInfo> AddedRecords { get; } = [];
+
+            /// <summary>
+            /// Captures record identifiers deleted by reconciliation or final cleanup.
+            /// </summary>
+            internal List<string> DeletedRecordIds { get; } = [];
+
             /// <summary>
             /// Supplies add call count for the fixture or scenario under test.
             /// </summary>
@@ -277,6 +497,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                if (_returnAllRecordsFromGet)
+                {
+                    return Task.FromResult<IReadOnlyList<CloudflareTxtRecordInfo>>([.. _records]);
+                }
+
                 return Task.FromResult<IReadOnlyList<CloudflareTxtRecordInfo>>([.. _records.Where(record => record.Name == recordName)]);
             }
 
@@ -296,7 +522,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 AddCallCount++;
-                CloudflareTxtRecordInfo record = new($"new-{_nextId++}", recordName, recordValue, CloudFlare.Client.Enumerators.DnsRecordType.Txt, false, 60, "BackFiller ACME", ["acme"], null, null);
+                CloudflareTxtRecordInfo record = new(
+                    $"new-{_nextId++}",
+                    recordName,
+                    recordValue,
+                    CloudFlare.Client.Enumerators.DnsRecordType.Txt,
+                    false,
+                    60,
+                    AcmeDnsTxtRecordOwnership.OwnershipComment,
+                    [],
+                    null,
+                    null);
+
+                AddedRecords.Add(record);
                 _records.Add(record);
                 return Task.FromResult(record);
             }
@@ -321,6 +559,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                     throw new InvalidOperationException("delete failed");
                 }
 
+                DeletedRecordIds.Add(recordId);
                 _ = _records.RemoveAll(record => record.Id == recordId);
                 return Task.CompletedTask;
             }
@@ -383,8 +622,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// </summary>
             /// <param name="shouldFailValidation">Whether challenge validation should transition to invalid.</param>
             /// <param name="failChallengeAfterCreate">Whether validation should throw immediately after DNS setup.</param>
-            internal FakeAuthorizationContext(bool shouldFailValidation, bool failChallengeAfterCreate)
+            /// <param name="challengeToken">
+            /// DNS-01 challenge token used for this simulated attempt so restart scenarios can model token changes across
+            /// separate process executions.
+            /// </param>
+            internal FakeAuthorizationContext(bool shouldFailValidation, bool failChallengeAfterCreate, string challengeToken)
             {
+                ArgumentException.ThrowIfNullOrWhiteSpace(challengeToken);
+
                 _authorization = new Authorization
                 {
                     Identifier = new Identifier { Type = IdentifierType.Dns, Value = RecoveryScenario.Fqdn },
@@ -394,7 +639,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                         new Challenge
                         {
                             Type = ChallengeTypes.Dns01,
-                            Token = RecoveryScenario.ChallengeToken,
+                            Token = challengeToken,
                             Status = ChallengeStatus.Pending,
                         },
                     ],
@@ -507,7 +752,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// <summary>
             /// Supplies the deterministic token used to derive the DNS-01 TXT value.
             /// </summary>
-            public string Token => RecoveryScenario.ChallengeToken;
+            public string Token => _challenge.Token;
 
             /// <summary>
             /// Supplies the DNS-01 challenge type expected by production.

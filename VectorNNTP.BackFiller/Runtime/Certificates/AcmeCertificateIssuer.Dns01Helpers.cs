@@ -81,40 +81,23 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// Determines whether one TXT record is safe to treat as BackFiller-owned ACME challenge state.
         /// </summary>
         /// <remarks>
-        /// Ownership is inferred conservatively from metadata that the implementation itself can safely control.
-        /// Unrelated TXT values are never deleted.
+        /// Deletion authority is granted only when record identity (name and TXT type) and the canonical ownership
+        /// comment marker both match exactly.
         /// </remarks>
         /// <param name="record">TXT record candidate returned from Cloudflare.</param>
         /// <param name="recordName">Fully qualified ACME TXT host name expected for the challenge.</param>
-        /// <returns><see langword="true"/> when the record name/type match and BackFiller ownership markers are present.</returns>
+        /// <returns>
+        /// <see langword="true"/> when the record name/type match and the canonical ownership comment is an exact
+        /// equality match; otherwise <see langword="false"/>.
+        /// </returns>
         private static bool IsOwnedAcmeChallengeRecord(CloudflareTxtRecordInfo record, string recordName)
         {
             ArgumentNullException.ThrowIfNull(record);
             ArgumentException.ThrowIfNullOrWhiteSpace(recordName);
 
-            if (!string.Equals(record.Name, recordName, StringComparison.Ordinal) || record.Type != CloudFlare.Client.Enumerators.DnsRecordType.Txt)
-            {
-                return false;
-            }
-
-            if (record.Comment is not null && record.Comment.Contains("BackFiller", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (record.Tags is not null)
-            {
-                for (int index = 0; index < record.Tags.Count; index++)
-                {
-                    if (record.Tags[index].Contains("BackFiller", StringComparison.OrdinalIgnoreCase) ||
-                        record.Tags[index].Contains("acme", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
+            return string.Equals(record.Name, recordName, StringComparison.Ordinal)
+                && record.Type == CloudFlare.Client.Enumerators.DnsRecordType.Txt
+                && string.Equals(record.Comment, AcmeDnsTxtRecordOwnership.OwnershipComment, StringComparison.Ordinal);
         }
     }
 }
