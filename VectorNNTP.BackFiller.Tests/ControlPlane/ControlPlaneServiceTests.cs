@@ -143,6 +143,64 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
         }
 
         /// <summary>
+        /// Confirms startup cancellation after one successful account initialization rolls back all created managers before StartAsync fails.
+        /// </summary>
+        [Fact]
+        public async Task StartAsync_WhenSecondAccountInitializationCancellationOccurs_RollsBackFirstAccountManager()
+        {
+            FakeNntpServer firstServer = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable firstServerLease = firstServer.ConfigureAwait(false);
+
+            TaskCompletionSource secondAccountInitializationEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            FakeNntpServer secondServer = await FakeNntpServer.StartAsync(async (client, cancellationToken) =>
+            {
+                _ = secondAccountInitializationEntered.TrySetResult();
+
+                using NetworkStream stream = client.GetStream();
+                byte[] buffer = new byte[1];
+                _ = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable secondServerLease = secondServer.ConfigureAwait(false);
+
+            Guid firstAccountId = Guid.NewGuid();
+            Guid secondAccountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(firstAccountId, maxConnections: 1, port: firstServer.Port),
+                CreateAccountSnapshot(secondAccountId, maxConnections: 1, port: secondServer.Port),
+            ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            ControlPlaneService service = new(
+                NullLogger<ControlPlaneService>.Instance,
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator());
+
+            using CancellationTokenSource startupCancellation = new();
+            Task startTask = service.StartAsync(startupCancellation.Token);
+
+            await WaitForConditionAsync(() => firstServer.ActiveConnectionCount == 1).ConfigureAwait(false);
+            await secondAccountInitializationEntered.Task.ConfigureAwait(false);
+
+            startupCancellation.Cancel();
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await startTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.False(service.IsStartupInitializationComplete);
+            Assert.Equal(0, service.ManagedAccountCount);
+
+            await WaitForConditionAsync(() => firstServer.ActiveConnectionCount == 0).ConfigureAwait(false);
+            await WaitForConditionAsync(() => secondServer.ActiveConnectionCount == 0).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Confirms startup reconciliation creates one account runtime and converges session capacity to configured max connections.
         /// </summary>
         [Fact]
@@ -219,6 +277,105 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             Assert.Equal(0, service.ManagedAccountCount);
             Assert.Equal(0, service.GetManagedAccountActiveSessionCount(accountId));
             await WaitForConditionAsync(() => server.ActiveConnectionCount == 0);
+
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Confirms account removal cancellation during RabbitMQ retirement still disposes manager-owned sessions before propagating cancellation.
+        /// </summary>
+        [Fact]
+        public async Task RefreshAndReconcileOnceAsync_WhenAccountRemovalRetirementIsCanceled_DisposesRuntimeBeforeRethrow()
+        {
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port),
+            ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            BlockingRabbitMqCapacityRetirementCoordinator rabbitCoordinator = new();
+            ControlPlaneService service = new(
+                NullLogger<ControlPlaneService>.Instance,
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                rabbitCoordinator);
+
+            await service.StartAsync(CancellationToken.None);
+            Assert.Equal(1, service.ManagedAccountCount);
+            Assert.Equal(1, service.GetManagedAccountActiveSessionCount(accountId));
+
+            desiredAccounts.Clear();
+            using CancellationTokenSource reconcileCancellation = new();
+            Task reconcileTask = service.RefreshAndReconcileOnceAsync(reconcileCancellation.Token);
+
+            await rabbitCoordinator.Called.Task.ConfigureAwait(false);
+            reconcileCancellation.Cancel();
+            rabbitCoordinator.Release();
+
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await reconcileTask.ConfigureAwait(false)).ConfigureAwait(false);
+
+            Assert.Equal(0, service.ManagedAccountCount);
+            Assert.Equal(0, service.GetManagedAccountActiveSessionCount(accountId));
+            await WaitForConditionAsync(() => server.ActiveConnectionCount == 0).ConfigureAwait(false);
+
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Confirms account removal still disposes manager-owned sessions when RabbitMQ retirement fails.
+        /// </summary>
+        [Fact]
+        public async Task RefreshAndReconcileOnceAsync_WhenAccountRemovalRetirementFails_DisposesRuntimeAndLogsFailure()
+        {
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port),
+            ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            CapturingLoggerProvider loggerProvider = new();
+            ThrowingRabbitMqCapacityRetirementCoordinator rabbitCoordinator = new(new InvalidOperationException("retirement failed"));
+            ControlPlaneService service = new(
+                loggerProvider.CreateLogger<ControlPlaneService>(),
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                rabbitCoordinator,
+                loggerFactory: loggerProvider);
+
+            await service.StartAsync(CancellationToken.None);
+            Assert.Equal(1, service.ManagedAccountCount);
+
+            desiredAccounts.Clear();
+            await service.RefreshAndReconcileOnceAsync(CancellationToken.None);
+
+            Assert.Equal(0, service.ManagedAccountCount);
+            await WaitForConditionAsync(() => server.ActiveConnectionCount == 0).ConfigureAwait(false);
+
+            Assert.Contains(
+                loggerProvider.Entries,
+                entry => entry.Level == LogLevel.Warning &&
+                         entry.Message.Contains("Account remove failed", StringComparison.Ordinal) &&
+                         entry.Message.Contains(accountId.ToString(), StringComparison.Ordinal));
 
             await service.StopAsync(CancellationToken.None);
         }
@@ -896,6 +1053,30 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
             internal void Release()
             {
                 _ = _release.TrySetResult(true);
+            }
+        }
+
+        /// <summary>
+        /// Confirms the throwing rabbit mq capacity retirement coordinator behavior.
+        /// </summary>
+        private sealed class ThrowingRabbitMqCapacityRetirementCoordinator(Exception exception) : IRabbitMqCapacityRetirementCoordinator
+        {
+            /// <summary>
+            /// Confirms the exception behavior.
+            /// </summary>
+            private readonly Exception _exception = exception;
+
+            /// <summary>
+            /// Confirms the retire capacity async behavior.
+            /// </summary>
+            /// <param name="accountId">The account id used by this test scenario.</param>
+            /// <param name="retainConnectionCount">The retain connection count used by this test scenario.</param>
+            /// <param name="cancellationToken">The cancellation token used by this test scenario.</param>
+            /// <returns>The value returned by the retire capacity async helper.</returns>
+            public Task RetireCapacityAsync(Guid accountId, int retainConnectionCount, CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return Task.FromException(_exception);
             }
         }
 
