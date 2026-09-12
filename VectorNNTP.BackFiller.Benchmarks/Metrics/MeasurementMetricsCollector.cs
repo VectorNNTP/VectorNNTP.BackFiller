@@ -474,8 +474,8 @@ internal sealed class MeasurementMetrics
             Interlocked.Add(ref _submittedWithinWindowBytes, bytes);
         }
 
-        long completionTick = completionTickOverride ?? publishEndTick;
-        bool postMeasurementCompletion = IsPostMeasurementTick(completionTick);
+        long terminalClassificationTick = completionTickOverride ?? publishEndTick;
+        bool postMeasurementCompletion = IsPostMeasurementTick(terminalClassificationTick);
 
         if (publishResult.Status == TransitPublishStatus.Accepted)
         {
@@ -551,7 +551,7 @@ internal sealed class MeasurementMetrics
             Interlocked.Increment(ref _completedWithinWindowCount);
         }
 
-        RecordProvenanceClassification(publishResult, completionTick);
+        RecordProvenanceClassification(publishResult, terminalClassificationTick);
 
         long dispatchQueueWaitTicks = Math.Max(0, publishStartTick - dequeuedTick);
         long publishTicks = Math.Max(0, publishEndTick - publishStartTick);

@@ -116,34 +116,52 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         }
 
         [Fact]
-        public void OnPublishResult_UsesPublishEndTickForCompletionClassificationWithoutOverride()
+        public async Task OnPublishResult_UsesCapturedPublishEndTick_WhenMetricsProcessingOccursAfterBoundaryPublicationAsync()
         {
             MeasurementMetrics metrics = new(articleBytes: 1024);
-            long start = Stopwatch.GetTimestamp();
-            long boundary = start + 100;
+            long now = Stopwatch.GetTimestamp();
+            long start = now - 10_000;
+            long publishStartTick = start + 40;
+            long publishEndTick = start + 50;
+            long boundary = publishEndTick;
+
             metrics.MarkMeasurementStart(start);
+
+            TaskCompletionSource publishCompletionObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource releaseMetricsProcessing = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task delayedMetricsProcessing = Task.Run(async () =>
+            {
+                _ = publishCompletionObserved.TrySetResult();
+                await releaseMetricsProcessing.Task.ConfigureAwait(false);
+
+                metrics.OnPublishResult(
+                    new TransitPublishResult(
+                        MessageId: "<completion-source@benchmark.usenet.ninja>",
+                        Status: TransitPublishStatus.Accepted,
+                        ResponseCode: 239,
+                        ResponseText: "ok",
+                        T0PublishAsyncEnterTick: publishStartTick,
+                        T1DispatcherAssignedTick: publishStartTick + 1,
+                        T2SocketWriteBeginTick: publishStartTick + 2,
+                        T3SocketWriteEndTick: publishStartTick + 3,
+                        T4ResponseAvailableTick: publishStartTick + 4,
+                        T5ResponseParsedTick: publishStartTick + 5,
+                        T6ResponseCorrelatedTick: publishStartTick + 6,
+                        T7PublishAsyncCompleteTick: publishStartTick + 7),
+                    bytes: 1024,
+                    dequeuedTick: publishStartTick - 1,
+                    publishStartTick: publishStartTick,
+                    publishEndTick: publishEndTick,
+                    pendingAtSubmit: 1,
+                    pendingAtComplete: 0);
+            });
+
+            await publishCompletionObserved.Task;
             metrics.MarkMeasurementBoundary(DateTimeOffset.UtcNow, boundary);
 
-            metrics.OnPublishResult(
-                new TransitPublishResult(
-                    MessageId: "<completion-source@benchmark.usenet.ninja>",
-                    Status: TransitPublishStatus.Accepted,
-                    ResponseCode: 239,
-                    ResponseText: "ok",
-                    T0PublishAsyncEnterTick: start + 10,
-                    T1DispatcherAssignedTick: start + 11,
-                    T2SocketWriteBeginTick: start + 12,
-                    T3SocketWriteEndTick: start + 13,
-                    T4ResponseAvailableTick: start + 14,
-                    T5ResponseParsedTick: start + 15,
-                    T6ResponseCorrelatedTick: start + 16,
-                    T7PublishAsyncCompleteTick: start + 17),
-                bytes: 1024,
-                dequeuedTick: start + 9,
-                publishStartTick: start + 10,
-                publishEndTick: boundary,
-                pendingAtSubmit: 1,
-                pendingAtComplete: 0);
+            _ = releaseMetricsProcessing.TrySetResult();
+            await delayedMetricsProcessing;
 
             MeasurementSnapshot snapshot = metrics.Snapshot();
             Assert.Equal(1, snapshot.AcceptedWithinWindowCount);
@@ -157,17 +175,17 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                     Status: TransitPublishStatus.Accepted,
                     ResponseCode: 239,
                     ResponseText: "ok",
-                    T0PublishAsyncEnterTick: start + 20,
-                    T1DispatcherAssignedTick: start + 21,
-                    T2SocketWriteBeginTick: start + 22,
-                    T3SocketWriteEndTick: start + 23,
-                    T4ResponseAvailableTick: start + 24,
-                    T5ResponseParsedTick: start + 25,
-                    T6ResponseCorrelatedTick: start + 26,
-                    T7PublishAsyncCompleteTick: start + 27),
+                    T0PublishAsyncEnterTick: start + 60,
+                    T1DispatcherAssignedTick: start + 61,
+                    T2SocketWriteBeginTick: start + 62,
+                    T3SocketWriteEndTick: start + 63,
+                    T4ResponseAvailableTick: start + 64,
+                    T5ResponseParsedTick: start + 65,
+                    T6ResponseCorrelatedTick: start + 66,
+                    T7PublishAsyncCompleteTick: start + 67),
                 bytes: 1024,
-                dequeuedTick: start + 19,
-                publishStartTick: start + 20,
+                dequeuedTick: start + 59,
+                publishStartTick: start + 60,
                 publishEndTick: boundary + 1,
                 pendingAtSubmit: 1,
                 pendingAtComplete: 0);
