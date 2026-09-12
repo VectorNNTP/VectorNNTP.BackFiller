@@ -88,6 +88,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                     publisher,
                     metrics,
                     workload,
+                    fixedCountAdmissionLimiter: null,
                     CancellationToken.None,
                     enableForensicDiagnostics: true)))];
 
@@ -124,18 +125,19 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 dispatchers,
                 producerStopCts,
                 DateTimeOffset.UtcNow,
+                measurementStartTick: Stopwatch.GetTimestamp(),
                 allocatedStartBytes: GC.GetTotalAllocatedBytes(false),
                 enableForensicDiagnostics: true,
-                (drainConfig, snapshot, drainMetrics, drainRuntime, drainProcess, workloadPreparation, startUtc, endUtc, drainTime, outstandingAtEnd, drainedAfterEnd, allocatedAtStart, forensicEnabled, fixedCountBoundaryTelemetry) =>
+                (drainConfig, snapshot, drainMetrics, drainRuntime, drainProcess, workloadPreparation, boundary, outstandingAtEnd, drainedAfterEnd, allocatedAtStart, forensicEnabled, fixedCountBoundaryTelemetry) =>
                     BenchmarkContractTestHelper.InvokeCreateBenchmarkResult(
                         drainConfig,
                         snapshot,
                         drainMetrics,
                         drainRuntime,
                         workloadPreparation,
-                        startUtc,
-                        endUtc,
-                        drainTime,
+                        boundary.MeasurementStartUtc,
+                        boundary.MeasurementEndUtc,
+                        boundary.DrainDuration,
                         outstandingAtEnd,
                         drainedAfterEnd,
                         allocatedAtStart,

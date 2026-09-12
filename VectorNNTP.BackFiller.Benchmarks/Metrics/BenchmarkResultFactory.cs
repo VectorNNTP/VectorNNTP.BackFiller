@@ -26,9 +26,7 @@ internal static class BenchmarkResultFactory
         RuntimeMetrics runtime,
         Process process,
         WorkloadPreparationSummary workloadPreparation,
-        DateTimeOffset measurementStartUtc,
-        DateTimeOffset measurementEndUtc,
-        TimeSpan drainDuration,
+        MeasurementBoundary boundary,
         long outstandingAtMeasurementEnd,
         long drainedAfterMeasurement,
         long allocatedStartBytes,
@@ -38,7 +36,7 @@ internal static class BenchmarkResultFactory
     {
         RuntimeSnapshot runtimeSnapshot = runtime.Snapshot();
         ForensicSnapshot forensic = metrics.CaptureForensicSnapshot();
-        AmbiguityProvenanceSummary ambiguityProvenance = metrics.CaptureAmbiguityProvenanceSummary(measurementStartUtc);
+        AmbiguityProvenanceSummary ambiguityProvenance = metrics.CaptureAmbiguityProvenanceSummary(boundary.MeasurementStartUtc);
         TransitPublisher.PumpFaultTelemetrySnapshot? initiatingFaultSnapshot = TransitPublisher.CaptureSubmissionPumpFaultTelemetrySnapshot();
         TransitPublisher.SubmissionPumpFaultCounts faultCounts = TransitPublisher.CaptureSubmissionPumpFaultCounts();
         TransitConnection.P1GreetingProvenanceSnapshot? p1GreetingProvenanceSnapshot = publisher.CaptureFirstP1GreetingProvenanceSnapshot();
@@ -110,7 +108,11 @@ internal static class BenchmarkResultFactory
                         InitializationAttemptId: lifecycleEvent.AttemptId))
                     .ToArray());
 
-        double measurementSeconds = Math.Max(0.000001d, (measurementEndUtc - measurementStartUtc).TotalSeconds);
+        double measurementSeconds = Math.Max(0.000001d, boundary.MeasurementWindowDuration.TotalSeconds);
+        double endToEndSeconds = Math.Max(0.000001d, boundary.EndToEndDuration.TotalSeconds);
+        double offeredWithinWindowGbps = snapshot.OfferedWithinWindowBytes * 8d / 1_000_000_000d / measurementSeconds;
+        double admittedWithinWindowGbps = snapshot.AdmittedWithinWindowBytes * 8d / 1_000_000_000d / measurementSeconds;
+        double acceptedWithinWindowGbps = snapshot.AcceptedWithinWindowBytes * 8d / 1_000_000_000d / measurementSeconds;
 
         long producerObservedTicks = snapshot.ActiveTicks + snapshot.BlockedTicks;
         double blockedPercent = producerObservedTicks <= 0
@@ -144,26 +146,52 @@ internal static class BenchmarkResultFactory
             BenchmarkBuildVersion: benchmarkBuildVersion,
             RuntimeIdentity: runtimeIdentity,
             WorkloadPreparation: workloadPreparation,
-            MeasurementStartUtc: measurementStartUtc,
-            MeasurementEndUtc: measurementEndUtc,
-            DrainDuration: drainDuration,
+            Boundary: boundary,
+            DrainDuration: boundary.DrainDuration,
             OutstandingAtMeasurementEnd: outstandingAtMeasurementEnd,
             DrainedAfterMeasurement: drainedAfterMeasurement,
             FixedCountBoundaryTelemetry: fixedCountBoundaryTelemetry,
             AmbiguityProvenance: ambiguityProvenance,
             SubmissionPumpFault: submissionPumpFaultSummary,
             P1GreetingProvenance: p1GreetingProvenanceSummary,
-            GeneratedArticles: snapshot.GeneratedCount,
-            GeneratedBytes: snapshot.GeneratedBytes,
-            GeneratedGbps: snapshot.GeneratedBytes * 8d / 1_000_000_000d / measurementSeconds,
+            OfferedArticles: snapshot.OfferedCount,
+            OfferedBytes: snapshot.OfferedBytes,
+            OfferedGbps: offeredWithinWindowGbps,
+            OfferedWithinWindowArticles: snapshot.OfferedWithinWindowCount,
+            OfferedWithinWindowBytes: snapshot.OfferedWithinWindowBytes,
+            OfferedWithinWindowGbps: offeredWithinWindowGbps,
             AdmittedArticles: snapshot.AdmittedCount,
             AdmittedBytes: snapshot.AdmittedBytes,
-            AdmittedGbps: snapshot.AdmittedBytes * 8d / 1_000_000_000d / measurementSeconds,
+            AdmittedGbps: admittedWithinWindowGbps,
+            AdmittedWithinWindowArticles: snapshot.AdmittedWithinWindowCount,
+            AdmittedWithinWindowBytes: snapshot.AdmittedWithinWindowBytes,
+            AdmittedWithinWindowGbps: admittedWithinWindowGbps,
+            SubmittedArticles: snapshot.SubmittedCount,
+            SubmittedBytes: snapshot.SubmittedBytes,
+            SubmittedWithinWindowArticles: snapshot.SubmittedWithinWindowCount,
+            SubmittedWithinWindowBytes: snapshot.SubmittedWithinWindowBytes,
             AcceptedArticles: snapshot.AcceptedCount,
             AcceptedBytes: snapshot.AcceptedBytes,
-            AcceptedGbps: snapshot.AcceptedBytes * 8d / 1_000_000_000d / measurementSeconds,
+            AcceptedGbps: acceptedWithinWindowGbps,
+            AcceptedWithinWindowArticles: snapshot.AcceptedWithinWindowCount,
+            AcceptedWithinWindowBytes: snapshot.AcceptedWithinWindowBytes,
+            AcceptedWithinWindowGbps: acceptedWithinWindowGbps,
+            AcceptedPostMeasurementArticles: snapshot.AcceptedPostMeasurementCount,
+            AcceptedPostMeasurementBytes: snapshot.AcceptedPostMeasurementBytes,
+            DrainInclusiveAcceptedGbps: snapshot.AcceptedBytes * 8d / 1_000_000_000d / endToEndSeconds,
             RejectedArticles: snapshot.RejectedCount,
+            RejectedWithinWindowArticles: snapshot.RejectedWithinWindowCount,
             AmbiguousArticles: snapshot.AmbiguousCount,
+            AmbiguousWithinWindowArticles: snapshot.AmbiguousWithinWindowCount,
+            FailedArticles: snapshot.FailedCount,
+            FailedWithinWindowArticles: snapshot.FailedWithinWindowCount,
+            UnavailableArticles: snapshot.UnavailableCount,
+            UnavailableWithinWindowArticles: snapshot.UnavailableWithinWindowCount,
+            CanceledArticles: snapshot.CanceledCount,
+            CanceledWithinWindowArticles: snapshot.CanceledWithinWindowCount,
+            CompletedArticles: snapshot.CompletedCount,
+            CompletedWithinWindowArticles: snapshot.CompletedWithinWindowCount,
+            CompletedPostMeasurementArticles: snapshot.CompletedPostMeasurementCount,
             MinQueueDepth: snapshot.MinQueueDepth,
             QueueDepthSampleCount: snapshot.QueueDepthSampleCount,
             AverageQueueDepth: snapshot.AverageQueueDepth,

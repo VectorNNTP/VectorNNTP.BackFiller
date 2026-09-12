@@ -30,9 +30,10 @@ internal static partial class MeasurementExecutionEngine
         Task[] dispatchers,
         CancellationTokenSource producerStopCts,
         DateTimeOffset measurementStartUtc,
+        long measurementStartTick,
         long allocatedStartBytes,
         bool enableForensicDiagnostics,
-        Func<TransitBenchmarkConfig, MeasurementSnapshot, MeasurementMetrics, RuntimeMetrics, Process, WorkloadPreparationSummary, DateTimeOffset, DateTimeOffset, TimeSpan, long, long, long, bool, FixedCountBoundaryTelemetry?, BenchmarkResult> createBenchmarkResult)
+        Func<TransitBenchmarkConfig, MeasurementSnapshot, MeasurementMetrics, RuntimeMetrics, Process, WorkloadPreparationSummary, MeasurementBoundary, long, long, long, bool, FixedCountBoundaryTelemetry?, BenchmarkResult> createBenchmarkResult)
     {
         DateTimeOffset measurementEndUtc = DateTimeOffset.UtcNow;
         long measurementEndTick = Stopwatch.GetTimestamp();
@@ -102,7 +103,6 @@ internal static partial class MeasurementExecutionEngine
 
         Console.WriteLine();
         Console.WriteLine("=== Phase 6: Drain ===");
-        Stopwatch drainStopwatch = Stopwatch.StartNew();
 
         Task dispatcherDrainTask = Task.WhenAll(dispatchers);
         Task completedDrainTask = await Task.WhenAny(dispatcherDrainTask, Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None)).ConfigureAwait(false);
@@ -114,12 +114,21 @@ internal static partial class MeasurementExecutionEngine
 
         await dispatcherDrainTask.ConfigureAwait(false);
         TransitPublisher.MarkSubmissionPumpFaultDispatchersCompleted(dispatchersCompleted: true);
-        drainStopwatch.Stop();
 
         DateTimeOffset postDrainFinalUtc = DateTimeOffset.UtcNow;
         long postDrainFinalTick = Stopwatch.GetTimestamp();
         TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot diagnosticsAfterDrain = publisher.CaptureConnectionDiagnosticsSnapshot();
         FixedCountBoundarySnapshot postDrainFinalSnapshot = BuildBoundarySnapshot("post-drain-final", postDrainFinalUtc, postDrainFinalTick, metrics, diagnosticsAfterDrain);
+
+        MeasurementBoundary boundary = new(
+            MeasurementStartUtc: measurementStartUtc,
+            MeasurementStartStopwatchTick: measurementStartTick,
+            MeasurementEndUtc: measurementEndUtc,
+            MeasurementEndStopwatchTick: measurementEndTick,
+            DrainStartUtc: postMeasurementPreDrainUtc,
+            DrainStartStopwatchTick: postMeasurementPreDrainTick,
+            DrainCompletionUtc: postDrainFinalUtc,
+            DrainCompletionStopwatchTick: postDrainFinalTick);
 
         Console.WriteLine("[SHUTDOWN-DIAG] Drain completed: outstandingSubmissions={0} queuedSubmissions={1} pendingMessageIds={2} queuedWriteIntents={3}",
             postDrainFinalSnapshot.CurrentOutstandingSubmissions,
@@ -152,9 +161,7 @@ internal static partial class MeasurementExecutionEngine
             runtime,
             process,
             workload.PreparationSummary,
-            measurementStartUtc,
-            measurementEndUtc,
-            drainStopwatch.Elapsed,
+            boundary,
             outstandingAtMeasurementEnd,
             drainedAfterMeasurement,
             allocatedStartBytes,

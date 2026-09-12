@@ -30,8 +30,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 maxQueuedArticles: 256);
 
             MeasurementSnapshot snapshot = BenchmarkContractTestHelper.CreateMeasurementSnapshot(
-                generatedCount: 100,
-                generatedBytes: 100_000_000,
+                offeredCount: 100,
+                offeredBytes: 100_000_000,
                 admittedCount: 90,
                 admittedBytes: 90_000_000,
                 acceptedCount: 80,
@@ -70,8 +70,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 enableForensicDiagnostics: true);
 
             Assert.Equal(workload, result.WorkloadPreparation);
-            Assert.Equal(measurementStartUtc, result.MeasurementStartUtc);
-            Assert.Equal(measurementEndUtc, result.MeasurementEndUtc);
+            Assert.Equal(measurementStartUtc, result.Boundary.MeasurementStartUtc);
+            Assert.Equal(measurementEndUtc, result.Boundary.MeasurementEndUtc);
             Assert.Equal(drainDuration, result.DrainDuration);
             Assert.Equal(17, result.OutstandingAtMeasurementEnd);
             Assert.Equal(13, result.DrainedAfterMeasurement);
@@ -91,8 +91,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Null(result.SubmissionPumpFault.InitiatingFault);
             Assert.Null(result.P1GreetingProvenance);
 
-            Assert.Equal(snapshot.GeneratedCount, result.GeneratedArticles);
-            Assert.Equal(snapshot.GeneratedBytes, result.GeneratedBytes);
+            Assert.Equal(snapshot.OfferedCount, result.OfferedArticles);
+            Assert.Equal(snapshot.OfferedBytes, result.OfferedBytes);
             Assert.Equal(snapshot.AdmittedCount, result.AdmittedArticles);
             Assert.Equal(snapshot.AdmittedBytes, result.AdmittedBytes);
             Assert.Equal(snapshot.AcceptedCount, result.AcceptedArticles);
@@ -167,7 +167,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         {
             TransitBenchmarkConfig config = BenchmarkContractTestHelper.CreateConfig(measurementSeconds: 10);
             MeasurementSnapshot snapshot = BenchmarkContractTestHelper.CreateMeasurementSnapshot(
-                generatedBytes: 1_250_000_000,
+                offeredBytes: 1_250_000_000,
                 admittedBytes: 1_000_000_000,
                 acceptedBytes: 500_000_000,
                 blockedTicks: 200,
@@ -189,9 +189,12 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                 allocatedStartBytes: 0,
                 enableForensicDiagnostics: false);
 
-            Assert.Equal(1d, result.GeneratedGbps);
+            Assert.Equal(1d, result.OfferedGbps);
+            Assert.Equal(result.OfferedGbps, result.OfferedWithinWindowGbps);
             Assert.Equal(0.8d, result.AdmittedGbps);
+            Assert.Equal(result.AdmittedGbps, result.AdmittedWithinWindowGbps);
             Assert.Equal(0.4d, result.AcceptedGbps);
+            Assert.Equal(result.AcceptedGbps, result.AcceptedWithinWindowGbps);
 
             Assert.Equal(80d, result.ProducerActivePercent);
             Assert.Equal(20d, result.ProducerBlockedPercent);

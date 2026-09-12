@@ -47,12 +47,18 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             BenchmarkResultArtifact artifact = BenchmarkResultArtifact.From(result, config, processorCount: 8);
 
             Assert.Equal(result.BenchmarkBuildVersion, artifact.BenchmarkBuildVersion);
-            Assert.Equal(result.GeneratedArticles, artifact.GeneratedArticles);
-            Assert.Equal(result.GeneratedGbps, artifact.GeneratedGbps);
+            Assert.Equal(result.OfferedArticles, artifact.OfferedArticles);
+            Assert.Equal(result.OfferedGbps, artifact.OfferedGbps);
+            Assert.Equal(result.OfferedWithinWindowGbps, artifact.OfferedWithinWindowGbps);
+            Assert.Equal(result.OfferedGbps, result.OfferedWithinWindowGbps);
             Assert.Equal(result.AdmittedArticles, artifact.AdmittedArticles);
             Assert.Equal(result.AdmittedGbps, artifact.AdmittedGbps);
+            Assert.Equal(result.AdmittedWithinWindowGbps, artifact.AdmittedWithinWindowGbps);
+            Assert.Equal(result.AdmittedGbps, result.AdmittedWithinWindowGbps);
             Assert.Equal(result.AcceptedArticles, artifact.AcceptedArticles);
             Assert.Equal(result.AcceptedGbps, artifact.AcceptedGbps);
+            Assert.Equal(result.AcceptedWithinWindowGbps, artifact.AcceptedWithinWindowGbps);
+            Assert.Equal(result.AcceptedGbps, result.AcceptedWithinWindowGbps);
             Assert.Equal(result.RejectedArticles, artifact.RejectedArticles);
             Assert.Equal(result.AmbiguousArticles, artifact.AmbiguousArticles);
             Assert.Equal(result.PeakQueueDepth, artifact.PeakQueueDepth);
@@ -81,7 +87,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
 
             Assert.Equal(config.Mode.ToString(), artifact.Mode);
             Assert.Equal(config.WarmupDuration.TotalSeconds, artifact.WarmupSeconds);
-            Assert.Equal(config.MeasurementDuration.TotalSeconds, artifact.MeasurementSeconds);
+            Assert.Equal(result.Boundary.MeasurementWindowDuration.TotalSeconds, artifact.MeasurementSeconds);
+            Assert.Equal(config.MeasurementDuration.TotalSeconds, artifact.ConfiguredMeasurementSeconds);
             Assert.Equal(config.ConnectionPoolSize, artifact.ConnectionPoolSize);
             Assert.Equal(config.PerConnectionPipelineDepth, artifact.PipelineDepth);
             Assert.Equal(config.DispatchWorkerCount, artifact.DispatchWorkers);
@@ -129,14 +136,30 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.True(root.TryGetProperty("EndpointHost", out _));
             Assert.True(root.TryGetProperty("EndpointPort", out _));
             Assert.True(root.TryGetProperty("EndpointUseSsl", out _));
+            Assert.True(root.TryGetProperty("MeasurementSeconds", out _));
+            Assert.True(root.TryGetProperty("ConfiguredMeasurementSeconds", out _));
             Assert.True(root.TryGetProperty("WorkloadPreGenerationMs", out _));
             Assert.True(root.TryGetProperty("PayloadPreparationMs", out _));
-            Assert.True(root.TryGetProperty("GeneratedArticles", out _));
-            Assert.True(root.TryGetProperty("GeneratedGbps", out _));
+            Assert.True(root.TryGetProperty("OfferedArticles", out _));
+            Assert.True(root.TryGetProperty("OfferedGbps", out JsonElement offeredGbps));
+            Assert.True(root.TryGetProperty("OfferedWithinWindowGbps", out JsonElement offeredWithinWindowGbps));
+            Assert.Equal(offeredGbps.GetDouble(), offeredWithinWindowGbps.GetDouble());
             Assert.True(root.TryGetProperty("AdmittedArticles", out _));
+            Assert.True(root.TryGetProperty("AdmittedWithinWindowArticles", out _));
+            Assert.True(root.TryGetProperty("AdmittedGbps", out JsonElement admittedGbps));
+            Assert.True(root.TryGetProperty("AdmittedWithinWindowGbps", out JsonElement admittedWithinWindowGbps));
+            Assert.Equal(admittedGbps.GetDouble(), admittedWithinWindowGbps.GetDouble());
             Assert.True(root.TryGetProperty("AcceptedArticles", out _));
+            Assert.True(root.TryGetProperty("AcceptedWithinWindowArticles", out _));
+            Assert.True(root.TryGetProperty("AcceptedGbps", out JsonElement acceptedGbps));
+            Assert.True(root.TryGetProperty("AcceptedWithinWindowGbps", out JsonElement acceptedWithinWindowGbps));
+            Assert.Equal(acceptedGbps.GetDouble(), acceptedWithinWindowGbps.GetDouble());
+            Assert.True(root.TryGetProperty("AcceptedPostMeasurementArticles", out _));
+            Assert.True(root.TryGetProperty("DrainInclusiveAcceptedGbps", out _));
             Assert.True(root.TryGetProperty("RejectedArticles", out _));
+            Assert.True(root.TryGetProperty("RejectedWithinWindowArticles", out _));
             Assert.True(root.TryGetProperty("AmbiguousArticles", out _));
+            Assert.True(root.TryGetProperty("AmbiguousWithinWindowArticles", out _));
             Assert.True(root.TryGetProperty("ProducerBlockedPercent", out _));
             Assert.True(root.TryGetProperty("WorkingSetMb", out _));
             Assert.True(root.TryGetProperty("GcHeapMb", out _));
@@ -193,7 +216,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             string row = records[1];
 
             Assert.Contains("benchmark_build_version,runtime_assembly_version,runtime_assembly_path", header, StringComparison.Ordinal);
-            Assert.Contains(",generated_articles,generated_gbps,admitted_articles,admitted_gbps,accepted_articles,accepted_gbps,rejected_articles,ambiguous_articles,", header, StringComparison.Ordinal);
+            Assert.Contains(",warmup_seconds,measurement_seconds,configured_measurement_seconds,connections,pipeline_depth,dispatch_workers,generator_workers,", header, StringComparison.Ordinal);
+            Assert.Contains(",offered_articles,offered_gbps,offered_within_window_articles,offered_within_window_gbps,admitted_articles,admitted_gbps,admitted_within_window_articles,admitted_within_window_gbps,accepted_articles,accepted_gbps,accepted_within_window_articles,accepted_within_window_gbps,accepted_post_measurement_articles,drain_inclusive_accepted_gbps,rejected_articles,rejected_within_window_articles,ambiguous_articles,ambiguous_within_window_articles,failed_articles,unavailable_articles,canceled_articles,completed_within_window_articles,completed_post_measurement_articles,", header, StringComparison.Ordinal);
             Assert.Contains(",dispatch_wait_us_avg,dispatch_wait_us_p50,dispatch_wait_us_p95,dispatch_wait_us_p99,dispatch_wait_us_max,", header, StringComparison.Ordinal);
             Assert.Contains(",effective_queue_article_capacity_from_bytes,pending_depth_latency_buckets,observability_notes", header, StringComparison.Ordinal);
 

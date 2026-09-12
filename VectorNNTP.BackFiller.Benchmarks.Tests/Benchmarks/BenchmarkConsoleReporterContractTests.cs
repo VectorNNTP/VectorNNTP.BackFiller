@@ -58,18 +58,26 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             Assert.Contains("Endpoint host:", output, StringComparison.Ordinal);
             Assert.Contains("Endpoint port:", output, StringComparison.Ordinal);
             Assert.Contains("Preparation summary:", output, StringComparison.Ordinal);
-            Assert.Contains("Generated articles:", output, StringComparison.Ordinal);
+            Assert.Contains("Offered throughput = bytes successfully offered to the benchmark queue during the measurement window.", output, StringComparison.Ordinal);
+            Assert.Contains("Admitted throughput = bytes admitted by dispatcher workers into TransitPublisher PublishAsync submissions.", output, StringComparison.Ordinal);
+            Assert.Contains("Accepted throughput = within-window bytes mapped to definitive TransitServer success responses (e.g., 239).", output, StringComparison.Ordinal);
+            Assert.Contains("Configured measurement duration:", output, StringComparison.Ordinal);
+            Assert.Contains("Measured window duration:", output, StringComparison.Ordinal);
+            Assert.Contains("Offered articles:", output, StringComparison.Ordinal);
             Assert.Contains("Admitted articles:", output, StringComparison.Ordinal);
             Assert.Contains("Accepted articles:", output, StringComparison.Ordinal);
+            Assert.Contains("Accepted Gbps (within-window accepted / measurement window):", output, StringComparison.Ordinal);
             Assert.Contains("Queue target depth (articles):", output, StringComparison.Ordinal);
             Assert.Contains("Queue depth samples:", output, StringComparison.Ordinal);
             Assert.Contains("CPU % (avg sampled):", output, StringComparison.Ordinal);
             Assert.Contains("Forensic timing and time-series:", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("Generated throughput", output, StringComparison.Ordinal);
+            Assert.DoesNotContain("Generated/admitted throughput", output, StringComparison.Ordinal);
 
             int benchmarkIndex = output.IndexOf("Benchmark Build Version:", StringComparison.Ordinal);
             int endpointTypeIndex = output.IndexOf("Endpoint type:", StringComparison.Ordinal);
             int prepIndex = output.IndexOf("Preparation summary:", StringComparison.Ordinal);
-            int generatedIndex = output.IndexOf("Generated articles:", StringComparison.Ordinal);
+            int generatedIndex = output.IndexOf("Offered articles:", StringComparison.Ordinal);
             int queueIndex = output.IndexOf("Queue target depth (articles):", StringComparison.Ordinal);
             int cpuIndex = output.IndexOf("CPU % (avg sampled):", StringComparison.Ordinal);
             int forensicIndex = output.IndexOf("Forensic timing and time-series:", StringComparison.Ordinal);

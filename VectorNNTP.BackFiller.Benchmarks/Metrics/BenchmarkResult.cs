@@ -4,6 +4,7 @@
 //
 // Metrics/BenchmarkResult: captures, aggregates, or publishes benchmark throughput, latency, and runtime telemetry.
 
+using System.Diagnostics;
 using VectorNNTP.Backfiller.Runtime.Transit;
 
 namespace VectorNNTP.BackFiller.Benchmarks;
@@ -203,14 +204,58 @@ internal readonly record struct P1GreetingProvenanceSummary(
     P1GreetingLifecycleEventSummary[] LifecycleEvents);
 
 /// <summary>
+/// Represents the benchmark measurement and drain boundary captured with both UTC and monotonic stopwatch ticks.
+/// </summary>
+internal readonly record struct MeasurementBoundary(
+    DateTimeOffset MeasurementStartUtc,
+    long MeasurementStartStopwatchTick,
+    DateTimeOffset MeasurementEndUtc,
+    long MeasurementEndStopwatchTick,
+    DateTimeOffset DrainStartUtc,
+    long DrainStartStopwatchTick,
+    DateTimeOffset DrainCompletionUtc,
+    long DrainCompletionStopwatchTick)
+{
+    /// <summary>
+    /// Gets the monotonic measurement-window duration.
+    /// </summary>
+    internal TimeSpan MeasurementWindowDuration => StopwatchTicksToTimeSpan(MeasurementEndStopwatchTick - MeasurementStartStopwatchTick);
+
+    /// <summary>
+    /// Gets the monotonic post-measurement drain duration.
+    /// </summary>
+    internal TimeSpan DrainDuration => StopwatchTicksToTimeSpan(DrainCompletionStopwatchTick - DrainStartStopwatchTick);
+
+    /// <summary>
+    /// Gets the monotonic end-to-end duration from measurement start through drain completion.
+    /// </summary>
+    internal TimeSpan EndToEndDuration => StopwatchTicksToTimeSpan(DrainCompletionStopwatchTick - MeasurementStartStopwatchTick);
+
+    private static TimeSpan StopwatchTicksToTimeSpan(long ticks)
+    {
+        double seconds = Math.Max(0d, ticks) / Stopwatch.Frequency;
+        return TimeSpan.FromSeconds(seconds);
+    }
+}
+
+/// <summary>
 /// Represents the benchmark Result record struct used by the benchmark or regression gate.
 /// </summary>
+/// <remarks>
+/// Throughput compatibility contract:
+/// <list type="bullet">
+/// <item><description><c>OfferedGbps</c> is a compatibility alias of <c>OfferedWithinWindowGbps</c> and they are expected to remain equal by construction.</description></item>
+/// <item><description><c>AdmittedGbps</c> is a compatibility alias of <c>AdmittedWithinWindowGbps</c> and they are expected to remain equal by construction.</description></item>
+/// <item><description><c>AcceptedGbps</c> is a compatibility alias of <c>AcceptedWithinWindowGbps</c> and they are expected to remain equal by construction.</description></item>
+/// <item><description>These compatibility aliases describe measurement-window throughput only and do not include post-boundary drain terminalizations.</description></item>
+/// <item><description><c>DrainInclusiveAcceptedGbps</c> is the distinct drain-inclusive accepted-throughput metric and uses end-to-end duration semantics.</description></item>
+/// </list>
+/// </remarks>
 internal readonly record struct BenchmarkResult(
     string BenchmarkBuildVersion,
     RuntimeExecutionIdentity RuntimeIdentity,
     WorkloadPreparationSummary WorkloadPreparation,
-    DateTimeOffset MeasurementStartUtc,
-    DateTimeOffset MeasurementEndUtc,
+    MeasurementBoundary Boundary,
     TimeSpan DrainDuration,
     long OutstandingAtMeasurementEnd,
     long DrainedAfterMeasurement,
@@ -218,17 +263,44 @@ internal readonly record struct BenchmarkResult(
     AmbiguityProvenanceSummary AmbiguityProvenance,
     SubmissionPumpFaultSummary SubmissionPumpFault,
     P1GreetingProvenanceSummary? P1GreetingProvenance,
-    long GeneratedArticles,
-    long GeneratedBytes,
-    double GeneratedGbps,
+    long OfferedArticles,
+    long OfferedBytes,
+    double OfferedGbps,
+    long OfferedWithinWindowArticles,
+    long OfferedWithinWindowBytes,
+    double OfferedWithinWindowGbps,
     long AdmittedArticles,
     long AdmittedBytes,
     double AdmittedGbps,
+    long AdmittedWithinWindowArticles,
+    long AdmittedWithinWindowBytes,
+    double AdmittedWithinWindowGbps,
+    long SubmittedArticles,
+    long SubmittedBytes,
+    long SubmittedWithinWindowArticles,
+    long SubmittedWithinWindowBytes,
     long AcceptedArticles,
     long AcceptedBytes,
     double AcceptedGbps,
+    long AcceptedWithinWindowArticles,
+    long AcceptedWithinWindowBytes,
+    double AcceptedWithinWindowGbps,
+    long AcceptedPostMeasurementArticles,
+    long AcceptedPostMeasurementBytes,
+    double DrainInclusiveAcceptedGbps,
     long RejectedArticles,
+    long RejectedWithinWindowArticles,
     long AmbiguousArticles,
+    long AmbiguousWithinWindowArticles,
+    long FailedArticles,
+    long FailedWithinWindowArticles,
+    long UnavailableArticles,
+    long UnavailableWithinWindowArticles,
+    long CanceledArticles,
+    long CanceledWithinWindowArticles,
+    long CompletedArticles,
+    long CompletedWithinWindowArticles,
+    long CompletedPostMeasurementArticles,
     long MinQueueDepth,
     long QueueDepthSampleCount,
     double AverageQueueDepth,

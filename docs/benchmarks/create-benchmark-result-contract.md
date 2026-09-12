@@ -12,7 +12,7 @@ It assembles `MeasurementSnapshot`, `RuntimeSnapshot`, `ForensicSnapshot`, workl
 
 This method includes benchmark semantics that are easy to regress during structural movement:
 
-- throughput formulas (`GeneratedGbps`, `AdmittedGbps`, `AcceptedGbps`)
+- throughput formulas (`OfferedGbps`, `AdmittedGbps`, `AcceptedGbps`)
 - producer backpressure formulas (`ProducerActivePercent`, `ProducerBlockedPercent`)
 - conversion formulas (stopwatch ticks to milliseconds, bytes to MB, bytes to Gbps)
 - classification mapping (accepted / rejected / ambiguous groupings)
@@ -20,6 +20,20 @@ This method includes benchmark semantics that are easy to regress during structu
 - GC count semantics (current `GC.CollectionCount(...)` values at result creation time)
 - forensic latency passthrough behavior (no reinterpretation)
 - artifact schema/order and console section ordering
+
+## Throughput compatibility alias contract
+
+The benchmark result currently exposes both explicit within-window throughput fields and compatibility aliases.
+
+Compatibility aliases (must remain equal by construction):
+
+- `OfferedGbps == OfferedWithinWindowGbps`
+- `AdmittedGbps == AdmittedWithinWindowGbps`
+- `AcceptedGbps == AcceptedWithinWindowGbps`
+
+Compatibility aliases are measurement-window metrics only. They do not represent drain-inclusive throughput.
+
+`DrainInclusiveAcceptedGbps` is a distinct metric and uses accepted bytes across the full start-to-drain-completion interval.
 
 ## Extraction rule
 

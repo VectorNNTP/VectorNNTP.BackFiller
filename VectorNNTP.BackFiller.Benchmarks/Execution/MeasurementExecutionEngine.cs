@@ -23,7 +23,6 @@ internal static partial class MeasurementExecutionEngine
         PreparedBenchmarkWorkload workload,
         int targetQueuedArticles,
         int workerId,
-        FixedArticleLimiter? fixedArticleLimiter,
         CancellationToken cancellationToken)
     {
         _ = targetQueuedArticles;
@@ -31,11 +30,6 @@ internal static partial class MeasurementExecutionEngine
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            if (fixedArticleLimiter is not null && !fixedArticleLimiter.TryReserveNext())
-            {
-                return;
-            }
-
             if (!workload.TryTakeNextMessageId(out string? messageId))
             {
                 return;
@@ -67,7 +61,7 @@ internal static partial class MeasurementExecutionEngine
                 blockedTicks: queueWaitTicks,
                 otherActiveTicks: otherActiveTicks);
 
-            metrics.OnGenerated(workload.PayloadLength, producerTiming, queueWaitTicks);
+            metrics.OnGenerated(workload.PayloadLength, generationEnd, producerTiming, queueWaitTicks);
         }
     }
 
@@ -76,30 +70,49 @@ internal static partial class MeasurementExecutionEngine
     /// </summary>
     internal static async Task DispatchLoopAsync(
         BoundedArticleQueue queue,
-        TransitPublisher publisher,
+        TransitPublisher? publisher,
         MeasurementMetrics metrics,
         PreparedBenchmarkWorkload workload,
+        FixedArticleLimiter? fixedCountAdmissionLimiter,
         CancellationToken cancellationToken,
-        bool enableForensicDiagnostics)
+        bool enableForensicDiagnostics,
+        Func<string, ReadOnlyMemory<byte>, CancellationToken, ValueTask<TransitPublishResult>>? publishAsyncOverride = null,
+        Func<ValueTask>? reservationGateAsync = null,
+        Action<TransitPublishResult>? terminalObserver = null)
     {
         bool forensicSnapshotFailureLogged = false;
+        bool hasPublisherDiagnostics = publisher is not null;
 
         while (await queue.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
         {
             while (queue.TryRead(out QueuedArticle queuedArticle))
             {
                 long dequeuedTick = Stopwatch.GetTimestamp();
+                if (fixedCountAdmissionLimiter is not null)
+                {
+                    if (reservationGateAsync is not null)
+                    {
+                        await reservationGateAsync().ConfigureAwait(false);
+                    }
+
+                    if (!fixedCountAdmissionLimiter.TryReserveNext())
+                    {
+                        queue.ReleaseReservation(queuedArticle.PayloadLength);
+                        continue;
+                    }
+                }
+
                 metrics.OnDequeued(dequeuedTick);
                 Interlocked.Increment(ref metrics.InFlightSubmissions);
 
                 try
                 {
                     int pendingAtSubmit = 0;
-                    if (enableForensicDiagnostics)
+                    if (enableForensicDiagnostics && hasPublisherDiagnostics)
                     {
                         try
                         {
-                            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
+                            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot beforeSubmit = publisher!.CaptureConnectionDiagnosticsSnapshot();
                             pendingAtSubmit = beforeSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
                         }
                         catch (Exception ex)
@@ -116,15 +129,33 @@ internal static partial class MeasurementExecutionEngine
 
                     metrics.OnAdmitted(queuedArticle.PayloadLength, dequeuedTick);
                     long publishStartTick = Stopwatch.GetTimestamp();
-                    TransitPublishResult result = await publisher.PublishAsync(queuedArticle.MessageId, workload.ReusableArticlePayload, cancellationToken).ConfigureAwait(false);
+                    TransitPublishResult result;
+
+                    try
+                    {
+                        if (publishAsyncOverride is not null)
+                        {
+                            result = await publishAsyncOverride(queuedArticle.MessageId, workload.ReusableArticlePayload, cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            result = await publisher!.PublishAsync(queuedArticle.MessageId, workload.ReusableArticlePayload, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        long failureTick = Stopwatch.GetTimestamp();
+                        result = CreateTerminalResultFromDispatchException(queuedArticle.MessageId, ex, publishStartTick, failureTick);
+                    }
+
                     long publishEndTick = Stopwatch.GetTimestamp();
 
                     int pendingAtComplete = 0;
-                    if (enableForensicDiagnostics)
+                    if (enableForensicDiagnostics && hasPublisherDiagnostics)
                     {
                         try
                         {
-                            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterSubmit = publisher.CaptureConnectionDiagnosticsSnapshot();
+                            TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot afterSubmit = publisher!.CaptureConnectionDiagnosticsSnapshot();
                             pendingAtComplete = afterSubmit.Connections.Sum(static x => x.Snapshot.CurrentConcurrentSubmissions);
                         }
                         catch (Exception ex)
@@ -140,6 +171,7 @@ internal static partial class MeasurementExecutionEngine
                     }
 
                     metrics.OnPublishResult(result, queuedArticle.PayloadLength, dequeuedTick, publishStartTick, publishEndTick, pendingAtSubmit, pendingAtComplete);
+                    terminalObserver?.Invoke(result);
                 }
                 finally
                 {
@@ -149,13 +181,58 @@ internal static partial class MeasurementExecutionEngine
             }
         }
 
-        TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot dispatcherExitDiagnostics = publisher.CaptureConnectionDiagnosticsSnapshot();
+        if (!hasPublisherDiagnostics)
+        {
+            return;
+        }
+
+        TransitPublisher.TransitPublisherConnectionDiagnosticsSnapshot dispatcherExitDiagnostics = publisher!.CaptureConnectionDiagnosticsSnapshot();
         int dispatcherExitPendingMessageIds = dispatcherExitDiagnostics.Connections.Sum(static entry => entry.Snapshot.OutstandingOperations.Length);
         long dispatcherExitQueuedWriteIntents = dispatcherExitDiagnostics.Connections.Sum(static entry => entry.Snapshot.CurrentWriteIntentQueueDepth);
         Console.WriteLine("[SHUTDOWN-DIAG] DispatchLoop exit: queuedSubmissions={0} pendingMessageIds={1} queuedWriteIntents={2}",
             dispatcherExitDiagnostics.QueuedSubmissionCount,
             dispatcherExitPendingMessageIds,
             dispatcherExitQueuedWriteIntents);
+    }
+
+    /// <summary>
+    /// Creates a deterministic terminal publish result for dispatch-level publish exceptions so admitted articles always terminalize exactly once.
+    /// </summary>
+    /// <param name="messageId">Message-ID associated with the failed publish attempt.</param>
+    /// <param name="exception">Exception raised by publish processing.</param>
+    /// <param name="publishStartTick">Monotonic tick captured before publish invocation.</param>
+    /// <param name="publishEndTick">Monotonic tick captured when exception was observed.</param>
+    /// <returns>A terminal publish result mapped to existing benchmark failure taxonomy.</returns>
+    private static TransitPublishResult CreateTerminalResultFromDispatchException(string messageId, Exception exception, long publishStartTick, long publishEndTick)
+    {
+        TransitPublishStatus status;
+        TransitPublishProvenance provenance;
+
+        if (exception is OperationCanceledException)
+        {
+            status = TransitPublishStatus.Canceled;
+            provenance = TransitPublishProvenance.Cancellation;
+        }
+        else if (exception is ObjectDisposedException)
+        {
+            status = TransitPublishStatus.Unavailable;
+            provenance = TransitPublishProvenance.Unavailable;
+        }
+        else
+        {
+            status = TransitPublishStatus.Failed;
+            provenance = TransitPublishProvenance.Failed;
+        }
+
+        return new TransitPublishResult(
+            MessageId: messageId,
+            Status: status,
+            ResponseCode: null,
+            ResponseText: exception.Message,
+            T0PublishAsyncEnterTick: publishStartTick,
+            T7PublishAsyncCompleteTick: publishEndTick,
+            Provenance: provenance,
+            ProvenanceTick: publishEndTick);
     }
 
     /// <summary>
@@ -197,8 +274,8 @@ internal static partial class MeasurementExecutionEngine
 
                 MeasurementSnapshot current = metrics.Snapshot();
 
-                long generatedCountDelta = current.GeneratedCount - previous.GeneratedCount;
-                long generatedBytesDelta = current.GeneratedBytes - previous.GeneratedBytes;
+                long generatedCountDelta = current.OfferedCount - previous.OfferedCount;
+                long generatedBytesDelta = current.OfferedBytes - previous.OfferedBytes;
                 long admittedCountDelta = current.AdmittedCount - previous.AdmittedCount;
                 long admittedBytesDelta = current.AdmittedBytes - previous.AdmittedBytes;
                 long acceptedCountDelta = current.AcceptedCount - previous.AcceptedCount;
