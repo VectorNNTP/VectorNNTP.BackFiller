@@ -165,7 +165,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         }
 
         /// <summary>
-        /// Verifies canonical comment ownership does not authorize deletion when record identity constraints fail.
+        /// Verifies canonical comment ownership does not authorize deletion when record identity constraints fail,
+        /// even when provider list results include records outside the requested name.
         /// </summary>
         [Fact]
         public async Task IssueCertificateAsync_WhenRecordIdentityDoesNotMatch_PreservesCanonicalCommentRecords()
@@ -179,11 +180,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 shouldFailValidation: false,
                 shouldFailFinalize: false,
                 throwOnDelete: false,
-                cancellationToken: CancellationToken.None);
+                cancellationToken: CancellationToken.None,
+                returnAllRecordsFromGet: true);
 
             Assert.True(result.WasSuccessful);
             Assert.Equal(1, result.Api.AddCallCount);
             Assert.Equal(1, result.Api.DeleteCallCount);
+            Assert.DoesNotContain("wrong-name", result.Api.DeletedRecordIds);
+            Assert.DoesNotContain("wrong-type", result.Api.DeletedRecordIds);
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "wrong-name", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "wrong-type", StringComparison.Ordinal));
         }
@@ -239,7 +243,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             CancellationToken cancellationToken,
             bool failChallengeAfterCreate = false,
             string? challengeTokenOverride = null,
-            FakeCloudflareTxtRecordApi? persistentApi = null)
+            FakeCloudflareTxtRecordApi? persistentApi = null,
+            bool returnAllRecordsFromGet = false)
         {
             _ = shouldFailFinalize;
             string tempDir = Path.Combine(Path.GetTempPath(), $"VectorNNTP-BackFiller-AcmeDns01-{Guid.NewGuid():N}");
@@ -248,7 +253,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             try
             {
                 BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir);
-                FakeCloudflareTxtRecordApi api = persistentApi ?? new(initialRecords, throwOnDelete);
+                FakeCloudflareTxtRecordApi api = persistentApi ?? new(initialRecords, throwOnDelete, returnAllRecordsFromGet);
                 if (persistentApi is not null)
                 {
                     api.Seed(initialRecords);
@@ -410,6 +415,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// </summary>
             private readonly bool _throwOnDelete;
             /// <summary>
+            /// Controls whether list calls should bypass record-name filtering to exercise identity checks in
+            /// production reconciliation logic.
+            /// </summary>
+            private readonly bool _returnAllRecordsFromGet;
+            /// <summary>
             /// Supplies  next id for the fixture or scenario under test.
             /// </summary>
             private int _nextId = 1000;
@@ -417,10 +427,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// <summary>
             /// Confirms the fake cloudflare txt record api behavior.
             /// </summary>
-            internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete)
+            internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete, bool returnAllRecordsFromGet = false)
             {
                 _records = [.. initialRecords];
                 _throwOnDelete = throwOnDelete;
+                _returnAllRecordsFromGet = returnAllRecordsFromGet;
             }
 
             /// <summary>
@@ -468,6 +479,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             public Task<IReadOnlyList<CloudflareTxtRecordInfo>> GetTxtRecordsAsync(string zoneId, string recordName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                if (_returnAllRecordsFromGet)
+                {
+                    return Task.FromResult<IReadOnlyList<CloudflareTxtRecordInfo>>([.. _records]);
+                }
+
                 return Task.FromResult<IReadOnlyList<CloudflareTxtRecordInfo>>([.. _records.Where(record => record.Name == recordName)]);
             }
 
