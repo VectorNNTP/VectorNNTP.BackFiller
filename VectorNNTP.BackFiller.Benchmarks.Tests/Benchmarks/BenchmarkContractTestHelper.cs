@@ -93,8 +93,8 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
         /// Confirms the create measurement snapshot behavior.
         /// </summary>
         internal static MeasurementSnapshot CreateMeasurementSnapshot(
-            long generatedCount = 100,
-            long generatedBytes = 100_000_000,
+            long offeredCount = 100,
+            long offeredBytes = 100_000_000,
             long admittedCount = 90,
             long admittedBytes = 90_000_000,
             long acceptedCount = 80,
@@ -109,15 +109,37 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             int articleBytes = 1_000_000)
         {
             return new MeasurementSnapshot(
-                GeneratedCount: generatedCount,
-                GeneratedBytes: generatedBytes,
+                OfferedCount: offeredCount,
+                OfferedBytes: offeredBytes,
+                OfferedWithinWindowCount: offeredCount,
+                OfferedWithinWindowBytes: offeredBytes,
                 AdmittedCount: admittedCount,
                 AdmittedBytes: admittedBytes,
+                AdmittedWithinWindowCount: admittedCount,
+                AdmittedWithinWindowBytes: admittedBytes,
+                SubmittedCount: admittedCount,
+                SubmittedBytes: admittedBytes,
+                SubmittedWithinWindowCount: admittedCount,
+                SubmittedWithinWindowBytes: admittedBytes,
                 AcceptedCount: acceptedCount,
                 AcceptedBytes: acceptedBytes,
+                AcceptedWithinWindowCount: acceptedCount,
+                AcceptedWithinWindowBytes: acceptedBytes,
                 RejectedCount: rejectedCount,
+                RejectedWithinWindowCount: rejectedCount,
                 AmbiguousCount: ambiguousCount,
+                AmbiguousWithinWindowCount: ambiguousCount,
+                FailedCount: 0,
+                FailedWithinWindowCount: 0,
+                UnavailableCount: 0,
+                UnavailableWithinWindowCount: 0,
+                CanceledCount: 0,
+                CanceledWithinWindowCount: 0,
                 CompletedCount: completedCount,
+                CompletedWithinWindowCount: completedCount,
+                CompletedPostMeasurementCount: 0,
+                AcceptedPostMeasurementCount: 0,
+                AcceptedPostMeasurementBytes: 0,
                 BlockedTicks: blockedTicks,
                 GenerationTicks: 4500,
                 OtherActiveTicks: 1500,
@@ -216,6 +238,23 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             bool enableForensicDiagnostics,
             FixedCountBoundaryTelemetry? fixedCountBoundaryTelemetry = null)
         {
+            long measurementStartTick = 1_000_000;
+            long measurementDurationTicks = Math.Max(1, (long)(Math.Max(0.000001d, (measurementEndUtc - measurementStartUtc).TotalSeconds) * Stopwatch.Frequency));
+            long measurementEndTick = measurementStartTick + measurementDurationTicks;
+            long drainTicks = Math.Max(0, (long)(Math.Max(0d, drainDuration.TotalSeconds) * Stopwatch.Frequency));
+            long drainStartTick = measurementEndTick;
+            long drainCompletionTick = drainStartTick + drainTicks;
+
+            MeasurementBoundary boundary = new(
+                MeasurementStartUtc: measurementStartUtc,
+                MeasurementStartStopwatchTick: measurementStartTick,
+                MeasurementEndUtc: measurementEndUtc,
+                MeasurementEndStopwatchTick: measurementEndTick,
+                DrainStartUtc: measurementEndUtc,
+                DrainStartStopwatchTick: drainStartTick,
+                DrainCompletionUtc: measurementEndUtc + drainDuration,
+                DrainCompletionStopwatchTick: drainCompletionTick);
+
             object? value = CreateBenchmarkResultMethod.Invoke(
                 obj: null,
                 parameters:
@@ -228,9 +267,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
                     runtime,
                     Process.GetCurrentProcess(),
                     workloadPreparation,
-                    measurementStartUtc,
-                    measurementEndUtc,
-                    drainDuration,
+                    boundary,
                     outstandingAtMeasurementEnd,
                     drainedAfterMeasurement,
                     allocatedStartBytes,

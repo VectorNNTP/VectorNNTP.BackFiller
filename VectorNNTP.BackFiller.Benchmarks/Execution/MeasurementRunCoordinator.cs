@@ -52,7 +52,7 @@ internal static class MeasurementRunCoordinator
         long allocatedStartBytes = GC.GetTotalAllocatedBytes(precise: false);
 
         int producerQueueTargetArticles = Math.Clamp(config.ProducerQueueTargetArticles, 1, config.MaxQueuedArticles);
-        FixedArticleLimiter? fixedArticleLimiter = config.MeasurementArticleCount is int fixedCount
+        FixedArticleLimiter? fixedCountAdmissionLimiter = config.MeasurementArticleCount is int fixedCount
             ? new FixedArticleLimiter(fixedCount)
             : null;
 
@@ -66,7 +66,6 @@ internal static class MeasurementRunCoordinator
                 workload,
                 producerQueueTargetArticles,
                 capturedWorkerId,
-                fixedArticleLimiter,
                 producerStopCts.Token), CancellationToken.None);
         }
 
@@ -84,7 +83,7 @@ internal static class MeasurementRunCoordinator
         Task[] dispatchers = new Task[config.DispatchWorkerCount];
         for (int i = 0; i < dispatchers.Length; i++)
         {
-            dispatchers[i] = Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, cancellationToken, enableForensicDiagnostics), CancellationToken.None);
+            dispatchers[i] = Task.Run(() => MeasurementExecutionEngine.DispatchLoopAsync(queue, publisher, metrics, workload, fixedCountAdmissionLimiter, cancellationToken, enableForensicDiagnostics), CancellationToken.None);
         }
 
         if (config.MeasurementArticleCount is null)
@@ -93,7 +92,8 @@ internal static class MeasurementRunCoordinator
         }
         else
         {
-            await Task.WhenAll(producerTasks).ConfigureAwait(false);
+            int targetAdmitted = config.MeasurementArticleCount.Value;
+            await metrics.WaitForAdmittedCountAsync(targetAdmitted, cancellationToken).ConfigureAwait(false);
         }
 
         return await MeasurementExecutionEngine.DrainAndShutdownAsync(
@@ -109,9 +109,10 @@ internal static class MeasurementRunCoordinator
             dispatchers,
             producerStopCts,
             measurementStartUtc,
+            measurementStartTick,
             allocatedStartBytes,
             enableForensicDiagnostics,
-            (drainConfig, snapshot, drainMetrics, drainRuntime, drainProcess, workloadPreparation, startUtc, endUtc, drainTime, outstandingAtEnd, drainedAfterEnd, allocatedAtStart, forensicEnabled, fixedCountBoundaryTelemetry) =>
+            (drainConfig, snapshot, drainMetrics, drainRuntime, drainProcess, workloadPreparation, boundary, outstandingAtEnd, drainedAfterEnd, allocatedAtStart, forensicEnabled, fixedCountBoundaryTelemetry) =>
                 BenchmarkResultFactory.Create(
                     drainConfig,
                     runtimeIdentity,
@@ -121,9 +122,7 @@ internal static class MeasurementRunCoordinator
                     drainRuntime,
                     drainProcess,
                     workloadPreparation,
-                    startUtc,
-                    endUtc,
-                    drainTime,
+                    boundary,
                     outstandingAtEnd,
                     drainedAfterEnd,
                     allocatedAtStart,

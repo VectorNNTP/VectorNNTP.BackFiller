@@ -20,13 +20,21 @@ internal readonly record struct ProvenanceOccurrenceBounds(long FirstTick, long 
 internal sealed class MeasurementMetrics
 {
     /// <summary>
-    /// Gets or sets the _generatedCount.
+    /// Gets or sets the _offeredCount.
     /// </summary>
-    private long _generatedCount;
+    private long _offeredCount;
     /// <summary>
-    /// Gets or sets the _generatedBytes.
+    /// Gets or sets the _offeredBytes.
     /// </summary>
-    private long _generatedBytes;
+    private long _offeredBytes;
+    /// <summary>
+    /// Gets or sets the _offeredWithinWindowCount.
+    /// </summary>
+    private long _offeredWithinWindowCount;
+    /// <summary>
+    /// Gets or sets the _offeredWithinWindowBytes.
+    /// </summary>
+    private long _offeredWithinWindowBytes;
     /// <summary>
     /// Gets or sets the _admittedCount.
     /// </summary>
@@ -36,6 +44,30 @@ internal sealed class MeasurementMetrics
     /// </summary>
     private long _admittedBytes;
     /// <summary>
+    /// Gets or sets the _admittedWithinWindowCount.
+    /// </summary>
+    private long _admittedWithinWindowCount;
+    /// <summary>
+    /// Gets or sets the _admittedWithinWindowBytes.
+    /// </summary>
+    private long _admittedWithinWindowBytes;
+    /// <summary>
+    /// Gets or sets the _submittedCount.
+    /// </summary>
+    private long _submittedCount;
+    /// <summary>
+    /// Gets or sets the _submittedBytes.
+    /// </summary>
+    private long _submittedBytes;
+    /// <summary>
+    /// Gets or sets the _submittedWithinWindowCount.
+    /// </summary>
+    private long _submittedWithinWindowCount;
+    /// <summary>
+    /// Gets or sets the _submittedWithinWindowBytes.
+    /// </summary>
+    private long _submittedWithinWindowBytes;
+    /// <summary>
     /// Gets or sets the _acceptedCount.
     /// </summary>
     private long _acceptedCount;
@@ -44,13 +76,37 @@ internal sealed class MeasurementMetrics
     /// </summary>
     private long _acceptedBytes;
     /// <summary>
+    /// Gets or sets the _acceptedWithinWindowCount.
+    /// </summary>
+    private long _acceptedWithinWindowCount;
+    /// <summary>
+    /// Gets or sets the _acceptedWithinWindowBytes.
+    /// </summary>
+    private long _acceptedWithinWindowBytes;
+    /// <summary>
+    /// Gets or sets the _acceptedPostMeasurementCount.
+    /// </summary>
+    private long _acceptedPostMeasurementCount;
+    /// <summary>
+    /// Gets or sets the _acceptedPostMeasurementBytes.
+    /// </summary>
+    private long _acceptedPostMeasurementBytes;
+    /// <summary>
     /// Gets or sets the _rejectedCount.
     /// </summary>
     private long _rejectedCount;
     /// <summary>
+    /// Gets or sets the _rejectedWithinWindowCount.
+    /// </summary>
+    private long _rejectedWithinWindowCount;
+    /// <summary>
     /// Gets or sets the _ambiguousCount.
     /// </summary>
     private long _ambiguousCount;
+    /// <summary>
+    /// Gets or sets the _ambiguousWithinWindowCount.
+    /// </summary>
+    private long _ambiguousWithinWindowCount;
     /// <summary>
     /// Gets or sets the _ambiguousOnlyCount.
     /// </summary>
@@ -60,17 +116,37 @@ internal sealed class MeasurementMetrics
     /// </summary>
     private long _failedCount;
     /// <summary>
+    /// Gets or sets the _failedWithinWindowCount.
+    /// </summary>
+    private long _failedWithinWindowCount;
+    /// <summary>
     /// Gets or sets the _unavailableCount.
     /// </summary>
     private long _unavailableCount;
+    /// <summary>
+    /// Gets or sets the _unavailableWithinWindowCount.
+    /// </summary>
+    private long _unavailableWithinWindowCount;
     /// <summary>
     /// Gets or sets the _canceledCount.
     /// </summary>
     private long _canceledCount;
     /// <summary>
+    /// Gets or sets the _canceledWithinWindowCount.
+    /// </summary>
+    private long _canceledWithinWindowCount;
+    /// <summary>
     /// Gets or sets the _completedCount.
     /// </summary>
     private long _completedCount;
+    /// <summary>
+    /// Gets or sets the _completedWithinWindowCount.
+    /// </summary>
+    private long _completedWithinWindowCount;
+    /// <summary>
+    /// Gets or sets the _completedPostMeasurementCount.
+    /// </summary>
+    private long _completedPostMeasurementCount;
 
     /// <summary>
     /// Gets or sets the _measurementStartStopwatchTick.
@@ -84,10 +160,6 @@ internal sealed class MeasurementMetrics
     /// Gets or sets the _measurementEndUtcTicks.
     /// </summary>
     private long _measurementEndUtcTicks;
-    /// <summary>
-    /// Gets or sets the _measurementBoundarySet.
-    /// </summary>
-    private long _measurementBoundarySet;
 
     /// <summary>
     /// Gets or sets the _provenanceAggregates.
@@ -303,6 +375,14 @@ internal sealed class MeasurementMetrics
     /// Gets or sets the _articleBytes.
     /// </summary>
     private readonly int _articleBytes;
+    /// <summary>
+    /// Gets or sets the _admittedTargetCount.
+    /// </summary>
+    private int _admittedTargetCount;
+    /// <summary>
+    /// Gets or sets the _admittedTargetCompletion.
+    /// </summary>
+    private TaskCompletionSource _admittedTargetCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// Implements the measurement Metrics contract.
@@ -325,10 +405,17 @@ internal sealed class MeasurementMetrics
     /// <summary>
     /// Implements the on Generated contract.
     /// </summary>
-    internal void OnGenerated(int bytes, TransitBenchmarkCore.ProducerTiming producerTiming, long queueWaitTicks)
+    internal void OnGenerated(int bytes, long offeredTick, TransitBenchmarkCore.ProducerTiming producerTiming, long queueWaitTicks)
     {
-        Interlocked.Increment(ref _generatedCount);
-        Interlocked.Add(ref _generatedBytes, bytes);
+        Interlocked.Increment(ref _offeredCount);
+        Interlocked.Add(ref _offeredBytes, bytes);
+
+        if (!IsPostMeasurementTick(offeredTick))
+        {
+            Interlocked.Increment(ref _offeredWithinWindowCount);
+            Interlocked.Add(ref _offeredWithinWindowBytes, bytes);
+        }
+
         Interlocked.Add(ref _blockedTicks, producerTiming.BlockedTicks);
         Interlocked.Add(ref _generationTicks, producerTiming.GenerationTicks);
         Interlocked.Add(ref _otherActiveTicks, producerTiming.OtherActiveTicks);
@@ -347,10 +434,22 @@ internal sealed class MeasurementMetrics
     /// <summary>
     /// Implements the on Admitted contract.
     /// </summary>
-    internal void OnAdmitted(int bytes, long dequeuedTick)
+    internal void OnAdmitted(int bytes, long admittedTick)
     {
-        Interlocked.Increment(ref _admittedCount);
+        long admittedCount = Interlocked.Increment(ref _admittedCount);
         Interlocked.Add(ref _admittedBytes, bytes);
+
+        if (!IsPostMeasurementTick(admittedTick))
+        {
+            Interlocked.Increment(ref _admittedWithinWindowCount);
+            Interlocked.Add(ref _admittedWithinWindowBytes, bytes);
+        }
+
+        int target = Volatile.Read(ref _admittedTargetCount);
+        if (target > 0 && admittedCount >= target)
+        {
+            _ = _admittedTargetCompletion.TrySetResult();
+        }
     }
 
     /// <summary>
@@ -363,20 +462,52 @@ internal sealed class MeasurementMetrics
         long publishStartTick,
         long publishEndTick,
         int pendingAtSubmit,
-        int pendingAtComplete)
+        int pendingAtComplete,
+        long? completionTickOverride = null)
     {
+        Interlocked.Increment(ref _submittedCount);
+        Interlocked.Add(ref _submittedBytes, bytes);
+
+        if (!IsPostMeasurementTick(publishStartTick))
+        {
+            Interlocked.Increment(ref _submittedWithinWindowCount);
+            Interlocked.Add(ref _submittedWithinWindowBytes, bytes);
+        }
+
+        long terminalClassificationTick = completionTickOverride ?? publishEndTick;
+        bool postMeasurementCompletion = IsPostMeasurementTick(terminalClassificationTick);
+
         if (publishResult.Status == TransitPublishStatus.Accepted)
         {
             Interlocked.Increment(ref _acceptedCount);
             Interlocked.Add(ref _acceptedBytes, bytes);
+
+            if (postMeasurementCompletion)
+            {
+                Interlocked.Increment(ref _acceptedPostMeasurementCount);
+                Interlocked.Add(ref _acceptedPostMeasurementBytes, bytes);
+            }
+            else
+            {
+                Interlocked.Increment(ref _acceptedWithinWindowCount);
+                Interlocked.Add(ref _acceptedWithinWindowBytes, bytes);
+            }
         }
         else if (publishResult.Status == TransitPublishStatus.Rejected)
         {
             Interlocked.Increment(ref _rejectedCount);
+            if (!postMeasurementCompletion)
+            {
+                Interlocked.Increment(ref _rejectedWithinWindowCount);
+            }
         }
         else if (publishResult.Status is TransitPublishStatus.Ambiguous or TransitPublishStatus.Unavailable or TransitPublishStatus.Failed or TransitPublishStatus.Canceled)
         {
             Interlocked.Increment(ref _ambiguousCount);
+            if (!postMeasurementCompletion)
+            {
+                Interlocked.Increment(ref _ambiguousWithinWindowCount);
+            }
         }
 
         switch (publishResult.Status)
@@ -386,18 +517,41 @@ internal sealed class MeasurementMetrics
                 break;
             case TransitPublishStatus.Failed:
                 Interlocked.Increment(ref _failedCount);
+                if (!postMeasurementCompletion)
+                {
+                    Interlocked.Increment(ref _failedWithinWindowCount);
+                }
+
                 break;
             case TransitPublishStatus.Unavailable:
                 Interlocked.Increment(ref _unavailableCount);
+                if (!postMeasurementCompletion)
+                {
+                    Interlocked.Increment(ref _unavailableWithinWindowCount);
+                }
+
                 break;
             case TransitPublishStatus.Canceled:
                 Interlocked.Increment(ref _canceledCount);
+                if (!postMeasurementCompletion)
+                {
+                    Interlocked.Increment(ref _canceledWithinWindowCount);
+                }
+
                 break;
         }
 
-        long completionTick = Stopwatch.GetTimestamp();
         Interlocked.Increment(ref _completedCount);
-        RecordProvenanceClassification(publishResult, completionTick);
+        if (postMeasurementCompletion)
+        {
+            Interlocked.Increment(ref _completedPostMeasurementCount);
+        }
+        else
+        {
+            Interlocked.Increment(ref _completedWithinWindowCount);
+        }
+
+        RecordProvenanceClassification(publishResult, terminalClassificationTick);
 
         long dispatchQueueWaitTicks = Math.Max(0, publishStartTick - dequeuedTick);
         long publishTicks = Math.Max(0, publishEndTick - publishStartTick);
@@ -561,9 +715,33 @@ internal sealed class MeasurementMetrics
     /// </summary>
     internal long GetCompletedCount() => Interlocked.Read(ref _completedCount);
     /// <summary>
+    /// Gets CompletedWithinWindowCount.
+    /// </summary>
+    internal long GetCompletedWithinWindowCount() => Interlocked.Read(ref _completedWithinWindowCount);
+    /// <summary>
+    /// Gets CompletedPostMeasurementCount.
+    /// </summary>
+    internal long GetCompletedPostMeasurementCount() => Interlocked.Read(ref _completedPostMeasurementCount);
+    /// <summary>
     /// Gets AcceptedCount.
     /// </summary>
     internal long GetAcceptedCount() => Interlocked.Read(ref _acceptedCount);
+    /// <summary>
+    /// Gets AcceptedWithinWindowCount.
+    /// </summary>
+    internal long GetAcceptedWithinWindowCount() => Interlocked.Read(ref _acceptedWithinWindowCount);
+    /// <summary>
+    /// Gets AcceptedWithinWindowBytes.
+    /// </summary>
+    internal long GetAcceptedWithinWindowBytes() => Interlocked.Read(ref _acceptedWithinWindowBytes);
+    /// <summary>
+    /// Gets AcceptedPostMeasurementCount.
+    /// </summary>
+    internal long GetAcceptedPostMeasurementCount() => Interlocked.Read(ref _acceptedPostMeasurementCount);
+    /// <summary>
+    /// Gets AcceptedPostMeasurementBytes.
+    /// </summary>
+    internal long GetAcceptedPostMeasurementBytes() => Interlocked.Read(ref _acceptedPostMeasurementBytes);
     /// <summary>
     /// Gets RejectedCount.
     /// </summary>
@@ -586,13 +764,41 @@ internal sealed class MeasurementMetrics
     internal long GetCanceledCount() => Interlocked.Read(ref _canceledCount);
 
     /// <summary>
+    /// Waits until the admitted count reaches the configured fixed-count cohort size.
+    /// </summary>
+    /// <param name="targetAdmittedCount">The fixed-count admission target.</param>
+    /// <param name="cancellationToken">Token used to cancel waiting.</param>
+    /// <returns>A task that completes when admitted count reaches <paramref name="targetAdmittedCount"/>.</returns>
+    internal async Task WaitForAdmittedCountAsync(int targetAdmittedCount, CancellationToken cancellationToken)
+    {
+        if (targetAdmittedCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(targetAdmittedCount), targetAdmittedCount, "Admitted target must be positive.");
+        }
+
+        if (Interlocked.Read(ref _admittedCount) >= targetAdmittedCount)
+        {
+            return;
+        }
+
+        Interlocked.Exchange(ref _admittedTargetCount, targetAdmittedCount);
+        Task completionTask = _admittedTargetCompletion.Task;
+
+        if (Interlocked.Read(ref _admittedCount) >= targetAdmittedCount)
+        {
+            _ = _admittedTargetCompletion.TrySetResult();
+        }
+
+        await completionTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Implements the mark MeasurementBoundary contract.
     /// </summary>
     internal void MarkMeasurementBoundary(DateTimeOffset measurementEndUtc, long measurementEndStopwatchTick)
     {
         Interlocked.Exchange(ref _measurementEndUtcTicks, measurementEndUtc.UtcTicks);
         Interlocked.Exchange(ref _measurementEndStopwatchTick, measurementEndStopwatchTick);
-        Interlocked.Exchange(ref _measurementBoundarySet, 1);
     }
 
     /// <summary>
@@ -601,6 +807,22 @@ internal sealed class MeasurementMetrics
     internal void MarkMeasurementStart(long measurementStartStopwatchTick)
     {
         Interlocked.Exchange(ref _measurementStartStopwatchTick, measurementStartStopwatchTick);
+    }
+
+    /// <summary>
+    /// Determines whether an event tick occurred after the measurement boundary.
+    /// </summary>
+    /// <param name="eventStopwatchTick">Stopwatch timestamp captured for the event.</param>
+    /// <returns><see langword="true"/> when the event occurred after measurement end; otherwise <see langword="false"/>.</returns>
+    internal bool IsPostMeasurementTick(long eventStopwatchTick)
+    {
+        if (eventStopwatchTick <= 0)
+        {
+            return false;
+        }
+
+        long measurementEndTick = Interlocked.Read(ref _measurementEndStopwatchTick);
+        return measurementEndTick > 0 && eventStopwatchTick > measurementEndTick;
     }
 
     /// <summary>
@@ -785,15 +1007,37 @@ internal sealed class MeasurementMetrics
         long queueDepthSampleCount = Interlocked.Read(ref _queueDepthSampleCount);
 
         return new MeasurementSnapshot(
-            GeneratedCount: Interlocked.Read(ref _generatedCount),
-            GeneratedBytes: Interlocked.Read(ref _generatedBytes),
+            OfferedCount: Interlocked.Read(ref _offeredCount),
+            OfferedBytes: Interlocked.Read(ref _offeredBytes),
+            OfferedWithinWindowCount: Interlocked.Read(ref _offeredWithinWindowCount),
+            OfferedWithinWindowBytes: Interlocked.Read(ref _offeredWithinWindowBytes),
             AdmittedCount: Interlocked.Read(ref _admittedCount),
             AdmittedBytes: Interlocked.Read(ref _admittedBytes),
+            AdmittedWithinWindowCount: Interlocked.Read(ref _admittedWithinWindowCount),
+            AdmittedWithinWindowBytes: Interlocked.Read(ref _admittedWithinWindowBytes),
+            SubmittedCount: Interlocked.Read(ref _submittedCount),
+            SubmittedBytes: Interlocked.Read(ref _submittedBytes),
+            SubmittedWithinWindowCount: Interlocked.Read(ref _submittedWithinWindowCount),
+            SubmittedWithinWindowBytes: Interlocked.Read(ref _submittedWithinWindowBytes),
             AcceptedCount: Interlocked.Read(ref _acceptedCount),
             AcceptedBytes: Interlocked.Read(ref _acceptedBytes),
+            AcceptedWithinWindowCount: Interlocked.Read(ref _acceptedWithinWindowCount),
+            AcceptedWithinWindowBytes: Interlocked.Read(ref _acceptedWithinWindowBytes),
             RejectedCount: Interlocked.Read(ref _rejectedCount),
+            RejectedWithinWindowCount: Interlocked.Read(ref _rejectedWithinWindowCount),
             AmbiguousCount: Interlocked.Read(ref _ambiguousCount),
+            AmbiguousWithinWindowCount: Interlocked.Read(ref _ambiguousWithinWindowCount),
+            FailedCount: Interlocked.Read(ref _failedCount),
+            FailedWithinWindowCount: Interlocked.Read(ref _failedWithinWindowCount),
+            UnavailableCount: Interlocked.Read(ref _unavailableCount),
+            UnavailableWithinWindowCount: Interlocked.Read(ref _unavailableWithinWindowCount),
+            CanceledCount: Interlocked.Read(ref _canceledCount),
+            CanceledWithinWindowCount: Interlocked.Read(ref _canceledWithinWindowCount),
             CompletedCount: Interlocked.Read(ref _completedCount),
+            CompletedWithinWindowCount: Interlocked.Read(ref _completedWithinWindowCount),
+            CompletedPostMeasurementCount: Interlocked.Read(ref _completedPostMeasurementCount),
+            AcceptedPostMeasurementCount: Interlocked.Read(ref _acceptedPostMeasurementCount),
+            AcceptedPostMeasurementBytes: Interlocked.Read(ref _acceptedPostMeasurementBytes),
             BlockedTicks: Interlocked.Read(ref _blockedTicks),
             GenerationTicks: Interlocked.Read(ref _generationTicks),
             OtherActiveTicks: Interlocked.Read(ref _otherActiveTicks),
@@ -823,9 +1067,8 @@ internal sealed class MeasurementMetrics
         }
 
         TransitPublishProvenance provenance = NormalizeProvenance(publishResult);
-        bool boundaryDefined = Interlocked.Read(ref _measurementBoundarySet) == 1;
-        long measurementEndTick = boundaryDefined ? Interlocked.Read(ref _measurementEndStopwatchTick) : 0;
-        bool isPostMeasurement = boundaryDefined && completionTick > measurementEndTick;
+        long measurementEndTick = Interlocked.Read(ref _measurementEndStopwatchTick);
+        bool isPostMeasurement = measurementEndTick > 0 && completionTick > measurementEndTick;
 
         _provenanceAggregates[(int)provenance].Record(completionTick, isPostMeasurement);
 

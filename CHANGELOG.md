@@ -2,6 +2,26 @@
 
 This changelog records significant engineering events, archaeology recoveries, architectural decisions, test-contract repairs, benchmark changes, and measured performance outcomes.
 
+## 2026-09-12
+
+### Category: Benchmark Forensic Remediation (Issue #76 / PR #134)
+
+#### Summary
+Final F15 disposition recorded for B01 forensic remediation. `publishAsyncOverride` and nullable benchmark dispatch publisher were removed. `reservationGateAsync` and `terminalObserver` were retained as narrow internal test-only hooks with architectural justification.
+
+#### Why
+F04 requires deterministic multi-dispatcher staging at the exact pre-`TryReserveNext()` boundary. F05 requires per-MessageId exactly-once terminalization and Failed/Canceled mapping proofs. Existing runtime boundaries and exposed benchmark metrics/diagnostics do not provide equivalent deterministic control or identity-level completed-operation observation without broader redesign.
+
+#### Production impact
+No production behavior change. Normal benchmark production execution (`MeasurementRunCoordinator`) does not pass either hook, and both hooks are null on production paths.
+
+#### Validation
+- Focused F04/F05 tests passed.
+- Benchmark test suite passed.
+- Release x64 solution build passed.
+
+---
+
 ## 2026-08-21
 
 ### Commit: b8d557f9696c2d9d919241852e12b43541e2a1de (b8d557f)
