@@ -234,6 +234,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         /// <param name="throwOnDelete">Whether TXT-record cleanup should throw.</param>
         /// <param name="cancellationToken">Cancellation token for the scenario.</param>
         /// <param name="failChallengeAfterCreate">Whether the simulated challenge should throw immediately after record reconciliation/creation.</param>
+        /// <param name="challengeTokenOverride">
+        /// Optional challenge token override used to model a different issuance attempt, such as a restart where the
+        /// later process receives a different ACME DNS-01 token.
+        /// </param>
+        /// <param name="persistentApi">
+        /// Optional shared fake provider state used to model records surviving a process boundary and being observed by
+        /// a subsequent issuance attempt.
+        /// </param>
+        /// <param name="returnAllRecordsFromGet">
+        /// When <see langword="true"/>, the fake provider returns all seeded records without record-name filtering so
+        /// identity-negative tests can pass mismatched-name fixtures into production reconciliation logic.
+        /// </param>
         /// <returns>The scenario result capturing TXT API activity and any surfaced exception.</returns>
         private static async Task<RecoveryScenarioResult> ExecuteScenarioAsync(
             IReadOnlyList<CloudflareTxtRecordInfo> initialRecords,
@@ -427,6 +439,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// <summary>
             /// Confirms the fake cloudflare txt record api behavior.
             /// </summary>
+            /// <param name="initialRecords">Initial provider records seeded for the scenario.</param>
+            /// <param name="throwOnDelete">Whether delete operations should throw to simulate cleanup failures.</param>
+            /// <param name="returnAllRecordsFromGet">
+            /// Whether list operations should bypass record-name filtering so identity-negative fixtures can reach
+            /// production reconciliation logic.
+            /// </param>
             internal FakeCloudflareTxtRecordApi(IEnumerable<CloudflareTxtRecordInfo> initialRecords, bool throwOnDelete, bool returnAllRecordsFromGet = false)
             {
                 _records = [.. initialRecords];
@@ -604,6 +622,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             /// </summary>
             /// <param name="shouldFailValidation">Whether challenge validation should transition to invalid.</param>
             /// <param name="failChallengeAfterCreate">Whether validation should throw immediately after DNS setup.</param>
+            /// <param name="challengeToken">
+            /// DNS-01 challenge token used for this simulated attempt so restart scenarios can model token changes across
+            /// separate process executions.
+            /// </param>
             internal FakeAuthorizationContext(bool shouldFailValidation, bool failChallengeAfterCreate, string challengeToken)
             {
                 ArgumentException.ThrowIfNullOrWhiteSpace(challengeToken);
