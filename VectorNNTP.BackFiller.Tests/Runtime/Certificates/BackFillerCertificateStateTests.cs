@@ -127,7 +127,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             using X509Certificate2 intermediateSignedNoKey = intermediateRequest.Create(rootCertificate, now.AddDays(-2), now.AddDays(60), intermediateSerial);
             X509Certificate2 intermediateCertificate = intermediateSignedNoKey.CopyWithPrivateKey(intermediateKey);
 
-            RSA leafKey = RSA.Create(2048);
+            using RSA leafKey = RSA.Create(2048);
             CertificateRequest leafRequest = new(
                 $"CN={fqdn}",
                 leafKey,

@@ -1625,8 +1625,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
         /// <returns>The value returned by the create server certificate helper.</returns>
         private static X509Certificate2 CreateServerCertificate(string dnsName)
         {
-            using GeneratedCertificateChain chain = CreateServerCertificateChain(dnsName);
-            return CloneForState(chain.LeafCertificate);
+            ArgumentException.ThrowIfNullOrWhiteSpace(dnsName);
+
+            using RSA rsa = RSA.Create(2048);
+            CertificateRequest request = new(
+                $"CN={dnsName}",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            SubjectAlternativeNameBuilder sanBuilder = new();
+            sanBuilder.AddDnsName("localhost");
+            sanBuilder.AddDnsName(dnsName);
+            sanBuilder.AddIpAddress(IPAddress.Loopback);
+            request.CertificateExtensions.Add(sanBuilder.Build());
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, critical: true));
+            OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, critical: true));
+            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            using X509Certificate2 selfSigned = request.CreateSelfSigned(now.AddDays(-1), now.AddDays(30));
+            return CloneForState(selfSigned);
         }
 
         private static GeneratedCertificateChain CreateServerCertificateChain(string dnsName)
@@ -1660,7 +1681,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             using X509Certificate2 intermediateSignedNoKey = intermediateRequest.Create(rootCertificate, now.AddDays(-2), now.AddDays(60), intermediateSerial);
             X509Certificate2 intermediateCertificate = intermediateSignedNoKey.CopyWithPrivateKey(intermediateKey);
 
-            RSA leafKey = RSA.Create(2048);
+            using RSA leafKey = RSA.Create(2048);
             CertificateRequest leafRequest = new(
                 $"CN={dnsName}",
                 leafKey,
