@@ -185,10 +185,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// Optional lifecycle observer invoked when shutdown reaches the reconcile serialization boundary.
         /// </summary>
         private readonly Action? _stopAllSessionsBoundaryReached;
-        /// <summary>
-        /// Optional diagnostic lifecycle observer used by tests to capture service sequencing without changing behavior.
-        /// </summary>
-        private readonly Action<string>? _lifecycleObserver;
 
         /// <summary>
         /// Initializes the consumer service with the default always-available backbone capacity provider.
@@ -200,7 +196,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             IRabbitMqConsumerSessionFactory sessionFactory,
             ShutdownCoordinator shutdownCoordinator,
             ILogger<RabbitMqConsumerService> logger)
-            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger, null, null)
+            : this(runtimeOptions, accountSnapshotProvider, connectionManager, sessionFactory, shutdownCoordinator, AlwaysAvailableBackboneCapacityProvider.Instance, logger, null)
         {
         }
 
@@ -215,8 +211,7 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             ShutdownCoordinator shutdownCoordinator,
             IBackboneUsableCapacityProvider capacityProvider,
             ILogger<RabbitMqConsumerService> logger,
-            Action? stopAllSessionsBoundaryReached = null,
-            Action<string>? lifecycleObserver = null)
+            Action? stopAllSessionsBoundaryReached = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(accountSnapshotProvider);
@@ -233,7 +228,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
             _capacityProvider = capacityProvider;
             _logger = logger;
             _stopAllSessionsBoundaryReached = stopAllSessionsBoundaryReached;
-            _lifecycleObserver = lifecycleObserver;
 
             _consumerOptions = RabbitMqConsumerInfrastructureOptions.FromRuntimeOptions(runtimeOptions);
             _deliveryChannel = Channel.CreateBounded<RabbitMqArticleDelivery>(new BoundedChannelOptions(_consumerOptions.DeliveryBufferCapacity)
@@ -386,7 +380,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <returns>A task that completes after all sessions are stopped and the delivery channel is completed.</returns>
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            NotifyLifecycleObserver("ExecuteAsync.Started");
             LogConsumerServiceStarting(_logger, _consumerOptions.DeliveryBufferCapacity, _consumerOptions.PrefetchCount);
 
             using CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, _shutdownCts.Token);
@@ -400,7 +393,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
                 catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
                 {
-                    NotifyLifecycleObserver("ExecuteAsync.CancellationObserved.Reconcile");
                     break;
                 }
                 catch (Exception ex)
@@ -414,14 +406,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
                 catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
                 {
-                    NotifyLifecycleObserver("ExecuteAsync.CancellationObserved.Delay");
                     break;
                 }
             }
 
-            NotifyLifecycleObserver("ExecuteAsync.ReconcileLoopExited");
             await StopAllSessionsAsync(CancellationToken.None).ConfigureAwait(false);
-            NotifyLifecycleObserver("ExecuteAsync.StopAllSessionsCompleted");
             _ = _deliveryChannel.Writer.TryComplete();
             DisposeLifecycleCallbacks();
             _shutdownCts.Dispose();
@@ -436,10 +425,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// <returns>A task that completes after the service stops.</returns>
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            NotifyLifecycleObserver("StopAsync.Invoked");
             OnShutdownSignaled();
             await base.StopAsync(cancellationToken).ConfigureAwait(false);
-            NotifyLifecycleObserver("StopAsync.Completed");
         }
 
         /// <summary>
@@ -490,7 +477,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private async Task ReconcileSessionsAsync(CancellationToken cancellationToken)
         {
-            NotifyLifecycleObserver("ReconcileSessionsAsync.Begin");
             await _reconcileGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -614,7 +600,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                 }
 
                 LogConsumerReconcileCompleted(_logger, desiredSessions.Count, activeCount);
-                NotifyLifecycleObserver("ReconcileSessionsAsync.Completed");
             }
             finally
             {
@@ -684,11 +669,8 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private async Task StopAllSessionsAsync(CancellationToken cancellationToken)
         {
-            NotifyLifecycleObserver("StopAllSessionsAsync.Entered");
             _stopAllSessionsBoundaryReached?.Invoke();
-            NotifyLifecycleObserver("StopAllSessionsAsync.ReconcileGateWaitBegin");
             await _reconcileGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-            NotifyLifecycleObserver("StopAllSessionsAsync.ReconcileGateAcquired");
             try
             {
                 List<RetirementOperation> retirements = [];
@@ -712,7 +694,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     _ = _stateGate.Release();
                 }
 
-                NotifyLifecycleObserver("StopAllSessionsAsync.RetirementProcessingBegin");
                 _ = await ExecuteRetirementBatchAsync(retirements, cancelAdmittedWork: true, cancellationToken).ConfigureAwait(false);
 
                 Task[] pendingRetirements;
@@ -736,8 +717,6 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
                     {
                     }
                 }
-
-                NotifyLifecycleObserver("StopAllSessionsAsync.Completed");
             }
             finally
             {
@@ -750,39 +729,14 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         /// </summary>
         private void OnShutdownSignaled()
         {
-            NotifyLifecycleObserver("OnShutdownSignaled.Invoked");
             if (_shutdownRequested)
             {
-                NotifyLifecycleObserver("OnShutdownSignaled.AlreadyRequested");
                 return;
             }
 
             _shutdownRequested = true;
-            NotifyLifecycleObserver("OnShutdownSignaled.RequestedSet");
             DisposeLifecycleCallbacks();
             _shutdownCts.Cancel();
-            NotifyLifecycleObserver("OnShutdownSignaled.CancellationRequested");
-        }
-
-        /// <summary>
-        /// Notifies the optional lifecycle observer while isolating diagnostics from production behavior.
-        /// </summary>
-        /// <param name="eventName">Lifecycle event name.</param>
-        private void NotifyLifecycleObserver(string eventName)
-        {
-            Action<string>? observer = _lifecycleObserver;
-            if (observer is null)
-            {
-                return;
-            }
-
-            try
-            {
-                observer(eventName);
-            }
-            catch
-            {
-            }
         }
 
         /// <summary>

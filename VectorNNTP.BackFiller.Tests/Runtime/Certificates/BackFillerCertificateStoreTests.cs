@@ -258,6 +258,93 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             }
         }
 
+        [Fact]
+        public async Task LoadCertificateBundleAsync_WhenPersistedPfxHasNoPrivateKeyCertificate_ThrowsAndEvaluationIsUnusable()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                const string fqdn = "bf-malformed-zero-key.example.com";
+                BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn);
+
+                using X509Certificate2 leafWithKey = CreateEndEntityCertificateWithKey(fqdn);
+                using X509Certificate2 leafWithoutKey = new(leafWithKey.Export(X509ContentType.Cert));
+                WritePfxCollection(options.CertificatePfxPath, options.PfxExportPassword, leafWithoutKey);
+
+                CryptographicException loadFailure = await Assert.ThrowsAsync<CryptographicException>(
+                    () => BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None));
+                Assert.Contains("exactly one private-key certificate", loadFailure.Message);
+
+                CertificateEvaluationResult evaluation = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+                Assert.True(evaluation.HasCertificate);
+                Assert.False(evaluation.IsUsable);
+                Assert.True(evaluation.RequiresRenewal);
+                Assert.Contains("exactly one private-key certificate", evaluation.Reason);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task LoadCertificateBundleAsync_WhenPersistedPfxHasMultiplePrivateKeyCertificates_ThrowsAndEvaluationIsUnusable()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                const string fqdn = "bf-malformed-multi-key.example.com";
+                BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn);
+
+                using X509Certificate2 firstLeaf = CreateEndEntityCertificateWithKey(fqdn);
+                using X509Certificate2 secondLeaf = CreateEndEntityCertificateWithKey($"secondary-{fqdn}");
+                WritePfxCollection(options.CertificatePfxPath, options.PfxExportPassword, firstLeaf, secondLeaf);
+
+                CryptographicException loadFailure = await Assert.ThrowsAsync<CryptographicException>(
+                    () => BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None));
+                Assert.Contains("exactly one private-key certificate", loadFailure.Message);
+
+                CertificateEvaluationResult evaluation = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+                Assert.True(evaluation.HasCertificate);
+                Assert.False(evaluation.IsUsable);
+                Assert.True(evaluation.RequiresRenewal);
+                Assert.Contains("exactly one private-key certificate", evaluation.Reason);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
+        [Fact]
+        public async Task LoadCertificateBundleAsync_WhenPersistedPfxContainsNonCaExtraCertificate_ThrowsAndEvaluationIsUnusable()
+        {
+            string tempDir = CreateUniqueTempDirectory();
+            try
+            {
+                const string fqdn = "bf-malformed-nonca.example.com";
+                BackFillerLetsEncryptRuntimeOptions options = CreateLetsEncryptOptions(tempDir, fqdn);
+
+                using X509Certificate2 leaf = CreateEndEntityCertificateWithKey(fqdn);
+                using X509Certificate2 nonCaExtra = CreateEndEntityCertificateWithoutPrivateKey("bf-nonca-extra.example.com");
+                WritePfxCollection(options.CertificatePfxPath, options.PfxExportPassword, leaf, nonCaExtra);
+
+                CryptographicException loadFailure = await Assert.ThrowsAsync<CryptographicException>(
+                    () => BackFillerCertificateStore.LoadCertificateBundleAsync(options, TimeProvider.System, CancellationToken.None));
+                Assert.Contains("non-CA certificates", loadFailure.Message);
+
+                CertificateEvaluationResult evaluation = await BackFillerCertificateStore.EvaluateExistingCertificateAsync(options, TimeProvider.System, CancellationToken.None);
+                Assert.True(evaluation.HasCertificate);
+                Assert.False(evaluation.IsUsable);
+                Assert.True(evaluation.RequiresRenewal);
+                Assert.Contains("non-CA certificates", evaluation.Reason);
+            }
+            finally
+            {
+                DeleteDirectoryIfExists(tempDir);
+            }
+        }
+
         /// <summary>
         /// Confirms the create lets encrypt options behavior.
         /// </summary>
@@ -314,6 +401,56 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
 
             using X509Certificate2 certificate = request.CreateSelfSigned(notBeforeUtc, notAfterUtc);
             byte[] pfx = certificate.Export(X509ContentType.Pkcs12, password);
+            File.WriteAllBytes(pfxPath, pfx);
+        }
+
+        private static X509Certificate2 CreateEndEntityCertificateWithKey(string fqdn)
+        {
+            using RSA rsa = RSA.Create(2048);
+            CertificateRequest request = new(
+                $"CN={fqdn}",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            SubjectAlternativeNameBuilder sanBuilder = new();
+            sanBuilder.AddDnsName(fqdn);
+            request.CertificateExtensions.Add(sanBuilder.Build());
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, true));
+            OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, true));
+            request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+
+            using X509Certificate2 issued = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+            const string Password = "BackFiller-CertificateStoreTests-Leaf";
+            byte[] pfx = issued.Export(X509ContentType.Pkcs12, Password);
+            return new X509Certificate2(pfx, Password, X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
+        }
+
+        private static X509Certificate2 CreateEndEntityCertificateWithoutPrivateKey(string fqdn)
+        {
+            using X509Certificate2 withKey = CreateEndEntityCertificateWithKey(fqdn);
+            return new X509Certificate2(withKey.Export(X509ContentType.Cert));
+        }
+
+        private static void WritePfxCollection(string pfxPath, string password, params X509Certificate2[] certificates)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(pfxPath);
+            ArgumentNullException.ThrowIfNull(certificates);
+            if (certificates.Length == 0)
+            {
+                throw new ArgumentException("At least one certificate is required.", nameof(certificates));
+            }
+
+            X509Certificate2Collection collection = new();
+            for (int index = 0; index < certificates.Length; index++)
+            {
+                _ = collection.Add(certificates[index]);
+            }
+
+            byte[] pfx = collection.Export(X509ContentType.Pkcs12, password)
+                ?? throw new CryptographicException("Failed to export malformed PFX test fixture.");
             File.WriteAllBytes(pfxPath, pfx);
         }
 

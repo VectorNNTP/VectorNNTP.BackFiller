@@ -6,7 +6,6 @@
 // Focused tests for rabbit mq consumer phase2, covering dependency integration and failure handling.
 // Primary responsibility: documents the executable contracts covered by the rabbit mq consumer phase 2 test suite.
 
-using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
@@ -2586,28 +2585,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             CapacityStateBackboneCapacityProvider capacityProvider = new();
             capacityProvider.SetBackboneCapacity("Giganews", hasCapacity: true);
             TaskCompletionSource<bool> stopBoundaryReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            object traceGate = new();
-            List<string> lifecycleTrace = [];
-            Stopwatch stopwatch = Stopwatch.StartNew();
-
-            void RecordLifecycle(string eventName)
-            {
-                lock (traceGate)
-                {
-                    lifecycleTrace.Add($"{stopwatch.Elapsed.TotalMilliseconds,10:0.000} ms | {eventName}");
-                }
-            }
-
-            string BuildLifecycleTrace()
-            {
-                lock (traceGate)
-                {
-                    return lifecycleTrace.Count == 0 ? "<no lifecycle events captured>" : string.Join(Environment.NewLine, lifecycleTrace);
-                }
-            }
-
-            RecordLifecycle("test.start");
             RabbitMqConsumerService service = new(
                 runtimeOptions,
                 snapshotProvider.Provider,
@@ -2616,123 +2593,80 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
                 shutdownCoordinator,
                 capacityProvider,
                 NullLogger<RabbitMqConsumerService>.Instance,
-                () =>
-                {
-                    RecordLifecycle("service.StopAllSessionsBoundaryCallback");
-                    _ = stopBoundaryReached.TrySetResult(true);
-                },
-                eventName => RecordLifecycle($"service.{eventName}"));
+                () => _ = stopBoundaryReached.TrySetResult(true));
 
-            try
-            {
-                Guid accountId = Guid.NewGuid();
-                string sessionKey1 = $"{accountId:N}:1";
-                string sessionKey2 = $"{accountId:N}:2";
-                string sessionKey3 = $"{accountId:N}:3";
+            Guid accountId = Guid.NewGuid();
+            string sessionKey1 = $"{accountId:N}:1";
+            string sessionKey2 = $"{accountId:N}:2";
+            string sessionKey3 = $"{accountId:N}:3";
 
-                await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
-                RecordLifecycle("test.ReconcileOnce.initial.invoked");
-                await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
-                RecordLifecycle("test.ReconcileOnce.initial.completed");
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            await service.ReconcileOnceAsync(timeoutToken).ConfigureAwait(false);
 
-                _ = sessionFactory.RequireLatestSession(sessionKey2);
-                BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
-                sessionFactory.BlockStopForSession(sessionKey2);
+            _ = sessionFactory.RequireLatestSession(sessionKey2);
+            BlockingStopTrackingSession session3 = sessionFactory.RequireLatestSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey2);
 
-                await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 1)).ConfigureAwait(false);
 
-                using CancellationTokenSource reconcileCts = new();
-                Task reconcileTask = service.ReconcileOnceAsync(reconcileCts.Token);
-                await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+            using CancellationTokenSource reconcileCts = new();
+            Task reconcileTask = service.ReconcileOnceAsync(reconcileCts.Token);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
 
-                Assert.Equal(0, session3.StopCallCount);
-                Assert.False(session3.DisposeCalled);
+            Assert.Equal(0, session3.StopCallCount);
+            Assert.False(session3.DisposeCalled);
 
-                reconcileCts.Cancel();
-                RecordLifecycle("test.ReconcileOnce.cancel-requested");
-                await sessionFactory.WaitForStopCancellationObservedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
-                sessionFactory.ReleaseStop(sessionKey2);
+            reconcileCts.Cancel();
+            await sessionFactory.WaitForStopCancellationObservedAsync(sessionKey2, timeoutToken).ConfigureAwait(false);
+            sessionFactory.ReleaseStop(sessionKey2);
 
-                _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                    async () => await reconcileTask.ConfigureAwait(false)).ConfigureAwait(false);
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                async () => await reconcileTask.ConfigureAwait(false)).ConfigureAwait(false);
 
-                Assert.Equal(1, session3.StopCallCount);
-                Assert.True(session3.DisposeCalled);
+            Assert.Equal(1, session3.StopCallCount);
+            Assert.True(session3.DisposeCalled);
 
-                RecordLifecycle("test.service.StartAsync.invoked");
-                await service.StartAsync(timeoutToken).ConfigureAwait(false);
-                RecordLifecycle("test.service.StartAsync.completed");
+            await service.StartAsync(timeoutToken).ConfigureAwait(false);
 
-                sessionFactory.BlockStartForSession(sessionKey3);
-                sessionFactory.BlockStopForSession(sessionKey3);
-                await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
+            sessionFactory.BlockStartForSession(sessionKey3);
+            sessionFactory.BlockStopForSession(sessionKey3);
+            await snapshotProvider.SetSingleAccountAsync(CreateAccountSnapshot(accountId, maxConnections: 3)).ConfigureAwait(false);
 
-                RecordLifecycle("test.ReconcileOnce.while-starting.invoked");
-                Task reconcileWhileStartingTask = service.ReconcileOnceAsync(timeoutToken);
-                await sessionFactory.WaitForStartEnteredAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
-                RecordLifecycle("test.session3.StartEntered");
+            Task reconcileWhileStartingTask = service.ReconcileOnceAsync(timeoutToken);
+            await sessionFactory.WaitForStartEnteredAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
 
-                sessionFactory.RequireStopBoundaryAfterStartExited(sessionKey3);
-                RecordLifecycle("test.shutdown.request-point-reached");
-                RecordLifecycle("test.shutdown.SignalForcedShutdown.invoked");
-                shutdownCoordinator.SignalForcedShutdown();
-                RecordLifecycle("test.shutdown.SignalForcedShutdown.completed");
-                RecordLifecycle("test.service.StopAsync.invoked");
-                Task stopTask = service.StopAsync(timeoutToken);
+            sessionFactory.RequireStopBoundaryAfterStartExited(sessionKey3);
+            shutdownCoordinator.SignalForcedShutdown();
+            Task stopTask = service.StopAsync(timeoutToken);
 
-                RecordLifecycle("test.stopBoundary.wait.invoked");
-                try
-                {
-                    await stopBoundaryReached.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
-                    RecordLifecycle("test.stopBoundary.wait.completed");
-                }
-                catch (OperationCanceledException) when (timeoutToken.IsCancellationRequested)
-                {
-                    throw new Xunit.Sdk.XunitException(
-                        $"Timed out waiting for StopAllSessions boundary callback before test timeout.{Environment.NewLine}{BuildLifecycleTrace()}");
-                }
+            await stopBoundaryReached.Task.WaitAsync(timeoutToken).ConfigureAwait(false);
+            Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
 
-                Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
+            sessionFactory.ReleaseStart(sessionKey3);
+            await sessionFactory.WaitForStartExitedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            await reconcileWhileStartingTask.ConfigureAwait(false);
 
-                sessionFactory.ReleaseStart(sessionKey3);
-                RecordLifecycle("test.session3.StartReleased");
-                await sessionFactory.WaitForStartExitedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
-                RecordLifecycle("test.session3.StartExited");
-                await reconcileWhileStartingTask.ConfigureAwait(false);
-                RecordLifecycle("test.ReconcileOnce.while-starting.completed");
+            await sessionFactory.WaitForStopBoundaryReachedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            await sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
+            sessionFactory.ReleaseStop(sessionKey3);
+            await stopTask.ConfigureAwait(false);
 
-                await sessionFactory.WaitForStopBoundaryReachedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
-                RecordLifecycle("test.session3.StopBoundaryReached");
-                await sessionFactory.WaitForStopStartedAsync(sessionKey3, timeoutToken).ConfigureAwait(false);
-                RecordLifecycle("test.session3.StopStarted");
-                sessionFactory.ReleaseStop(sessionKey3);
-                RecordLifecycle("test.session3.StopReleased");
-                await stopTask.ConfigureAwait(false);
-                RecordLifecycle("test.service.StopAsync.await-completed");
+            BlockingStopTrackingSession session1AtShutdown = sessionFactory.RequireLatestSession(sessionKey1);
+            BlockingStopTrackingSession restartedSession3 = sessionFactory.RequireLatestSession(sessionKey3);
+            Assert.True(session1AtShutdown.DisposeCalled);
+            Assert.True(session1AtShutdown.StopCallCount >= 1);
+            Assert.Equal(1, restartedSession3.StartCallCount);
+            Assert.True(restartedSession3.DisposeCalled);
+            Assert.True(restartedSession3.StopCallCount >= 1);
+            Assert.False(restartedSession3.IsRunning);
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey1));
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey2));
+            Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey3));
+            Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
+            Assert.Equal(0, service.ActiveSessionCount);
 
-                BlockingStopTrackingSession session1AtShutdown = sessionFactory.RequireLatestSession(sessionKey1);
-                BlockingStopTrackingSession restartedSession3 = sessionFactory.RequireLatestSession(sessionKey3);
-                Assert.True(session1AtShutdown.DisposeCalled);
-                Assert.True(session1AtShutdown.StopCallCount >= 1);
-                Assert.Equal(1, restartedSession3.StartCallCount);
-                Assert.True(restartedSession3.DisposeCalled);
-                Assert.True(restartedSession3.StopCallCount >= 1);
-                Assert.False(restartedSession3.IsRunning);
-                Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey1));
-                Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey2));
-                Assert.Equal(0, sessionFactory.GetRunningCount(sessionKey3));
-                Assert.False(sessionFactory.AnyStopBoundaryReachedBeforeStartExited());
-                Assert.Equal(0, service.ActiveSessionCount);
-            }
-            catch (Exception ex) when (ex is not Xunit.Sdk.XunitException)
-            {
-                throw new Xunit.Sdk.XunitException($"RabbitMQ lifecycle trace:{Environment.NewLine}{BuildLifecycleTrace()}{Environment.NewLine}Failure: {ex}");
-            }
-            finally
-            {
-                service.Dispose();
-                await manager.DisposeAsync().ConfigureAwait(false);
-            }
+            service.Dispose();
+            await manager.DisposeAsync().ConfigureAwait(false);
         }
 
         /// <summary>

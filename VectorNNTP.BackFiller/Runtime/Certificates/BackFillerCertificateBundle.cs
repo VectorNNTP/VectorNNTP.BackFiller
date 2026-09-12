@@ -83,18 +83,38 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         {
             const string ClonePassword = "BackFiller-CertificateBundle-Clone";
             byte[] pfx = Certificate.Export(X509ContentType.Pkcs12, ClonePassword);
-            X509Certificate2 clonedLeaf = new(
-                pfx,
-                ClonePassword,
-                X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
+            X509Certificate2? clonedLeaf = null;
+            List<X509Certificate2>? clonedIntermediates = null;
 
-            List<X509Certificate2> clonedIntermediates = new(IntermediateCertificates.Count);
-            for (int index = 0; index < IntermediateCertificates.Count; index++)
+            try
             {
-                clonedIntermediates.Add(new X509Certificate2(IntermediateCertificates[index].RawData));
-            }
+                clonedLeaf = new X509Certificate2(
+                    pfx,
+                    ClonePassword,
+                    X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
 
-            return new BackFillerCertificateBundle(clonedLeaf, clonedIntermediates, SourcePath, LoadedAtUtc);
+                clonedIntermediates = new List<X509Certificate2>(IntermediateCertificates.Count);
+                for (int index = 0; index < IntermediateCertificates.Count; index++)
+                {
+                    clonedIntermediates.Add(new X509Certificate2(IntermediateCertificates[index].RawData));
+                }
+
+                BackFillerCertificateBundle clone = new(clonedLeaf, clonedIntermediates, SourcePath, LoadedAtUtc);
+                clonedLeaf = null;
+                clonedIntermediates = null;
+                return clone;
+            }
+            finally
+            {
+                clonedLeaf?.Dispose();
+                if (clonedIntermediates is not null)
+                {
+                    for (int index = 0; index < clonedIntermediates.Count; index++)
+                    {
+                        clonedIntermediates[index].Dispose();
+                    }
+                }
+            }
         }
 
         /// <summary>

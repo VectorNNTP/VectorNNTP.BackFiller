@@ -120,16 +120,13 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
         /// <returns>Owned runtime certificate material, or <see langword="null"/> when no active certificate exists.</returns>
         internal RuntimeCertificateMaterial? GetCurrentRuntimeCertificateMaterialClone()
         {
+            BackFillerCertificateBundle? clone;
             lock (_gate)
             {
-                if (_current is null)
-                {
-                    return null;
-                }
-
-                BackFillerCertificateBundle clone = _current.CloneOwned();
-                return new RuntimeCertificateMaterial(clone);
+                clone = _current?.CloneOwned();
             }
+
+            return clone is null ? null : new RuntimeCertificateMaterial(clone);
         }
 
         /// <summary>

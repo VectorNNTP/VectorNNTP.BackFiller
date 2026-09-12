@@ -181,55 +181,85 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                 byte[] pfx = await File.ReadAllBytesAsync(letsEncryptOptions.CertificatePfxPath, cancellationToken).ConfigureAwait(false);
 
                 X509Certificate2Collection collection = [];
-                collection.Import(
-                    pfx,
-                    letsEncryptOptions.PfxExportPassword,
-                    X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
-
-                X509Certificate2[] privateKeyCertificates = [.. collection.OfType<X509Certificate2>().Where(static cert => cert.HasPrivateKey)];
-                if (privateKeyCertificates.Length != 1)
+                try
                 {
-                    throw new CryptographicException($"Listener certificate PFX must contain exactly one private-key certificate but found {privateKeyCertificates.Length}.");
-                }
+                    collection.Import(
+                        pfx,
+                        letsEncryptOptions.PfxExportPassword,
+                        X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
 
-                X509Certificate2 selectedLeaf = privateKeyCertificates[0];
-                const string ReloadClonePassword = "BackFiller-CertificateStore-Reload";
-                byte[] selectedLeafPfx = selectedLeaf.Export(X509ContentType.Pkcs12, ReloadClonePassword);
-                X509Certificate2 ownedLeaf = new(
-                    selectedLeafPfx,
-                    ReloadClonePassword,
-                    X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
-
-                List<X509Certificate2> intermediates = [];
-                foreach (X509Certificate2 candidate in collection)
-                {
-                    if (ReferenceEquals(candidate, selectedLeaf))
+                    X509Certificate2[] privateKeyCertificates = [.. collection.OfType<X509Certificate2>().Where(static cert => cert.HasPrivateKey)];
+                    if (privateKeyCertificates.Length != 1)
                     {
-                        continue;
+                        throw new CryptographicException($"Listener certificate PFX must contain exactly one private-key certificate but found {privateKeyCertificates.Length}.");
                     }
 
-                    if (candidate.HasPrivateKey)
-                    {
-                        throw new CryptographicException("Listener certificate PFX includes additional private-key certificates that are not supported.");
-                    }
+                    X509Certificate2 selectedLeaf = privateKeyCertificates[0];
+                    const string ReloadClonePassword = "BackFiller-CertificateStore-Reload";
+                    byte[] selectedLeafPfx = selectedLeaf.Export(X509ContentType.Pkcs12, ReloadClonePassword);
+                    X509Certificate2? ownedLeaf = null;
+                    List<X509Certificate2>? intermediates = null;
 
-                    if (!IsCertificateAuthority(candidate))
+                    try
                     {
-                        throw new CryptographicException("Listener certificate PFX includes non-CA certificates outside the leaf certificate entry.");
-                    }
+                        ownedLeaf = new X509Certificate2(
+                            selectedLeafPfx,
+                            ReloadClonePassword,
+                            X509KeyStorageFlags.EphemeralKeySet | X509KeyStorageFlags.Exportable);
 
-                    intermediates.Add(new X509Certificate2(candidate.RawData));
+                        intermediates = [];
+                        foreach (X509Certificate2 candidate in collection)
+                        {
+                            if (ReferenceEquals(candidate, selectedLeaf))
+                            {
+                                continue;
+                            }
+
+                            if (candidate.HasPrivateKey)
+                            {
+                                throw new CryptographicException("Listener certificate PFX includes additional private-key certificates that are not supported.");
+                            }
+
+                            if (!IsCertificateAuthority(candidate))
+                            {
+                                throw new CryptographicException("Listener certificate PFX includes non-CA certificates outside the leaf certificate entry.");
+                            }
+
+                            intermediates.Add(new X509Certificate2(candidate.RawData));
+                        }
+
+                        if (logger is not null)
+                        {
+                            LogLoadedListenerCertificateBundle(
+                                logger,
+                                letsEncryptOptions.CanonicalCertificateSubjectName,
+                                letsEncryptOptions.CertificatePfxPath);
+                        }
+
+                        BackFillerCertificateBundle bundle = new(ownedLeaf, intermediates, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
+                        ownedLeaf = null;
+                        intermediates = null;
+                        return bundle;
+                    }
+                    finally
+                    {
+                        ownedLeaf?.Dispose();
+                        if (intermediates is not null)
+                        {
+                            for (int index = 0; index < intermediates.Count; index++)
+                            {
+                                intermediates[index].Dispose();
+                            }
+                        }
+                    }
                 }
-
-                if (logger is not null)
+                finally
                 {
-                    LogLoadedListenerCertificateBundle(
-                        logger,
-                        letsEncryptOptions.CanonicalCertificateSubjectName,
-                        letsEncryptOptions.CertificatePfxPath);
+                    foreach (X509Certificate2 importedCertificate in collection)
+                    {
+                        importedCertificate.Dispose();
+                    }
                 }
-
-                return new BackFillerCertificateBundle(ownedLeaf, intermediates, letsEncryptOptions.CertificatePfxPath, timeProvider.GetUtcNow());
             }
             catch (Exception ex)
             {
@@ -399,6 +429,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
             chain.ChainPolicy.RevocationFlag = X509RevocationFlag.ExcludeRoot;
             chain.ChainPolicy.VerificationFlags = X509VerificationFlags.NoFlag;
+            chain.ChainPolicy.DisableCertificateDownloads = true;
 
             for (int index = 0; index < intermediateCertificates.Count; index++)
             {
