@@ -11,22 +11,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
     /// Defines the canonical Cloudflare metadata contract that grants BackFiller ACME DNS-01 TXT deletion authority.
     /// </summary>
     /// <remarks>
-    /// This marker is persisted on create and later re-read from Cloudflare to prove workflow ownership across process
-    /// restarts. Only exact canonical marker matches are considered owned for stale-record reconciliation.
+    /// This exact marker is persisted in the Cloudflare DNS record comment on create and later re-read from Cloudflare
+    /// to prove workflow ownership across process restarts. Only exact equality matches are considered owned.
     /// </remarks>
     internal static class AcmeDnsTxtRecordOwnership
     {
         /// <summary>
-        /// Exact Cloudflare tag persisted on BackFiller ACME DNS-01 TXT records.
+        /// Exact Cloudflare record-comment marker persisted on BackFiller ACME DNS-01 TXT records.
         /// </summary>
-        internal const string CanonicalOwnershipTag = "vectornntp.backfiller.acme-dns01";
-
-        /// <summary>
-        /// Operator-facing Cloudflare comment set when creating BackFiller ACME DNS-01 TXT records.
-        /// </summary>
-        /// <remarks>
-        /// This comment is informational only and does not grant deletion authority.
-        /// </remarks>
-        internal const string OwnershipComment = "VectorNNTP.BackFiller ACME DNS-01";
+        internal const string OwnershipComment = "VectorNNTP.BackFiller:acme-dns01";
     }
 }

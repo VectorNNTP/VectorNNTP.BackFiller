@@ -24,10 +24,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
     public sealed class AcmeCertificateIssuerDns01RecoveryTests
     {
         /// <summary>
-        /// Verifies production Cloudflare TXT request construction includes canonical ownership metadata.
+        /// Verifies production Cloudflare TXT request construction includes canonical ownership comment metadata and
+        /// does not require tags.
         /// </summary>
         [Fact]
-        public void CreateAcmeTxtRecordRequest_UsesCanonicalOwnershipMetadata()
+        public void CreateAcmeTxtRecordRequest_UsesCanonicalOwnershipCommentWithoutTags()
         {
             const string recordName = RecoveryScenario.RecordName;
             const string recordValue = "challenge-value";
@@ -40,9 +41,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             Assert.False(request.Proxied);
             Assert.Equal(60, request.Ttl);
             Assert.Equal(AcmeDnsTxtRecordOwnership.OwnershipComment, request.Comment);
-            Assert.NotNull(request.Tags);
-            Assert.Single(request.Tags);
-            Assert.Equal(AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag, request.Tags[0]);
+            Assert.True(request.Tags is null || request.Tags.Count == 0);
         }
 
         /// <summary>
@@ -69,8 +68,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         {
             RecoveryScenarioResult result = await ExecuteScenarioAsync(
                 initialRecords: [
-                    CreateRecord("stale-1", RecoveryScenario.RecordName, "old-value", tags: [AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
-                    CreateRecord("unrelated-1", RecoveryScenario.RecordName, "unrelated-value", tags: ["other-service.acme-dns01"], comment: "operator managed")],
+                    CreateRecord("stale-1", RecoveryScenario.RecordName, "old-value", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("unrelated-1", RecoveryScenario.RecordName, "unrelated-value", tags: ["other-service:acme-dns01"], comment: "operator managed")],
                 shouldFailValidation: false,
                 shouldFailFinalize: false,
                 throwOnDelete: false,
@@ -134,11 +133,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             RecoveryScenarioResult result = await ExecuteScenarioAsync(
                 initialRecords:
                 [
-                    CreateRecord("near-tag", RecoveryScenario.RecordName, "old-1", tags: [AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag + ".suffix"], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
-                    CreateRecord("acme-substring", RecoveryScenario.RecordName, "old-2", tags: ["acme"], comment: "operator"),
-                    CreateRecord("backfiller-comment", RecoveryScenario.RecordName, "old-3", tags: ["operator"], comment: "BackFiller note"),
-                    CreateRecord("other-app", RecoveryScenario.RecordName, "old-4", tags: ["anotherapp.acme-dns01"], comment: "other app"),
-                    CreateRecord("prefix-tag", RecoveryScenario.RecordName, "old-5", tags: ["vectornntp.backfiller"], comment: AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("suffix", RecoveryScenario.RecordName, "old-1", tags: [], comment: AcmeDnsTxtRecordOwnership.OwnershipComment + "-extra"),
+                    CreateRecord("prefix", RecoveryScenario.RecordName, "old-2", tags: [], comment: "legacy-" + AcmeDnsTxtRecordOwnership.OwnershipComment),
+                    CreateRecord("legacy-invalid", RecoveryScenario.RecordName, "old-3", tags: [], comment: "vectornntp.backfiller.acme-dns01"),
+                    CreateRecord("generic-acme", RecoveryScenario.RecordName, "old-4", tags: [], comment: "acme"),
+                    CreateRecord("backfiller-only", RecoveryScenario.RecordName, "old-5", tags: [], comment: "BackFiller"),
+                    CreateRecord("other-app", RecoveryScenario.RecordName, "old-6", tags: [], comment: "OtherApp:acme-dns01"),
                     CreateRecord("exact-current", RecoveryScenario.RecordName, currentValue, tags: ["external"], comment: "external reuse")
                 ],
                 shouldFailValidation: false,
@@ -149,11 +149,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             Assert.True(result.WasSuccessful);
             Assert.Equal(0, result.Api.AddCallCount);
             Assert.Equal(0, result.Api.DeleteCallCount);
-            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "near-tag", StringComparison.Ordinal));
-            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "acme-substring", StringComparison.Ordinal));
-            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "backfiller-comment", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "suffix", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "prefix", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "legacy-invalid", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "generic-acme", StringComparison.Ordinal));
+            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "backfiller-only", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "other-app", StringComparison.Ordinal));
-            Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "prefix-tag", StringComparison.Ordinal));
             Assert.Contains(result.Api.Records, record => string.Equals(record.Id, "exact-current", StringComparison.Ordinal));
         }
 
@@ -362,15 +363,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         /// </summary>
         private static bool RecordHasCanonicalOwnership(CloudflareTxtRecordInfo record)
         {
-            for (int i = 0; i < record.Tags.Count; i++)
-            {
-                if (string.Equals(record.Tags[i], AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return string.Equals(record.Comment, AcmeDnsTxtRecordOwnership.OwnershipComment, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -472,7 +465,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                     false,
                     60,
                     AcmeDnsTxtRecordOwnership.OwnershipComment,
-                    [AcmeDnsTxtRecordOwnership.CanonicalOwnershipTag],
+                    [],
                     null,
                     null);
 
