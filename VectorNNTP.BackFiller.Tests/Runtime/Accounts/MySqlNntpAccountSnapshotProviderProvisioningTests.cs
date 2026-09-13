@@ -110,11 +110,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
         public async Task EnsureStartupDependenciesAsync_WhenFrozenRuntimeProjectionProvided_UsesFrozenDatabaseTarget()
         {
             CapturingProvisioningStore store = new();
-            Dictionary<string, string?> values = new(StringComparer.OrdinalIgnoreCase)
+            IConfigurationRoot configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
                 ["ConnectionStrings:GrabberDB"] = "Server=mysql-a;Port=3306;Database=DatabaseA;User ID=usera;Password=secret;SslMode=Required",
-            };
-            IConfiguration configuration = BuildConfiguration(values);
+            });
             BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
                 ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
             List<(string Setting, string Error)> errors = [];
@@ -128,7 +127,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
             Assert.NotNull(runtimeOptions);
             Assert.Empty(errors);
 
-            values["ConnectionStrings:GrabberDB"] = "Server=mysql-b;Port=3307;Database=DatabaseB;User ID=userb;Password=secret2;SslMode=None";
+            configuration["ConnectionStrings:GrabberDB"] = "Server=mysql-b;Port=3307;Database=DatabaseB;User ID=userb;Password=secret2;SslMode=None";
 
             MySqlNntpAccountSnapshotProvider provider = new(
                 runtimeOptions,
@@ -172,7 +171,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
         public async Task EnsureStartupDependenciesAsync_WhenDatabaseMissingAndProvisioningDenied_ThrowsDeterministicFailure()
         {
             MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore store =
-                new DelegateProvisioningStore(static _ => throw new InvalidOperationException("MySQL startup provisioning failed at stage 'create-database' (Error #1044): Target database is missing and startup provisioning could not create it."));
+                new DelegateProvisioningStore(static _ => throw new InvalidOperationException("MySQL startup provisioning failed at stage 'create-database' (Error #1044): Unable to create or verify the target database during startup provisioning."));
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=missing_db;User ID=runtime_user;SslMode=Required");
 
             MySqlNntpAccountSnapshotProvider provider = new(
@@ -182,8 +181,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
                 store);
 
             InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
-            Assert.Contains("stage 'create-database'", exception.Message, StringComparison.Ordinal);
-            Assert.Contains("Error #1044", exception.Message, StringComparison.Ordinal);
+            Assert.Equal(
+                MySqlNntpAccountSnapshotProvider.FormatStartupProvisioningFailureMessage(
+                    "create-database",
+                    1044,
+                    "Unable to create or verify the target database during startup provisioning."),
+                exception.Message);
         }
 
         /// <summary>
@@ -225,8 +228,27 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
                 store);
 
             InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
-            Assert.Contains("stage 'create-table'", exception.Message, StringComparison.Ordinal);
-            Assert.Contains("Error #1142", exception.Message, StringComparison.Ordinal);
+            Assert.Equal(
+                MySqlNntpAccountSnapshotProvider.FormatStartupProvisioningFailureMessage(
+                    "create-table",
+                    1142,
+                    "Startup provisioning could not create or validate the required accounts table."),
+                exception.Message);
+        }
+
+        /// <summary>
+        /// Confirms startup provisioning failure formatting remains deterministic and preserves stage/error classification.
+        /// </summary>
+        [Theory]
+        [InlineData("server-connect", 2003, "Unable to connect to MySQL server for startup provisioning.")]
+        [InlineData("create-database", 1044, "Unable to create or verify the target database during startup provisioning.")]
+        [InlineData("select-database", 1049, "Startup provisioning could not access the target database.")]
+        [InlineData("create-table", 1142, "Startup provisioning could not create or validate the required accounts table.")]
+        public void FormatStartupProvisioningFailureMessage_WhenCalled_ReturnsDeterministicClassifiedMessage(string stage, int errorNumber, string detail)
+        {
+            string message = MySqlNntpAccountSnapshotProvider.FormatStartupProvisioningFailureMessage(stage, errorNumber, detail);
+
+            Assert.Equal($"MySQL startup provisioning failed at stage '{stage}' (Error #{errorNumber}): {detail}", message);
         }
 
         /// <summary>
@@ -326,7 +348,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
             };
         }
 
-        private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
+        private static IConfigurationRoot BuildConfiguration(Dictionary<string, string?> values)
         {
             Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
             {

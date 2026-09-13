@@ -549,7 +549,7 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                             throw CreateProvisioningFailureException(
                                 "create-database",
                                 ex,
-                                "Target database is missing and startup provisioning could not create it.");
+                                "Unable to create or verify the target database during startup provisioning.");
                         }
                         catch (Exception ex)
                         {
@@ -637,9 +637,24 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                 ArgumentException.ThrowIfNullOrWhiteSpace(message);
 
                 return new InvalidOperationException(
-                    $"MySQL startup provisioning failed at stage '{stage}' (Error #{exception.Number}): {message}",
+                    FormatStartupProvisioningFailureMessage(stage, exception.Number, message),
                     exception);
             }
+        }
+
+        /// <summary>
+        /// Formats a deterministic MySQL startup provisioning failure message with stage and error-number classification.
+        /// </summary>
+        /// <param name="stage">Provisioning stage identifier.</param>
+        /// <param name="errorNumber">MySQL provider error number.</param>
+        /// <param name="message">Sanitized stage-specific failure detail.</param>
+        /// <returns>Deterministic startup provisioning failure text.</returns>
+        internal static string FormatStartupProvisioningFailureMessage(string stage, int errorNumber, string message)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(stage);
+            ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+            return $"MySQL startup provisioning failed at stage '{stage}' (Error #{errorNumber}): {message}";
         }
 
         /// <summary>

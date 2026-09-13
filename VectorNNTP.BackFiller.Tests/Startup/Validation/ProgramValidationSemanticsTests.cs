@@ -3989,11 +3989,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         [Fact]
         public void RuntimeSnapshotFactory_WhenConfigurationChangesAfterSnapshot_GrabberDbProjectionRemainsFrozen()
         {
-            Dictionary<string, string?> values = new(StringComparer.OrdinalIgnoreCase)
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
                 ["ConnectionStrings:GrabberDB"] = "Server=mysql-a;Port=3306;Database=DatabaseA;User ID=usera;Password=secret;SslMode=Required",
-            };
-            IConfiguration configuration = BuildConfiguration(values);
+            });
             BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
                 ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
             List<(string Setting, string Error)> initialErrors = [];
@@ -4007,7 +4006,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             Assert.NotNull(frozenSnapshot);
             Assert.Empty(initialErrors);
 
-            values["ConnectionStrings:GrabberDB"] = "Server=mysql-b;Port=3307;Database=DatabaseB;User ID=userb;Password=secret2;SslMode=None";
+            configuration["ConnectionStrings:GrabberDB"] = "Server=mysql-b;Port=3307;Database=DatabaseB;User ID=userb;Password=secret2;SslMode=None";
 
             Assert.Equal("DatabaseA", frozenSnapshot.GrabberDb.Database);
             Assert.Equal("mysql-a", frozenSnapshot.GrabberDb.Server);
