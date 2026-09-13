@@ -109,6 +109,56 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(source.Outcome, parsed.Outcome);
             Assert.Equal(source.Error, parsed.Error);
         }
+
+        [Fact]
+        public void SerializeAndParseV1_WhenInvalidRequestIdentityUnavailable_RoundTripsNullIdentity()
+        {
+            RabbitMqArticleWorkResponse source = new(
+                Version: 1,
+                RequestId: null,
+                MessageId: null,
+                Backbone: null,
+                Outcome: nameof(ArticleWorkProcessingOutcome.InvalidRequest),
+                Uri: null,
+                Error: "Request payload was invalid.");
+
+            byte[] payload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(source);
+            RabbitMqArticleWorkResponse parsed = RabbitMqArticleWorkResponseWireProtocol.ParseV1(payload);
+
+            Assert.Null(parsed.RequestId);
+            Assert.Null(parsed.MessageId);
+            Assert.Null(parsed.Backbone);
+            Assert.Equal(source.Error, parsed.Error);
+        }
+
+        [Fact]
+        public void ParseV1_WhenInvalidRequestIdentityNull_IsAccepted()
+        {
+            byte[] payload = Encoding.UTF8.GetBytes("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}");
+            RabbitMqArticleWorkResponse parsed = RabbitMqArticleWorkResponseWireProtocol.ParseV1(payload);
+
+            Assert.Null(parsed.RequestId);
+            Assert.Null(parsed.MessageId);
+            Assert.Null(parsed.Backbone);
+            Assert.Equal(nameof(ArticleWorkProcessingOutcome.InvalidRequest), parsed.Outcome);
+        }
+
+        [Theory]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":null,\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":null,\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"ArticleNotFound\",\"error\":\"No article\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"\",\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"   \",\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":\"\",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":\"   \",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        public void ParseV1_WhenConcreteIdentityRequiredButMissingOrInvalid_ThrowsInvalidOperationException(string json)
+        {
+            byte[] payload = Encoding.UTF8.GetBytes(json);
+            Assert.Throws<InvalidOperationException>(() => RabbitMqArticleWorkResponseWireProtocol.ParseV1(payload));
+        }
+
         /// <summary>
         /// Confirms the parse v1 when version unsupported throws invalid operation exception behavior.
         /// </summary>

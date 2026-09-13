@@ -62,7 +62,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(result.Delivery.ConnectionGeneration, publishResult.ConnectionGeneration);
             Assert.False(string.IsNullOrWhiteSpace(channel.LastPublishMessageId));
             Assert.True(Guid.TryParse(channel.LastPublishMessageId, out _));
-            Assert.NotEqual(result.Request.RequestId.ToString("D"), channel.LastPublishMessageId);
+            Assert.NotEqual(result.Request.RequestId?.ToString("D"), channel.LastPublishMessageId);
             Assert.NotNull(channel.LastPublishBody);
             string json = Encoding.UTF8.GetString(channel.LastPublishBody!);
             Assert.Contains("\"requestId\"", json, StringComparison.Ordinal);

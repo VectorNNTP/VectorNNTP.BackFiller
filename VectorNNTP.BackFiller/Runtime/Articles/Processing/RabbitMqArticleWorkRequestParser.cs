@@ -130,46 +130,94 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     return ValueTask.FromResult(Failed(delivery, $"RabbitMQ article-work payload uses unsupported version '{version}'."));
                 }
 
-                if (!TryReadRequiredGuid(root, "requestId", out Guid requestId))
+                _ = TryReadOptionalGuid(root, "requestId", out Guid? requestId);
+                _ = TryReadOptionalString(root, "messageId", out string? rawMessageId);
+                _ = TryReadOptionalString(root, "backbone", out string? rawBackbone);
+
+                string? canonicalMessageId = !string.IsNullOrWhiteSpace(rawMessageId) && NntpMessageIdValidation.IsValidMessageId(rawMessageId.AsSpan())
+                    ? rawMessageId
+                    : null;
+
+                string? validatedBackbone = !string.IsNullOrWhiteSpace(rawBackbone)
+                    && string.Equals(rawBackbone, delivery.Backbone, StringComparison.OrdinalIgnoreCase)
+                        ? rawBackbone
+                        : null;
+
+                if (requestId is null)
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload contains missing or invalid 'requestId'."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ article-work payload contains missing or invalid 'requestId'.",
+                        requestId: null,
+                        messageId: canonicalMessageId,
+                        messageBackbone: validatedBackbone));
                 }
 
-                if (!TryReadRequiredString(root, "messageId", out string? messageId) || string.IsNullOrWhiteSpace(messageId))
+                if (string.IsNullOrWhiteSpace(rawMessageId))
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload contains missing or invalid 'messageId'."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ article-work payload contains missing or invalid 'messageId'.",
+                        requestId: requestId,
+                        messageId: null,
+                        messageBackbone: validatedBackbone));
                 }
 
-                if (!NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan()))
+                if (canonicalMessageId is null)
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload 'messageId' is not a canonical NNTP Message-ID."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ article-work payload 'messageId' is not a canonical NNTP Message-ID.",
+                        requestId: requestId,
+                        messageId: null,
+                        messageBackbone: validatedBackbone));
                 }
 
-                if (!TryReadRequiredString(root, "backbone", out string? messageBackbone) || string.IsNullOrWhiteSpace(messageBackbone))
+                if (string.IsNullOrWhiteSpace(rawBackbone))
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload contains missing or invalid 'backbone'."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ article-work payload contains missing or invalid 'backbone'.",
+                        requestId: requestId,
+                        messageId: canonicalMessageId,
+                        messageBackbone: null));
                 }
 
-                if (!string.Equals(messageBackbone, delivery.Backbone, StringComparison.OrdinalIgnoreCase))
+                if (validatedBackbone is null)
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload backbone does not match the consuming queue backbone context."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ article-work payload backbone does not match the consuming queue backbone context.",
+                        requestId: requestId,
+                        messageId: canonicalMessageId,
+                        messageBackbone: null));
                 }
 
                 if (string.IsNullOrWhiteSpace(delivery.CorrelationId))
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ delivery is missing required AMQP CorrelationId property."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ delivery is missing required AMQP CorrelationId property.",
+                        requestId: requestId,
+                        messageId: canonicalMessageId,
+                        messageBackbone: validatedBackbone));
                 }
 
                 if (string.IsNullOrWhiteSpace(delivery.ReplyTo))
                 {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ delivery is missing required AMQP ReplyTo property."));
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        "RabbitMQ delivery is missing required AMQP ReplyTo property.",
+                        requestId: requestId,
+                        messageId: canonicalMessageId,
+                        messageBackbone: validatedBackbone));
                 }
 
                 RabbitMqArticleWorkRequest request = new(
                     Version: version,
                     RequestId: requestId,
-                    MessageId: messageId,
-                    Backbone: messageBackbone);
+                    MessageId: canonicalMessageId,
+                    Backbone: validatedBackbone);
 
                 return ValueTask.FromResult(new RabbitMqArticleWorkParseResult(request, Failure: null));
             }
@@ -265,8 +313,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <param name="delivery">Delivery that could not be converted into a valid application request.</param>
         /// <param name="reason">Human-readable rejection reason surfaced to logs and any terminal invalid-request response.</param>
+        /// <param name="requestId">Parsed request identity when available before failure; otherwise <see langword="null"/>.</param>
+        /// <param name="messageId">Parsed message identity when available before failure; otherwise <see langword="null"/>.</param>
+        /// <param name="messageBackbone">Parsed request-body backbone when available before failure; otherwise <see langword="null"/>.</param>
         /// <returns>A parse result whose <see cref="RabbitMqArticleWorkParseResult.Failure"/> is preclassified as <see cref="ArticleWorkProcessingOutcome.InvalidRequest"/>.</returns>
-        private RabbitMqArticleWorkParseResult Failed(RabbitMqArticleDelivery delivery, string reason)
+        private RabbitMqArticleWorkParseResult Failed(
+            RabbitMqArticleDelivery delivery,
+            string reason,
+            Guid? requestId = null,
+            string? messageId = null,
+            string? messageBackbone = null)
         {
             if (_logger.IsEnabled(LogLevel.Warning))
             {
@@ -287,9 +343,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             ArticleWorkProcessingResult result = new(
                 Request: new RabbitMqArticleWorkRequest(
                     Version: SupportedVersion,
-                    RequestId: Guid.Empty,
-                    MessageId: string.Empty,
-                    Backbone: delivery.Backbone),
+                    RequestId: requestId,
+                    MessageId: messageId,
+                    Backbone: messageBackbone),
                 Delivery: delivery,
                 Outcome: ArticleWorkProcessingOutcome.InvalidRequest,
                 Disposition: ArticleWorkDispositionRecommendation.NackDrop,
@@ -322,20 +378,31 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="propertyName">Required property name.</param>
         /// <param name="value">Parsed GUID value when the property exists and contains a non-blank GUID string.</param>
         /// <returns><see langword="true"/> when the property exists, is a string, and parses as a GUID.</returns>
-        private static bool TryReadRequiredGuid(JsonElement root, string propertyName, out Guid value)
+        private static bool TryReadOptionalGuid(JsonElement root, string propertyName, out Guid? value)
         {
-            value = Guid.Empty;
-            return TryReadRequiredString(root, propertyName, out string? textValue) && !string.IsNullOrWhiteSpace(textValue) && Guid.TryParse(textValue, out value);
+            value = null;
+            if (!TryReadOptionalString(root, propertyName, out string? textValue) || string.IsNullOrWhiteSpace(textValue))
+            {
+                return false;
+            }
+
+            if (!Guid.TryParse(textValue, out Guid parsed))
+            {
+                return false;
+            }
+
+            value = parsed;
+            return true;
         }
 
         /// <summary>
-        /// Reads a required string property from the request object.
+        /// Reads an optional string property from the request object.
         /// </summary>
         /// <param name="root">Root JSON object representing the payload.</param>
-        /// <param name="propertyName">Required property name.</param>
+        /// <param name="propertyName">Property name.</param>
         /// <param name="value">String value when the property exists and contains a JSON string.</param>
         /// <returns><see langword="true"/> when the property exists, is a JSON string, and deserializes to a non-null managed string.</returns>
-        private static bool TryReadRequiredString(JsonElement root, string propertyName, out string? value)
+        private static bool TryReadOptionalString(JsonElement root, string propertyName, out string? value)
         {
             value = null;
             if (!root.TryGetProperty(propertyName, out JsonElement property) || property.ValueKind != JsonValueKind.String)

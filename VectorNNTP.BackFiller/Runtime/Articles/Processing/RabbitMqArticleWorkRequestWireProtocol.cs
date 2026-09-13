@@ -47,9 +47,24 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             });
 
+            if (!request.RequestId.HasValue)
+            {
+                throw new InvalidOperationException("Canonical request serialization requires a concrete requestId.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.MessageId))
+            {
+                throw new InvalidOperationException("Canonical request serialization requires a non-empty messageId.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Backbone))
+            {
+                throw new InvalidOperationException("Canonical request serialization requires a non-empty backbone.");
+            }
+
             jsonWriter.WriteStartObject();
             jsonWriter.WriteNumber("version", request.Version);
-            jsonWriter.WriteString("requestId", request.RequestId);
+            jsonWriter.WriteString("requestId", request.RequestId.Value);
             jsonWriter.WriteString("messageId", request.MessageId);
             jsonWriter.WriteString("backbone", request.Backbone);
             jsonWriter.WriteEndObject();

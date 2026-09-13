@@ -191,10 +191,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "Article processing result forwarded. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} Outcome={Outcome} Disposition={Disposition} Redelivered={Redelivered}")]
         private static partial void LogArticleProcessingResultForwarded(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
-            string backbone,
+            string? messageId,
+            string? backbone,
             ArticleWorkProcessingOutcome outcome,
             ArticleWorkDispositionRecommendation disposition,
             bool redelivered);

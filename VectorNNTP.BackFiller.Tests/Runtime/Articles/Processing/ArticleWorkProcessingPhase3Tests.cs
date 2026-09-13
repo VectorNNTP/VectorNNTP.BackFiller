@@ -517,7 +517,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<phase3-notfound@example.com>", "BackboneA");
             RabbitMqArticleDelivery delivery = CreateDelivery(
-                CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone),
+                CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!),
                 correlationId: "rpc-notfound",
                 replyTo: "rpc.responses");
 
@@ -538,7 +538,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<phase3-cancel@example.com>", "BackboneA");
             RabbitMqArticleDelivery delivery = CreateDelivery(
-                CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone),
+                CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!),
                 correlationId: "rpc-cancel",
                 replyTo: "rpc.responses");
 
@@ -569,7 +569,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-success@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-success", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-success", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -599,7 +599,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-failure@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-failure", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-failure", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -626,7 +626,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-ordering@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-order", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-order", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -663,11 +663,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
 
             RabbitMqArticleWorkRequest firstRequest = new(1, Guid.NewGuid(), "<lease-reuse-1@example.com>", "BackboneA");
-            RabbitMqArticleDelivery firstDelivery = CreateDelivery(CreateValidJsonPayload(firstRequest.RequestId, firstRequest.MessageId, firstRequest.Backbone), correlationId: "rpc-lease-reuse-1", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery firstDelivery = CreateDelivery(CreateValidJsonPayload(firstRequest.RequestId!.Value, firstRequest.MessageId!, firstRequest.Backbone!), correlationId: "rpc-lease-reuse-1", replyTo: "rpc.responses");
             ArticleWorkProcessingResult firstResult = await processor.ProcessAsync(firstRequest, firstDelivery, CancellationToken.None).ConfigureAwait(false);
 
             RabbitMqArticleWorkRequest secondRequest = new(1, Guid.NewGuid(), "<lease-reuse-2@example.com>", "BackboneA");
-            RabbitMqArticleDelivery secondDelivery = CreateDelivery(CreateValidJsonPayload(secondRequest.RequestId, secondRequest.MessageId, secondRequest.Backbone), correlationId: "rpc-lease-reuse-2", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery secondDelivery = CreateDelivery(CreateValidJsonPayload(secondRequest.RequestId!.Value, secondRequest.MessageId!, secondRequest.Backbone!), correlationId: "rpc-lease-reuse-2", replyTo: "rpc.responses");
             ArticleWorkProcessingResult secondResult = await processor.ProcessAsync(secondRequest, secondDelivery, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Equal(2, slotIds.Count);
@@ -693,7 +693,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-no-double-dispose@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-nodouble", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-nodouble", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -783,9 +783,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// <param name="messageId">The message id used by this test scenario.</param>
         /// <param name="backbone">The backbone used by this test scenario.</param>
         /// <returns>The value returned by the create valid json payload helper.</returns>
-        private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
+        private static string CreateValidJsonPayload(Guid? requestId, string? messageId, string? backbone)
         {
-            return $"{{\"version\":1,\"requestId\":\"{requestId}\",\"messageId\":\"{messageId}\",\"backbone\":\"{backbone}\"}}";
+            Guid concreteRequestId = requestId ?? throw new InvalidOperationException("requestId is required for valid payload generation.");
+            string concreteMessageId = messageId ?? throw new InvalidOperationException("messageId is required for valid payload generation.");
+            string concreteBackbone = backbone ?? throw new InvalidOperationException("backbone is required for valid payload generation.");
+            return $"{{\"version\":1,\"requestId\":\"{concreteRequestId}\",\"messageId\":\"{concreteMessageId}\",\"backbone\":\"{concreteBackbone}\"}}";
         }
 
         /// <summary>

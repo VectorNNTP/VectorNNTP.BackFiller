@@ -19,20 +19,41 @@
       "description": "Application-level protocol version identifier."
     },
     "requestId": {
-      "type": "string",
-      "format": "uuid",
-      "minLength": 1,
-      "description": "Application request identity copied from request JSON payload."
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Application request identity copied from request JSON payload when available; null indicates identity was unavailable during InvalidRequest parsing."
     },
     "messageId": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Canonical NNTP Message-ID copied from request JSON payload."
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Canonical NNTP Message-ID copied from request JSON payload when available; null indicates identity was unavailable during InvalidRequest parsing."
     },
     "backbone": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Backbone identity copied from request JSON payload."
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Backbone identity copied from request JSON payload when available; null indicates identity was unavailable during InvalidRequest parsing."
     },
     "outcome": {
       "type": "string",
@@ -55,53 +76,178 @@
       "description": "Terminal failure detail for non-success terminal outcomes."
     }
   },
-  "allOf": [
+  "oneOf": [
     {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "Success"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "uri"
-        ],
-        "not": {
-          "required": [
-            "error"
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "uri"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "Success"
           ]
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backbone": {
+          "type": "string",
+          "minLength": 1
         }
+      },
+      "not": {
+        "required": [
+          "error"
+        ]
       }
     },
     {
-      "if": {
-        "properties": {
-          "outcome": {
-            "enum": [
-              "ArticleNotFound",
-              "InvalidArticle",
-              "InvalidRequest"
-            ]
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "error"
-        ],
-        "not": {
-          "required": [
-            "uri"
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "error"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "ArticleNotFound"
           ]
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backbone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error": {
+          "type": "string",
+          "minLength": 1
         }
+      },
+      "not": {
+        "required": [
+          "uri"
+        ]
+      }
+    },
+    {
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "error"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "InvalidArticle"
+          ]
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "backbone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "not": {
+        "required": [
+          "uri"
+        ]
+      }
+    },
+    {
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "error"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "InvalidRequest"
+          ]
+        },
+        "requestId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messageId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backbone": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "not": {
+        "required": [
+          "uri"
+        ]
       }
     }
   ]

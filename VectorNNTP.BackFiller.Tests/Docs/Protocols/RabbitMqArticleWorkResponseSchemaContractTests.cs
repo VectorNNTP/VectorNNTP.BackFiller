@@ -73,6 +73,60 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
             Assert.Empty(errors);
         }
 
+        [Fact]
+        public void Schema_WhenOutcomeInvalidRequestWithUnavailableIdentityAndError_IsValid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": null,
+                  "messageId": null,
+                  "backbone": null,
+                  "outcome": "InvalidRequest",
+                  "error": "Request payload was invalid."
+                }
+                """);
+
+            Assert.Empty(errors);
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeArticleNotFoundWithUnavailableIdentity_IsInvalid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": null,
+                  "messageId": "<12345@example.invalid>",
+                  "backbone": "Giganews",
+                  "outcome": "ArticleNotFound",
+                  "error": "No article with that message-id"
+                }
+                """);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("requestId", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeInvalidRequestMissingError_IsInvalid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": null,
+                  "messageId": null,
+                  "backbone": null,
+                  "outcome": "InvalidRequest"
+                }
+                """);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("error", StringComparison.OrdinalIgnoreCase));
+        }
+
         [Theory]
         [InlineData("cache://backfiller01.usenet.ninja:1/30edc94157aa16fe644a45a1f1ffe160")]
         [InlineData("cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]

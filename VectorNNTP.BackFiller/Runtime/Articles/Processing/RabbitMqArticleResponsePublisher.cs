@@ -86,10 +86,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             await _publishGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                string backbone = result.Request.Backbone ?? result.Delivery.Backbone;
+
                 RabbitMqOwnedChannel? ownedChannel;
                 try
                 {
-                    ownedChannel = await GetOrCreatePublishChannelAsync(result.Request.Backbone, cancellationToken).ConfigureAwait(false);
+                    ownedChannel = await GetOrCreatePublishChannelAsync(backbone, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -151,7 +153,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
-                        result.Request.Backbone);
+                        backbone);
 
                     return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Confirmed, ownedChannel.ConnectionGeneration, null);
                 }
@@ -169,7 +171,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
-                        result.Request.Backbone);
+                        backbone);
 
                     return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Failed, ownedChannel.ConnectionGeneration, ex);
                 }
@@ -258,9 +260,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ RPC response published and confirmed. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone}")]
         private static partial void LogRabbitMqRpcResponsePublishedAndConfirmed(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone);
 
         /// <summary>
@@ -279,9 +281,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         private static partial void LogRabbitMqRpcResponsePublishFailed(
             Exception exception,
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone);
     }
 }

@@ -89,22 +89,27 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         {
             ArgumentNullException.ThrowIfNull(request);
 
+            string backbone = request.Backbone
+                ?? throw new InvalidOperationException("Backbone retrieval requires a concrete request backbone.");
+            string messageId = request.MessageId
+                ?? throw new InvalidOperationException("Backbone retrieval requires a concrete request messageId.");
+
             Stopwatch stopwatch = Stopwatch.StartNew();
             NntpArticleSessionLease lease = await _leaseProvider
-                .AcquireSessionLeaseAsync(request.Backbone, request.MessageId, cancellationToken)
+                .AcquireSessionLeaseAsync(backbone, messageId, cancellationToken)
                 .ConfigureAwait(false);
 
             try
             {
                 NntpArticleGrabberResult grabberResult = await _workflow
-                    .ProcessAsync(lease.Session, new NntpArticleGrabberWorkItem(request.MessageId), cancellationToken)
+                    .ProcessAsync(lease.Session, new NntpArticleGrabberWorkItem(messageId), cancellationToken)
                     .ConfigureAwait(false);
 
                 lease.ReportAcquisitionOutcome(grabberResult.AcquisitionFailureCode ?? NntpArticleAcquisitionFailureCode.None);
                 LogArticleRetrievalCompleted(
                     _logger,
-                    request.MessageId,
-                    request.Backbone,
+                    messageId,
+                    backbone,
                     lease.AccountId,
                     lease.SlotId,
                     grabberResult.FailureCode,

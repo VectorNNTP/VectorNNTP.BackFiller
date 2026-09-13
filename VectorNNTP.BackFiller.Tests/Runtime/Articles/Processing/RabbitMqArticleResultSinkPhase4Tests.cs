@@ -296,9 +296,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.InvalidRequest,
-                requestId: Guid.Empty,
-                messageId: string.Empty,
-                backbone: "BackboneA");
+                requestId: null,
+                messageId: null,
+                backbone: null);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -329,9 +329,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.InvalidRequest,
-                requestId: Guid.Empty,
-                messageId: string.Empty,
-                backbone: "BackboneA");
+                requestId: null,
+                messageId: null,
+                backbone: null);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -362,9 +362,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.InvalidRequest,
-                requestId: Guid.Empty,
-                messageId: string.Empty,
-                backbone: "BackboneA");
+                requestId: null,
+                messageId: null,
+                backbone: null);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -395,9 +395,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.InvalidRequest,
-                requestId: Guid.Empty,
-                messageId: string.Empty,
-                backbone: "BackboneA");
+                requestId: null,
+                messageId: null,
+                backbone: null);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -428,9 +428,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingResult result = CreateResult(
                 delivery,
                 outcome: ArticleWorkProcessingOutcome.InvalidRequest,
-                requestId: Guid.Empty,
-                messageId: string.Empty,
-                backbone: "BackboneA");
+                requestId: null,
+                messageId: null,
+                backbone: null);
 
             TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Failed);
             RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
@@ -1104,9 +1104,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         private static ArticleWorkProcessingResult CreateResult(
             RabbitMqArticleDelivery delivery,
             ArticleWorkProcessingOutcome outcome,
-            Guid requestId,
-            string messageId,
-            string backbone,
+            Guid? requestId,
+            string? messageId,
+            string? backbone,
             NntpArticleGrabberResult? grabberResult = null)
         {
             RabbitMqArticleWorkRequest request = new(1, requestId, messageId, backbone);

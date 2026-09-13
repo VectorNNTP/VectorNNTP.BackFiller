@@ -8,6 +8,7 @@
 using System.Buffers;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
@@ -49,9 +50,34 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
             jsonWriter.WriteStartObject();
             jsonWriter.WriteNumber("version", response.Version);
-            jsonWriter.WriteString("requestId", response.RequestId);
-            jsonWriter.WriteString("messageId", response.MessageId);
-            jsonWriter.WriteString("backbone", response.Backbone);
+
+            if (response.RequestId.HasValue)
+            {
+                jsonWriter.WriteString("requestId", response.RequestId.Value);
+            }
+            else
+            {
+                jsonWriter.WriteNull("requestId");
+            }
+
+            if (response.MessageId is null)
+            {
+                jsonWriter.WriteNull("messageId");
+            }
+            else
+            {
+                jsonWriter.WriteString("messageId", response.MessageId);
+            }
+
+            if (response.Backbone is null)
+            {
+                jsonWriter.WriteNull("backbone");
+            }
+            else
+            {
+                jsonWriter.WriteString("backbone", response.Backbone);
+            }
+
             jsonWriter.WriteString("outcome", response.Outcome);
 
             if (string.Equals(response.Outcome, nameof(ArticleWorkProcessingOutcome.Success), StringComparison.Ordinal))
@@ -109,13 +135,67 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 throw new InvalidOperationException($"Unsupported response version '{version}'.");
             }
 
-            Guid requestId = root.GetProperty("requestId").GetGuid();
-            string messageId = root.GetProperty("messageId").GetString()
-                ?? throw new InvalidOperationException("Response payload is missing required 'messageId'.");
-            string backbone = root.GetProperty("backbone").GetString()
-                ?? throw new InvalidOperationException("Response payload is missing required 'backbone'.");
             string outcome = root.GetProperty("outcome").GetString()
                 ?? throw new InvalidOperationException("Response payload is missing required 'outcome'.");
+
+            Guid? requestId = ReadOptionalGuidProperty(root, "requestId");
+            string? messageId = ReadOptionalStringProperty(root, "messageId");
+            string? backbone = ReadOptionalStringProperty(root, "backbone");
+
+            bool successOutcome = string.Equals(outcome, nameof(ArticleWorkProcessingOutcome.Success), StringComparison.Ordinal);
+            bool invalidRequestOutcome = string.Equals(outcome, nameof(ArticleWorkProcessingOutcome.InvalidRequest), StringComparison.Ordinal);
+
+            if (successOutcome)
+            {
+                if (!requestId.HasValue || requestId.Value == Guid.Empty)
+                {
+                    throw new InvalidOperationException("Success response payload requires a concrete non-empty 'requestId'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(messageId) || !NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan()))
+                {
+                    throw new InvalidOperationException("Success response payload requires a canonical non-empty 'messageId'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(backbone))
+                {
+                    throw new InvalidOperationException("Success response payload requires a non-empty 'backbone'.");
+                }
+            }
+            else if (!invalidRequestOutcome)
+            {
+                if (!requestId.HasValue || requestId.Value == Guid.Empty)
+                {
+                    throw new InvalidOperationException("Terminal non-invalid-request response payload requires a concrete non-empty 'requestId'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(messageId) || !NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan()))
+                {
+                    throw new InvalidOperationException("Terminal non-invalid-request response payload requires a canonical non-empty 'messageId'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(backbone))
+                {
+                    throw new InvalidOperationException("Terminal non-invalid-request response payload requires a non-empty 'backbone'.");
+                }
+            }
+            else
+            {
+                if (requestId.HasValue && requestId.Value == Guid.Empty)
+                {
+                    throw new InvalidOperationException("InvalidRequest payload must not use Guid.Empty sentinel request identity.");
+                }
+
+                if (messageId is not null && (string.IsNullOrWhiteSpace(messageId) || !NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan())))
+                {
+                    throw new InvalidOperationException("InvalidRequest payload messageId, when provided, must be canonical and non-empty.");
+                }
+
+                if (backbone is not null && string.IsNullOrWhiteSpace(backbone))
+                {
+                    throw new InvalidOperationException("InvalidRequest payload backbone, when provided, must be non-empty.");
+                }
+            }
 
             string? uri = null;
             if (root.TryGetProperty("uri", out JsonElement uriElement) && uriElement.ValueKind == JsonValueKind.String)
@@ -130,6 +210,40 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
 
             return new RabbitMqArticleWorkResponse(version, requestId, messageId, backbone, outcome, uri, error);
+        }
+
+        private static Guid? ReadOptionalGuidProperty(JsonElement root, string propertyName)
+        {
+            JsonElement property = root.GetProperty(propertyName);
+            return property.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => property.GetGuid(),
+                JsonValueKind.Undefined => throw new InvalidOperationException($"Response payload property '{propertyName}' is undefined."),
+                JsonValueKind.Object => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be an object."),
+                JsonValueKind.Array => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be an array."),
+                JsonValueKind.Number => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be numeric."),
+                JsonValueKind.True => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be boolean true."),
+                JsonValueKind.False => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be boolean false."),
+                _ => throw new InvalidOperationException($"Response payload property '{propertyName}' must be a JSON string or null."),
+            };
+        }
+
+        private static string? ReadOptionalStringProperty(JsonElement root, string propertyName)
+        {
+            JsonElement property = root.GetProperty(propertyName);
+            return property.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => property.GetString() ?? throw new InvalidOperationException($"Response payload property '{propertyName}' string value was null."),
+                JsonValueKind.Undefined => throw new InvalidOperationException($"Response payload property '{propertyName}' is undefined."),
+                JsonValueKind.Object => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be an object."),
+                JsonValueKind.Array => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be an array."),
+                JsonValueKind.Number => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be numeric."),
+                JsonValueKind.True => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be boolean true."),
+                JsonValueKind.False => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be boolean false."),
+                _ => throw new InvalidOperationException($"Response payload property '{propertyName}' must be a JSON string or null."),
+            };
         }
     }
 }

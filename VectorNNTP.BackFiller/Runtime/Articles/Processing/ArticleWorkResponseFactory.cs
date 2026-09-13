@@ -57,7 +57,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     MessageId: result.Request.MessageId,
                     Backbone: result.Request.Backbone,
                     Outcome: result.Outcome.ToString(),
-                    Uri: $"{_successUriPrefix}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}",
+                    Uri: $"{_successUriPrefix}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId ?? throw new InvalidOperationException("Successful responses require a canonical Message-ID."))}",
                     Error: null),
 
                 ArticleWorkProcessingOutcome.ArticleNotFound => new RabbitMqArticleWorkResponse(
@@ -67,7 +67,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     Backbone: result.Request.Backbone,
                     Outcome: result.Outcome.ToString(),
                     Uri: null,
-                    Error: result.ResponseText ?? "Article not found."),
+                    Error: ResolveTerminalError(result.ResponseText, "Article not found.")),
 
                 ArticleWorkProcessingOutcome.InvalidArticle => new RabbitMqArticleWorkResponse(
                     Version: ResponseVersion,
@@ -76,7 +76,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     Backbone: result.Request.Backbone,
                     Outcome: result.Outcome.ToString(),
                     Uri: null,
-                    Error: result.ResponseText ?? "Article content was invalid."),
+                    Error: ResolveTerminalError(result.ResponseText, "Article content was invalid.")),
 
                 ArticleWorkProcessingOutcome.InvalidRequest => new RabbitMqArticleWorkResponse(
                     Version: ResponseVersion,
@@ -85,7 +85,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     Backbone: result.Request.Backbone,
                     Outcome: result.Outcome.ToString(),
                     Uri: null,
-                    Error: result.ResponseText ?? "Request payload was invalid."),
+                    Error: ResolveTerminalError(result.ResponseText, "Request payload was invalid.")),
 
                 ArticleWorkProcessingOutcome.ProviderFailure => null,
 
@@ -95,6 +95,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
                 _ => null,
             };
+        }
+
+        private static string ResolveTerminalError(string? responseText, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(responseText)
+                ? fallback
+                : responseText;
         }
     }
 }
