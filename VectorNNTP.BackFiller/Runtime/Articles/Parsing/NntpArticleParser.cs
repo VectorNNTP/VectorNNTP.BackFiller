@@ -142,6 +142,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                     headers: headerOutcome.Headers);
             }
 
+            if (!TryValidateBodyLineLengths(headerOutcome.BodyBytes.Span, _options.MaxHeaderLineBytes, out NntpArticleParseFailureCode bodyLineFailure))
+            {
+                return NntpArticleParseResult.Rejected(
+                    failureCode: bodyLineFailure,
+                    articleType: NntpArticleType.Malformed,
+                    articleBytes: articleBytes,
+                    headerBytes: headerOutcome.HeaderBytes,
+                    bodyBytes: headerOutcome.BodyBytes,
+                    headers: headerOutcome.Headers);
+            }
+
             if (!TryValidateMessageId(articleSpan, headerOutcome, out ReadOnlyMemory<byte> originalMessageIdValue, out NntpArticleParseFailureCode messageIdFailure))
             {
                 return NntpArticleParseResult.Rejected(
@@ -290,8 +301,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             while (index < articleSpan.Length)
             {
                 int maxLineLength = options.MaxHeaderLineBytes;
-                int lineEnd = FindLineTerminator(articleSpan, index);
-                int lineContentEnd = lineEnd >= 0 ? lineEnd : articleSpan.Length;
+                int lineEnd = FindLineTerminator(articleSpan, index, maxLineLength + 1);
+                int lineContentEnd = lineEnd >= 0 ? lineEnd : Math.Min(articleSpan.Length, index + maxLineLength + 1);
                 int lineLength = lineContentEnd - index;
                 if (lineEnd < 0 && lineLength > maxLineLength)
                 {
@@ -886,6 +897,52 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Validates body line lengths against the repository-wide hard line boundary.
+        /// </summary>
+        /// <param name="body">Article body bytes.</param>
+        /// <param name="maxLineBytes">Maximum accepted line bytes.</param>
+        /// <param name="failureCode">Failure code when validation fails.</param>
+        /// <returns><see langword="true"/> when all body lines satisfy the hard boundary.</returns>
+        private static bool TryValidateBodyLineLengths(ReadOnlySpan<byte> body, int maxLineBytes, out NntpArticleParseFailureCode failureCode)
+        {
+            failureCode = NntpArticleParseFailureCode.None;
+            int position = 0;
+
+            while (position < body.Length)
+            {
+                int maxScanBytes = Math.Min(maxLineBytes + 1, body.Length - position);
+                int lineEnd = -1;
+
+                for (int i = 0; i < maxScanBytes; i++)
+                {
+                    byte current = body[position + i];
+                    if (current is (byte)'\r' or (byte)'\n')
+                    {
+                        lineEnd = position + i;
+                        break;
+                    }
+                }
+
+                int lineContentEnd = lineEnd >= 0 ? lineEnd : position + maxScanBytes;
+                int lineLength = lineContentEnd - position;
+                if (lineLength > maxLineBytes)
+                {
+                    failureCode = NntpArticleParseFailureCode.HeaderLineTooLong;
+                    return false;
+                }
+
+                if (lineEnd < 0)
+                {
+                    return true;
+                }
+
+                position = AdvancePastTerminator(body, lineEnd);
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Performs a bounded line-start scan for <c>=ybegin </c> markers before invoking full yEnc validation.
         /// </summary>
         /// <param name="body">Article body bytes.</param>
@@ -897,7 +954,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             int position = 0;
             while (position < scanLength)
             {
-                int lineEnd = FindLineTerminator(body, position);
+                int lineEnd = FindLineTerminator(body, position, scanLength - position);
                 int lineContentEnd = lineEnd >= 0 ? lineEnd : scanLength;
                 ReadOnlySpan<byte> line = body[position..lineContentEnd];
                 if (line.StartsWith(YEncBeginMarker))
@@ -952,10 +1009,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// </summary>
         /// <param name="buffer">Input bytes.</param>
         /// <param name="start">Start offset.</param>
-        /// <returns>The index of the next CR or LF byte, -1 when no terminator remains, or -2 when a NUL byte is encountered before any terminator.</returns>
-        private static int FindLineTerminator(ReadOnlySpan<byte> buffer, int start)
+        /// <param name="maximumScanBytes">Maximum bytes to scan before reporting that no terminator was found.</param>
+        /// <returns>The index of the next CR or LF byte, -1 when no terminator remains within scan bounds, or -2 when a NUL byte is encountered before any terminator.</returns>
+        private static int FindLineTerminator(ReadOnlySpan<byte> buffer, int start, int maximumScanBytes = int.MaxValue)
         {
-            for (int i = start; i < buffer.Length; i++)
+            int boundedScanBytes = Math.Max(0, maximumScanBytes);
+            int endExclusive = boundedScanBytes == int.MaxValue
+                ? buffer.Length
+                : Math.Min(buffer.Length, start + boundedScanBytes);
+
+            for (int i = start; i < endExclusive; i++)
             {
                 byte b = buffer[i];
                 if (b == (byte)'\r')

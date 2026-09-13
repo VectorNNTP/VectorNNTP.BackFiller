@@ -6,7 +6,6 @@
 // Deterministic forensic measurement runner comparing early acquisition rejection against late parser-stage rejection.
 
 using System.Diagnostics;
-using System.Collections;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -41,8 +40,8 @@ namespace VectorNNTP.BackFiller.Benchmarks
         {
             byte[] oversizedArticle = BuildOversizedArticle(ArticleResourceLimits.MaxArticleBytes + LateRejectOversizeBytes);
 
-            ScenarioAggregate earlyAggregate = new("EarlyRejectAtAcquisitionBoundary");
-            ScenarioAggregate lateAggregate = new("LateRejectAfterMaterialization");
+            ScenarioAggregate earlyAggregate = new("EarlyRejectThroughAcquisitionPath");
+            ScenarioAggregate lateAggregate = new("LateRejectAfterClientMaterialization");
 
             for (int i = 0; i < Iterations; i++)
             {
@@ -57,6 +56,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
             Console.WriteLine($"Iterations: {Iterations}");
             Console.WriteLine($"HardArticleLimitBytes: {ArticleResourceLimits.MaxArticleBytes}");
             Console.WriteLine($"OversizedInputBytes: {oversizedArticle.Length}");
+            Console.WriteLine("MeasurementNote: Scenarios are intentionally non-comparative because the late path bypasses acquisition boundary enforcement.");
             Console.WriteLine();
             WriteAggregate(earlyAggregate);
             Console.WriteLine();
@@ -68,7 +68,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         /// </summary>
         private static async Task<ScenarioSample> MeasureEarlyRejectAsync(byte[] oversizedArticle)
         {
-            await using CountingArticleServer server = await CountingArticleServer.StartAsync("<m16-early@test>", oversizedArticle, ArticleResourceLimits.MaxArticleBytes).ConfigureAwait(false);
+            await using CountingArticleServer server = await CountingArticleServer.StartAsync("<m16-early@test>", oversizedArticle).ConfigureAwait(false);
             (NntpArticleAcquisitionSession? session, NntpArticleAcquisitionResult connectResult) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.Endpoint,
                 NntpArticleAcquisitionOptions.Default,
@@ -99,9 +99,11 @@ namespace VectorNNTP.BackFiller.Benchmarks
                 return new ScenarioSample(
                     Elapsed: stopwatch.Elapsed,
                     AllocatedBytes: allocatedAfter - allocatedBefore,
-                    BytesConsumedOnWire: server.TotalBytesWritten,
-                    MaterializedPayloadBytes: server.MaterializedPayloadBytes,
-                    Outcome: result.FailureCode.ToString());
+                    ServerBytesWritten: server.TotalBytesWritten,
+                    ObservedMaterializedPayloadBytes: 0,
+                    ExpectedMaterializationThresholdBytes: ArticleResourceLimits.MaxArticleBytes,
+                    Outcome: result.FailureCode.ToString(),
+                    MeasurementPath: "Acquisition");
             }
         }
 
@@ -131,9 +133,11 @@ namespace VectorNNTP.BackFiller.Benchmarks
             return new ScenarioSample(
                 Elapsed: stopwatch.Elapsed,
                 AllocatedBytes: allocatedAfter - allocatedBefore,
-                BytesConsumedOnWire: 0,
-                MaterializedPayloadBytes: materialized.Length,
-                Outcome: parseResult.FailureCode.ToString());
+                ServerBytesWritten: 0,
+                ObservedMaterializedPayloadBytes: materialized.Length,
+                ExpectedMaterializationThresholdBytes: ArticleResourceLimits.MaxArticleBytes,
+                Outcome: parseResult.FailureCode.ToString(),
+                MeasurementPath: "ParserAfterMaterialization");
         }
 
         /// <summary>
@@ -156,9 +160,18 @@ namespace VectorNNTP.BackFiller.Benchmarks
 
             byte[] article = new byte[totalBytes];
             Buffer.BlockCopy(headerBytes, 0, article, 0, headerBytes.Length);
-            for (int i = headerBytes.Length; i < article.Length; i++)
+
+            int bodyStart = headerBytes.Length;
+            int bodyLength = totalBytes - bodyStart;
+            for (int i = bodyStart; i < article.Length; i++)
             {
                 article[i] = (byte)'A';
+            }
+
+            if (bodyLength >= 2)
+            {
+                article[^2] = (byte)'\r';
+                article[^1] = (byte)'\n';
             }
 
             return article;
@@ -171,10 +184,12 @@ namespace VectorNNTP.BackFiller.Benchmarks
         {
             Console.WriteLine($"Scenario: {aggregate.Name}");
             Console.WriteLine($"  Outcome: {aggregate.LastOutcome}");
+            Console.WriteLine($"  MeasurementPath: {aggregate.MeasurementPath}");
             Console.WriteLine($"  AvgElapsedMs: {aggregate.AverageElapsed.TotalMilliseconds:F2}");
             Console.WriteLine($"  AvgAllocatedBytes: {aggregate.AverageAllocatedBytes}");
-            Console.WriteLine($"  AvgWireBytesConsumed: {aggregate.AverageWireBytesConsumed}");
-            Console.WriteLine($"  AvgMaterializedPayloadBytes: {aggregate.AverageMaterializedPayloadBytes}");
+            Console.WriteLine($"  AvgServerBytesWritten: {aggregate.AverageServerBytesWritten}");
+            Console.WriteLine($"  AvgObservedMaterializedPayloadBytes: {aggregate.AverageObservedMaterializedPayloadBytes}");
+            Console.WriteLine($"  AvgExpectedMaterializationThresholdBytes: {aggregate.AverageExpectedMaterializationThresholdBytes}");
         }
 
         /// <summary>
@@ -193,9 +208,11 @@ namespace VectorNNTP.BackFiller.Benchmarks
         private readonly record struct ScenarioSample(
             TimeSpan Elapsed,
             long AllocatedBytes,
-            long BytesConsumedOnWire,
-            int MaterializedPayloadBytes,
-            string Outcome);
+            long ServerBytesWritten,
+            int ObservedMaterializedPayloadBytes,
+            int ExpectedMaterializationThresholdBytes,
+            string Outcome,
+            string MeasurementPath);
 
         /// <summary>
         /// Aggregate metrics for one scenario across repeated samples.
@@ -213,13 +230,17 @@ namespace VectorNNTP.BackFiller.Benchmarks
 
             internal string LastOutcome => _samples.Count == 0 ? "n/a" : _samples[^1].Outcome;
 
+            internal string MeasurementPath => _samples.Count == 0 ? "n/a" : _samples[^1].MeasurementPath;
+
             internal TimeSpan AverageElapsed => TimeSpan.FromTicks((long)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.Elapsed.Ticks)));
 
             internal long AverageAllocatedBytes => (long)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.AllocatedBytes));
 
-            internal long AverageWireBytesConsumed => (long)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.BytesConsumedOnWire));
+            internal long AverageServerBytesWritten => (long)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.ServerBytesWritten));
 
-            internal int AverageMaterializedPayloadBytes => (int)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.MaterializedPayloadBytes));
+            internal int AverageObservedMaterializedPayloadBytes => (int)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.ObservedMaterializedPayloadBytes));
+
+            internal int AverageExpectedMaterializationThresholdBytes => (int)(_samples.Count == 0 ? 0d : _samples.Average(static sample => (double)sample.ExpectedMaterializationThresholdBytes));
 
             internal void Add(ScenarioSample sample)
             {
@@ -235,19 +256,16 @@ namespace VectorNNTP.BackFiller.Benchmarks
             private readonly TcpListener _listener;
             private readonly string _messageId;
             private readonly byte[] _article;
-            private readonly int _earlyRejectionBytes;
             private readonly CancellationTokenSource _cancellation = new();
             private readonly Task _acceptLoop;
 
             private long _totalBytesWritten;
-            private int _materializedPayloadBytes;
 
-            private CountingArticleServer(TcpListener listener, string messageId, byte[] article, int earlyRejectionBytes)
+            private CountingArticleServer(TcpListener listener, string messageId, byte[] article)
             {
                 _listener = listener;
                 _messageId = messageId;
                 _article = article;
-                _earlyRejectionBytes = earlyRejectionBytes;
                 Endpoint = new NntpArticleAcquisitionEndpoint("127.0.0.1", ((IPEndPoint)listener.LocalEndpoint).Port, UseSsl: false, Username: null, Password: null);
                 _acceptLoop = Task.Run(AcceptLoopAsync);
             }
@@ -256,13 +274,11 @@ namespace VectorNNTP.BackFiller.Benchmarks
 
             internal long TotalBytesWritten => Interlocked.Read(ref _totalBytesWritten);
 
-            internal int MaterializedPayloadBytes => Volatile.Read(ref _materializedPayloadBytes);
-
-            internal static ValueTask<CountingArticleServer> StartAsync(string messageId, byte[] article, int earlyRejectionBytes)
+            internal static ValueTask<CountingArticleServer> StartAsync(string messageId, byte[] article)
             {
                 TcpListener listener = new(IPAddress.Loopback, 0);
                 listener.Start();
-                return ValueTask.FromResult(new CountingArticleServer(listener, messageId, article, earlyRejectionBytes));
+                return ValueTask.FromResult(new CountingArticleServer(listener, messageId, article));
             }
 
             public async ValueTask DisposeAsync()
@@ -299,7 +315,6 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     await WriteAsciiLineAsync(stream, $"220 0 {_messageId} article follows").ConfigureAwait(false);
                     await WriteBytesAsync(stream, _article).ConfigureAwait(false);
                     await WriteBytesAsync(stream, ".\r\n"u8.ToArray()).ConfigureAwait(false);
-                    Volatile.Write(ref _materializedPayloadBytes, _earlyRejectionBytes);
                 }
                 catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
                 {

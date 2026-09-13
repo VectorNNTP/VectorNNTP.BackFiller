@@ -743,13 +743,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
                 });
 
             byte[] yEncBody = BuildSyntheticSinglePartYEncBody(512, "late-marker.bin");
-            byte[] paddedBody = new byte[1024 + yEncBody.Length];
+            byte[] paddedBody = new byte[1026 + yEncBody.Length];
             for (int i = 0; i < 1024; i++)
             {
                 paddedBody[i] = (byte)'A';
             }
 
-            Buffer.BlockCopy(yEncBody, 0, paddedBody, 1024, yEncBody.Length);
+            paddedBody[1024] = (byte)'\r';
+            paddedBody[1025] = (byte)'\n';
+            Buffer.BlockCopy(yEncBody, 0, paddedBody, 1026, yEncBody.Length);
 
             byte[] article = BuildArticle(
                 headers:
@@ -1219,7 +1221,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
                     "Newsgroups: alt.test",
                     "From: user@example.test",
                 ],
-                bodyBytes: CreateFilledBytes(payloadBytes, (byte)'A'));
+                bodyBytes: CreateLineBoundedBodyBytes(payloadBytes, (byte)'A'));
 
             NntpArticleParseResult result = parser.Parse(article);
 
@@ -1243,7 +1245,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
                     "Newsgroups: alt.test",
                     "From: user@example.test",
                 ],
-                bodyBytes: CreateFilledBytes(payloadBytes, (byte)'B'));
+                bodyBytes: CreateLineBoundedBodyBytes(payloadBytes, (byte)'B'));
 
             NntpArticleParseResult result = parser.Parse(article);
 
@@ -1312,6 +1314,106 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
                 "Subject: " + new string('x', 1025) +
                 "\r\n\r\n" +
                 "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+
+            int subjectPrefixIndex = Encoding.ASCII.GetString(article).IndexOf("Subject: ", StringComparison.Ordinal);
+            Assert.True(subjectPrefixIndex >= 0);
+            Assert.Equal(subjectPrefixIndex + 1024, result.HeaderBytes.Length);
+        }
+
+        /// <summary>
+        /// Verifies body line boundaries enforce 1023/1024 accepted and 1025 rejected.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenBodyLineLengthHits1023And1024And1025_EnforcesBoundary()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+
+            byte[] bodyLine1023 = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-line-1023@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: new string('a', 1023) + "\r\n");
+
+            byte[] bodyLine1024 = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-line-1024@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: new string('b', 1024) + "\r\n");
+
+            byte[] bodyLine1025 = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-line-1025@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: new string('c', 1025) + "\r\n");
+
+            NntpArticleParseResult result1023 = parser.Parse(bodyLine1023);
+            NntpArticleParseResult result1024 = parser.Parse(bodyLine1024);
+            NntpArticleParseResult result1025 = parser.Parse(bodyLine1025);
+
+            Assert.True(result1023.IsAccepted);
+            Assert.True(result1024.IsAccepted);
+            Assert.False(result1025.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result1025.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies newline-free body scanning rejects once the 1024-character boundary is crossed.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenBodyLineHasNoNewlineUntilAfterBoundary_RejectsBoundedly()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-newline-free@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: new string('z', 1025) + "\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies newline-free overlength body lines are rejected at the bounded 1024-character contract position, not after scanning the full trailing payload.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenBodyLineExceedsBoundaryBeforeLargeTrailingPayload_RejectsBoundedly()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            string oversizedLine = new('n', 1025);
+            string trailingPayload = new('t', 256 * 1024);
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-bounded-scan@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: oversizedLine + trailingPayload);
 
             NntpArticleParseResult result = parser.Parse(article);
 
@@ -1651,6 +1753,40 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         {
             byte[] bytes = new byte[length];
             Array.Fill(bytes, value);
+            return bytes;
+        }
+
+        private static byte[] CreateLineBoundedBodyBytes(int length, byte value)
+        {
+            byte[] bytes = new byte[length];
+            int written = 0;
+
+            while (written < length)
+            {
+                int remaining = length - written;
+                int lineBytes = Math.Min(ArticleResourceLimits.MaxArticleLineCharacters, remaining);
+                for (int i = 0; i < lineBytes; i++)
+                {
+                    bytes[written + i] = value;
+                }
+
+                written += lineBytes;
+                if (written >= length)
+                {
+                    break;
+                }
+
+                if (length - written >= 2)
+                {
+                    bytes[written++] = (byte)'\r';
+                    bytes[written++] = (byte)'\n';
+                }
+                else
+                {
+                    bytes[written++] = (byte)'\n';
+                }
+            }
+
             return bytes;
         }
 

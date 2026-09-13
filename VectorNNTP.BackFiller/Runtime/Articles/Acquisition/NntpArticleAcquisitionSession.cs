@@ -261,6 +261,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
             }
 
+            if (_transportFailed)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session transport is no longer reusable.");
+            }
+
             if (!NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan()))
             {
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.InvalidMessageId, null, "Message-ID does not satisfy NNTP/INN grammar.");
@@ -328,6 +333,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             if (_disposed)
             {
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
+            }
+
+            if (_transportFailed)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session transport is no longer reusable.");
             }
 
             using IDisposable? connectionLoggingScope = _connectionLoggingContext?.Push();
@@ -586,63 +596,71 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     ReadOnlySequence<byte> sequence = readResult.Buffer;
                     SequenceReader<byte> reader = new(sequence);
 
-                    while (reader.TryPeek(out byte current))
+                    try
                     {
-                        if (atLineStart && current == (byte)'.')
+                        while (reader.TryPeek(out byte current))
                         {
-                            SequenceReader<byte> lookAhead = reader;
-                            lookAhead.Advance(1);
-                            if (!lookAhead.TryPeek(out byte next))
+                            if (atLineStart && current == (byte)'.')
                             {
-                                break;
-                            }
-
-                            if (next == (byte)'.')
-                            {
-                                reader.Advance(2);
-                                builder.WriteByte((byte)'.');
-                                atLineStart = false;
-                                continue;
-                            }
-
-                            if (next == (byte)'\n')
-                            {
-                                reader.Advance(2);
-                                _reader.AdvanceTo(reader.Position, sequence.End);
-                                return builder.Build();
-                            }
-
-                            if (next == (byte)'\r')
-                            {
-                                SequenceReader<byte> afterCarriageReturn = lookAhead;
-                                afterCarriageReturn.Advance(1);
-                                if (!afterCarriageReturn.TryPeek(out byte lineFeed))
+                                SequenceReader<byte> lookAhead = reader;
+                                lookAhead.Advance(1);
+                                if (!lookAhead.TryPeek(out byte next))
                                 {
                                     break;
                                 }
 
-                                if (lineFeed == (byte)'\n')
+                                if (next == (byte)'.')
                                 {
-                                    reader.Advance(3);
+                                    reader.Advance(2);
+                                    atLineStart = false;
+                                    builder.WriteByte((byte)'.');
+                                    continue;
+                                }
+
+                                if (next == (byte)'\n')
+                                {
+                                    reader.Advance(2);
                                     _reader.AdvanceTo(reader.Position, sequence.End);
                                     return builder.Build();
                                 }
 
+                                if (next == (byte)'\r')
+                                {
+                                    SequenceReader<byte> afterCarriageReturn = lookAhead;
+                                    afterCarriageReturn.Advance(1);
+                                    if (!afterCarriageReturn.TryPeek(out byte lineFeed))
+                                    {
+                                        break;
+                                    }
+
+                                    if (lineFeed == (byte)'\n')
+                                    {
+                                        reader.Advance(3);
+                                        _reader.AdvanceTo(reader.Position, sequence.End);
+                                        return builder.Build();
+                                    }
+
+                                    reader.Advance(1);
+                                    atLineStart = false;
+                                    builder.WriteByte((byte)'.');
+                                    continue;
+                                }
+
                                 reader.Advance(1);
-                                builder.WriteByte((byte)'.');
                                 atLineStart = false;
+                                builder.WriteByte((byte)'.');
                                 continue;
                             }
 
                             reader.Advance(1);
-                            builder.WriteByte((byte)'.');
-                            atLineStart = false;
-                            continue;
+                            atLineStart = current is (byte)'\r' or (byte)'\n';
+                            builder.WriteByte(current);
                         }
-
-                        reader.Advance(1);
-                        builder.WriteByte(current);
-                        atLineStart = current is (byte)'\r' or (byte)'\n';
+                    }
+                    catch (NntpArticleAcquisitionException ex) when (ex.FailureCode == NntpArticleAcquisitionFailureCode.ArticleTooLarge)
+                    {
+                        _reader.AdvanceTo(reader.Position, reader.Position);
+                        throw;
                     }
 
                     _reader.AdvanceTo(reader.Position, sequence.End);
@@ -658,9 +676,32 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             catch (NntpArticleAcquisitionException ex) when (ex.FailureCode == NntpArticleAcquisitionFailureCode.ArticleTooLarge)
             {
                 _transportFailed = true;
-                await DrainArticlePayloadTerminatorAfterOversizeAsync(atLineStart, cancellationToken).ConfigureAwait(false);
-                builder.Dispose();
-                throw;
+                Exception? cleanupFailure = null;
+
+                try
+                {
+                    await DrainArticlePayloadTerminatorAfterOversizeAsync(atLineStart, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception drainException)
+                {
+                    cleanupFailure = drainException;
+                    _ = MarkTransportFailureForException(drainException, cancellationToken);
+                }
+                finally
+                {
+                    builder.Dispose();
+                }
+
+                if (cleanupFailure is null)
+                {
+                    throw;
+                }
+
+                throw new NntpArticleAcquisitionException(
+                    NntpArticleAcquisitionFailureCode.ArticleTooLarge,
+                    ex.TraceContext,
+                    ex.Message,
+                    cleanupFailure);
             }
             catch
             {
@@ -680,10 +721,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// </remarks>
         private async ValueTask DrainArticlePayloadTerminatorAfterOversizeAsync(bool atLineStart, CancellationToken cancellationToken)
         {
+            const int MaximumDrainBytes = 256 * 1024;
+            long drainDeadlineTimestamp = Stopwatch.GetTimestamp() + (long)(_options.ReceiveTimeout.TotalSeconds * Stopwatch.Frequency);
+            int drainedBytes = 0;
+
             while (true)
             {
+                TimeSpan remainingDrainBudget = TimeSpan.FromSeconds(Math.Max(0d, (drainDeadlineTimestamp - Stopwatch.GetTimestamp()) / (double)Stopwatch.Frequency));
+                if (remainingDrainBudget <= TimeSpan.Zero)
+                {
+                    throw new TimeoutException("Timed out draining oversized ARTICLE payload before reaching terminator.");
+                }
+
                 ReadResult readResult = await ExecuteWithTimeoutAsync(
-                    _options.ReceiveTimeout,
+                    remainingDrainBudget,
                     token => _reader.ReadAsync(token),
                     cancellationToken).ConfigureAwait(false);
 
@@ -704,6 +755,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                         if (next == (byte)'.')
                         {
                             reader.Advance(2);
+                            drainedBytes += 2;
+                            if (drainedBytes > MaximumDrainBytes)
+                            {
+                                throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                            }
+
                             atLineStart = false;
                             continue;
                         }
@@ -711,6 +768,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                         if (next == (byte)'\n')
                         {
                             reader.Advance(2);
+                            drainedBytes += 2;
+                            if (drainedBytes > MaximumDrainBytes)
+                            {
+                                throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                            }
+
                             _reader.AdvanceTo(reader.Position, sequence.End);
                             return;
                         }
@@ -727,28 +790,52 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                             if (lineFeed == (byte)'\n')
                             {
                                 reader.Advance(3);
+                                drainedBytes += 3;
+                                if (drainedBytes > MaximumDrainBytes)
+                                {
+                                    throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                                }
+
                                 _reader.AdvanceTo(reader.Position, sequence.End);
                                 return;
                             }
 
                             reader.Advance(1);
+                            drainedBytes += 1;
+                            if (drainedBytes > MaximumDrainBytes)
+                            {
+                                throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                            }
+
                             atLineStart = false;
                             continue;
                         }
 
                         reader.Advance(1);
+                        drainedBytes += 1;
+                        if (drainedBytes > MaximumDrainBytes)
+                        {
+                            throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                        }
+
                         atLineStart = false;
                         continue;
                     }
 
                     reader.Advance(1);
+                    drainedBytes += 1;
+                    if (drainedBytes > MaximumDrainBytes)
+                    {
+                        throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                    }
+
                     atLineStart = current is (byte)'\r' or (byte)'\n';
                 }
 
-                _reader.AdvanceTo(reader.Position, sequence.End);
+                _reader.AdvanceTo(reader.Position, reader.Position);
                 if (readResult.IsCompleted)
                 {
-                    return;
+                    throw new EndOfStreamException("NNTP connection closed before oversized ARTICLE cleanup reached terminator.");
                 }
             }
         }
