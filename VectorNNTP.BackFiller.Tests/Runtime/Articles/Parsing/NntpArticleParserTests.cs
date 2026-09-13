@@ -1278,6 +1278,96 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Verifies parser respects caller article limit when configured below the hard 5 MiB ceiling.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerArticleLimitIsBelowHardCeiling_RemainsEffective()
+        {
+            const int callerArticleLimit = 1024 * 1024;
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxArticleBytes = callerArticleLimit,
+                });
+
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-caller-article-below@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: CreateFilledBytes(callerArticleLimit + 1 - BuildArticleHeaderBytes("<m16-caller-article-below@example.test>").Length, (byte)'D'));
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.ArticleTooLarge, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser respects caller article limit when configured exactly at the hard 5 MiB ceiling.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerArticleLimitIsExactlyHardCeiling_RemainsEffective()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxArticleBytes = ArticleResourceLimits.MaxArticleBytes,
+                });
+
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-caller-article-eq@example.test>").Length;
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-caller-article-eq@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: CreateLineBoundedBodyBytes(payloadBytes, (byte)'E'));
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(ArticleResourceLimits.MaxArticleBytes, result.ArticleBytes.Length);
+        }
+
+        /// <summary>
+        /// Verifies parser caps caller article limit above 5 MiB to the hard 5 MiB ceiling.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerArticleLimitExceedsHardCeiling_IsCappedAtHardCeiling()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxArticleBytes = ArticleResourceLimits.MaxArticleBytes + (1024 * 1024),
+                });
+
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-caller-article-above@example.test>").Length + 1;
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-caller-article-above@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: CreateFilledBytes(payloadBytes, (byte)'F'));
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.ArticleTooLarge, result.FailureCode);
+        }
+
+        /// <summary>
         /// Verifies parser accepts 1023-character header line and 1024-character header line, then rejects 1025-character header line.
         /// </summary>
         [Fact]
@@ -1297,6 +1387,130 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             Assert.True(result1024.IsAccepted);
             Assert.False(result1025.IsAccepted);
             Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result1025.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser keeps caller header line limit below hard ceiling effective for header parsing.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerLineLimitIsBelowHardCeilingForHeaders_RemainsEffective()
+        {
+            const int callerLineLimit = 256;
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderLineBytes = callerLineLimit,
+                });
+
+            byte[] article = BuildHeaderLineLengthArticle("<m16-line-caller-below@example.test>", callerLineLimit + 1);
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser keeps caller line limit exactly at hard ceiling effective.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerLineLimitIsExactlyHardCeiling_RemainsEffective()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderLineBytes = ArticleResourceLimits.MaxArticleLineBytes,
+                });
+
+            byte[] line1024 = BuildHeaderLineLengthArticle("<m16-line-caller-eq@example.test>", 1024);
+            byte[] line1025 = BuildHeaderLineLengthArticle("<m16-line-caller-eq-plus@example.test>", 1025);
+
+            NntpArticleParseResult accepted = parser.Parse(line1024);
+            NntpArticleParseResult rejected = parser.Parse(line1025);
+
+            Assert.True(accepted.IsAccepted);
+            Assert.False(rejected.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, rejected.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser caps caller line limit above hard ceiling to 1024 for header parsing.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerLineLimitExceedsHardCeiling_IsCappedAtHardCeilingForHeaders()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderLineBytes = ArticleResourceLimits.MaxArticleLineBytes + 256,
+                });
+
+            byte[] article = BuildHeaderLineLengthArticle("<m16-line-caller-above@example.test>", 1025);
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser keeps caller line limit below hard ceiling effective for body-line validation.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerLineLimitIsBelowHardCeilingForBody_RemainsEffective()
+        {
+            const int callerLineLimit = 256;
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderLineBytes = callerLineLimit,
+                });
+
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-line-caller-below@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: new string('b', callerLineLimit + 1) + "\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.BodyLineTooLong, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser caps caller line limit above hard ceiling to 1024 for body-line validation.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenCallerLineLimitExceedsHardCeiling_IsCappedAtHardCeilingForBody()
+        {
+            NntpArticleParser parser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderLineBytes = ArticleResourceLimits.MaxArticleLineBytes + 512,
+                });
+
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-body-line-caller-above@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                body: new string('c', 1025) + "\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.BodyLineTooLong, result.FailureCode);
         }
 
         /// <summary>
@@ -1370,7 +1584,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             Assert.True(result1023.IsAccepted);
             Assert.True(result1024.IsAccepted);
             Assert.False(result1025.IsAccepted);
-            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result1025.FailureCode);
+            Assert.Equal(NntpArticleParseFailureCode.BodyLineTooLong, result1025.FailureCode);
         }
 
         /// <summary>
@@ -1393,7 +1607,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             NntpArticleParseResult result = parser.Parse(article);
 
             Assert.False(result.IsAccepted);
-            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+            Assert.Equal(NntpArticleParseFailureCode.BodyLineTooLong, result.FailureCode);
         }
 
         /// <summary>
@@ -1418,7 +1632,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             NntpArticleParseResult result = parser.Parse(article);
 
             Assert.False(result.IsAccepted);
-            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+            Assert.Equal(NntpArticleParseFailureCode.BodyLineTooLong, result.FailureCode);
         }
 
         /// <summary>

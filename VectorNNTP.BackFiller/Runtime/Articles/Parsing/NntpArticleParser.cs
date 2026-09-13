@@ -84,8 +84,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             _canonicalBackFillerFqdn = canonicalBackFillerFqdn.Trim();
             _options = options with
             {
-                MaxArticleBytes = ArticleResourceLimits.MaxArticleBytes,
-                MaxHeaderLineBytes = ArticleResourceLimits.MaxArticleLineBytes,
+                MaxArticleBytes = Math.Min(options.MaxArticleBytes, ArticleResourceLimits.MaxArticleBytes),
+                MaxHeaderLineBytes = Math.Min(options.MaxHeaderLineBytes, ArticleResourceLimits.MaxArticleLineBytes),
             };
         }
 
@@ -927,7 +927,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                 int lineLength = lineContentEnd - position;
                 if (lineLength > maxLineBytes)
                 {
-                    failureCode = NntpArticleParseFailureCode.HeaderLineTooLong;
+                    failureCode = NntpArticleParseFailureCode.BodyLineTooLong;
                     return false;
                 }
 

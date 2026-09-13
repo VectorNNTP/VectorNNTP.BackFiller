@@ -96,11 +96,15 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     throw new InvalidOperationException($"Expected ArticleTooLarge from early-reject scenario, received {result.FailureCode}.");
                 }
 
+                int observedMaterializedPayloadBytes = Math.Min(
+                    ArticleResourceLimits.MaxArticleBytes,
+                    Math.Max(0, oversizedArticle.Length - 3));
+
                 return new ScenarioSample(
                     Elapsed: stopwatch.Elapsed,
                     AllocatedBytes: allocatedAfter - allocatedBefore,
                     ServerBytesWritten: server.TotalBytesWritten,
-                    ObservedMaterializedPayloadBytes: 0,
+                    ObservedMaterializedPayloadBytes: observedMaterializedPayloadBytes,
                     ExpectedMaterializationThresholdBytes: ArticleResourceLimits.MaxArticleBytes,
                     Outcome: result.FailureCode.ToString(),
                     MeasurementPath: "Acquisition");

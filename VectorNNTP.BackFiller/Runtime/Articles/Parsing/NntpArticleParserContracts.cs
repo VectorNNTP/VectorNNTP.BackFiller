@@ -88,6 +88,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         HeaderLineTooLong = 5,
 
         /// <summary>
+        /// Body line exceeded configured maximum line length.
+        /// </summary>
+        BodyLineTooLong = 24,
+
+        /// <summary>
         /// Header syntax is malformed.
         /// </summary>
         MalformedHeader = 6,

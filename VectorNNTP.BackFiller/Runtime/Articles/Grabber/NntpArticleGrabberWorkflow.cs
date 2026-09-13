@@ -156,6 +156,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
                 or NntpArticleParseFailureCode.HeaderSectionTooLarge
                 or NntpArticleParseFailureCode.TooManyHeaders
                 or NntpArticleParseFailureCode.HeaderLineTooLong
+                or NntpArticleParseFailureCode.BodyLineTooLong
                 or NntpArticleParseFailureCode.MalformedHeader
                 or NntpArticleParseFailureCode.MalformedHeaderContinuation
                 or NntpArticleParseFailureCode.HeaderNameTooLong

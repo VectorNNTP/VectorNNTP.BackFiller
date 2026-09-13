@@ -1124,62 +1124,77 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         [Fact]
         public async Task DownloadArticleAsync_WhenOversizedResponseTerminatorConsumed_DrainsAndMarksTransportNonReusable()
         {
-            int oversizedPayloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<oversized-drain@test>").Length + 1;
-            byte[] oversizedArticle = BuildArticleBytes("<oversized-drain@test>", CreateWireTerminatedBody(oversizedPayloadBytes, (byte)'A'));
+            await VerifyOversizedDrainRetiresTransportWithoutFollowupAsync(
+                "<oversized-drain@test>",
+                oversizedArticle =>
+                [
+                    oversizedArticle,
+                    ".\r\n"u8.ToArray(),
+                ]);
+        }
 
-            Channel<string> observedFollowupCommand = Channel.CreateBounded<string>(new BoundedChannelOptions(1)
-            {
-                SingleReader = true,
-                SingleWriter = true,
-                FullMode = BoundedChannelFullMode.Wait,
-                AllowSynchronousContinuations = false,
-            });
+        /// <summary>
+        /// Confirms oversized cleanup handles terminator split immediately after dot byte without reprocessing the same buffer.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenOversizedTerminatorSplitAfterDot_RetiresTransportDeterministically()
+        {
+            await VerifyOversizedDrainRetiresTransportWithoutFollowupAsync(
+                "<oversized-split-dot@test>",
+                oversizedArticle =>
+                [
+                    oversizedArticle,
+                    "."u8.ToArray(),
+                    "\r\n"u8.ToArray(),
+                ]);
+        }
 
-            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
-            {
-                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
-                await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <oversized-drain@test>");
-                await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <oversized-drain@test> article follows");
+        /// <summary>
+        /// Confirms oversized cleanup handles terminator split after dot-carriage-return sequence without reprocessing the same buffer.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenOversizedTerminatorSplitAfterDotCarriageReturn_RetiresTransportDeterministically()
+        {
+            await VerifyOversizedDrainRetiresTransportWithoutFollowupAsync(
+                "<oversized-split-dotcr@test>",
+                oversizedArticle =>
+                [
+                    oversizedArticle,
+                    ".\r"u8.ToArray(),
+                    "\n"u8.ToArray(),
+                ]);
+        }
 
-                byte[] oversizedResponse = new byte[oversizedArticle.Length + 3];
-                Buffer.BlockCopy(oversizedArticle, 0, oversizedResponse, 0, oversizedArticle.Length);
-                Buffer.BlockCopy(".\r\n"u8.ToArray(), 0, oversizedResponse, oversizedArticle.Length, 3);
-                await FakeArticleServer.WriteBytesAsync(stream, oversizedResponse);
+        /// <summary>
+        /// Confirms oversized cleanup handles CRLF terminator split across multiple writes while preserving non-reuse behavior.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenOversizedTerminatorSplitAcrossMultipleReads_RetiresTransportDeterministically()
+        {
+            await VerifyOversizedDrainRetiresTransportWithoutFollowupAsync(
+                "<oversized-split-multi@test>",
+                oversizedArticle =>
+                [
+                    oversizedArticle,
+                    "."u8.ToArray(),
+                    "\r"u8.ToArray(),
+                    "\n"u8.ToArray(),
+                ]);
+        }
 
-                try
-                {
-                    string command = await FakeArticleServer.ReadAsciiLineAsync(stream, CancellationToken.None);
-                    await observedFollowupCommand.Writer.WriteAsync(command);
-
-                    if (string.Equals(command, "QUIT", StringComparison.Ordinal))
-                    {
-                        await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection");
-                    }
-                }
-                catch (EndOfStreamException)
-                {
-                    await observedFollowupCommand.Writer.WriteAsync("<EOF>");
-                }
-            });
-
-            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
-                server.CreateEndpoint(),
-                NntpArticleAcquisitionOptions.Default,
-                NullLogger<NntpArticleAcquisitionSession>.Instance,
-                CancellationToken.None);
-
-            Assert.NotNull(session);
-            await using (session)
-            {
-                using NntpArticleAcquisitionResult oversized = await session.DownloadArticleAsync("<oversized-drain@test>", CancellationToken.None);
-                Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleTooLarge, oversized.FailureCode);
-
-                using NntpArticleAcquisitionResult followup = await session.DownloadArticleAsync("<oversized-recovery@test>", CancellationToken.None);
-                Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, followup.FailureCode);
-            }
-
-            string observed = await observedFollowupCommand.Reader.ReadAsync();
-            Assert.NotEqual("ARTICLE <oversized-recovery@test>", observed);
+        /// <summary>
+        /// Confirms oversized cleanup accepts LF-only terminator framing and still retires transport.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenOversizedLfOnlyTerminatorConsumed_RetiresTransportDeterministically()
+        {
+            await VerifyOversizedDrainRetiresTransportWithoutFollowupAsync(
+                "<oversized-lf@test>",
+                oversizedArticle =>
+                [
+                    oversizedArticle,
+                    ".\n"u8.ToArray(),
+                ]);
         }
 
         /// <summary>
@@ -1848,6 +1863,89 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
             body[^2] = (byte)'\r';
             body[^1] = (byte)'\n';
             return body;
+        }
+
+        private async Task VerifyOversizedDrainRetiresTransportWithoutFollowupAsync(
+            string messageId,
+            Func<byte[], IReadOnlyList<byte[]>> buildResponseFragments)
+        {
+            int oversizedPayloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes(messageId).Length + 1;
+            byte[] oversizedArticle = BuildArticleBytes(messageId, CreateWireTerminatedBody(oversizedPayloadBytes, (byte)'A'));
+
+            Channel<string> observedCommands = Channel.CreateUnbounded<string>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                AllowSynchronousContinuations = false,
+            });
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+
+                while (true)
+                {
+                    string command;
+                    try
+                    {
+                        command = await FakeArticleServer.ReadAsciiLineAsync(stream, CancellationToken.None);
+                    }
+                    catch (EndOfStreamException)
+                    {
+                        break;
+                    }
+
+                    await observedCommands.Writer.WriteAsync(command);
+
+                    if (string.Equals(command, $"ARTICLE {messageId}", StringComparison.Ordinal))
+                    {
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, $"220 0 {messageId} article follows");
+                        IReadOnlyList<byte[]> fragments = buildResponseFragments(oversizedArticle);
+                        for (int i = 0; i < fragments.Count; i++)
+                        {
+                            await FakeArticleServer.WriteBytesAsync(stream, fragments[i]);
+                        }
+
+                        continue;
+                    }
+
+                    if (string.Equals(command, "QUIT", StringComparison.Ordinal))
+                    {
+                        await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection");
+                        break;
+                    }
+
+                    await FakeArticleServer.WriteAsciiLineAsync(stream, "500 unexpected command in oversized-drain test");
+                }
+
+                observedCommands.Writer.TryComplete();
+            });
+
+            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+                server.CreateEndpoint(),
+                NntpArticleAcquisitionOptions.Default,
+                NullLogger<NntpArticleAcquisitionSession>.Instance,
+                CancellationToken.None);
+
+            Assert.NotNull(session);
+            await using (session)
+            {
+                using NntpArticleAcquisitionResult oversized = await session.DownloadArticleAsync(messageId, CancellationToken.None);
+                Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleTooLarge, oversized.FailureCode);
+
+                string followupMessageId = $"<{messageId.Trim('<', '>')}-followup@test>";
+                using NntpArticleAcquisitionResult followup = await session.DownloadArticleAsync(followupMessageId, CancellationToken.None);
+                Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, followup.FailureCode);
+            }
+
+            List<string> commands = [];
+            await foreach (string command in observedCommands.Reader.ReadAllAsync())
+            {
+                commands.Add(command);
+            }
+
+            Assert.Contains($"ARTICLE {messageId}", commands);
+            Assert.DoesNotContain($"ARTICLE <{messageId.Trim('<', '>')}-followup@test>", commands);
         }
 
         /// <summary>
