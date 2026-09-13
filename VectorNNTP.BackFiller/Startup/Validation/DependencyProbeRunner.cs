@@ -55,7 +55,7 @@ namespace VectorNNTP.Backfiller.Startup.Validation
             ArgumentNullException.ThrowIfNull(runtimeOptions);
 
             Task<DependencyValidationResult> databaseDependencyTask = DatabaseDependencyProbe.ValidateDatabaseConnectivityAsync(
-                configuration,
+                runtimeOptions.GrabberDb,
                 dependencyTimeout,
                 cancellationToken);
 

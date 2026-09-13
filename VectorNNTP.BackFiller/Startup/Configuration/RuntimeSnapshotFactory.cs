@@ -6,6 +6,7 @@
 // Builds the validated runtime snapshot consumed by the BackFiller host and certificate pipeline.
 
 using System.Net;
+using MySqlConnector;
 using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Configuration
@@ -63,6 +64,7 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                 string canonicalBackFillerFqdn = BackFillerIdentityValidator.BuildBackFillerFqdn(backFillerName, backFillerId, canonicalDnsSuffix);
 
                 string validatedLogDirectory = ResolveAndValidateLogDirectory(configuration);
+                GrabberDbRuntimeOptions grabberDbRuntimeOptions = BuildGrabberDbRuntimeOptions(configuration);
 
                 string[] rabbitMqHosts = [.. (backFiller.RabbitMQ?.Hosts ?? [])
                     .Where(static x => !string.IsNullOrWhiteSpace(x))
@@ -110,13 +112,59 @@ namespace VectorNNTP.Backfiller.Startup.Configuration
                     ArticleRetention: BuildArticleRetentionRuntimeOptions(backFiller.ArticleRetention),
                     Listener: BuildListenerRuntimeOptions(backFiller.Listener),
                     LetsEncrypt: letsEncryptRuntimeOptions,
-                    RabbitMq: rabbitMqRuntimeOptions);
+                    RabbitMq: rabbitMqRuntimeOptions)
+                {
+                    GrabberDb = grabberDbRuntimeOptions,
+                };
             }
             catch (Exception ex)
             {
                 configErrors.Add(("BackFiller", $"Failed to build runtime options snapshot: {ex.Message}"));
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Builds the immutable GrabberDB runtime projection from the validated connection string.
+        /// </summary>
+        /// <param name="configuration">Configuration root used to resolve <c>ConnectionStrings:GrabberDB</c>.</param>
+        /// <returns>Immutable GrabberDB runtime options consumed by startup dependency probing and runtime account services.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when GrabberDB connection string is missing, invalid, or ambiguous.</exception>
+        private static GrabberDbRuntimeOptions BuildGrabberDbRuntimeOptions(IConfiguration configuration)
+        {
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            string connectionString = configuration.GetConnectionString("GrabberDB")
+                ?? throw new InvalidOperationException("ConnectionStrings:GrabberDB is required to build runtime options.");
+
+            if (!MySqlConnectionStringUtilities.TryParseEffective(connectionString, out MySqlConnectionStringBuilder? builder)
+                || builder is null)
+            {
+                throw new InvalidOperationException("ConnectionStrings:GrabberDB must be a valid, non-ambiguous MySQL connection string.");
+            }
+
+            if (string.IsNullOrWhiteSpace(builder.Server))
+            {
+                throw new InvalidOperationException("ConnectionStrings:GrabberDB must include a server/host.");
+            }
+
+            if (string.IsNullOrWhiteSpace(builder.Database))
+            {
+                throw new InvalidOperationException("ConnectionStrings:GrabberDB must include a database name.");
+            }
+
+            if (string.IsNullOrWhiteSpace(builder.UserID))
+            {
+                throw new InvalidOperationException("ConnectionStrings:GrabberDB must include a MySQL user ID.");
+            }
+
+            return new GrabberDbRuntimeOptions(
+                ConnectionString: builder.ConnectionString,
+                Server: builder.Server,
+                Port: builder.Port,
+                Database: builder.Database,
+                UserId: builder.UserID,
+                SslMode: builder.SslMode);
         }
 
         /// <summary>

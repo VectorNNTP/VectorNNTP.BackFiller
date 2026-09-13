@@ -96,29 +96,23 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
         private volatile NntpAccountSnapshotState _currentSnapshot;
 
         /// <summary>
-        /// Initializes the provider from runtime configuration for production account snapshot loading.
+        /// Initializes the provider from frozen startup runtime options for production account snapshot loading.
         /// </summary>
-        /// <param name="configuration">Application configuration containing the <c>GrabberDB</c> connection string.</param>
-        /// <param name="runtimeOptions">Runtime options supplying the authoritative backfiller server identifier.</param>
+        /// <param name="runtimeOptions">Runtime options supplying the authoritative backfiller server identifier and frozen GrabberDB connection projection.</param>
         /// <param name="logger">Logger used for startup, refresh, and provisioning diagnostics.</param>
         /// <exception cref="InvalidOperationException">
         /// Thrown when required runtime configuration values are missing or when the configured backfiller identifier is outside the supported byte range.
         /// </exception>
         public MySqlNntpAccountSnapshotProvider(
-            IConfiguration configuration,
             BackFillerRuntimeOptions runtimeOptions,
             ILogger<MySqlNntpAccountSnapshotProvider> logger)
         {
-            ArgumentNullException.ThrowIfNull(configuration);
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(logger);
 
-            _connectionString = configuration.GetConnectionString("GrabberDB")
-                ?? throw new InvalidOperationException("ConnectionStrings:GrabberDB is required for runtime NNTP account loading.");
-
-            MySqlConnectionStringBuilder connectionStringBuilder = new(_connectionString);
-            _databaseName = !string.IsNullOrWhiteSpace(connectionStringBuilder.Database)
-                ? connectionStringBuilder.Database
+            _connectionString = runtimeOptions.GrabberDb.ConnectionString;
+            _databaseName = !string.IsNullOrWhiteSpace(runtimeOptions.GrabberDb.Database)
+                ? runtimeOptions.GrabberDb.Database
                 : throw new InvalidOperationException("ConnectionStrings:GrabberDB must include a database name for runtime NNTP account loading.");
 
             _serverId = runtimeOptions.BackFillerId is >= byte.MinValue and <= byte.MaxValue
@@ -152,6 +146,38 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
             _connectionString = string.Empty;
             _databaseName = "test";
             _serverId = serverId;
+            _logger = logger;
+            _queryAccounts = queryAccounts;
+            _startupProvisioningStore = startupProvisioningStore ?? NoOpStartupProvisioningStore.Instance;
+            _currentSnapshot = NntpAccountSnapshotState.Empty(_serverId);
+        }
+
+        /// <summary>
+        /// Initializes a provider instance from frozen runtime options while allowing deterministic test injection for query/provisioning delegates.
+        /// </summary>
+        /// <param name="runtimeOptions">Frozen runtime options supplying authoritative server and GrabberDB projection.</param>
+        /// <param name="logger">Logger used for startup, refresh, and provisioning diagnostics.</param>
+        /// <param name="queryAccounts">Delegate that loads account rows from the authoritative store.</param>
+        /// <param name="startupProvisioningStore">Optional startup provisioning implementation; when omitted, a no-op implementation is used.</param>
+        internal MySqlNntpAccountSnapshotProvider(
+            BackFillerRuntimeOptions runtimeOptions,
+            ILogger<MySqlNntpAccountSnapshotProvider> logger,
+            Func<CancellationToken, Task<List<NntpAccountSnapshot>>> queryAccounts,
+            IStartupProvisioningStore? startupProvisioningStore = null)
+        {
+            ArgumentNullException.ThrowIfNull(runtimeOptions);
+            ArgumentNullException.ThrowIfNull(logger);
+            ArgumentNullException.ThrowIfNull(queryAccounts);
+
+            _connectionString = runtimeOptions.GrabberDb.ConnectionString;
+            _databaseName = !string.IsNullOrWhiteSpace(runtimeOptions.GrabberDb.Database)
+                ? runtimeOptions.GrabberDb.Database
+                : throw new InvalidOperationException("ConnectionStrings:GrabberDB must include a database name for runtime NNTP account loading.");
+
+            _serverId = runtimeOptions.BackFillerId is >= byte.MinValue and <= byte.MaxValue
+                ? (byte)runtimeOptions.BackFillerId
+                : throw new InvalidOperationException($"BackFiller.Id must be between {byte.MinValue} and {byte.MaxValue} for {AccountsTableName} query.");
+
             _logger = logger;
             _queryAccounts = queryAccounts;
             _startupProvisioningStore = startupProvisioningStore ?? NoOpStartupProvisioningStore.Instance;
@@ -494,6 +520,14 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                     {
                         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
                     }
+                    catch (MySqlException ex)
+                    {
+                        LogProvisioningConnectServerFailed(_logger, serverTarget, ex);
+                        throw CreateProvisioningFailureException(
+                            "server-connect",
+                            ex,
+                            "Unable to connect to MySQL server for startup provisioning.");
+                    }
                     catch (Exception ex)
                     {
                         LogProvisioningConnectServerFailed(_logger, serverTarget, ex);
@@ -508,6 +542,14 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                         try
                         {
                             _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (MySqlException ex)
+                        {
+                            LogProvisioningCreateDatabaseFailed(_logger, serverTarget, databaseName, ex);
+                            throw CreateProvisioningFailureException(
+                                "create-database",
+                                ex,
+                                "Target database is missing and startup provisioning could not create it.");
                         }
                         catch (Exception ex)
                         {
@@ -541,6 +583,14 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                     {
                         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
                     }
+                    catch (MySqlException ex)
+                    {
+                        LogProvisioningSelectDatabaseFailed(_logger, serverTarget, databaseName, ex);
+                        throw CreateProvisioningFailureException(
+                            "select-database",
+                            ex,
+                            "Startup provisioning could not access the target database.");
+                    }
                     catch (Exception ex)
                     {
                         LogProvisioningSelectDatabaseFailed(_logger, serverTarget, databaseName, ex);
@@ -556,6 +606,14 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                         {
                             _ = await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
                         }
+                        catch (MySqlException ex)
+                        {
+                            LogProvisioningCreateTableFailed(_logger, serverTarget, databaseName, tableName, ex);
+                            throw CreateProvisioningFailureException(
+                                "create-table",
+                                ex,
+                                "Startup provisioning could not create or validate the required accounts table.");
+                        }
                         catch (Exception ex)
                         {
                             LogProvisioningCreateTableFailed(_logger, serverTarget, databaseName, tableName, ex);
@@ -563,6 +621,24 @@ namespace VectorNNTP.Backfiller.Runtime.Accounts
                         }
                     }
                 }
+            }
+
+            /// <summary>
+            /// Creates a deterministic provisioning-stage failure wrapper for startup dependency diagnostics.
+            /// </summary>
+            /// <param name="stage">Provisioning stage identifier for diagnostics.</param>
+            /// <param name="exception">Underlying MySQL provider exception.</param>
+            /// <param name="message">Sanitized startup provisioning failure message.</param>
+            /// <returns>An <see cref="InvalidOperationException"/> that preserves stage and MySQL error code context.</returns>
+            private static InvalidOperationException CreateProvisioningFailureException(string stage, MySqlException exception, string message)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(stage);
+                ArgumentNullException.ThrowIfNull(exception);
+                ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+                return new InvalidOperationException(
+                    $"MySQL startup provisioning failed at stage '{stage}' (Error #{exception.Number}): {message}",
+                    exception);
             }
         }
 

@@ -6,6 +6,7 @@
 
 using MySqlConnector;
 using Serilog;
+using VectorNNTP.Backfiller.Configuration;
 
 namespace VectorNNTP.Backfiller.Startup.Validation
 {
@@ -20,45 +21,37 @@ namespace VectorNNTP.Backfiller.Startup.Validation
     internal static class DatabaseDependencyProbe
     {
         /// <summary>
-        /// Probes GrabberDB by opening a MySQL connection and executing <c>SELECT 1</c> within the configured timeout budget.
+        /// Probes GrabberDB server-level connectivity by opening a MySQL connection without selecting the target database.
         /// </summary>
-        /// <param name="configuration">Configuration root used to resolve the <c>ConnectionStrings:GrabberDB</c> value.</param>
-        /// <param name="timeout">Per-probe timeout applied to both connection open and test-query execution.</param>
+        /// <param name="grabberDb">Frozen validated GrabberDB runtime projection built during startup configuration validation.</param>
+        /// <param name="timeout">Per-probe timeout applied to the server-level connection open operation.</param>
         /// <param name="cancellationToken">Startup cancellation token propagated to database I/O operations.</param>
         /// <returns>
         /// A task that completes with a <see cref="DependencyValidationResult"/> containing sanitized GrabberDB failure
-        /// diagnostics. Successful probes return no failures and emit an informational structured log with server/database identity.
+        /// diagnostics. Successful probes return no failures and emit an informational structured log with server identity.
         /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="grabberDb"/> is <see langword="null"/>.</exception>
         /// <exception cref="OperationCanceledException">The outer <paramref name="cancellationToken"/> is canceled.</exception>
         /// <remarks>
-        /// <para>Connectivity is validated at runtime (not just syntactically) by opening a real provider connection and executing a test query.</para>
+        /// <para>This probe validates server reachability/authentication/TLS against the frozen startup runtime projection without requiring the target database to exist yet.</para>
         /// <para>Known provider error numbers are mapped via <see cref="GetSanitizedMySqlConnectionFailureReason(int)"/> to avoid leaking environment details.</para>
         /// <para>Unexpected exceptions are logged at debug level and converted to a generic dependency failure so startup can continue aggregating diagnostics.</para>
         /// </remarks>
         internal static async Task<DependencyValidationResult> ValidateDatabaseConnectivityAsync(
-            IConfiguration configuration,
+            GrabberDbRuntimeOptions grabberDb,
             TimeSpan timeout,
             CancellationToken cancellationToken)
         {
+            ArgumentNullException.ThrowIfNull(grabberDb);
+
             List<(string Dependency, string Reason)> failures = [];
             List<(string Category, string Message)> warnings = [];
             List<(string Category, string Message)> errors = [];
 
-            string? connectionString = configuration.GetConnectionString("GrabberDB");
-
-            if (string.IsNullOrWhiteSpace(connectionString))
-            {
-                // This should have been caught by configuration validation, but guard anyway
-                failures.Add(("GrabberDB", "Connection string is not configured"));
-                return new DependencyValidationResult(failures, warnings, errors);
-            }
-
-            // Runtime MySQL connectivity validation using MySqlConnector
-            // This validates beyond static syntax checking:
+            // Runtime MySQL server-level connectivity validation using the frozen startup projection.
+            // This validates beyond static syntax checking while intentionally not requiring target database existence:
             //   - Network reachability (can we reach the MySQL server?)
             //   - Authentication (are credentials valid?)
-            //   - Database accessibility (does the database exist and is it accessible?)
-            //   - Permissions (can we execute basic queries?)
             //   - TLS/SSL negotiation (if required)
             //   - Protocol compatibility (server version, authentication plugins)
             try
@@ -66,40 +59,20 @@ namespace VectorNNTP.Backfiller.Startup.Validation
                 using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 cts.CancelAfter(timeout);
 
-                MySqlConnection connection = new(connectionString);
+                MySqlConnectionStringBuilder serverConnectionBuilder = new(grabberDb.ConnectionString)
+                {
+                    Database = string.Empty,
+                };
+
+                MySqlConnection connection = new(serverConnectionBuilder.ConnectionString);
                 await using (connection.ConfigureAwait(false))
                 {
-                    Log.Debug("Validating GrabberDB connectivity: attempting to open connection (timeout: {Timeout})", timeout);
+                    Log.Debug("Validating GrabberDB server connectivity: attempting to open server-level connection (timeout: {Timeout})", timeout);
 
-                    // OpenAsync() validates:
-                    // - Network connectivity to MySQL server (host:port)
-                    // - TLS/SSL handshake (if SslMode is configured)
-                    // - MySQL protocol handshake and version compatibility
-                    // - Authentication (username/password or token via ProvidePasswordCallback)
                     await connection.OpenAsync(cts.Token).ConfigureAwait(false);
 
-                    // Execute test query to verify database accessibility and permissions
-                    // This catches issues like:
-                    // - Database doesn't exist (MySQL error 1049)
-                    // - User lacks SELECT permission (MySQL error 1142)
-                    // - Database is in read-only mode or otherwise inaccessible
-                    MySqlCommand cmd = connection.CreateCommand();
-                    await using (cmd.ConfigureAwait(false))
-                    {
-                        cmd.CommandText = "SELECT 1";
-                        double timeoutSeconds = timeout.TotalSeconds;
-                        int commandTimeoutSeconds = timeoutSeconds <= 0
-                            ? 1
-                            : timeoutSeconds >= int.MaxValue
-                                ? int.MaxValue
-                                : (int)Math.Ceiling(timeoutSeconds);
-                        cmd.CommandTimeout = commandTimeoutSeconds;
-                        _ = await cmd.ExecuteScalarAsync(cts.Token).ConfigureAwait(false);
-                    }
-
-                    Log.Information("GrabberDB connectivity validated successfully (Server: {Server}, Database: {Database})",
-                        connection.DataSource,
-                        connection.Database);
+                    Log.Information("GrabberDB server connectivity validated successfully (Server: {Server})",
+                        connection.DataSource);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
