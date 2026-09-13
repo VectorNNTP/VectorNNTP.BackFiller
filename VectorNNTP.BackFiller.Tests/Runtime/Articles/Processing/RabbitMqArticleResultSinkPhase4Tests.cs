@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
+using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -895,6 +897,97 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Null(secondSettlement.NackDeliveryTag);
         }
 
+        [Fact]
+        public async Task OnProcessedAsync_WhenCanonicalMaterializationBoundaryRejected_NacksWithoutRequeuePublishesInvalidArticleAndSkipsRetentionTransitAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            Guid requestId = Guid.NewGuid();
+            string messageId = "<canonical-boundary-rejected@example.com>";
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(requestId, messageId, "BackboneA"),
+                correlationId: "corr-canonical-boundary-rejected",
+                replyTo: "rpc.responses",
+                deliveryTag: 2401,
+                connectionGeneration: 65,
+                settlement: settlement);
+
+            const string shortPath = "b";
+            string longCanonicalPrefix = new string('a', 1018);
+            (NntpArticleGrabberResult grabberResult, DownloadedArticleBuffer _) = CreateSuccessfulGrabberResultWithPath(messageId, shortPath, "boundary-path-payload", longCanonicalPrefix);
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: requestId,
+                messageId: messageId,
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted);
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                transitAdmissionGateway: transitAdmissionGateway,
+                runtimeOptions: CreateRuntimeOptions() with { CanonicalBackFillerFqdn = longCanonicalPrefix });
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Equal(0, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(1, publisher.PublishCallCount);
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(2401UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+
+            RabbitMqArticleWorkResponse response = RabbitMqArticleWorkResponseWireProtocol.ParseV1(publisher.LastResponsePayload!);
+            Assert.Equal(nameof(ArticleWorkProcessingOutcome.InvalidArticle), response.Outcome);
+            Assert.NotNull(response.Error);
+            Assert.Contains("Path rewrite", response.Error!, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenCanonicalMaterializationBoundaryRejected_DisposesDetachedPayloadOwnerAndResultAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            Guid requestId = Guid.NewGuid();
+            string messageId = "<canonical-boundary-dispose@example.com>";
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(requestId, messageId, "BackboneA"),
+                correlationId: "corr-canonical-boundary-dispose",
+                replyTo: "rpc.responses",
+                deliveryTag: 2402,
+                connectionGeneration: 65,
+                settlement: settlement);
+
+            const string shortPath = "b";
+            string longCanonicalPrefix = new string('a', 1018);
+            (NntpArticleGrabberResult grabberResult, DownloadedArticleBuffer sourceOwner) = CreateSuccessfulGrabberResultWithPath(messageId, shortPath, "boundary-path-dispose-payload", longCanonicalPrefix);
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: requestId,
+                messageId: messageId,
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.Confirmed);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted);
+            RabbitMqArticleResultSink sink = CreateSink(
+                responsePublisher: publisher,
+                transitAdmissionGateway: transitAdmissionGateway,
+                runtimeOptions: CreateRuntimeOptions() with { CanonicalBackFillerFqdn = longCanonicalPrefix });
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Throws<ObjectDisposedException>(() =>
+            {
+                _ = sourceOwner.Memory;
+            });
+            result.Dispose();
+            Assert.Equal(0, transitAdmissionGateway.AdmitCallCount);
+            Assert.Equal(1, publisher.PublishCallCount);
+            Assert.Equal(2402UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+        }
+
         /// <summary>
         /// Confirms the create sink behavior.
         /// </summary>
@@ -922,6 +1015,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 retentionAuthority: retentionAuthority,
                 transitAdmissionGateway: transitAdmissionGateway,
                 logger: logger);
+        }
+
+        private static (NntpArticleGrabberResult Result, DownloadedArticleBuffer SourceOwner) CreateSuccessfulGrabberResultWithPath(
+            string messageId,
+            string pathValue,
+            string bodyPayload,
+            string parserLocalFqdn)
+        {
+            string articleText = $"Date: Tue, 10 May 2011 13:48:50 -0500\r\nMessage-ID: {messageId}\r\nNewsgroups: alt.test\r\nFrom: user@example.test\r\nPath: {pathValue}\r\n\r\n{bodyPayload}\r\n";
+            byte[] articleBytes = Encoding.ASCII.GetBytes(articleText);
+            byte[] rented = ArrayPool<byte>.Shared.Rent(articleBytes.Length);
+            Buffer.BlockCopy(articleBytes, 0, rented, 0, articleBytes.Length);
+
+            DownloadedArticleBuffer downloaded = new(rented, articleBytes.Length);
+            NntpArticleAcquisitionResult acquisition = NntpArticleAcquisitionResult.Success(220, "article follows", downloaded);
+            NntpArticleParser parser = new(parserLocalFqdn);
+            NntpArticleParseResult parse = parser.Parse(downloaded.Memory);
+            if (!parse.IsAccepted)
+            {
+                throw new InvalidOperationException($"Test fixture article must parse successfully. FailureCode={parse.FailureCode}");
+            }
+
+            return (NntpArticleGrabberResult.Successful(messageId, acquisition, parse), downloaded);
         }
 
         private sealed class TrackingTransitAdmissionGateway : ITransitAdmissionGateway

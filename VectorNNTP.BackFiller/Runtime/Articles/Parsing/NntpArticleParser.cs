@@ -82,7 +82,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(canonicalBackFillerFqdn);
             _canonicalBackFillerFqdn = canonicalBackFillerFqdn.Trim();
-            _options = options;
+            _options = options with
+            {
+                MaxArticleBytes = Math.Min(options.MaxArticleBytes, ArticleResourceLimits.MaxArticleBytes),
+                MaxHeaderLineBytes = Math.Min(options.MaxHeaderLineBytes, ArticleResourceLimits.MaxArticleLineBytes),
+            };
         }
 
         /// <summary>
@@ -131,6 +135,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             {
                 return NntpArticleParseResult.Rejected(
                     failureCode: headerOutcome.FailureCode,
+                    articleType: NntpArticleType.Malformed,
+                    articleBytes: articleBytes,
+                    headerBytes: headerOutcome.HeaderBytes,
+                    bodyBytes: headerOutcome.BodyBytes,
+                    headers: headerOutcome.Headers);
+            }
+
+            if (!TryValidateBodyLineLengths(headerOutcome.BodyBytes.Span, _options.MaxHeaderLineBytes, out NntpArticleParseFailureCode bodyLineFailure))
+            {
+                return NntpArticleParseResult.Rejected(
+                    failureCode: bodyLineFailure,
                     articleType: NntpArticleType.Malformed,
                     articleBytes: articleBytes,
                     headerBytes: headerOutcome.HeaderBytes,
@@ -285,12 +300,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
             while (index < articleSpan.Length)
             {
-                int lineEnd = FindLineTerminator(articleSpan, index);
-                int lineContentEnd = lineEnd >= 0 ? lineEnd : articleSpan.Length;
+                int maxLineLength = options.MaxHeaderLineBytes;
+                int lineEnd = FindLineTerminator(articleSpan, index, maxLineLength + 1);
+                int lineContentEnd = lineEnd >= 0 ? lineEnd : Math.Min(articleSpan.Length, index + maxLineLength + 1);
                 int lineLength = lineContentEnd - index;
-                if (lineLength > options.MaxHeaderLineBytes)
+                if (lineEnd < 0 && lineLength > maxLineLength)
                 {
-                    return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderLineTooLong, articleBytes, headerStart, index, headers);
+                    return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderLineTooLong, articleBytes, headerStart, index + maxLineLength, headers);
+                }
+
+                if (lineLength > maxLineLength)
+                {
+                    return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderLineTooLong, articleBytes, headerStart, index + maxLineLength, headers);
                 }
 
                 if (lineLength == 0)
@@ -350,6 +371,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
                     currentHeaderHasValue = true;
                     currentHeaderValueEndExclusive = lineContentEnd;
+                    int aggregateHeaderValueLength = currentHeaderValueEndExclusive - currentHeaderValueOffset;
+                    if (aggregateHeaderValueLength > options.MaxHeaderValueBytes)
+                    {
+                        return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderValueTooLong, articleBytes, headerStart, index + maxLineLength, headers);
+                    }
+
                     index = lineEnd >= 0 ? AdvancePastTerminator(articleSpan, lineEnd) : articleSpan.Length;
                     continue;
                 }
@@ -364,7 +391,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                         currentHeaderHasValue ? currentHeaderValueEndExclusive - currentHeaderValueOffset : 0));
                 }
 
-                if (headers.Count > options.MaxHeaderCount)
+                if (headers.Count >= options.MaxHeaderCount)
                 {
                     return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.TooManyHeaders, articleBytes, headerStart, lineContentEnd, headers);
                 }
@@ -870,6 +897,52 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Validates body line lengths against the repository-wide hard line boundary.
+        /// </summary>
+        /// <param name="body">Article body bytes.</param>
+        /// <param name="maxLineBytes">Maximum accepted line bytes.</param>
+        /// <param name="failureCode">Failure code when validation fails.</param>
+        /// <returns><see langword="true"/> when all body lines satisfy the hard boundary.</returns>
+        private static bool TryValidateBodyLineLengths(ReadOnlySpan<byte> body, int maxLineBytes, out NntpArticleParseFailureCode failureCode)
+        {
+            failureCode = NntpArticleParseFailureCode.None;
+            int position = 0;
+
+            while (position < body.Length)
+            {
+                int maxScanBytes = Math.Min(maxLineBytes + 1, body.Length - position);
+                int lineEnd = -1;
+
+                for (int i = 0; i < maxScanBytes; i++)
+                {
+                    byte current = body[position + i];
+                    if (current is (byte)'\r' or (byte)'\n')
+                    {
+                        lineEnd = position + i;
+                        break;
+                    }
+                }
+
+                int lineContentEnd = lineEnd >= 0 ? lineEnd : position + maxScanBytes;
+                int lineLength = lineContentEnd - position;
+                if (lineLength > maxLineBytes)
+                {
+                    failureCode = NntpArticleParseFailureCode.BodyLineTooLong;
+                    return false;
+                }
+
+                if (lineEnd < 0)
+                {
+                    return true;
+                }
+
+                position = AdvancePastTerminator(body, lineEnd);
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Performs a bounded line-start scan for <c>=ybegin </c> markers before invoking full yEnc validation.
         /// </summary>
         /// <param name="body">Article body bytes.</param>
@@ -881,7 +954,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
             int position = 0;
             while (position < scanLength)
             {
-                int lineEnd = FindLineTerminator(body, position);
+                int lineEnd = FindLineTerminator(body, position, scanLength - position);
                 int lineContentEnd = lineEnd >= 0 ? lineEnd : scanLength;
                 ReadOnlySpan<byte> line = body[position..lineContentEnd];
                 if (line.StartsWith(YEncBeginMarker))
@@ -936,10 +1009,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// </summary>
         /// <param name="buffer">Input bytes.</param>
         /// <param name="start">Start offset.</param>
-        /// <returns>The index of the next CR or LF byte, -1 when no terminator remains, or -2 when a NUL byte is encountered before any terminator.</returns>
-        private static int FindLineTerminator(ReadOnlySpan<byte> buffer, int start)
+        /// <param name="maximumScanBytes">Maximum bytes to scan before reporting that no terminator was found.</param>
+        /// <returns>The index of the next CR or LF byte, -1 when no terminator remains within scan bounds, or -2 when a NUL byte is encountered before any terminator.</returns>
+        private static int FindLineTerminator(ReadOnlySpan<byte> buffer, int start, int maximumScanBytes = int.MaxValue)
         {
-            for (int i = start; i < buffer.Length; i++)
+            int boundedScanBytes = Math.Max(0, maximumScanBytes);
+            int endExclusive = boundedScanBytes == int.MaxValue
+                ? buffer.Length
+                : Math.Min(buffer.Length, start + boundedScanBytes);
+
+            for (int i = start; i < endExclusive; i++)
             {
                 byte b = buffer[i];
                 if (b == (byte)'\r')

@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleAcquisitionContracts.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Acquisition
@@ -92,16 +92,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         string? Password);
 
     /// <summary>
-    /// Captures immutable guardrails that bound socket, protocol-line, and article-payload work for one acquisition session.
+    /// Captures immutable guardrails that bound socket and protocol-line work for one acquisition session.
     /// </summary>
-    /// <param name="MaxArticleBytes">Maximum article payload bytes accepted before the receive path fails deterministically.</param>
+    /// <remarks>
+    /// Article-size enforcement is a repository hard boundary fixed at <see cref="ArticleResourceLimits.MaxArticleBytes"/> and is not configurable through this options contract.
+    /// </remarks>
     /// <param name="ReceiveBufferBytes">Socket send and receive buffer size applied to the underlying <see cref="System.Net.Sockets.TcpClient"/>.</param>
     /// <param name="MaxStatusLineBytes">Maximum allowed byte length for a received NNTP status line.</param>
     /// <param name="ConnectTimeout">Timeout applied to connect and TLS/authentication handshake work.</param>
     /// <param name="CommandTimeout">Timeout applied to command writes and single-line status reads.</param>
     /// <param name="ReceiveTimeout">Timeout applied to multiline article payload reads.</param>
     internal readonly record struct NntpArticleAcquisitionOptions(
-        int MaxArticleBytes,
         int ReceiveBufferBytes,
         int MaxStatusLineBytes,
         TimeSpan ConnectTimeout,
@@ -112,11 +113,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// Gets the repository default guardrails for acquisition sessions.
         /// </summary>
         /// <value>
-        /// A configuration that allows large articles, uses 64 KiB socket buffers, caps status lines at 16 KiB,
+        /// A configuration that uses 64 KiB socket buffers, caps NNTP status lines at 16 KiB,
         /// and applies 30-second connect/command timeouts with a 2-minute payload receive timeout.
         /// </value>
         internal static NntpArticleAcquisitionOptions Default => new(
-            MaxArticleBytes: 256 * 1024 * 1024,
             ReceiveBufferBytes: 64 * 1024,
             MaxStatusLineBytes: 16 * 1024,
             ConnectTimeout: TimeSpan.FromSeconds(30),

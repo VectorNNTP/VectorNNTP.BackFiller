@@ -14,6 +14,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     /// <summary>
     /// Confirms the benchmark console reporter contract tests behavior.
     /// </summary>
+    [Collection(ConsoleCaptureSerializationCollection.Name)]
     public sealed class BenchmarkConsoleReporterContractTests
     {
         /// <summary>

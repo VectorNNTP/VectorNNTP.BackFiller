@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleAcquisitionSession.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Acquisition
@@ -261,6 +261,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
             }
 
+            if (_transportFailed)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session transport is no longer reusable.");
+            }
+
             if (!NntpMessageIdValidation.IsValidMessageId(messageId.AsSpan()))
             {
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.InvalidMessageId, null, "Message-ID does not satisfy NNTP/INN grammar.");
@@ -269,7 +274,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             Stopwatch stopwatch = Stopwatch.StartNew();
             NntpArticleAcquisitionTraceContext writeContext = new(NntpArticleAcquisitionOperation.CommandWrite, messageId, null, null);
             NntpArticleAcquisitionTraceContext statusContext = new(NntpArticleAcquisitionOperation.StatusRead, messageId, null, null);
-            NntpArticleAcquisitionTraceContext payloadContext = new(NntpArticleAcquisitionOperation.ArticleReceive, messageId, _options.MaxArticleBytes, null);
+            NntpArticleAcquisitionTraceContext payloadContext = new(NntpArticleAcquisitionOperation.ArticleReceive, messageId, ArticleResourceLimits.MaxArticleBytes, null);
 
             try
             {
@@ -328,6 +333,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             if (_disposed)
             {
                 return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session has been disposed.");
+            }
+
+            if (_transportFailed)
+            {
+                return NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "Session transport is no longer reusable.");
             }
 
             using IDisposable? connectionLoggingScope = _connectionLoggingContext?.Push();
@@ -571,7 +581,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             NntpArticleAcquisitionTraceContext context,
             CancellationToken cancellationToken)
         {
-            PooledArticleBuilder builder = new(_options.MaxArticleBytes, context);
+            PooledArticleBuilder builder = new(ArticleResourceLimits.MaxArticleBytes, context);
             bool atLineStart = true;
 
             try
@@ -586,63 +596,71 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     ReadOnlySequence<byte> sequence = readResult.Buffer;
                     SequenceReader<byte> reader = new(sequence);
 
-                    while (reader.TryPeek(out byte current))
+                    try
                     {
-                        if (atLineStart && current == (byte)'.')
+                        while (reader.TryPeek(out byte current))
                         {
-                            SequenceReader<byte> lookAhead = reader;
-                            lookAhead.Advance(1);
-                            if (!lookAhead.TryPeek(out byte next))
+                            if (atLineStart && current == (byte)'.')
                             {
-                                break;
-                            }
-
-                            if (next == (byte)'.')
-                            {
-                                reader.Advance(2);
-                                builder.WriteByte((byte)'.');
-                                atLineStart = false;
-                                continue;
-                            }
-
-                            if (next == (byte)'\n')
-                            {
-                                reader.Advance(2);
-                                _reader.AdvanceTo(reader.Position, sequence.End);
-                                return builder.Build();
-                            }
-
-                            if (next == (byte)'\r')
-                            {
-                                SequenceReader<byte> afterCarriageReturn = lookAhead;
-                                afterCarriageReturn.Advance(1);
-                                if (!afterCarriageReturn.TryPeek(out byte lineFeed))
+                                SequenceReader<byte> lookAhead = reader;
+                                lookAhead.Advance(1);
+                                if (!lookAhead.TryPeek(out byte next))
                                 {
                                     break;
                                 }
 
-                                if (lineFeed == (byte)'\n')
+                                if (next == (byte)'.')
                                 {
-                                    reader.Advance(3);
+                                    reader.Advance(2);
+                                    atLineStart = false;
+                                    builder.WriteByte((byte)'.');
+                                    continue;
+                                }
+
+                                if (next == (byte)'\n')
+                                {
+                                    reader.Advance(2);
                                     _reader.AdvanceTo(reader.Position, sequence.End);
                                     return builder.Build();
                                 }
 
+                                if (next == (byte)'\r')
+                                {
+                                    SequenceReader<byte> afterCarriageReturn = lookAhead;
+                                    afterCarriageReturn.Advance(1);
+                                    if (!afterCarriageReturn.TryPeek(out byte lineFeed))
+                                    {
+                                        break;
+                                    }
+
+                                    if (lineFeed == (byte)'\n')
+                                    {
+                                        reader.Advance(3);
+                                        _reader.AdvanceTo(reader.Position, sequence.End);
+                                        return builder.Build();
+                                    }
+
+                                    reader.Advance(1);
+                                    atLineStart = false;
+                                    builder.WriteByte((byte)'.');
+                                    continue;
+                                }
+
                                 reader.Advance(1);
-                                builder.WriteByte((byte)'.');
                                 atLineStart = false;
+                                builder.WriteByte((byte)'.');
                                 continue;
                             }
 
                             reader.Advance(1);
-                            builder.WriteByte((byte)'.');
-                            atLineStart = false;
-                            continue;
+                            atLineStart = current is (byte)'\r' or (byte)'\n';
+                            builder.WriteByte(current);
                         }
-
-                        reader.Advance(1);
-                        builder.WriteByte(current);
-                        atLineStart = current is (byte)'\r' or (byte)'\n';
+                    }
+                    catch (NntpArticleAcquisitionException ex) when (ex.FailureCode == NntpArticleAcquisitionFailureCode.ArticleTooLarge)
+                    {
+                        _reader.AdvanceTo(reader.Position, reader.Position);
+                        throw;
                     }
 
                     _reader.AdvanceTo(reader.Position, sequence.End);
@@ -655,10 +673,170 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     }
                 }
             }
+            catch (NntpArticleAcquisitionException ex) when (ex.FailureCode == NntpArticleAcquisitionFailureCode.ArticleTooLarge)
+            {
+                _transportFailed = true;
+                Exception? cleanupFailure = null;
+
+                try
+                {
+                    await DrainArticlePayloadTerminatorAfterOversizeAsync(atLineStart, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception drainException)
+                {
+                    cleanupFailure = drainException;
+                    _ = MarkTransportFailureForException(drainException, cancellationToken);
+                }
+                finally
+                {
+                    builder.Dispose();
+                }
+
+                if (cleanupFailure is null)
+                {
+                    throw;
+                }
+
+                throw new NntpArticleAcquisitionException(
+                    NntpArticleAcquisitionFailureCode.ArticleTooLarge,
+                    ex.TraceContext,
+                    ex.Message,
+                    cleanupFailure);
+            }
             catch
             {
                 builder.Dispose();
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Drains the remainder of the current ARTICLE multiline response after an oversized payload rejection.
+        /// </summary>
+        /// <param name="atLineStart">Whether receive state was at a logical line start when oversize was detected.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A task that completes after the ARTICLE terminator line has been consumed.</returns>
+        /// <remarks>
+        /// This bounded-drain path consumes and discards bytes until the NNTP terminator is observed so unread oversized payload data cannot desynchronize subsequent commands.
+        /// </remarks>
+        private async ValueTask DrainArticlePayloadTerminatorAfterOversizeAsync(bool atLineStart, CancellationToken cancellationToken)
+        {
+            const int MaximumDrainBytes = 256 * 1024;
+            long drainDeadlineTimestamp = Stopwatch.GetTimestamp() + (long)(_options.ReceiveTimeout.TotalSeconds * Stopwatch.Frequency);
+            int drainedBytes = 0;
+
+            while (true)
+            {
+                TimeSpan remainingDrainBudget = TimeSpan.FromSeconds(Math.Max(0d, (drainDeadlineTimestamp - Stopwatch.GetTimestamp()) / (double)Stopwatch.Frequency));
+                if (remainingDrainBudget <= TimeSpan.Zero)
+                {
+                    throw new TimeoutException("Timed out draining oversized ARTICLE payload before reaching terminator.");
+                }
+
+                ReadResult readResult = await ExecuteWithTimeoutAsync(
+                    remainingDrainBudget,
+                    token => _reader.ReadAsync(token),
+                    cancellationToken).ConfigureAwait(false);
+
+                ReadOnlySequence<byte> sequence = readResult.Buffer;
+                SequenceReader<byte> reader = new(sequence);
+
+                while (reader.TryPeek(out byte current))
+                {
+                    if (atLineStart && current == (byte)'.')
+                    {
+                        SequenceReader<byte> lookAhead = reader;
+                        lookAhead.Advance(1);
+                        if (!lookAhead.TryPeek(out byte next))
+                        {
+                            break;
+                        }
+
+                        if (next == (byte)'.')
+                        {
+                            reader.Advance(2);
+                            drainedBytes += 2;
+                            if (drainedBytes > MaximumDrainBytes)
+                            {
+                                throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                            }
+
+                            atLineStart = false;
+                            continue;
+                        }
+
+                        if (next == (byte)'\n')
+                        {
+                            reader.Advance(2);
+                            drainedBytes += 2;
+                            if (drainedBytes > MaximumDrainBytes)
+                            {
+                                throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                            }
+
+                            _reader.AdvanceTo(reader.Position, sequence.End);
+                            return;
+                        }
+
+                        if (next == (byte)'\r')
+                        {
+                            SequenceReader<byte> afterCarriageReturn = lookAhead;
+                            afterCarriageReturn.Advance(1);
+                            if (!afterCarriageReturn.TryPeek(out byte lineFeed))
+                            {
+                                break;
+                            }
+
+                            if (lineFeed == (byte)'\n')
+                            {
+                                reader.Advance(3);
+                                drainedBytes += 3;
+                                if (drainedBytes > MaximumDrainBytes)
+                                {
+                                    throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                                }
+
+                                _reader.AdvanceTo(reader.Position, sequence.End);
+                                return;
+                            }
+
+                            reader.Advance(1);
+                            drainedBytes += 1;
+                            if (drainedBytes > MaximumDrainBytes)
+                            {
+                                throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                            }
+
+                            atLineStart = false;
+                            continue;
+                        }
+
+                        reader.Advance(1);
+                        drainedBytes += 1;
+                        if (drainedBytes > MaximumDrainBytes)
+                        {
+                            throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                        }
+
+                        atLineStart = false;
+                        continue;
+                    }
+
+                    reader.Advance(1);
+                    drainedBytes += 1;
+                    if (drainedBytes > MaximumDrainBytes)
+                    {
+                        throw new IOException("Oversized ARTICLE cleanup exceeded bounded drain byte budget.");
+                    }
+
+                    atLineStart = current is (byte)'\r' or (byte)'\n';
+                }
+
+                _reader.AdvanceTo(reader.Position, sequence.End);
+                if (readResult.IsCompleted)
+                {
+                    throw new EndOfStreamException("NNTP connection closed before oversized ARTICLE cleanup reached terminator.");
+                }
             }
         }
 
@@ -784,7 +962,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP host is required.")
                 : endpoint.Port is <= 0 or > 65535
                 ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ConnectionFailure, null, "NNTP port must be between 1 and 65535.")
-                : options.MaxArticleBytes <= 0 || options.ReceiveBufferBytes < 1024 || options.MaxStatusLineBytes < 256
+                : options.ReceiveBufferBytes < 1024 || options.MaxStatusLineBytes < 256
                 ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition options are out of range.")
                 : options.ConnectTimeout <= TimeSpan.Zero || options.CommandTimeout <= TimeSpan.Zero || options.ReceiveTimeout <= TimeSpan.Zero
                 ? NntpArticleAcquisitionResult.Failure(NntpArticleAcquisitionFailureCode.ProtocolFailure, null, "Acquisition timeouts must be greater than zero.")
@@ -1218,9 +1396,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
             {
                 if (_length >= _maximumArticleBytes)
                 {
+                    int attemptedLength = checked(_length + 1);
                     throw new NntpArticleAcquisitionException(
                         NntpArticleAcquisitionFailureCode.ArticleTooLarge,
-                        _context with { ActualValue = _length, MaximumValue = _maximumArticleBytes },
+                        _context with { ActualValue = attemptedLength, MaximumValue = _maximumArticleBytes },
                         string.Create(CultureInfo.InvariantCulture, $"Article exceeded configured maximum of {_maximumArticleBytes} bytes."));
                 }
 
@@ -1264,9 +1443,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                 int nextLength = Math.Min(_maximumArticleBytes, candidateLength);
                 if (nextLength <= currentLength)
                 {
+                    int attemptedLength = checked(_length + 1);
                     throw new NntpArticleAcquisitionException(
                         NntpArticleAcquisitionFailureCode.ArticleTooLarge,
-                        _context with { ActualValue = _length, MaximumValue = _maximumArticleBytes },
+                        _context with { ActualValue = attemptedLength, MaximumValue = _maximumArticleBytes },
                         string.Create(CultureInfo.InvariantCulture, $"Article exceeded configured maximum of {_maximumArticleBytes} bytes."));
                 }
 

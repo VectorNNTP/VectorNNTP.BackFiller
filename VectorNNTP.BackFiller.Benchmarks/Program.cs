@@ -30,6 +30,7 @@ namespace VectorNNTP.BackFiller.Benchmarks
         ArticleParseBenchmark,
         ArticleAcquisitionBenchmark,
         YEncValidatorBenchmark,
+        M16BoundaryMeasurement,
     }
 
     /// <summary>
@@ -127,6 +128,10 @@ namespace VectorNNTP.BackFiller.Benchmarks
 
                 case TransitEntrypointKind.YEncValidatorBenchmark:
                     _ = BenchmarkRunner.Run<YEncArticleValidatorBenchmarks>();
+                    return;
+
+                case TransitEntrypointKind.M16BoundaryMeasurement:
+                    await M16BoundaryMeasurementRunner.RunAsync().ConfigureAwait(false);
                     return;
 
                 default:
@@ -231,6 +236,11 @@ namespace VectorNNTP.BackFiller.Benchmarks
             if (string.Equals(mode, "yenc-validator-bench", StringComparison.OrdinalIgnoreCase))
             {
                 return new TransitEntrypointPlan(TransitEntrypointKind.YEncValidatorBenchmark, default, EffectiveDuration: null);
+            }
+
+            if (string.Equals(mode, "m16-boundary-measure", StringComparison.OrdinalIgnoreCase))
+            {
+                return new TransitEntrypointPlan(TransitEntrypointKind.M16BoundaryMeasurement, default, EffectiveDuration: null);
             }
 
             return new TransitEntrypointPlan(TransitEntrypointKind.DefaultLoggingBenchmark, default, EffectiveDuration: null);
