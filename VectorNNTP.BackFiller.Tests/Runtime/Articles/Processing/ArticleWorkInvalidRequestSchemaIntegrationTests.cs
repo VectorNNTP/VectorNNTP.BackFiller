@@ -27,6 +27,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [InlineData("[]", true, true, true, false, false)]
         [InlineData("{\"version\":1,\"messageId\":\"<missing-requestid@example.com>\",\"backbone\":\"BackboneA\"}", true, false, false, false, true)]
         [InlineData("{\"version\":1,\"requestId\":\"not-a-guid\",\"messageId\":\"<invalid-requestid@example.com>\",\"backbone\":\"BackboneA\"}", true, false, false, false, true)]
+        [InlineData("{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<guid-empty-requestid@example.com>\",\"backbone\":\"BackboneA\"}", true, false, false, false, true)]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"backbone\":\"BackboneA\"}", false, true, false, true, false)]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"not-message-id\",\"backbone\":\"BackboneA\"}", false, true, false, true, false)]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<missing-backbone@example.com>\"}", false, false, true, true, true)]

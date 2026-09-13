@@ -47,9 +47,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             });
 
-            if (!request.RequestId.HasValue)
+            if (!request.RequestId.HasValue || request.RequestId.Value == Guid.Empty)
             {
-                throw new InvalidOperationException("Canonical request serialization requires a concrete requestId.");
+                throw new InvalidOperationException("Canonical request serialization requires a concrete non-empty requestId.");
             }
 
             if (string.IsNullOrWhiteSpace(request.MessageId))

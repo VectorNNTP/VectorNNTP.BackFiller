@@ -91,6 +91,82 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
         }
 
         [Fact]
+        public void Schema_WhenOutcomeInvalidRequestUsesNilRequestId_IsInvalid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": "00000000-0000-0000-0000-000000000000",
+                  "messageId": "<12345@example.invalid>",
+                  "backbone": "Giganews",
+                  "outcome": "InvalidRequest",
+                  "error": "Request payload was invalid."
+                }
+                """);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("requestId", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeSuccessUsesNilRequestId_IsInvalid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": "00000000-0000-0000-0000-000000000000",
+                  "messageId": "<12345@example.invalid>",
+                  "backbone": "Giganews",
+                  "outcome": "Success",
+                  "uri": "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"
+                }
+                """);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("requestId", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeArticleNotFoundUsesNilRequestId_IsInvalid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": "00000000-0000-0000-0000-000000000000",
+                  "messageId": "<12345@example.invalid>",
+                  "backbone": "Giganews",
+                  "outcome": "ArticleNotFound",
+                  "error": "No article with that message-id"
+                }
+                """);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("requestId", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeInvalidArticleUsesNilRequestId_IsInvalid()
+        {
+            ICollection<ValidationError> errors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": "00000000-0000-0000-0000-000000000000",
+                  "messageId": "<12345@example.invalid>",
+                  "backbone": "Giganews",
+                  "outcome": "InvalidArticle",
+                  "error": "Article content was invalid."
+                }
+                """);
+
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("requestId", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
         public void Schema_WhenOutcomeArticleNotFoundWithUnavailableIdentity_IsInvalid()
         {
             ICollection<ValidationError> errors = Validate("""

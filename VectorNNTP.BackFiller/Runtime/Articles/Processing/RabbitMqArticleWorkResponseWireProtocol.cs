@@ -8,6 +8,7 @@
 using System.Buffers;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
@@ -19,7 +20,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// Success responses always emit an explicit <c>uri</c> property using the canonical cache URI contract,
     /// while failure responses omit <c>uri</c> and include <c>error</c> only when text is available.
     /// </remarks>
-    internal static class RabbitMqArticleWorkResponseWireProtocol
+    internal static partial class RabbitMqArticleWorkResponseWireProtocol
     {
         /// <summary>
         /// Canonical protocol name used in documentation and integration boundaries.
@@ -143,7 +144,26 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             string? backbone = ReadOptionalStringProperty(root, "backbone");
 
             bool successOutcome = string.Equals(outcome, nameof(ArticleWorkProcessingOutcome.Success), StringComparison.Ordinal);
+            bool articleNotFoundOutcome = string.Equals(outcome, nameof(ArticleWorkProcessingOutcome.ArticleNotFound), StringComparison.Ordinal);
+            bool invalidArticleOutcome = string.Equals(outcome, nameof(ArticleWorkProcessingOutcome.InvalidArticle), StringComparison.Ordinal);
             bool invalidRequestOutcome = string.Equals(outcome, nameof(ArticleWorkProcessingOutcome.InvalidRequest), StringComparison.Ordinal);
+
+            if (!successOutcome && !articleNotFoundOutcome && !invalidArticleOutcome && !invalidRequestOutcome)
+            {
+                throw new InvalidOperationException($"Unsupported response outcome '{outcome}'.");
+            }
+
+            string? uri = null;
+            if (root.TryGetProperty("uri", out JsonElement uriElement) && uriElement.ValueKind == JsonValueKind.String)
+            {
+                uri = uriElement.GetString();
+            }
+
+            string? error = null;
+            if (root.TryGetProperty("error", out JsonElement errorElement) && errorElement.ValueKind == JsonValueKind.String)
+            {
+                error = errorElement.GetString();
+            }
 
             if (successOutcome)
             {
@@ -161,8 +181,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 {
                     throw new InvalidOperationException("Success response payload requires a non-empty 'backbone'.");
                 }
+
+                if (string.IsNullOrWhiteSpace(uri) || !IsCanonicalCacheUri(uri))
+                {
+                    throw new InvalidOperationException("Success response payload requires a canonical non-empty 'uri'.");
+                }
+
+                if (error is not null)
+                {
+                    throw new InvalidOperationException("Success response payload must not include 'error'.");
+                }
             }
-            else if (!invalidRequestOutcome)
+            else if (articleNotFoundOutcome || invalidArticleOutcome)
             {
                 if (!requestId.HasValue || requestId.Value == Guid.Empty)
                 {
@@ -177,6 +207,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 if (string.IsNullOrWhiteSpace(backbone))
                 {
                     throw new InvalidOperationException("Terminal non-invalid-request response payload requires a non-empty 'backbone'.");
+                }
+
+                if (uri is not null)
+                {
+                    throw new InvalidOperationException("Terminal failure response payload must not include 'uri'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(error))
+                {
+                    throw new InvalidOperationException("Terminal failure response payload requires a non-empty 'error'.");
                 }
             }
             else
@@ -195,21 +235,27 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 {
                     throw new InvalidOperationException("InvalidRequest payload backbone, when provided, must be non-empty.");
                 }
-            }
 
-            string? uri = null;
-            if (root.TryGetProperty("uri", out JsonElement uriElement) && uriElement.ValueKind == JsonValueKind.String)
-            {
-                uri = uriElement.GetString();
-            }
+                if (uri is not null)
+                {
+                    throw new InvalidOperationException("InvalidRequest payload must not include 'uri'.");
+                }
 
-            string? error = null;
-            if (root.TryGetProperty("error", out JsonElement errorElement) && errorElement.ValueKind == JsonValueKind.String)
-            {
-                error = errorElement.GetString();
+                if (string.IsNullOrWhiteSpace(error))
+                {
+                    throw new InvalidOperationException("InvalidRequest payload requires a non-empty 'error'.");
+                }
             }
 
             return new RabbitMqArticleWorkResponse(version, requestId, messageId, backbone, outcome, uri, error);
+        }
+
+        [GeneratedRegex("^cache://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?:(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3})/[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
+        private static partial Regex CanonicalCacheUriRegex();
+
+        private static bool IsCanonicalCacheUri(string uri)
+        {
+            return CanonicalCacheUriRegex().IsMatch(uri);
         }
 
         private static Guid? ReadOptionalGuidProperty(JsonElement root, string propertyName)

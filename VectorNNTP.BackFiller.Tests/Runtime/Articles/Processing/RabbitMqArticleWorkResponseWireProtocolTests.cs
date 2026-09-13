@@ -153,6 +153,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"   \",\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":\"\",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":\"   \",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"ProviderFailure\",\"error\":\"Provider failure\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"Cancelled\",\"error\":\"Cancelled\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"UnexpectedFailure\",\"error\":\"Unexpected failure\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"SomeUnknownOutcome\",\"error\":\"Unknown\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"Success\",\"error\":\"must-not-exist\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://bad host:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"ArticleNotFound\",\"error\":\"No article\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"InvalidArticle\",\"error\":\"Invalid article\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"ArticleNotFound\",\"error\":\"\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"InvalidArticle\",\"error\":\"   \"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":null,\"outcome\":\"InvalidRequest\",\"uri\":\"cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"\"}")]
         public void ParseV1_WhenConcreteIdentityRequiredButMissingOrInvalid_ThrowsInvalidOperationException(string json)
         {
             byte[] payload = Encoding.UTF8.GetBytes(json);

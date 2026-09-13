@@ -80,6 +80,45 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.False(root.TryGetProperty("replyTo", out _));
         }
 
+        [Theory]
+        [InlineData(null, "<wire-null-requestid@example.com>", "BackboneA", "Canonical request serialization requires a concrete non-empty requestId.")]
+        [InlineData("00000000-0000-0000-0000-000000000000", "<wire-empty-requestid@example.com>", "BackboneA", "Canonical request serialization requires a concrete non-empty requestId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA", "Canonical request serialization requires a non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "   ", "BackboneA", "Canonical request serialization requires a non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<wire-empty-backbone@example.com>", null, "Canonical request serialization requires a non-empty backbone.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<wire-whitespace-backbone@example.com>", "   ", "Canonical request serialization requires a non-empty backbone.")]
+        public void SerializeV1_WhenRequestIdentityOrRequiredFieldsInvalid_ThrowsInvalidOperationException(
+            string? requestId,
+            string? messageId,
+            string? backbone,
+            string expectedMessage)
+        {
+            Guid? parsedRequestId = requestId is null ? null : Guid.Parse(requestId);
+            RabbitMqArticleWorkRequest request = new(
+                Version: 1,
+                RequestId: parsedRequestId,
+                MessageId: messageId,
+                Backbone: backbone);
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => RabbitMqArticleWorkRequestWireProtocol.SerializeV1(request));
+            Assert.Equal(expectedMessage, exception.Message);
+        }
+
+        [Fact]
+        public void SerializeV1_WhenRequestIdentityConcreteAndRequiredFieldsPresent_WritesCanonicalJson()
+        {
+            RabbitMqArticleWorkRequest request = new(
+                Version: 1,
+                RequestId: Guid.Parse("9c5c0e4f-5161-4d4e-9db2-2d7d9d4a1d22"),
+                MessageId: "<wire-valid@example.com>",
+                Backbone: "BackboneA");
+
+            byte[] payload = RabbitMqArticleWorkRequestWireProtocol.SerializeV1(request);
+            string json = Encoding.UTF8.GetString(payload);
+
+            Assert.Equal("{\"version\":1,\"requestId\":\"9c5c0e4f-5161-4d4e-9db2-2d7d9d4a1d22\",\"messageId\":\"<wire-valid@example.com>\",\"backbone\":\"BackboneA\"}", json);
+        }
+
         /// <summary>
         /// Confirms a serialized RabbitMQ work-request payload exactly at the configured envelope ceiling is accepted.
         /// </summary>
@@ -313,6 +352,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             AssertInvalidRequest(parseResult);
         }
+
+        [Fact]
+        public async Task ParseAsync_WhenRequestIdGuidEmpty_ReturnsInvalidRequestAndPreservesIndependentIdentityAsync()
+        {
+            string payload = "{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<guid-empty@example.com>\",\"backbone\":\"BackboneA\"}";
+            RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-guid-empty", replyTo: "rpc.replies"), CancellationToken.None);
+
+            AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Null(failure.Request.RequestId);
+            Assert.Equal("<guid-empty@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
+        }
+
+        [Fact]
+        public async Task ParseAsync_WhenRequestIdConcreteNonEmpty_ParsesSuccessfullyAsync()
+        {
+            Guid requestId = Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa");
+            string payload = $$"""{"version":1,"requestId":"{{requestId}}","messageId":"<guid-concrete@example.com>","backbone":"BackboneA"}""";
+
+            RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-concrete", replyTo: "rpc.replies"), CancellationToken.None);
+
+            Assert.True(parseResult.IsSuccess);
+            RabbitMqArticleWorkRequest request = Assert.IsType<RabbitMqArticleWorkRequest>(parseResult.Request);
+            Assert.Equal(requestId, request.RequestId);
+            Assert.Equal("<guid-concrete@example.com>", request.MessageId);
+            Assert.Equal("BackboneA", request.Backbone);
+        }
+
         /// <summary>
         /// Confirms the parse async when message id missing returns invalid request async behavior.
         /// </summary>

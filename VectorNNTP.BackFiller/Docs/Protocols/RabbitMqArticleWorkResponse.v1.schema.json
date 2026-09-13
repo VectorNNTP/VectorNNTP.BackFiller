@@ -12,6 +12,14 @@
     "backbone",
     "outcome"
   ],
+  "$defs": {
+    "concreteRequestId": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 1,
+      "pattern": "^(?!00000000-0000-0000-0000-000000000000$).+"
+    }
+  },
   "properties": {
     "version": {
       "type": "integer",
@@ -21,9 +29,7 @@
     "requestId": {
       "oneOf": [
         {
-          "type": "string",
-          "format": "uuid",
-          "minLength": 1
+          "$ref": "#/$defs/concreteRequestId"
         },
         {
           "type": "null"
@@ -93,9 +99,7 @@
           ]
         },
         "requestId": {
-          "type": "string",
-          "format": "uuid",
-          "minLength": 1
+          "$ref": "#/$defs/concreteRequestId"
         },
         "messageId": {
           "type": "string",
@@ -128,9 +132,7 @@
           ]
         },
         "requestId": {
-          "type": "string",
-          "format": "uuid",
-          "minLength": 1
+          "$ref": "#/$defs/concreteRequestId"
         },
         "messageId": {
           "type": "string",
@@ -167,9 +169,7 @@
           ]
         },
         "requestId": {
-          "type": "string",
-          "format": "uuid",
-          "minLength": 1
+          "$ref": "#/$defs/concreteRequestId"
         },
         "messageId": {
           "type": "string",
@@ -208,9 +208,7 @@
         "requestId": {
           "oneOf": [
             {
-              "type": "string",
-              "format": "uuid",
-              "minLength": 1
+              "$ref": "#/$defs/concreteRequestId"
             },
             {
               "type": "null"

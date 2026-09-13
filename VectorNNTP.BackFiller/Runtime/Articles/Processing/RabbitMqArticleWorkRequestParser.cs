@@ -386,7 +386,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 return false;
             }
 
-            if (!Guid.TryParse(textValue, out Guid parsed))
+            if (!Guid.TryParse(textValue, out Guid parsed) || parsed == Guid.Empty)
             {
                 return false;
             }
