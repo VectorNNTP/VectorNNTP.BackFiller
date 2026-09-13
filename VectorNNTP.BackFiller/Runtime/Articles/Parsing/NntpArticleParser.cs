@@ -82,7 +82,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(canonicalBackFillerFqdn);
             _canonicalBackFillerFqdn = canonicalBackFillerFqdn.Trim();
-            _options = options;
+            _options = options with
+            {
+                MaxArticleBytes = ArticleResourceLimits.MaxArticleBytes,
+                MaxHeaderLineBytes = ArticleResourceLimits.MaxArticleLineBytes,
+            };
         }
 
         /// <summary>
@@ -285,12 +289,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
             while (index < articleSpan.Length)
             {
+                int maxLineLength = options.MaxHeaderLineBytes;
                 int lineEnd = FindLineTerminator(articleSpan, index);
                 int lineContentEnd = lineEnd >= 0 ? lineEnd : articleSpan.Length;
                 int lineLength = lineContentEnd - index;
-                if (lineLength > options.MaxHeaderLineBytes)
+                if (lineEnd < 0 && lineLength > maxLineLength)
                 {
-                    return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderLineTooLong, articleBytes, headerStart, index, headers);
+                    return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderLineTooLong, articleBytes, headerStart, index + maxLineLength, headers);
+                }
+
+                if (lineLength > maxLineLength)
+                {
+                    return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderLineTooLong, articleBytes, headerStart, index + maxLineLength, headers);
                 }
 
                 if (lineLength == 0)
@@ -350,6 +360,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
 
                     currentHeaderHasValue = true;
                     currentHeaderValueEndExclusive = lineContentEnd;
+                    int aggregateHeaderValueLength = currentHeaderValueEndExclusive - currentHeaderValueOffset;
+                    if (aggregateHeaderValueLength > options.MaxHeaderValueBytes)
+                    {
+                        return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.HeaderValueTooLong, articleBytes, headerStart, index + maxLineLength, headers);
+                    }
+
                     index = lineEnd >= 0 ? AdvancePastTerminator(articleSpan, lineEnd) : articleSpan.Length;
                     continue;
                 }
@@ -364,7 +380,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
                         currentHeaderHasValue ? currentHeaderValueEndExclusive - currentHeaderValueOffset : 0));
                 }
 
-                if (headers.Count > options.MaxHeaderCount)
+                if (headers.Count >= options.MaxHeaderCount)
                 {
                     return HeaderParseOutcome.Fail(NntpArticleParseFailureCode.TooManyHeaders, articleBytes, headerStart, lineContentEnd, headers);
                 }

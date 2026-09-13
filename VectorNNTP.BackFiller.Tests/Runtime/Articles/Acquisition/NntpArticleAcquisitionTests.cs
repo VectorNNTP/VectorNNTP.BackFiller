@@ -14,9 +14,11 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading.Channels;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Runtime.Articles;
 using VectorNNTP.Backfiller.Runtime.Articles.Acquisition;
 using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -775,7 +777,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         [Fact]
         public async Task DownloadArticleAsync_WhenArticleTooLarge_ReturnsArticleTooLarge()
         {
-            byte[] article = BuildArticleBytes("<huge@test>", new string('A', 16_384) + "\r\n");
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<huge@test>").Length + 1;
+            byte[] article = BuildArticleBytes("<huge@test>", CreateWireTerminatedBody(payloadBytes, (byte)'H'));
 
             await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
             {
@@ -786,10 +789,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
             });
 
-            NntpArticleAcquisitionOptions options = NntpArticleAcquisitionOptions.Default with { MaxArticleBytes = 4096 };
             (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
                 server.CreateEndpoint(),
-                options,
+                NntpArticleAcquisitionOptions.Default,
                 NullLogger<NntpArticleAcquisitionSession>.Instance,
                 CancellationToken.None);
 
@@ -799,6 +801,160 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<huge@test>", CancellationToken.None);
                 Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleTooLarge, result.FailureCode);
             }
+        }
+
+        /// <summary>
+        /// Confirms acquisition accepts article size one byte below the fixed 5 MiB hard boundary.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenArticleIsLimitMinusOneByte_Accepts()
+        {
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-limit-minus-one@test>").Length - 1;
+            byte[] body = CreateWireTerminatedBody(payloadBytes, (byte)'A');
+            byte[] article = BuildArticleBytes("<m16-limit-minus-one@test>", body);
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <m16-limit-minus-one@test>");
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <m16-limit-minus-one@test> article follows");
+                await FakeArticleServer.WriteBytesAsync(stream, article);
+                await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
+            });
+
+            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+                server.CreateEndpoint(),
+                NntpArticleAcquisitionOptions.Default,
+                NullLogger<NntpArticleAcquisitionSession>.Instance,
+                CancellationToken.None);
+
+            Assert.NotNull(session);
+            await using (session)
+            {
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<m16-limit-minus-one@test>", CancellationToken.None);
+                Assert.True(result.IsSuccess);
+                Assert.Equal(ArticleResourceLimits.MaxArticleBytes - 1, result.ArticleLength);
+            }
+        }
+
+        /// <summary>
+        /// Confirms acquisition accepts article size exactly at the fixed 5 MiB hard boundary.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenArticleIsExactlyLimit_Accepts()
+        {
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-limit-exact@test>").Length;
+            byte[] body = CreateWireTerminatedBody(payloadBytes, (byte)'B');
+            byte[] article = BuildArticleBytes("<m16-limit-exact@test>", body);
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <m16-limit-exact@test>");
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <m16-limit-exact@test> article follows");
+                await FakeArticleServer.WriteBytesAsync(stream, article);
+                await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
+            });
+
+            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+                server.CreateEndpoint(),
+                NntpArticleAcquisitionOptions.Default,
+                NullLogger<NntpArticleAcquisitionSession>.Instance,
+                CancellationToken.None);
+
+            Assert.NotNull(session);
+            await using (session)
+            {
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<m16-limit-exact@test>", CancellationToken.None);
+                Assert.True(result.IsSuccess);
+                Assert.Equal(ArticleResourceLimits.MaxArticleBytes, result.ArticleLength);
+            }
+        }
+
+        /// <summary>
+        /// Confirms acquisition rejects article size one byte above the fixed 5 MiB hard boundary.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenArticleIsLimitPlusOneByte_RejectsArticleTooLarge()
+        {
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-limit-plus-one@test>").Length + 1;
+            byte[] body = CreateWireTerminatedBody(payloadBytes, (byte)'C');
+            byte[] article = BuildArticleBytes("<m16-limit-plus-one@test>", body);
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <m16-limit-plus-one@test>");
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <m16-limit-plus-one@test> article follows");
+                await FakeArticleServer.WriteBytesAsync(stream, article);
+                await FakeArticleServer.WriteBytesAsync(stream, ".\r\n"u8.ToArray());
+            });
+
+            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+                server.CreateEndpoint(),
+                NntpArticleAcquisitionOptions.Default,
+                NullLogger<NntpArticleAcquisitionSession>.Instance,
+                CancellationToken.None);
+
+            Assert.NotNull(session);
+            await using (session)
+            {
+                using NntpArticleAcquisitionResult result = await session.DownloadArticleAsync("<m16-limit-plus-one@test>", CancellationToken.None);
+                Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleTooLarge, result.FailureCode);
+            }
+        }
+
+        /// <summary>
+        /// Confirms oversized ARTICLE rejection drains through terminator and marks the transport non-reusable, preventing stale bytes from becoming a subsequent response.
+        /// </summary>
+        [Fact]
+        public async Task DownloadArticleAsync_WhenOversizedResponseRejected_DrainsAndMarksTransportNonReusable()
+        {
+            int oversizedPayloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<oversized-drain@test>").Length + 1;
+            byte[] oversizedArticle = BuildArticleBytes("<oversized-drain@test>", CreateWireTerminatedBody(oversizedPayloadBytes, (byte)'A'));
+
+            Channel<byte[]> scriptedChunks = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                AllowSynchronousContinuations = false,
+            });
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready");
+
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "ARTICLE <oversized-drain@test>");
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "220 0 <oversized-drain@test> article follows");
+                byte[] oversizedChunk1 = new byte[oversizedArticle.Length - 3];
+                byte[] oversizedChunk2 = new byte[3];
+                Buffer.BlockCopy(oversizedArticle, 0, oversizedChunk1, 0, oversizedChunk1.Length);
+                Buffer.BlockCopy(oversizedArticle, oversizedChunk1.Length, oversizedChunk2, 0, oversizedChunk2.Length);
+                await FakeArticleServer.WriteBytesAsync(stream, oversizedChunk1);
+                await FakeArticleServer.WriteBytesAsync(stream, oversizedChunk2);
+                await FakeArticleServer.WriteBytesAsync(stream, ".\r"u8.ToArray());
+                await FakeArticleServer.WriteBytesAsync(stream, "\n"u8.ToArray());
+                await scriptedChunks.Writer.WriteAsync(Encoding.ASCII.GetBytes("oversized-drained"));
+            });
+
+            (NntpArticleAcquisitionSession? session, _) = await NntpArticleAcquisitionSession.ConnectAsync(
+                server.CreateEndpoint(),
+                NntpArticleAcquisitionOptions.Default,
+                NullLogger<NntpArticleAcquisitionSession>.Instance,
+                CancellationToken.None);
+
+            Assert.NotNull(session);
+            await using (session)
+            {
+                using NntpArticleAcquisitionResult oversized = await session.DownloadArticleAsync("<oversized-drain@test>", CancellationToken.None);
+                Assert.Equal(NntpArticleAcquisitionFailureCode.ArticleTooLarge, oversized.FailureCode);
+
+                using NntpArticleAcquisitionResult followup = await session.DownloadArticleAsync("<oversized-recovery@test>", CancellationToken.None);
+                Assert.Equal(NntpArticleAcquisitionFailureCode.ConnectionFailure, followup.FailureCode);
+            }
+
+            byte[] checkpoint = await scriptedChunks.Reader.ReadAsync();
+            Assert.Equal("oversized-drained", Encoding.ASCII.GetString(checkpoint));
         }
 
         /// <summary>
@@ -1442,17 +1598,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
         /// <returns>The value returned by the build article bytes helper.</returns>
         private static byte[] BuildArticleBytes(string messageId, byte[] body)
         {
-            byte[] headers = Encoding.ASCII.GetBytes(
-                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
-                $"Message-ID: {messageId}\r\n" +
-                "Newsgroups: alt.test\r\n" +
-                "From: user@example.test\r\n" +
-                "\r\n");
+            byte[] headers = BuildArticleHeaderBytes(messageId);
 
             byte[] article = new byte[headers.Length + body.Length];
             Buffer.BlockCopy(headers, 0, article, 0, headers.Length);
             Buffer.BlockCopy(body, 0, article, headers.Length, body.Length);
             return article;
+        }
+
+        private static byte[] BuildArticleHeaderBytes(string messageId)
+        {
+            return Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                $"Message-ID: {messageId}\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test\r\n" +
+                "\r\n");
+        }
+
+        private static byte[] CreateWireTerminatedBody(int payloadBytes, byte fillByte)
+        {
+            byte[] body = new byte[payloadBytes];
+            Array.Fill(body, fillByte);
+            body[^2] = (byte)'\r';
+            body[^1] = (byte)'\n';
+            return body;
         }
 
         /// <summary>

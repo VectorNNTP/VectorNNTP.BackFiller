@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleParserContracts.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Parsing
@@ -270,7 +270,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
     /// <param name="MaxArticleBytes">Maximum article payload size accepted by the parser.</param>
     /// <param name="MaxHeaderSectionBytes">Maximum bytes scanned while searching header/body separation.</param>
     /// <param name="MaxHeaderCount">Maximum number of header fields accepted.</param>
-    /// <param name="MaxHeaderLineBytes">Maximum bytes for one unfolded physical header line.</param>
+    /// <param name="MaxHeaderLineBytes">Maximum characters for one physical header line, enforced on ASCII wire bytes.</param>
     /// <param name="MaxHeaderNameBytes">Maximum bytes for one header name token.</param>
     /// <param name="MaxHeaderValueBytes">Maximum bytes for one unfolded header value.</param>
     /// <param name="YEncDetectionScanBytes">Maximum body bytes scanned for yEnc marker detection prior to optional full validation.</param>
@@ -286,12 +286,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Parsing
         /// <summary>
         /// Gets the default parser limits tuned for hostile-input safety and transit workloads.
         /// </summary>
-        /// <value>Default guardrails for article size, header scanning, and bounded yEnc detection.</value>
+        /// <value>Default guardrails for fixed 5 MiB article size, 1024-character header line boundaries, header scanning, and bounded yEnc detection.</value>
         internal static NntpArticleParserOptions Default => new(
-            MaxArticleBytes: 64 * 1024 * 1024,
+            MaxArticleBytes: ArticleResourceLimits.MaxArticleBytes,
             MaxHeaderSectionBytes: 256 * 1024,
             MaxHeaderCount: 1024,
-            MaxHeaderLineBytes: 16 * 1024,
+            MaxHeaderLineBytes: ArticleResourceLimits.MaxArticleLineBytes,
             MaxHeaderNameBytes: 128,
             MaxHeaderValueBytes: 64 * 1024,
             YEncDetectionScanBytes: 64 * 1024);

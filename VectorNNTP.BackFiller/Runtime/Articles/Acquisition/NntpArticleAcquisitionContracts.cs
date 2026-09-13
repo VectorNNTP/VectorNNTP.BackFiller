@@ -1,5 +1,5 @@
 // <copyright file="NntpArticleAcquisitionContracts.cs" company="Usenet Ninja">
-// Copyright © Chris Knipe <cknipe@opticnetworks.net>
+// Copyright © Chris Knipe cknipe@opticnetworks.net
 // </copyright>
 //
 // VectorNNTP.Backfiller Runtime / Articles / Acquisition
@@ -112,11 +112,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
         /// Gets the repository default guardrails for acquisition sessions.
         /// </summary>
         /// <value>
-        /// A configuration that allows large articles, uses 64 KiB socket buffers, caps status lines at 16 KiB,
-        /// and applies 30-second connect/command timeouts with a 2-minute payload receive timeout.
+        /// A configuration that enforces the fixed 5 MiB article payload ceiling, uses 64 KiB socket buffers,
+        /// caps NNTP status lines at 16 KiB, and applies 30-second connect/command timeouts with a 2-minute payload receive timeout.
         /// </value>
         internal static NntpArticleAcquisitionOptions Default => new(
-            MaxArticleBytes: 256 * 1024 * 1024,
+            MaxArticleBytes: ArticleResourceLimits.MaxArticleBytes,
             ReceiveBufferBytes: 64 * 1024,
             MaxStatusLineBytes: 16 * 1024,
             ConnectTimeout: TimeSpan.FromSeconds(30),

@@ -7,6 +7,7 @@
 // Primary responsibility: documents the executable contracts covered by the nntp article parser test suite.
 
 using System.Text;
+using VectorNNTP.Backfiller.Runtime.Articles;
 using VectorNNTP.Backfiller.Runtime.Articles.DateParser;
 using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 using VectorNNTP.Backfiller.Runtime.Articles.YEnc;
@@ -533,12 +534,39 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         public void Parse_WhenFoldedFromSemanticLengthAtLimit_EnforcesBoundary()
         {
             const int maxFromLength = 2048;
+            const int foldBoundaryCount = 2;
+            const int perLineValueChunk = 900;
             NntpArticleParser parser = new(LocalFqdn);
 
+            static string FoldHeaderValueForLineLimit(string value, int chunkSize)
+            {
+                if (value.Length <= chunkSize)
+                {
+                    return value;
+                }
+
+                StringBuilder builder = new(value.Length + ((value.Length / chunkSize) * 3));
+                int index = 0;
+                builder.Append(value.AsSpan(index, chunkSize));
+                index += chunkSize;
+
+                while (index < value.Length)
+                {
+                    int remaining = value.Length - index;
+                    int take = Math.Min(chunkSize, remaining);
+                    builder.Append("\r\n\t");
+                    builder.Append(value.AsSpan(index, take));
+                    index += take;
+                }
+
+                return builder.ToString();
+            }
+
+            int semanticLengthAtLimit = maxFromLength - foldBoundaryCount;
             string localAtLimit = new('a', 1023);
-            string domainAtLimit = new('b', maxFromLength - localAtLimit.Length - 2);
+            string domainAtLimit = new('b', semanticLengthAtLimit - localAtLimit.Length - 1);
             string semanticAtLimitBeforeFold = localAtLimit + "@" + domainAtLimit;
-            string foldedAtLimit = semanticAtLimitBeforeFold[..1024] + "\r\n\t" + semanticAtLimitBeforeFold[1024..];
+            string foldedAtLimit = FoldHeaderValueForLineLimit(semanticAtLimitBeforeFold, perLineValueChunk);
 
             byte[] acceptedArticle = Encoding.ASCII.GetBytes(
                 "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
@@ -550,7 +578,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
 
             string domainTooLong = new('b', domainAtLimit.Length + 1);
             string semanticTooLongBeforeFold = localAtLimit + "@" + domainTooLong;
-            string foldedTooLong = semanticTooLongBeforeFold[..1024] + "\r\n\t" + semanticTooLongBeforeFold[1024..];
+            string foldedTooLong = FoldHeaderValueForLineLimit(semanticTooLongBeforeFold, perLineValueChunk);
             byte[] rejectedArticle = Encoding.ASCII.GetBytes(
                 "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
                 "Message-ID: <m11j@example.test>\r\n" +
@@ -1176,6 +1204,122 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Verifies parser accepts article size one byte below the fixed 5 MiB hard boundary.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenArticleSizeIsLimitMinusOne_Accepts()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-parse-minus-one@example.test>").Length - 1;
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-parse-minus-one@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: CreateFilledBytes(payloadBytes, (byte)'A'));
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(ArticleResourceLimits.MaxArticleBytes - 1, result.ArticleBytes.Length);
+        }
+
+        /// <summary>
+        /// Verifies parser accepts article size exactly at the fixed 5 MiB hard boundary.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenArticleSizeIsExactlyLimit_Accepts()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-parse-exact@example.test>").Length;
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-parse-exact@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: CreateFilledBytes(payloadBytes, (byte)'B'));
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(ArticleResourceLimits.MaxArticleBytes, result.ArticleBytes.Length);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects article size one byte above the fixed 5 MiB hard boundary.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenArticleSizeIsLimitPlusOne_RejectsArticleTooLarge()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            int payloadBytes = ArticleResourceLimits.MaxArticleBytes - BuildArticleHeaderBytes("<m16-parse-plus-one@example.test>").Length + 1;
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m16-parse-plus-one@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                bodyBytes: CreateFilledBytes(payloadBytes, (byte)'C'));
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.ArticleTooLarge, result.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies parser accepts 1023-character header line and 1024-character header line, then rejects 1025-character header line.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderLineLengthHits1023And1024And1025_EnforcesBoundary()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+
+            byte[] line1023 = BuildHeaderLineLengthArticle("<m16-line-1023@example.test>", 1023);
+            byte[] line1024 = BuildHeaderLineLengthArticle("<m16-line-1024@example.test>", 1024);
+            byte[] line1025 = BuildHeaderLineLengthArticle("<m16-line-1025@example.test>", 1025);
+
+            NntpArticleParseResult result1023 = parser.Parse(line1023);
+            NntpArticleParseResult result1024 = parser.Parse(line1024);
+            NntpArticleParseResult result1025 = parser.Parse(line1025);
+
+            Assert.True(result1023.IsAccepted);
+            Assert.True(result1024.IsAccepted);
+            Assert.False(result1025.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result1025.FailureCode);
+        }
+
+        /// <summary>
+        /// Verifies newline-free header scanning remains bounded at 1024-character line limit.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderLineHasNoNewlineUntilAfterBoundary_RejectsBoundedly()
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] article = Encoding.ASCII.GetBytes(
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                "Message-ID: <m16-newline-free@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test\r\n" +
+                "Subject: " + new string('x', 1025) +
+                "\r\n\r\n" +
+                "body\r\n");
+
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.False(result.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderLineTooLong, result.FailureCode);
+        }
+
+        /// <summary>
         /// Verifies parser rejects completely empty input deterministically.
         /// </summary>
         [Fact]
@@ -1280,65 +1424,126 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
-        /// Verifies parser can parse very large header count within configured guardrails.
+        /// Verifies folded-header aggregate value length is enforced at limit-1, exact limit, and limit+1 boundaries.
         /// </summary>
         [Fact]
-        public void Parse_WhenHeaderCountIsLargeButWithinLimit_Accepts()
+        public void Parse_WhenFoldedHeaderAggregateValueCrossesConfiguredBoundary_EnforcesExactLimit()
         {
-            NntpArticleParser parser = new(
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m36@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Subject: " + new string('s', 48),
+                    " " + new string('t', 48),
+                    "\t" + new string('u', 48),
+                ],
+                body: "body\r\n");
+
+            NntpArticleParser baselineParser = new(LocalFqdn);
+            NntpArticleParseResult baseline = baselineParser.Parse(article);
+            Assert.True(baseline.IsAccepted);
+
+            NntpArticleHeaderEntry subject = FindHeaderEntry(baseline.Headers, NntpArticleHeaderName.Subject);
+            Assert.True(subject.ValueLength > 1);
+
+            NntpArticleParser belowLimitParser = new(
                 LocalFqdn,
                 NntpArticleParserOptions.Default with
                 {
-                    MaxHeaderCount = 1100,
+                    MaxHeaderValueBytes = subject.ValueLength - 1,
                 });
 
-            List<string> headers =
-            [
-                "Date: Fri, 23 Aug 2024 07:30:10 +0000",
-                "Message-ID: <m36@example.test>",
-                "Newsgroups: alt.test",
-                "From: user@example.test",
-            ];
+            NntpArticleParser exactLimitParser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderValueBytes = subject.ValueLength,
+                });
 
-            for (int i = 0; i < 1000; i++)
-            {
-                headers.Add($"X-Extra-{i}: value-{i}");
-            }
+            NntpArticleParser aboveLimitParser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderValueBytes = subject.ValueLength + 1,
+                });
 
-            byte[] article = BuildArticle(headers, body: "body\r\n");
+            NntpArticleParseResult belowLimitResult = belowLimitParser.Parse(article);
+            NntpArticleParseResult exactLimitResult = exactLimitParser.Parse(article);
+            NntpArticleParseResult aboveLimitResult = aboveLimitParser.Parse(article);
 
-            NntpArticleParseResult result = parser.Parse(article);
-
-            Assert.True(result.IsAccepted);
+            Assert.False(belowLimitResult.IsAccepted);
+            Assert.Equal(NntpArticleParseFailureCode.HeaderValueTooLong, belowLimitResult.FailureCode);
+            Assert.True(exactLimitResult.IsAccepted);
+            Assert.True(aboveLimitResult.IsAccepted);
         }
 
         /// <summary>
-        /// Verifies parser enforces header-count limit deterministically.
+        /// Verifies parser accepts header counts at limit-1 and exact limit.
         /// </summary>
         [Fact]
-        public void Parse_WhenHeaderCountExceedsLimit_Rejects()
+        public void Parse_WhenHeaderCountAtOrBelowLimit_Accepts()
         {
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m37@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Subject: first",
+                    " second",
+                ],
+                body: "body\r\n");
+
+            NntpArticleParser limitMinusOneParser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderCount = 6,
+                });
+
+            NntpArticleParser exactLimitParser = new(
+                LocalFqdn,
+                NntpArticleParserOptions.Default with
+                {
+                    MaxHeaderCount = 5,
+                });
+
+            NntpArticleParseResult limitMinusOneResult = limitMinusOneParser.Parse(article);
+            NntpArticleParseResult exactLimitResult = exactLimitParser.Parse(article);
+
+            Assert.True(limitMinusOneResult.IsAccepted);
+            Assert.True(exactLimitResult.IsAccepted);
+        }
+
+        /// <summary>
+        /// Verifies parser rejects when adding one header would exceed the exact header-count limit.
+        /// </summary>
+        [Fact]
+        public void Parse_WhenHeaderCountExceedsLimitByOne_Rejects()
+        {
+            byte[] article = BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    "Message-ID: <m38@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Subject: first",
+                    " second",
+                    "X-Extra: value",
+                ],
+                body: "body\r\n");
+
             NntpArticleParser parser = new(
                 LocalFqdn,
                 NntpArticleParserOptions.Default with
                 {
-                    MaxHeaderCount = 8,
+                    MaxHeaderCount = 5,
                 });
-
-            List<string> headers =
-            [
-                "Date: Fri, 23 Aug 2024 07:30:10 +0000",
-                "Message-ID: <m37@example.test>",
-                "Newsgroups: alt.test",
-                "From: user@example.test",
-            ];
-
-            for (int i = 0; i < 12; i++)
-            {
-                headers.Add($"X-Limit-{i}: value-{i}");
-            }
-
-            byte[] article = BuildArticle(headers, body: "body\r\n");
 
             NntpArticleParseResult result = parser.Parse(article);
 
@@ -1377,6 +1582,26 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Finds one parsed header entry by known header name.
+        /// </summary>
+        /// <param name="headers">Parsed header entries.</param>
+        /// <param name="knownName">Known header name to locate.</param>
+        /// <returns>Matching header entry.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when no matching header entry exists.</exception>
+        private static NntpArticleHeaderEntry FindHeaderEntry(IReadOnlyList<NntpArticleHeaderEntry> headers, NntpArticleHeaderName knownName)
+        {
+            for (int i = 0; i < headers.Count; i++)
+            {
+                if (headers[i].KnownName == knownName)
+                {
+                    return headers[i];
+                }
+            }
+
+            throw new InvalidOperationException($"Header '{knownName}' was not found in parse output.");
+        }
+
+        /// <summary>
         /// Builds an article with explicit header lines and optional byte body.
         /// </summary>
         /// <param name="headers">Header lines without CRLF.</param>
@@ -1389,14 +1614,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         /// <returns>The value returned by the build article helper.</returns>
         private static byte[] BuildArticle(IEnumerable<string> headers, string? body = null, byte[]? bodyBytes = null)
         {
-            StringBuilder sb = new();
-            foreach (string header in headers)
-            {
-                _ = sb.Append(header).Append("\r\n");
-            }
-
-            _ = sb.Append("\r\n");
-            byte[] prefix = Encoding.ASCII.GetBytes(sb.ToString());
+            byte[] prefix = BuildArticlePrefixBytes(headers);
 
             bodyBytes ??= Encoding.ASCII.GetBytes(body ?? string.Empty);
 
@@ -1404,6 +1622,57 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
             Buffer.BlockCopy(prefix, 0, article, 0, prefix.Length);
             Buffer.BlockCopy(bodyBytes, 0, article, prefix.Length, bodyBytes.Length);
             return article;
+        }
+
+        private static byte[] BuildArticlePrefixBytes(IEnumerable<string> headers)
+        {
+            StringBuilder sb = new();
+            foreach (string header in headers)
+            {
+                _ = sb.Append(header).Append("\r\n");
+            }
+
+            _ = sb.Append("\r\n");
+            return Encoding.ASCII.GetBytes(sb.ToString());
+        }
+
+        private static byte[] BuildArticleHeaderBytes(string messageId)
+        {
+            return BuildArticlePrefixBytes(
+            [
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                $"Message-ID: {messageId}",
+                "Newsgroups: alt.test",
+                "From: user@example.test",
+            ]);
+        }
+
+        private static byte[] CreateFilledBytes(int length, byte value)
+        {
+            byte[] bytes = new byte[length];
+            Array.Fill(bytes, value);
+            return bytes;
+        }
+
+        private static byte[] BuildHeaderLineLengthArticle(string messageId, int physicalLineLength)
+        {
+            string subjectPrefix = "Subject: ";
+            if (physicalLineLength < subjectPrefix.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(physicalLineLength));
+            }
+
+            int valueLength = physicalLineLength - subjectPrefix.Length;
+            return BuildArticle(
+                headers:
+                [
+                    "Date: Fri, 23 Aug 2024 07:30:10 +0000",
+                    $"Message-ID: {messageId}",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    subjectPrefix + new string('x', valueLength),
+                ],
+                body: "body\r\n");
         }
 
         /// <summary>
