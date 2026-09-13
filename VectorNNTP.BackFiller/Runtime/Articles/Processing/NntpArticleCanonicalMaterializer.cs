@@ -81,6 +81,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
 
             int destinationLength = checked(source.Length + lengthDelta);
+            ValidateCanonicalArticleBoundaries(source, parseResult, dateEdit, pathEdit, pathInsert, destinationLength);
             byte[] rented = ArrayPool<byte>.Shared.Rent(destinationLength);
             int written = 0;
             int consumed = 0;
@@ -214,6 +215,112 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 && source[headerLength - 1] == (byte)'\r'
                 ? new HeaderSeparator(headerLength - 1, "\r"u8.ToArray())
                 : throw new InvalidOperationException("Accepted parse result header section does not terminate with an accepted separator style and cannot be safely materialized.");
+        }
+
+        /// <summary>
+        /// Validates canonical output boundaries after deterministic Date/Path rewrite planning and before destination rental.
+        /// </summary>
+        /// <param name="source">Original article bytes.</param>
+        /// <param name="parseResult">Accepted parser output used for canonicalization metadata.</param>
+        /// <param name="dateEdit">Resolved Date rewrite.</param>
+        /// <param name="pathEdit">Resolved Path rewrite when Path exists.</param>
+        /// <param name="pathInsert">Resolved Path insertion when Path is missing.</param>
+        /// <param name="destinationLength">Deterministic canonical destination length.</param>
+        /// <exception cref="InvalidOperationException">Thrown when canonical output would exceed hard article or line boundaries.</exception>
+        private static void ValidateCanonicalArticleBoundaries(
+            ReadOnlySpan<byte> source,
+            NntpArticleParseResult parseResult,
+            HeaderEdit dateEdit,
+            HeaderEdit? pathEdit,
+            HeaderInsert? pathInsert,
+            int destinationLength)
+        {
+            if (destinationLength > ArticleResourceLimits.MaxArticleBytes)
+            {
+                throw new InvalidOperationException(
+                    $"Canonical article materialization would produce {destinationLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleBytes} bytes.");
+            }
+
+            int selectedDateLineLength = ComputePhysicalHeaderLineLength(
+                source,
+                dateEdit.StartOffset,
+                dateEdit.RemovedLength,
+                dateEdit.Replacement.Length,
+                parseResult.Headers,
+                parseResult.HeaderBytes.Length);
+            if (selectedDateLineLength > ArticleResourceLimits.MaxArticleLineBytes)
+            {
+                throw new InvalidOperationException(
+                    $"Canonical date rewrite would produce a physical header line length of {selectedDateLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
+            }
+
+            if (pathEdit is HeaderEdit resolvedPathEdit)
+            {
+                int rewrittenPathLineLength = ComputePhysicalHeaderLineLength(
+                    source,
+                    resolvedPathEdit.StartOffset,
+                    resolvedPathEdit.RemovedLength,
+                    resolvedPathEdit.Replacement.Length,
+                    parseResult.Headers,
+                    parseResult.HeaderBytes.Length);
+                if (rewrittenPathLineLength > ArticleResourceLimits.MaxArticleLineBytes)
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical Path rewrite would produce a physical header line length of {rewrittenPathLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
+                }
+            }
+
+            if (pathInsert is HeaderInsert resolvedPathInsert)
+            {
+                int insertedPathLineLength = resolvedPathInsert.Inserted.Length;
+                if (insertedPathLineLength > ArticleResourceLimits.MaxArticleLineBytes)
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical Path insertion would produce a physical header line length of {insertedPathLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Computes one physical header line length in bytes after replacing the parsed header value segment.
+        /// </summary>
+        /// <param name="source">Original article bytes.</param>
+        /// <param name="valueOffset">Offset of replaced value start.</param>
+        /// <param name="removedLength">Length of replaced value bytes in original header line.</param>
+        /// <param name="replacementLength">Length of replacement value bytes.</param>
+        /// <param name="headers">Parsed headers in wire order.</param>
+        /// <param name="headerSectionLength">Parsed header-section length used to resolve the last header line boundary.</param>
+        /// <returns>Physical header line length in bytes including line terminator bytes.</returns>
+        private static int ComputePhysicalHeaderLineLength(
+            ReadOnlySpan<byte> source,
+            int valueOffset,
+            int removedLength,
+            int replacementLength,
+            IReadOnlyList<NntpArticleHeaderEntry> headers,
+            int headerSectionLength)
+        {
+            int headerIndex = -1;
+            for (int i = 0; i < headers.Count; i++)
+            {
+                if (headers[i].ValueOffset == valueOffset && headers[i].ValueLength == removedLength)
+                {
+                    headerIndex = i;
+                    break;
+                }
+            }
+
+            if (headerIndex < 0)
+            {
+                throw new InvalidOperationException("Canonical materialization could not resolve rewritten header boundary for line-length validation.");
+            }
+
+            int lineStart = headers[headerIndex].NameOffset;
+            int lineEndExclusive = headerIndex + 1 < headers.Count
+                ? headers[headerIndex + 1].NameOffset
+                : ResolveHeaderSeparator(source, headerSectionLength).StartOffset;
+
+            int originalLineLength = lineEndExclusive - lineStart;
+            return checked(originalLineLength - removedLength + replacementLength);
         }
 
         /// <summary>

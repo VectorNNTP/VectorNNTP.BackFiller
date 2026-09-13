@@ -14,6 +14,7 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     /// <summary>
     /// Verifies M16 boundary measurement output remains truthful and explicitly non-comparative.
     /// </summary>
+    [Collection(ConsoleCaptureSerializationCollection.Name)]
     public sealed class M16BoundaryMeasurementRunnerContractTests
     {
         /// <summary>
