@@ -3,7 +3,7 @@
 // </copyright>
 //
 // VectorNNTP.Backfiller Tests / Benchmarks
-// Focused tests for m16 boundary measurement runner contracts, covering truthful metric labeling and observed materialization semantics.
+// Focused tests for m16 boundary measurement runner contracts, covering truthful metric labeling and expected versus observed materialization semantics.
 
 using VectorNNTP.BackFiller.Benchmarks;
 using VectorNNTP.Backfiller.Runtime.Articles;
@@ -17,10 +17,10 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
     public sealed class M16BoundaryMeasurementRunnerContractTests
     {
         /// <summary>
-        /// Verifies the M16 measurement report preserves required truthful metric labels and non-comparative note.
+        /// Verifies the M16 measurement report distinguishes expected acquisition materialization from observed late materialization.
         /// </summary>
         [Fact]
-        public async Task RunAsync_WhenExecuted_ReportsTruthfulMetricLabelsAndObservedMaterialization()
+        public async Task RunAsync_WhenExecuted_ReportsTruthfulMaterializationMetricLabels()
         {
             StringWriter writer = new();
             TextWriter originalOut = Console.Out;
@@ -38,12 +38,12 @@ namespace VectorNNTP.BackFiller.Tests.Benchmarks
             string output = writer.ToString();
             Assert.Contains("MeasurementNote: Scenarios are intentionally non-comparative", output, StringComparison.Ordinal);
             Assert.Contains("AvgServerBytesWritten:", output, StringComparison.Ordinal);
+            Assert.Contains("AvgExpectedAcquisitionMaterializationBytes:", output, StringComparison.Ordinal);
             Assert.Contains("AvgObservedMaterializedPayloadBytes:", output, StringComparison.Ordinal);
             Assert.Contains("AvgExpectedMaterializationThresholdBytes:", output, StringComparison.Ordinal);
-
+            Assert.Contains($"AvgExpectedAcquisitionMaterializationBytes: {ArticleResourceLimits.MaxArticleBytes}", output, StringComparison.Ordinal);
             Assert.Contains("Scenario: EarlyRejectThroughAcquisitionPath", output, StringComparison.Ordinal);
             Assert.Contains("Scenario: LateRejectAfterClientMaterialization", output, StringComparison.Ordinal);
-            Assert.Contains($"AvgObservedMaterializedPayloadBytes: {ArticleResourceLimits.MaxArticleBytes}", output, StringComparison.Ordinal);
         }
     }
 }
