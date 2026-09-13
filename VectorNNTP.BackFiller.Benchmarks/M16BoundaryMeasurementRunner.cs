@@ -96,18 +96,14 @@ namespace VectorNNTP.BackFiller.Benchmarks
                     throw new InvalidOperationException($"Expected ArticleTooLarge from early-reject scenario, received {result.FailureCode}.");
                 }
 
-                int observedMaterializedPayloadBytes = Math.Min(
-                    ArticleResourceLimits.MaxArticleBytes,
-                    Math.Max(0, oversizedArticle.Length - 3));
-
                 return new ScenarioSample(
                     Elapsed: stopwatch.Elapsed,
                     AllocatedBytes: allocatedAfter - allocatedBefore,
                     ServerBytesWritten: server.TotalBytesWritten,
-                    ObservedMaterializedPayloadBytes: observedMaterializedPayloadBytes,
+                    ObservedMaterializedPayloadBytes: 0,
                     ExpectedMaterializationThresholdBytes: ArticleResourceLimits.MaxArticleBytes,
                     Outcome: result.FailureCode.ToString(),
-                    MeasurementPath: "Acquisition");
+                    MeasurementPath: "Acquisition (expected materialization boundary only)");
             }
         }
 
@@ -192,8 +188,15 @@ namespace VectorNNTP.BackFiller.Benchmarks
             Console.WriteLine($"  AvgElapsedMs: {aggregate.AverageElapsed.TotalMilliseconds:F2}");
             Console.WriteLine($"  AvgAllocatedBytes: {aggregate.AverageAllocatedBytes}");
             Console.WriteLine($"  AvgServerBytesWritten: {aggregate.AverageServerBytesWritten}");
-            Console.WriteLine($"  AvgObservedMaterializedPayloadBytes: {aggregate.AverageObservedMaterializedPayloadBytes}");
-            Console.WriteLine($"  AvgExpectedMaterializationThresholdBytes: {aggregate.AverageExpectedMaterializationThresholdBytes}");
+            if (aggregate.MeasurementPath.StartsWith("Acquisition", StringComparison.Ordinal))
+            {
+                Console.WriteLine($"  AvgExpectedAcquisitionMaterializationBytes: {aggregate.AverageExpectedMaterializationThresholdBytes}");
+            }
+            else
+            {
+                Console.WriteLine($"  AvgObservedMaterializedPayloadBytes: {aggregate.AverageObservedMaterializedPayloadBytes}");
+                Console.WriteLine($"  AvgExpectedMaterializationThresholdBytes: {aggregate.AverageExpectedMaterializationThresholdBytes}");
+            }
         }
 
         /// <summary>
