@@ -45,6 +45,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
     /// <param name="backboneUsableCapacityStateWriter">Optional writer for publishing usable backbone capacity state.</param>
     /// <param name="loggerFactory">The logger factory used to create account session-manager loggers.</param>
     /// <param name="serverCertificateValidationCallback">Optional per-acquisition-session TLS server-certificate validation callback. When <see langword="null"/>, acquisition sessions retain platform default certificate validation behavior.</param>
+    /// <param name="sessionManagerFactory">Optional factory that creates account session managers for control-plane ownership. When <see langword="null"/>, the default runtime manager implementation is used.</param>
     internal sealed partial class ControlPlaneService(
         ILogger<ControlPlaneService> logger,
         TimeProvider timeProvider,
@@ -52,7 +53,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
         IRabbitMqCapacityRetirementCoordinator rabbitMqCapacityRetirementCoordinator,
         IBackboneUsableCapacityStateWriter? backboneUsableCapacityStateWriter = null,
         ILoggerFactory? loggerFactory = null,
-        RemoteCertificateValidationCallback? serverCertificateValidationCallback = null) : BackgroundService, IBackboneSessionLeaseProvider
+        RemoteCertificateValidationCallback? serverCertificateValidationCallback = null,
+        Func<ILogger<NntpArticleExecutionSessionManager>, TimeProvider, ILoggerFactory, RemoteCertificateValidationCallback?, NntpArticleExecutionSessionManager>? sessionManagerFactory = null) : BackgroundService, IBackboneSessionLeaseProvider
     {
         /// <summary>
         /// Fixed cadence used for low-cost background-loop wakeups and debug heartbeat emission.
@@ -104,7 +106,21 @@ namespace VectorNNTP.Backfiller.ControlPlane
         private readonly Dictionary<Guid, AccountRuntimeState> _accountRuntimes = [];
 
         /// <summary>
-        /// Synchronizes account runtime map updates.
+        /// Tracks all managers currently owned by this control plane until disposal completes.
+        /// </summary>
+        private readonly HashSet<NntpArticleExecutionSessionManager> _ownedManagers = [];
+
+        /// <summary>
+        /// Tracks in-flight manager disposal tasks so concurrent cleanup paths converge on one attempt per manager.
+        /// </summary>
+
+        /// <summary>
+        /// Optional factory used to create runtime session managers for newly added account snapshots.
+        /// </summary>
+        private readonly Func<ILogger<NntpArticleExecutionSessionManager>, TimeProvider, ILoggerFactory, RemoteCertificateValidationCallback?, NntpArticleExecutionSessionManager>? _sessionManagerFactory = sessionManagerFactory;
+
+        /// <summary>
+        /// Synchronizes account runtime map and ownership ledger updates.
         /// </summary>
         private readonly object _accountRuntimeGate = new();
 
@@ -128,6 +144,20 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 lock (_accountRuntimeGate)
                 {
                     return _accountRuntimes.Count;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the number of manager instances still represented by the ownership ledger.
+        /// </summary>
+        internal int OwnedManagerCount
+        {
+            get
+            {
+                lock (_accountRuntimeGate)
+                {
+                    return _ownedManagers.Count;
                 }
             }
         }
@@ -261,17 +291,25 @@ namespace VectorNNTP.Backfiller.ControlPlane
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            await ReconcileSnapshotAsync(_snapshotProvider.CurrentSnapshot, cancellationToken).ConfigureAwait(false);
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (_logger.IsEnabled(LogLevel.Information))
+            try
             {
-                DateTimeOffset currentTime = _timeProvider.GetUtcNow();
-                LogControlPlaneStartupInitialized(_logger, currentTime);
-            }
+                await ReconcileSnapshotAsync(_snapshotProvider.CurrentSnapshot, cancellationToken).ConfigureAwait(false);
 
-            IsStartupInitializationComplete = true;
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    DateTimeOffset currentTime = _timeProvider.GetUtcNow();
+                    LogControlPlaneStartupInitialized(_logger, currentTime);
+                }
+
+                IsStartupInitializationComplete = true;
+            }
+            catch
+            {
+                await DisposeAllAccountRuntimesAsync().ConfigureAwait(false);
+                throw;
+            }
         }
 
         /// <summary>
@@ -279,26 +317,9 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// </summary>
         /// <param name="stoppingToken">Token that signals service shutdown.</param>
         /// <returns>A task that completes when one refresh/reconcile cycle finishes.</returns>
-        private async Task TryRefreshNntpAccountsAsync(CancellationToken stoppingToken)
+        private Task TryRefreshNntpAccountsAsync(CancellationToken stoppingToken)
         {
-            try
-            {
-                bool refreshed = await _snapshotProvider.RefreshSnapshotAsync(stoppingToken).ConfigureAwait(false);
-                if (!refreshed)
-                {
-                    return;
-                }
-
-                await ReconcileSnapshotAsync(_snapshotProvider.CurrentSnapshot, stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                // Normal shutdown cancellation; not an operational refresh failure.
-            }
-            catch (Exception ex)
-            {
-                LogNntpAccountRefreshFailed(_logger, ex);
-            }
+            return RefreshAndReconcileAsync(suppressFailures: true, stoppingToken);
         }
 
         /// <summary>
@@ -308,7 +329,36 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <returns>A task that completes when one refresh/reconcile cycle has finished.</returns>
         internal Task RefreshAndReconcileOnceAsync(CancellationToken cancellationToken)
         {
-            return TryRefreshNntpAccountsAsync(cancellationToken);
+            return RefreshAndReconcileAsync(suppressFailures: false, cancellationToken);
+        }
+
+        /// <summary>
+        /// Refreshes snapshot state and reconciles account runtimes, optionally suppressing operational failures for background-loop execution.
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token controlling refresh and reconciliation.</param>
+        /// <param name="suppressFailures"><see langword="true"/> to log and suppress failures for periodic background execution; otherwise failures are propagated.</param>
+        /// <returns>A task that completes when one refresh/reconcile cycle has finished.</returns>
+        private async Task RefreshAndReconcileAsync(bool suppressFailures, CancellationToken cancellationToken)
+        {
+            try
+            {
+                bool refreshed = await _snapshotProvider.RefreshSnapshotAsync(cancellationToken).ConfigureAwait(false);
+                if (!refreshed)
+                {
+                    await RetryOrphanedOwnedManagerDisposalsAsync(deferredManagers: null).ConfigureAwait(false);
+                    return;
+                }
+
+                await ReconcileSnapshotAsync(_snapshotProvider.CurrentSnapshot, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (suppressFailures && cancellationToken.IsCancellationRequested)
+            {
+                // Normal shutdown cancellation for periodic background execution.
+            }
+            catch (Exception ex) when (suppressFailures)
+            {
+                LogNntpAccountRefreshFailed(_logger, ex);
+            }
         }
 
         /// <summary>
@@ -328,6 +378,7 @@ namespace VectorNNTP.Backfiller.ControlPlane
 
             LogAccountReconciliationStarted(_logger, snapshot.ServerId, desiredAccounts.Count);
 
+            HashSet<NntpArticleExecutionSessionManager> deferredOrphanRetryManagers = [];
             List<(Guid AccountId, AccountRuntimeState Runtime)> accountsToRemove = [];
             lock (_accountRuntimeGate)
             {
@@ -349,16 +400,33 @@ namespace VectorNNTP.Backfiller.ControlPlane
 
             foreach ((Guid accountId, AccountRuntimeState runtime) in accountsToRemove)
             {
+                Exception? retirementFailure = null;
                 try
                 {
                     await RetireRabbitMqCapacityBoundaryAsync(accountId, retainConnectionCount: 0, cancellationToken).ConfigureAwait(false);
-                    LogAccountRemoved(_logger, accountId, runtime.LastAppliedAccount.Hostname, runtime.LastAppliedAccount.Port, runtime.LastAppliedAccount.UseSsl);
-                    await runtime.Manager.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    retirementFailure = null;
                 }
                 catch (Exception ex)
                 {
-                    LogAccountRemovalFailed(_logger, accountId, ex);
+                    retirementFailure = ex;
                 }
+
+                LogAccountRemoved(_logger, accountId, runtime.LastAppliedAccount.Hostname, runtime.LastAppliedAccount.Port, runtime.LastAppliedAccount.UseSsl);
+                bool disposed = await DisposeOwnedManagerAsync(accountId, runtime.Manager).ConfigureAwait(false);
+                if (!disposed)
+                {
+                    _ = deferredOrphanRetryManagers.Add(runtime.Manager);
+                }
+
+                if (retirementFailure is not null)
+                {
+                    LogAccountRemovalFailed(_logger, accountId, retirementFailure);
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
             }
 
             foreach ((Guid accountId, NntpAccountSnapshot desiredAccount) in desiredAccounts)
@@ -374,6 +442,17 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 if (existingRuntime is null)
                 {
                     await AddAccountRuntimeAsync(desiredAccount, cancellationToken).ConfigureAwait(false);
+
+                    lock (_accountRuntimeGate)
+                    {
+                        existingRuntime = _accountRuntimes.GetValueOrDefault(accountId);
+                    }
+
+                    if (existingRuntime is null)
+                    {
+                        continue;
+                    }
+
                     PublishBackboneUsableCapacitySnapshot();
                     continue;
                 }
@@ -414,6 +493,8 @@ namespace VectorNNTP.Backfiller.ControlPlane
                 }
             }
 
+            await RetryOrphanedOwnedManagerDisposalsAsync(deferredOrphanRetryManagers).ConfigureAwait(false);
+
             cancellationToken.ThrowIfCancellationRequested();
             PublishBackboneUsableCapacitySnapshot();
             LogAccountReconciliationCompleted(_logger, snapshot.ServerId, desiredAccounts.Count);
@@ -427,12 +508,23 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <returns>A task that completes when runtime creation attempt finishes.</returns>
         private async Task AddAccountRuntimeAsync(NntpAccountSnapshot account, CancellationToken cancellationToken)
         {
-            NntpArticleExecutionSessionManager manager = new(
-                _loggerFactory.CreateLogger<NntpArticleExecutionSessionManager>(),
-                options: null,
-                _timeProvider,
-                _loggerFactory,
-                _serverCertificateValidationCallback);
+            NntpArticleExecutionSessionManager manager = _sessionManagerFactory is null
+                ? new NntpArticleExecutionSessionManager(
+                    _loggerFactory.CreateLogger<NntpArticleExecutionSessionManager>(),
+                    options: null,
+                    _timeProvider,
+                    _loggerFactory,
+                    _serverCertificateValidationCallback)
+                : _sessionManagerFactory(
+                    _loggerFactory.CreateLogger<NntpArticleExecutionSessionManager>(),
+                    _timeProvider,
+                    _loggerFactory,
+                    _serverCertificateValidationCallback);
+
+            lock (_accountRuntimeGate)
+            {
+                _ = _ownedManagers.Add(manager);
+            }
 
             try
             {
@@ -448,13 +540,13 @@ namespace VectorNNTP.Backfiller.ControlPlane
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                await manager.DisposeAsync().ConfigureAwait(false);
+                _ = await DisposeOwnedManagerAsync(account.EntryId, manager).ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex)
             {
                 LogAccountAddFailed(_logger, account.EntryId, account.Hostname, account.Port, account.UseSsl, ex);
-                await manager.DisposeAsync().ConfigureAwait(false);
+                _ = await DisposeOwnedManagerAsync(account.EntryId, manager).ConfigureAwait(false);
             }
         }
 
@@ -464,23 +556,51 @@ namespace VectorNNTP.Backfiller.ControlPlane
         /// <returns>A task that completes when all account managers are disposed.</returns>
         private async Task DisposeAllAccountRuntimesAsync()
         {
-            List<(Guid AccountId, AccountRuntimeState Runtime)> runtimes;
+            Dictionary<NntpArticleExecutionSessionManager, Guid> managerAccountIds;
+
             lock (_accountRuntimeGate)
             {
-                runtimes = [.. _accountRuntimes.Select(static pair => (pair.Key, pair.Value))];
+                managerAccountIds = _accountRuntimes
+                    .ToDictionary(static pair => pair.Value.Manager, static pair => pair.Key);
                 _accountRuntimes.Clear();
             }
 
-            foreach ((Guid accountId, AccountRuntimeState runtime) in runtimes)
+            bool allowNoProgressRetry = true;
+            while (true)
             {
-                try
+                List<NntpArticleExecutionSessionManager> ownedManagers;
+                lock (_accountRuntimeGate)
                 {
-                    await runtime.Manager.DisposeAsync().ConfigureAwait(false);
+                    if (_ownedManagers.Count == 0)
+                    {
+                        break;
+                    }
+
+                    ownedManagers = [.. _ownedManagers];
                 }
-                catch (Exception ex)
+
+                int successfulDisposals = 0;
+                foreach (NntpArticleExecutionSessionManager manager in ownedManagers)
                 {
-                    LogAccountRemovalFailed(_logger, accountId, ex);
+                    Guid accountId = managerAccountIds.GetValueOrDefault(manager);
+                    if (await DisposeOwnedManagerAsync(accountId, manager).ConfigureAwait(false))
+                    {
+                        successfulDisposals++;
+                    }
                 }
+
+                if (successfulDisposals > 0)
+                {
+                    allowNoProgressRetry = true;
+                    continue;
+                }
+
+                if (!allowNoProgressRetry)
+                {
+                    break;
+                }
+
+                allowNoProgressRetry = false;
             }
 
             PublishBackboneUsableCapacitySnapshot();
@@ -522,6 +642,30 @@ namespace VectorNNTP.Backfiller.ControlPlane
         }
 
         /// <summary>
+        /// Retries disposal for owned managers that are no longer part of desired managed membership.
+        /// </summary>
+        /// <returns>A task that completes after one retry pass finishes.</returns>
+        private async Task RetryOrphanedOwnedManagerDisposalsAsync(HashSet<NntpArticleExecutionSessionManager>? deferredManagers = null)
+        {
+            List<NntpArticleExecutionSessionManager> orphanedManagers;
+            lock (_accountRuntimeGate)
+            {
+                HashSet<NntpArticleExecutionSessionManager> managedManagers = [.. _accountRuntimes.Values.Select(static runtime => runtime.Manager)];
+                orphanedManagers = [.. _ownedManagers.Where(manager => !managedManagers.Contains(manager))];
+            }
+
+            foreach (NntpArticleExecutionSessionManager manager in orphanedManagers)
+            {
+                if (deferredManagers?.Contains(manager) == true)
+                {
+                    continue;
+                }
+
+                _ = await DisposeOwnedManagerAsync(Guid.Empty, manager).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
         /// Delegates RabbitMQ capacity retirement coordination for one account before NNTP capacity changes are applied.
         /// </summary>
         /// <param name="accountId">Authoritative account identifier whose RabbitMQ capacity boundary is being retired.</param>
@@ -532,6 +676,53 @@ namespace VectorNNTP.Backfiller.ControlPlane
         {
             return _rabbitMqCapacityRetirementCoordinator
                 .RetireCapacityAsync(accountId, retainConnectionCount, cancellationToken);
+        }
+
+        /// <summary>
+        /// Disposes one manager still tracked by the ownership ledger and releases ownership only after disposal completes.
+        /// </summary>
+        /// <param name="accountId">Account identifier for logging correlation.</param>
+        /// <param name="manager">Owned manager being disposed.</param>
+        /// <returns><see langword="true"/> when disposal completed and ownership was released; otherwise <see langword="false"/>.</returns>
+        private async Task<bool> DisposeOwnedManagerAsync(Guid accountId, NntpArticleExecutionSessionManager manager)
+        {
+            ArgumentNullException.ThrowIfNull(manager);
+
+            lock (_accountRuntimeGate)
+            {
+                if (!_ownedManagers.Contains(manager))
+                {
+                    return false;
+                }
+            }
+
+            return await DisposeOwnedManagerCoreAsync(accountId, manager).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Executes one disposal attempt for an owned manager and commits ownership release only when cleanup succeeds.
+        /// </summary>
+        /// <param name="accountId">Account identifier for logging correlation.</param>
+        /// <param name="manager">Owned manager being disposed.</param>
+        /// <returns><see langword="true"/> when disposal completed successfully; otherwise <see langword="false"/>.</returns>
+        private async Task<bool> DisposeOwnedManagerCoreAsync(Guid accountId, NntpArticleExecutionSessionManager manager)
+        {
+            try
+            {
+                await manager.DisposeAsync().ConfigureAwait(false);
+
+                lock (_accountRuntimeGate)
+                {
+                    _ = _ownedManagers.Remove(manager);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogAccountRemovalFailed(_logger, accountId, ex);
+                return false;
+            }
         }
 
         /// <summary>

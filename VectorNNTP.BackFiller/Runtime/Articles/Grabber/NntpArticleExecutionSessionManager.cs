@@ -7,6 +7,7 @@
 // single-work-item leasing, and deterministic session-health based recycle/reconnect behavior.
 
 using System.Net.Security;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -148,6 +149,26 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         private long _availabilityTokenStaleReadCount;
 
         /// <summary>
+        /// Serializes one disposal attempt so concurrent callers converge on the same cleanup task.
+        /// </summary>
+        private Task? _disposeTask;
+
+        /// <summary>
+        /// Indicates whether every owned cleanup operation has completed successfully.
+        /// </summary>
+        private bool _disposeCompleted;
+
+        /// <summary>
+        /// Session-disposal delegate used by manager-owned cleanup.
+        /// </summary>
+        private readonly Func<NntpArticleAcquisitionSession, ValueTask> _sessionDisposer;
+
+        /// <summary>
+        /// Manager-owned sessions pending successful disposal completion.
+        /// </summary>
+        private readonly List<NntpArticleAcquisitionSession> _pendingSessionDisposals = [];
+
+        /// <summary>
         /// Fixed maintenance cadence used while scanning for idle keepalive work.
         /// </summary>
         private static readonly TimeSpan KeepAliveMaintenanceInterval = TimeSpan.FromSeconds(1);
@@ -160,18 +181,21 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// <param name="timeProvider">Optional time provider for UTC idle tracking and keepalive scheduling.</param>
         /// <param name="loggerFactory">Optional logger factory used for acquisition-session protocol logger creation.</param>
         /// <param name="serverCertificateValidationCallback">Optional per-session TLS server-certificate validation callback. When <see langword="null"/>, acquisition sessions use platform default certificate validation semantics.</param>
+        /// <param name="sessionDisposer">Optional session-disposal delegate used for deterministic lifecycle testing. When <see langword="null"/>, the manager calls <see cref="NntpArticleAcquisitionSession.DisposeAsync"/> directly.</param>
         internal NntpArticleExecutionSessionManager(
             ILogger<NntpArticleExecutionSessionManager> logger,
             NntpArticleAcquisitionOptions? options = null,
             TimeProvider? timeProvider = null,
             ILoggerFactory? loggerFactory = null,
-            RemoteCertificateValidationCallback? serverCertificateValidationCallback = null)
+            RemoteCertificateValidationCallback? serverCertificateValidationCallback = null,
+            Func<NntpArticleAcquisitionSession, ValueTask>? sessionDisposer = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _options = options ?? NntpArticleAcquisitionOptions.Default;
             _timeProvider = timeProvider ?? TimeProvider.System;
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _serverCertificateValidationCallback = serverCertificateValidationCallback;
+            _sessionDisposer = sessionDisposer ?? DisposeSessionDirectAsync;
             _availableSlots = Channel.CreateUnbounded<int>(new UnboundedChannelOptions
             {
                 SingleReader = false,
@@ -647,20 +671,79 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
         /// Stops keepalive maintenance, waits for active leases to finish, and disposes every owned session.
         /// </summary>
         /// <returns>A task that completes when all owned sessions and maintenance resources have been disposed.</returns>
-        public async ValueTask DisposeAsync()
+        /// <remarks>
+        /// Concurrent callers converge on one in-flight disposal attempt. If a disposal attempt fails after partial
+        /// progress, successfully cleaned resources stay released and failed cleanup steps remain retryable on later calls.
+        /// </remarks>
+        public ValueTask DisposeAsync()
+        {
+            Task disposeTask;
+
+            lock (_gate)
+            {
+                if (_disposeCompleted)
+                {
+                    return ValueTask.CompletedTask;
+                }
+
+                if (_disposeTask is not null && _disposeTask.IsCompleted && !_disposeTask.IsCompletedSuccessfully)
+                {
+                    _disposeTask = null;
+                }
+
+                if (_disposeTask is null)
+                {
+                    Task createdAttempt = DisposeCoreAsync();
+                    _disposeTask = createdAttempt;
+                    disposeTask = createdAttempt;
+
+                    _ = createdAttempt.ContinueWith(
+                        static (attemptTask, state) =>
+                        {
+                            NntpArticleExecutionSessionManager owner = (NntpArticleExecutionSessionManager)state!;
+                            lock (owner._gate)
+                            {
+                                if (!ReferenceEquals(owner._disposeTask, attemptTask))
+                                {
+                                    return;
+                                }
+
+                                if (attemptTask.IsCompletedSuccessfully)
+                                {
+                                    owner._disposeCompleted = true;
+                                    owner._disposeTask = Task.CompletedTask;
+                                }
+                                else
+                                {
+                                    owner._disposeTask = null;
+                                }
+                            }
+                        },
+                        this,
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
+                }
+                else
+                {
+                    disposeTask = _disposeTask;
+                }
+            }
+
+            return new ValueTask(disposeTask);
+        }
+
+        /// <summary>
+        /// Executes one disposal attempt and records completion state for subsequent calls.
+        /// </summary>
+        /// <returns>A task that completes when this disposal attempt has either succeeded or failed.</returns>
+        private async Task DisposeCoreAsync()
         {
             Task waitForLeases;
-            List<NntpArticleAcquisitionSession> sessionsToDispose;
-
             Task? maintenanceTask;
 
             lock (_gate)
             {
-                if (_disposeRequested)
-                {
-                    return;
-                }
-
                 _disposeRequested = true;
                 _ = _availableSlots.Writer.TryComplete();
                 _maintenanceCancellationSource.Cancel();
@@ -681,24 +764,135 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Grabber
 
             await waitForLeases.ConfigureAwait(false);
 
+            List<NntpArticleAcquisitionSession> sessionsToDispose;
             lock (_gate)
             {
-                sessionsToDispose = [.. _slots
-                    .Select(static slot => slot.Session)
-                    .Where(static session => session is not null)
-                    .Cast<NntpArticleAcquisitionSession>()];
-
-                foreach (SessionSlot slot in _slots)
-                {
-                    slot.Session = null;
-                    slot.Busy = false;
-                    slot.HasArticleLease = false;
-                }
+                CapturePendingSessionDisposalsUnderGate();
+                sessionsToDispose = [.. _pendingSessionDisposals.Distinct(ReferenceEqualityComparer.Instance)];
             }
+
+            List<NntpArticleAcquisitionSession>? disposedSessions = null;
+            List<Exception>? disposalFailures = null;
 
             foreach (NntpArticleAcquisitionSession session in sessionsToDispose)
             {
-                await session.DisposeAsync().ConfigureAwait(false);
+                try
+                {
+                    await _sessionDisposer(session).ConfigureAwait(false);
+                    disposedSessions ??= [];
+                    disposedSessions.Add(session);
+                }
+                catch (Exception ex)
+                {
+                    disposalFailures ??= [];
+                    disposalFailures.Add(ex);
+                }
+            }
+
+            lock (_gate)
+            {
+                if (disposedSessions is not null)
+                {
+                    HashSet<NntpArticleAcquisitionSession> disposedSet = new(disposedSessions, ReferenceEqualityComparer.Instance);
+
+                    for (int slotIndex = 0; slotIndex < _slots.Count; slotIndex++)
+                    {
+                        SessionSlot slot = _slots[slotIndex];
+                        if (slot.Session is null || !disposedSet.Contains(slot.Session))
+                        {
+                            continue;
+                        }
+
+                        slot.Session = null;
+                        slot.Busy = false;
+                        slot.HasArticleLease = false;
+                        slot.Enqueued = false;
+                        slot.RetireRequested = false;
+                        slot.ReconnectOnRelease = false;
+                        slot.LastKeepAliveProbeUtc = null;
+                    }
+
+                    _ = _pendingSessionDisposals.RemoveAll(disposedSet.Contains);
+                }
+
+                if (disposalFailures is null && _pendingSessionDisposals.Count == 0)
+                {
+                    return;
+                }
+            }
+
+            if (disposalFailures is null)
+            {
+                throw new InvalidOperationException("Session disposal did not converge to completion.");
+            }
+
+            throw disposalFailures.Count == 1
+                ? disposalFailures[0]
+                : new AggregateException("One or more acquisition sessions failed to dispose.", disposalFailures);
+        }
+
+        /// <summary>
+        /// Captures all manager-owned sessions into the pending-disposal ledger while preserving slot ownership until successful disposal.
+        /// </summary>
+        private void CapturePendingSessionDisposalsUnderGate()
+        {
+            for (int slotIndex = 0; slotIndex < _slots.Count; slotIndex++)
+            {
+                SessionSlot slot = _slots[slotIndex];
+                NntpArticleAcquisitionSession? session = slot.Session;
+                if (session is null)
+                {
+                    continue;
+                }
+
+                if (!_pendingSessionDisposals.Contains(session))
+                {
+                    _pendingSessionDisposals.Add(session);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Disposes one acquisition session using the default manager lifecycle path.
+        /// </summary>
+        /// <param name="session">Session to dispose.</param>
+        /// <returns>A task representing asynchronous session cleanup.</returns>
+        private static ValueTask DisposeSessionDirectAsync(NntpArticleAcquisitionSession session)
+        {
+            ArgumentNullException.ThrowIfNull(session);
+            return session.DisposeAsync();
+        }
+
+        /// <summary>
+        /// Compares object references directly so disposal ledgers can track session-instance identity without value-based conflation.
+        /// </summary>
+        private sealed class ReferenceEqualityComparer : IEqualityComparer<NntpArticleAcquisitionSession>
+        {
+            /// <summary>
+            /// Singleton reference comparer instance.
+            /// </summary>
+            internal static readonly ReferenceEqualityComparer Instance = new();
+
+            /// <summary>
+            /// Returns whether two objects are the same instance.
+            /// </summary>
+            /// <param name="x">First object reference.</param>
+            /// <param name="y">Second object reference.</param>
+            /// <returns><see langword="true"/> when both references point to the same object instance; otherwise <see langword="false"/>.</returns>
+            public bool Equals(NntpArticleAcquisitionSession? x, NntpArticleAcquisitionSession? y)
+            {
+                return ReferenceEquals(x, y);
+            }
+
+            /// <summary>
+            /// Returns an identity-based hash code for the object reference.
+            /// </summary>
+            /// <param name="obj">Object reference whose identity hash code is requested.</param>
+            /// <returns>Identity-based hash code stable for the object's lifetime.</returns>
+            public int GetHashCode(NntpArticleAcquisitionSession obj)
+            {
+                ArgumentNullException.ThrowIfNull(obj);
+                return RuntimeHelpers.GetHashCode(obj);
             }
         }
 

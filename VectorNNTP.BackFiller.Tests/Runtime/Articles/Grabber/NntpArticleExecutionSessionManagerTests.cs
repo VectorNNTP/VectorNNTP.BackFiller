@@ -1709,6 +1709,65 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
         }
 
         /// <summary>
+        /// Confirms repeated disposal after a first injected cleanup failure retries remaining cleanup and converges concurrent callers.
+        /// </summary>
+        [Fact]
+        public async Task DisposeAsync_WhenFirstSessionDisposalFails_RetryAndConcurrentCallsCompleteCleanup()
+        {
+            TaskCompletionSource<bool> firstDisposeEntered = CreateSignal();
+            int failFirstAttempt = 1;
+            int disposerInvocations = 0;
+
+            await using FakeArticleServer server = await FakeArticleServer.StartAsync(async stream =>
+            {
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "200 ready").ConfigureAwait(false);
+                await FakeArticleServer.ExpectAsciiLineAsync(stream, "QUIT").ConfigureAwait(false);
+                await FakeArticleServer.WriteAsciiLineAsync(stream, "205 closing connection").ConfigureAwait(false);
+            }, acceptConnectionCount: 1).ConfigureAwait(false);
+
+            NntpAccountSnapshot account = CreateAccount(server.Port, maxConnections: 1, username: null, password: null);
+            await using NntpArticleExecutionSessionManager manager = new(
+                NullLogger<NntpArticleExecutionSessionManager>.Instance,
+                options: null,
+                timeProvider: null,
+                loggerFactory: null,
+                serverCertificateValidationCallback: null,
+                sessionDisposer: async session =>
+                {
+                    _ = Interlocked.Increment(ref disposerInvocations);
+                    _ = firstDisposeEntered.TrySetResult(true);
+
+                    if (Interlocked.Exchange(ref failFirstAttempt, 0) == 1)
+                    {
+                        throw new InvalidOperationException("Injected session disposal failure.");
+                    }
+
+                    await session.DisposeAsync().ConfigureAwait(false);
+                });
+
+            await manager.InitializeAsync([account], CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(1, manager.ActiveSessionCount);
+
+            InvalidOperationException firstFailure = await Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await manager.DisposeAsync().ConfigureAwait(false)).ConfigureAwait(false);
+            Assert.Contains("Injected session disposal failure.", firstFailure.Message, StringComparison.Ordinal);
+            Assert.Equal(1, manager.ActiveSessionCount);
+            await firstDisposeEntered.Task.ConfigureAwait(false);
+
+            Task retryOne = manager.DisposeAsync().AsTask();
+            Task retryTwo = manager.DisposeAsync().AsTask();
+            Assert.True(ReferenceEquals(retryOne, retryTwo));
+
+            await Task.WhenAll(retryOne, retryTwo).ConfigureAwait(false);
+
+            Assert.Equal(0, manager.ActiveSessionCount);
+            Assert.Equal(2, Volatile.Read(ref disposerInvocations));
+
+            await manager.DisposeAsync().ConfigureAwait(false);
+            Assert.Equal(2, Volatile.Read(ref disposerInvocations));
+        }
+
+        /// <summary>
         /// Confirms connection-property reconciliation recreates the affected session using updated endpoint settings.
         /// </summary>
         [Fact]
@@ -2904,6 +2963,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             private readonly Task _acceptLoop;
 
             /// <summary>
+            /// Synchronizes access to tracked active accepted clients.
+            /// </summary>
+            private readonly object _clientsGate = new();
+
+            /// <summary>
+            /// Accepted clients currently owned by active session handlers.
+            /// </summary>
+            private readonly List<TcpClient> _activeClients = [];
+
+            /// <summary>
             /// Number of accepted connections expected before normal stop.
             /// </summary>
             private readonly int _acceptConnectionCount;
@@ -3058,6 +3127,23 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                 {
                 }
 
+                TcpClient[] clients;
+                lock (_clientsGate)
+                {
+                    clients = [.. _activeClients];
+                }
+
+                foreach (TcpClient client in clients)
+                {
+                    try
+                    {
+                        client.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                }
+
                 await _acceptLoop.ConfigureAwait(false);
                 _shutdown.Dispose();
             }
@@ -3099,6 +3185,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
             /// <returns>A task that completes when the scripted session finishes.</returns>
             private async Task HandleAcceptedClientAsync(TcpClient client)
             {
+                lock (_clientsGate)
+                {
+                    _activeClients.Add(client);
+                }
+
                 using (client)
                 using (NetworkStream stream = client.GetStream())
                 {
@@ -3117,6 +3208,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Grabber
                     }
                     catch (EndOfStreamException) when (_shutdown.IsCancellationRequested)
                     {
+                    }
+                    finally
+                    {
+                        lock (_clientsGate)
+                        {
+                            _ = _activeClients.Remove(client);
+                        }
                     }
                 }
             }
