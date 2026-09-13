@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Runtime.Articles.Grabber;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using Xunit;
@@ -376,6 +377,81 @@ namespace VectorNNTP.BackFiller.Tests.ControlPlane
                 entry => entry.Level == LogLevel.Warning &&
                          entry.Message.Contains("Account remove failed", StringComparison.Ordinal) &&
                          entry.Message.Contains(accountId.ToString(), StringComparison.Ordinal));
+
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Confirms manager disposal failure keeps ownership represented until a later cleanup attempt succeeds.
+        /// </summary>
+        [Fact]
+        public async Task RefreshAndReconcileOnceAsync_WhenManagerDisposalFails_KeepsOwnershipUntilSuccessfulRetry()
+        {
+            FakeNntpServer server = await FakeNntpServer.StartAsync(acceptConnectionCount: 1).ConfigureAwait(false);
+            await using ConfiguredAsyncDisposable serverLease = server.ConfigureAwait(false);
+
+            Guid accountId = Guid.NewGuid();
+            List<NntpAccountSnapshot> desiredAccounts =
+            [
+                CreateAccountSnapshot(accountId, maxConnections: 1, port: server.Port),
+            ];
+
+            MySqlNntpAccountSnapshotProvider snapshotProvider = new(
+                1,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult(desiredAccounts));
+
+            await snapshotProvider.LoadInitialSnapshotAsync(CancellationToken.None);
+
+            int failFirstSessionDispose = 1;
+            TaskCompletionSource<bool> firstFailureObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            CapturingLoggerProvider loggerProvider = new();
+            ControlPlaneService service = new(
+                loggerProvider.CreateLogger<ControlPlaneService>(),
+                new FixedTimeProvider(new DateTimeOffset(2026, 8, 15, 0, 0, 0, TimeSpan.Zero)),
+                snapshotProvider,
+                new TrackingRabbitMqCapacityRetirementCoordinator(),
+                loggerFactory: loggerProvider,
+                sessionManagerFactory: (managerLogger, managerTimeProvider, managerLoggerFactory, certificateValidationCallback) =>
+                    new VectorNNTP.Backfiller.Runtime.Articles.Grabber.NntpArticleExecutionSessionManager(
+                        managerLogger,
+                        options: null,
+                        managerTimeProvider,
+                        managerLoggerFactory,
+                        certificateValidationCallback,
+                        sessionDisposer: async session =>
+                        {
+                            if (Interlocked.Exchange(ref failFirstSessionDispose, 0) == 1)
+                            {
+                                _ = firstFailureObserved.TrySetResult(true);
+                                throw new InvalidOperationException("Injected manager disposal failure.");
+                            }
+
+                            await session.DisposeAsync().ConfigureAwait(false);
+                        }));
+
+            await service.StartAsync(CancellationToken.None);
+            Assert.Equal(1, service.ManagedAccountCount);
+            Assert.Equal(1, service.OwnedManagerCount);
+
+            desiredAccounts.Clear();
+            await service.RefreshAndReconcileOnceAsync(CancellationToken.None);
+
+            Assert.Equal(0, service.ManagedAccountCount);
+            Assert.Equal(1, service.OwnedManagerCount);
+            await WaitForConditionAsync(() => server.ActiveConnectionCount == 1).ConfigureAwait(false);
+
+            await firstFailureObserved.Task.ConfigureAwait(false);
+
+            Assert.Contains(
+                loggerProvider.Entries,
+                entry => entry.Level == LogLevel.Warning &&
+                         entry.Message.Contains("Account remove failed", StringComparison.Ordinal) &&
+                         entry.Message.Contains(accountId.ToString(), StringComparison.Ordinal));
+
+            await service.RefreshAndReconcileOnceAsync(CancellationToken.None);
+            await WaitForConditionAsync(() => server.ActiveConnectionCount == 0).ConfigureAwait(false);
+            Assert.Equal(0, service.OwnedManagerCount);
 
             await service.StopAsync(CancellationToken.None);
         }
