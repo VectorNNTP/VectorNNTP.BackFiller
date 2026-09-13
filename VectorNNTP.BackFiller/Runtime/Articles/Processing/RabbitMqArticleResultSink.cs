@@ -46,12 +46,6 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
 
-        private static readonly Action<ILogger, Guid, string?, string, string, ulong, string, Exception?> CanonicalMaterializationBoundaryRejectedLog =
-            LoggerMessage.Define<Guid, string?, string, string, ulong, string>(
-                LogLevel.Warning,
-                new EventId(3413, nameof(LogRabbitMqCanonicalMaterializationBoundaryRejected)),
-                "RabbitMQ success-path canonical materialization rejected article due to hard boundary. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Reason={Reason}");
-
         /// <summary>
         /// Initializes a sink that owns final response-publication and delivery-settlement orchestration.
         /// </summary>
@@ -333,17 +327,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
         /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
         /// <param name="reason">Canonical-boundary rejection reason.</param>
-        private static void LogRabbitMqCanonicalMaterializationBoundaryRejected(
+        [LoggerMessage(
+            EventId = 3413,
+            Level = LogLevel.Warning,
+            Message = "RabbitMQ success-path canonical materialization rejected article due to hard boundary. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Reason={Reason}")]
+        private static partial void LogRabbitMqCanonicalMaterializationBoundaryRejected(
             ILogger logger,
             Guid requestId,
             string? correlationId,
             string messageId,
             string backbone,
             ulong deliveryTag,
-            string reason)
-        {
-            CanonicalMaterializationBoundaryRejectedLog(logger, requestId, correlationId, messageId, backbone, deliveryTag, reason, null);
-        }
+            string reason);
 
         /// <summary>
         /// Emits an invalid-article drop event when the parsed article Message-ID does not match the requested Message-ID identity.
