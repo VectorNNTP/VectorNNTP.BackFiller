@@ -286,14 +286,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 - parse.OriginalPathValue.Length;
             Assert.True(expectedCanonicalLength > ArticleResourceLimits.MaxArticleBytes);
 
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
+            NntpArticleCanonicalBoundaryException ex = Assert.Throws<NntpArticleCanonicalBoundaryException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
             Assert.Contains("exceeding hard maximum", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Materialize_WhenCanonicalPathRewriteWouldExceedHardLineBytes_RejectsMaterialization()
         {
-            string longFqdn = new string('a', 1015);
+            string longFqdn = new string('a', 1017);
             NntpArticleParser parser = new(longFqdn);
             byte[] article = BuildArticle(
                 [
@@ -307,16 +307,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             NntpArticleParseResult parse = parser.Parse(article);
             Assert.True(parse.IsAccepted);
-            Assert.True(parse.CanonicalPath.Length + "Path: ".Length + 2 > ArticleResourceLimits.MaxArticleLineBytes);
+            Assert.True(parse.CanonicalPath.Length + "Path: ".Length > ArticleResourceLimits.MaxArticleLineBytes);
 
-            InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
+            NntpArticleCanonicalBoundaryException ex = Assert.Throws<NntpArticleCanonicalBoundaryException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
             Assert.Contains("Path rewrite", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Materialize_WhenCanonicalPathInsertionIsExactlyHardBoundary_SucceedsAtBoundary()
         {
-            string boundaryFqdn = new string('a', ArticleResourceLimits.MaxArticleLineBytes - "Path: ".Length - 2);
+            string boundaryFqdn = new string('a', ArticleResourceLimits.MaxArticleLineBytes - "Path: ".Length);
             NntpArticleParser parser = new(boundaryFqdn);
             byte[] article = BuildArticle(
                 [
@@ -336,13 +336,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             string? pathLine = FindHeaderLine(headers, "Path:");
             Assert.NotNull(pathLine);
             Assert.Equal($"Path: {boundaryFqdn}", pathLine);
-            Assert.Equal(ArticleResourceLimits.MaxArticleLineBytes, Encoding.ASCII.GetByteCount(pathLine + "\r\n"));
+            Assert.Equal(ArticleResourceLimits.MaxArticleLineBytes, Encoding.ASCII.GetByteCount(pathLine));
         }
 
         [Fact]
         public void Materialize_WhenRejectedForCanonicalBoundaries_DoesNotDisposeSourcePayloadOwner()
         {
-            string longFqdn = new string('a', 1015);
+            string longFqdn = new string('a', 1017);
             NntpArticleParser parser = new(longFqdn);
             byte[] article = BuildArticle(
                 [
@@ -361,10 +361,144 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             NntpArticleParseResult parse = parser.Parse(sourceOwner.Memory.ToArray());
             Assert.True(parse.IsAccepted);
 
-            _ = Assert.Throws<InvalidOperationException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
+            _ = Assert.Throws<NntpArticleCanonicalBoundaryException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
 
             int firstByte = sourceOwner.Memory.Span[0];
             Assert.Equal((int)(byte)'D', firstByte);
+        }
+
+        [Theory]
+        [InlineData("\r\n", 1024)]
+        [InlineData("\r\n", 1025)]
+        [InlineData("\n", 1024)]
+        [InlineData("\n", 1025)]
+        [InlineData("\r", 1024)]
+        [InlineData("\r", 1025)]
+        public void Materialize_WhenPathInsertionLineContentAtOrAboveBoundary_EnforcesContentByteLimit(string separator, int pathContentLength)
+        {
+            string fqdn = new string('a', pathContentLength - "Path: ".Length);
+            NntpArticleParser parser = new(fqdn);
+            byte[] article = BuildArticle(
+                [
+                    "Date: Tue, 10 May 2011 13:48:50 -0500",
+                    "Message-ID: <materialize-path-insert-exact-line-content-boundary@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                ],
+                "body\r\n",
+                separator);
+
+            NntpArticleParseResult parse = parser.Parse(article);
+            Assert.True(parse.IsAccepted);
+
+            if (pathContentLength == 1024)
+            {
+                using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+                string materializedText = Encoding.ASCII.GetString(materialized.Memory.Span);
+                string pathLine = ExtractHeaderLine(materializedText, "Path:", separator);
+                Assert.Equal(1024, Encoding.ASCII.GetByteCount(pathLine));
+                Assert.Equal(separator.Length, DetermineLineTerminatorLength(materializedText, "Path:", separator));
+            }
+            else
+            {
+                NntpArticleCanonicalBoundaryException ex = Assert.Throws<NntpArticleCanonicalBoundaryException>(() => NntpArticleCanonicalMaterializer.Materialize(parse));
+                Assert.Contains("Path insertion", ex.Message, StringComparison.Ordinal);
+            }
+        }
+
+        [Fact]
+        public void Materialize_WhenPathRewriteLineContentAt1024_SucceedsAnd1025Rejects()
+        {
+            string localPrefix = "bf";
+            int localPrefixLengthWithDelimiter = localPrefix.Length + 1;
+            int pathValueAt1024 = 1024 - "Path: ".Length;
+
+            string upstreamAt1024 = new string('x', pathValueAt1024 - localPrefixLengthWithDelimiter);
+            string upstreamAt1025 = new string('x', pathValueAt1024 - localPrefixLengthWithDelimiter + 1);
+
+            NntpArticleParser parser = new(localPrefix);
+
+            byte[] acceptedArticle = BuildArticle(
+                [
+                    "Date: Tue, 10 May 2011 13:48:50 -0500",
+                    "Message-ID: <materialize-path-rewrite-line-content-1024@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    $"Path: {upstreamAt1024}",
+                ],
+                "body\r\n");
+            NntpArticleParseResult acceptedParse = parser.Parse(acceptedArticle);
+            Assert.True(acceptedParse.IsAccepted);
+
+            using DownloadedArticleBuffer accepted = NntpArticleCanonicalMaterializer.Materialize(acceptedParse);
+            string acceptedHeaders = GetHeaderText(accepted.Memory.Span);
+            string? acceptedPathLine = FindHeaderLine(acceptedHeaders, "Path:");
+            Assert.NotNull(acceptedPathLine);
+            Assert.Equal(1024, Encoding.ASCII.GetByteCount(acceptedPathLine));
+
+            byte[] rejectedArticle = BuildArticle(
+                [
+                    "Date: Tue, 10 May 2011 13:48:50 -0500",
+                    "Message-ID: <materialize-path-rewrite-line-content-1025@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    $"Path: {upstreamAt1025}",
+                ],
+                "body\r\n");
+            NntpArticleParseResult rejectedParse = parser.Parse(rejectedArticle);
+            Assert.True(rejectedParse.IsAccepted);
+
+            NntpArticleCanonicalBoundaryException ex = Assert.Throws<NntpArticleCanonicalBoundaryException>(() => NntpArticleCanonicalMaterializer.Materialize(rejectedParse));
+            Assert.Contains("Path rewrite", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Materialize_WhenDateRewriteAt1024LineContentBoundary_SucceedsAnd1025Rejects()
+        {
+            string dateHeaderName = "Injection-Date";
+            const string shortDateValue = "Wed, 1 Jun 2011 13:48:50 -0500";
+            string canonicalDate = "Wed, 01 Jun 2011 18:48:50 +0000";
+            int paddingForAccepted = 1023 - (dateHeaderName.Length + 2 + shortDateValue.Length);
+            int paddingForRejected = 1024 - (dateHeaderName.Length + 2 + shortDateValue.Length);
+
+            string BuildDateValue(int leadingPadding) => $"{new string(' ', leadingPadding)}{shortDateValue}";
+
+            NntpArticleParser parser = new(LocalFqdn, NntpArticleParserOptions.Default with { MaxHeaderValueBytes = 200_000 });
+
+            byte[] acceptedArticle = BuildArticle(
+                [
+                    $"{dateHeaderName}: {BuildDateValue(paddingForAccepted)}",
+                    "Message-ID: <materialize-date-rewrite-line-content-1024@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Path: x",
+                ],
+                "body\r\n");
+            NntpArticleParseResult acceptedParse = parser.Parse(acceptedArticle);
+            Assert.True(acceptedParse.IsAccepted);
+            Assert.Equal(canonicalDate, acceptedParse.CanonicalUtcDate);
+
+            using DownloadedArticleBuffer accepted = NntpArticleCanonicalMaterializer.Materialize(acceptedParse);
+            string acceptedHeaders = GetHeaderText(accepted.Memory.Span);
+            string? acceptedDateLine = FindHeaderLine(acceptedHeaders, $"{dateHeaderName}:");
+            Assert.NotNull(acceptedDateLine);
+            Assert.Equal(1024, Encoding.ASCII.GetByteCount(acceptedDateLine));
+
+            byte[] rejectedArticle = BuildArticle(
+                [
+                    $"{dateHeaderName}: {BuildDateValue(paddingForRejected)}",
+                    "Message-ID: <materialize-date-rewrite-line-content-1025@example.test>",
+                    "Newsgroups: alt.test",
+                    "From: user@example.test",
+                    "Path: x",
+                ],
+                "body\r\n");
+            NntpArticleParseResult rejectedParse = parser.Parse(rejectedArticle);
+            Assert.True(rejectedParse.IsAccepted);
+            Assert.Equal(canonicalDate, rejectedParse.CanonicalUtcDate);
+
+            NntpArticleCanonicalBoundaryException ex = Assert.Throws<NntpArticleCanonicalBoundaryException>(() => NntpArticleCanonicalMaterializer.Materialize(rejectedParse));
+            Assert.Contains("date rewrite", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         private static byte[] BuildArticle(IReadOnlyList<string> headers, string body)
@@ -500,6 +634,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             }
 
             return null;
+        }
+
+        private static string ExtractHeaderLine(string materializedArticle, string prefix, string separator)
+        {
+            string[] lines = materializedArticle.Split(separator, StringSplitOptions.None);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    return lines[i];
+                }
+            }
+
+            throw new InvalidOperationException($"Header line with prefix '{prefix}' was not found.");
+        }
+
+        private static int DetermineLineTerminatorLength(string materializedArticle, string prefix, string separator)
+        {
+            int index = materializedArticle.IndexOf(prefix, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                throw new InvalidOperationException($"Header line with prefix '{prefix}' was not found.");
+            }
+
+            int lineEnd = materializedArticle.IndexOf(separator, index, StringComparison.Ordinal);
+            if (lineEnd < 0)
+            {
+                throw new InvalidOperationException($"Header line with prefix '{prefix}' did not contain separator '{separator}'.");
+            }
+
+            return separator.Length;
         }
 
         private static byte[] BuildSyntheticSinglePartYEncBody(ReadOnlySpan<byte> payload)

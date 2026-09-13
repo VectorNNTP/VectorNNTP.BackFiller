@@ -14,6 +14,21 @@ using VectorNNTP.Backfiller.Runtime.Articles.Parsing;
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
     /// <summary>
+    /// Represents deterministic canonical materialization rejection caused by hard article or line resource boundaries.
+    /// </summary>
+    internal sealed class NntpArticleCanonicalBoundaryException : InvalidOperationException
+    {
+        /// <summary>
+        /// Initializes a new exception instance with the specified message.
+        /// </summary>
+        /// <param name="message">Boundary-rejection diagnostic message.</param>
+        internal NntpArticleCanonicalBoundaryException(string message)
+            : base(message)
+        {
+        }
+    }
+
+    /// <summary>
     /// Materializes one validated article into the canonical retained-byte representation used by retention, Transit, and Listener.
     /// </summary>
     /// <remarks>
@@ -66,7 +81,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 canonicalPathBytes.AsSpan().CopyTo(lineBytes.AsSpan(offset));
                 offset += canonicalPathBytes.Length;
                 separator.LineTerminator.CopyTo(lineBytes.AsSpan(offset));
-                pathInsert = new HeaderInsert(separator.StartOffset, lineBytes);
+                pathInsert = new HeaderInsert(separator.StartOffset, lineBytes, separator.LineTerminator.Length);
             }
 
             int lengthDelta = canonicalDateBytes.Length - dateEdit.RemovedLength;
@@ -237,7 +252,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         {
             if (destinationLength > ArticleResourceLimits.MaxArticleBytes)
             {
-                throw new InvalidOperationException(
+                throw new NntpArticleCanonicalBoundaryException(
                     $"Canonical article materialization would produce {destinationLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleBytes} bytes.");
             }
 
@@ -250,8 +265,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 parseResult.HeaderBytes.Length);
             if (selectedDateLineLength > ArticleResourceLimits.MaxArticleLineBytes)
             {
-                throw new InvalidOperationException(
-                    $"Canonical date rewrite would produce a physical header line length of {selectedDateLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
+                throw new NntpArticleCanonicalBoundaryException(
+                    $"Canonical date rewrite would produce a physical header content length of {selectedDateLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
             }
 
             if (pathEdit is HeaderEdit resolvedPathEdit)
@@ -265,18 +280,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     parseResult.HeaderBytes.Length);
                 if (rewrittenPathLineLength > ArticleResourceLimits.MaxArticleLineBytes)
                 {
-                    throw new InvalidOperationException(
-                        $"Canonical Path rewrite would produce a physical header line length of {rewrittenPathLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
+                    throw new NntpArticleCanonicalBoundaryException(
+                        $"Canonical Path rewrite would produce a physical header line content length of {rewrittenPathLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
                 }
             }
 
             if (pathInsert is HeaderInsert resolvedPathInsert)
             {
-                int insertedPathLineLength = resolvedPathInsert.Inserted.Length;
-                if (insertedPathLineLength > ArticleResourceLimits.MaxArticleLineBytes)
+                int insertedPathLineContentLength = resolvedPathInsert.Inserted.Length - resolvedPathInsert.LineTerminatorLength;
+                if (insertedPathLineContentLength > ArticleResourceLimits.MaxArticleLineBytes)
                 {
-                    throw new InvalidOperationException(
-                        $"Canonical Path insertion would produce a physical header line length of {insertedPathLineLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
+                    throw new NntpArticleCanonicalBoundaryException(
+                        $"Canonical Path insertion would produce a physical header line content length of {insertedPathLineContentLength} bytes, exceeding hard maximum {ArticleResourceLimits.MaxArticleLineBytes} bytes.");
                 }
             }
         }
@@ -290,7 +305,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="replacementLength">Length of replacement value bytes.</param>
         /// <param name="headers">Parsed headers in wire order.</param>
         /// <param name="headerSectionLength">Parsed header-section length used to resolve the last header line boundary.</param>
-        /// <returns>Physical header line length in bytes including line terminator bytes.</returns>
+        /// <returns>Physical header line content length in bytes excluding trailing line terminator framing.</returns>
         private static int ComputePhysicalHeaderLineLength(
             ReadOnlySpan<byte> source,
             int valueOffset,
@@ -320,7 +335,28 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 : ResolveHeaderSeparator(source, headerSectionLength).StartOffset;
 
             int originalLineLength = lineEndExclusive - lineStart;
-            return checked(originalLineLength - removedLength + replacementLength);
+            int lineTerminatorLength = ResolveTrailingLineTerminatorLength(source, lineStart, lineEndExclusive);
+            int originalLineContentLength = originalLineLength - lineTerminatorLength;
+            return checked(originalLineContentLength - removedLength + replacementLength);
+        }
+
+        /// <summary>
+        /// Resolves the trailing line-terminator length for one physical header line.
+        /// </summary>
+        /// <param name="source">Original article bytes.</param>
+        /// <param name="lineStart">Inclusive line-start offset.</param>
+        /// <param name="lineEndExclusive">Exclusive line-end offset.</param>
+        /// <returns>Trailing line-terminator length in bytes (<c>0</c>, <c>1</c>, or <c>2</c>).</returns>
+        private static int ResolveTrailingLineTerminatorLength(ReadOnlySpan<byte> source, int lineStart, int lineEndExclusive)
+        {
+            int physicalLength = lineEndExclusive - lineStart;
+            return physicalLength <= 0
+                ? 0
+                : physicalLength >= 2
+                && source[lineEndExclusive - 2] == (byte)'\r'
+                && source[lineEndExclusive - 1] == (byte)'\n'
+                ? 2
+                : source[lineEndExclusive - 1] is (byte)'\r' or (byte)'\n' ? 1 : 0;
         }
 
         /// <summary>
@@ -387,6 +423,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         /// <param name="Offset">Source offset where inserted bytes are emitted.</param>
         /// <param name="Inserted">Inserted bytes emitted at <paramref name="Offset"/> without consuming source bytes.</param>
-        private readonly record struct HeaderInsert(int Offset, byte[] Inserted);
+        /// <param name="LineTerminatorLength">Trailing inserted line terminator length in bytes.</param>
+        private readonly record struct HeaderInsert(int Offset, byte[] Inserted, int LineTerminatorLength);
     }
 }

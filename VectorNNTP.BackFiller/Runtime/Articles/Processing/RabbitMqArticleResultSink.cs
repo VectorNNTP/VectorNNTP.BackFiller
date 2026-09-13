@@ -46,6 +46,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// </summary>
         private readonly ILogger<RabbitMqArticleResultSink> _logger;
 
+        private static readonly Action<ILogger, Guid, string?, string, string, ulong, string, Exception?> CanonicalMaterializationBoundaryRejectedLog =
+            LoggerMessage.Define<Guid, string?, string, string, ulong, string>(
+                LogLevel.Warning,
+                new EventId(3413, nameof(LogRabbitMqCanonicalMaterializationBoundaryRejected)),
+                "RabbitMQ success-path canonical materialization rejected article due to hard boundary. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Reason={Reason}");
+
         /// <summary>
         /// Initializes a sink that owns final response-publication and delivery-settlement orchestration.
         /// </summary>
@@ -119,88 +125,118 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         ?? throw new InvalidOperationException("Successful article processing result did not provide a retained payload owner for admission.");
                     detachedPayloadOwner = originalPayloadOwner;
 
-                    DownloadedArticleBuffer payloadOwner = NntpArticleCanonicalMaterializer.Materialize(parseResult);
-                    originalPayloadOwner.Dispose();
-                    detachedPayloadOwner = payloadOwner;
-
-                    ArticleRetentionAdmissionResult retentionAdmissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner);
-                    bool retainedAvailableForTransit = retentionAdmissionResult.Status switch
+                    DownloadedArticleBuffer? payloadOwner = null;
+                    bool canonicalBoundaryRejected = false;
+                    try
                     {
-                        ArticleRetentionAdmissionStatus.Admitted => true,
-                        ArticleRetentionAdmissionStatus.DuplicateMessageId => true,
-                        ArticleRetentionAdmissionStatus.AdmissionClosed => false,
-                        ArticleRetentionAdmissionStatus.Md5Collision => false,
-                        ArticleRetentionAdmissionStatus.PayloadExceedsCapacity => false,
-                        ArticleRetentionAdmissionStatus.CapacityUnavailable => false,
-                        ArticleRetentionAdmissionStatus.InvalidPayload => false,
-                        _ => false,
-                    };
-
-                    if (retainedAvailableForTransit)
-                    {
-                        if (retentionAdmissionResult.Status is ArticleRetentionAdmissionStatus.DuplicateMessageId)
-                        {
-                            payloadOwner.Dispose();
-                        }
-
-                        detachedPayloadOwner = null;
-
-                        TransitAdmissionResult transitAdmissionResult = await _transitAdmissionGateway
-                            .AdmitAsync(result.Request.MessageId, cancellationToken)
-                            .ConfigureAwait(false);
-
-                        if (!transitAdmissionResult.IsAccepted)
-                        {
-                            CancellationToken settlementToken = SelectTransitRejectionSettlementToken(
-                                admissionStatus: transitAdmissionResult.Status,
-                                processingToken: cancellationToken,
-                                deliveryToken: result.Delivery.CancellationToken);
-                            await result.Delivery.Settlement.NackAsync(requeue: false, settlementToken).ConfigureAwait(false);
-                            if (transitAdmissionResult.Status is TransitAdmissionStatus.Failed or TransitAdmissionStatus.Unavailable)
-                            {
-                                LogRabbitMqTransitAdmissionRejectedDropWarning(
-                                    _logger,
-                                    result.Request.RequestId,
-                                    result.CorrelationId,
-                                    result.Request.MessageId,
-                                    result.Request.Backbone,
-                                    result.Delivery.DeliveryTag,
-                                    transitAdmissionResult.Status,
-                                    transitAdmissionResult.Error);
-                            }
-                            else
-                            {
-                                LogRabbitMqTransitAdmissionRejectedDropInformation(
-                                    _logger,
-                                    result.Request.RequestId,
-                                    result.CorrelationId,
-                                    result.Request.MessageId,
-                                    result.Request.Backbone,
-                                    result.Delivery.DeliveryTag,
-                                    transitAdmissionResult.Status,
-                                    transitAdmissionResult.Error);
-                            }
-
-                            return;
-                        }
+                        payloadOwner = NntpArticleCanonicalMaterializer.Materialize(parseResult);
                     }
-                    else
+                    catch (NntpArticleCanonicalBoundaryException boundaryEx)
                     {
-                        if (!result.TryAttachSuccessfulPayloadOwner(payloadOwner))
+                        canonicalBoundaryRejected = true;
+                        result = result with
                         {
-                            payloadOwner.Dispose();
-                        }
+                            Outcome = ArticleWorkProcessingOutcome.InvalidArticle,
+                            Disposition = ArticleWorkDispositionRecommendation.NackDrop,
+                            ResponseText = boundaryEx.Message,
+                        };
 
-                        detachedPayloadOwner = null;
-                        await result.Delivery.Settlement.NackAsync(requeue: true, cancellationToken).ConfigureAwait(false);
-                        LogRabbitMqRetentionAdmissionFailedRequeue(
+                        plan = _planner.CreatePlan(result, cancellationToken);
+
+                        LogRabbitMqCanonicalMaterializationBoundaryRejected(
                             _logger,
                             result.Request.RequestId,
                             result.CorrelationId,
                             result.Request.MessageId,
                             result.Request.Backbone,
-                            retentionAdmissionResult.Status);
-                        return;
+                            result.Delivery.DeliveryTag,
+                            boundaryEx.Message);
+                    }
+
+                    if (!canonicalBoundaryRejected)
+                    {
+                        originalPayloadOwner.Dispose();
+                        detachedPayloadOwner = payloadOwner;
+
+                        ArticleRetentionAdmissionResult retentionAdmissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner!);
+                        bool retainedAvailableForTransit = retentionAdmissionResult.Status switch
+                        {
+                            ArticleRetentionAdmissionStatus.Admitted => true,
+                            ArticleRetentionAdmissionStatus.DuplicateMessageId => true,
+                            ArticleRetentionAdmissionStatus.AdmissionClosed => false,
+                            ArticleRetentionAdmissionStatus.Md5Collision => false,
+                            ArticleRetentionAdmissionStatus.PayloadExceedsCapacity => false,
+                            ArticleRetentionAdmissionStatus.CapacityUnavailable => false,
+                            ArticleRetentionAdmissionStatus.InvalidPayload => false,
+                            _ => false,
+                        };
+
+                        if (retainedAvailableForTransit)
+                        {
+                            if (retentionAdmissionResult.Status is ArticleRetentionAdmissionStatus.DuplicateMessageId)
+                            {
+                                payloadOwner!.Dispose();
+                            }
+
+                            detachedPayloadOwner = null;
+
+                            TransitAdmissionResult transitAdmissionResult = await _transitAdmissionGateway
+                                .AdmitAsync(result.Request.MessageId, cancellationToken)
+                                .ConfigureAwait(false);
+
+                            if (!transitAdmissionResult.IsAccepted)
+                            {
+                                CancellationToken settlementToken = SelectTransitRejectionSettlementToken(
+                                    admissionStatus: transitAdmissionResult.Status,
+                                    processingToken: cancellationToken,
+                                    deliveryToken: result.Delivery.CancellationToken);
+                                await result.Delivery.Settlement.NackAsync(requeue: false, settlementToken).ConfigureAwait(false);
+                                if (transitAdmissionResult.Status is TransitAdmissionStatus.Failed or TransitAdmissionStatus.Unavailable)
+                                {
+                                    LogRabbitMqTransitAdmissionRejectedDropWarning(
+                                        _logger,
+                                        result.Request.RequestId,
+                                        result.CorrelationId,
+                                        result.Request.MessageId,
+                                        result.Request.Backbone,
+                                        result.Delivery.DeliveryTag,
+                                        transitAdmissionResult.Status,
+                                        transitAdmissionResult.Error);
+                                }
+                                else
+                                {
+                                    LogRabbitMqTransitAdmissionRejectedDropInformation(
+                                        _logger,
+                                        result.Request.RequestId,
+                                        result.CorrelationId,
+                                        result.Request.MessageId,
+                                        result.Request.Backbone,
+                                        result.Delivery.DeliveryTag,
+                                        transitAdmissionResult.Status,
+                                        transitAdmissionResult.Error);
+                                }
+
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            if (!result.TryAttachSuccessfulPayloadOwner(payloadOwner!))
+                            {
+                                payloadOwner!.Dispose();
+                            }
+
+                            detachedPayloadOwner = null;
+                            await result.Delivery.Settlement.NackAsync(requeue: true, cancellationToken).ConfigureAwait(false);
+                            LogRabbitMqRetentionAdmissionFailedRequeue(
+                                _logger,
+                                result.Request.RequestId,
+                                result.CorrelationId,
+                                result.Request.MessageId,
+                                result.Request.Backbone,
+                                retentionAdmissionResult.Status);
+                            return;
+                        }
                     }
                 }
 
@@ -282,17 +318,31 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             CancellationToken processingToken,
             CancellationToken deliveryToken)
         {
-            if (admissionStatus != TransitAdmissionStatus.Canceled)
-            {
-                return processingToken;
-            }
+            return admissionStatus != TransitAdmissionStatus.Canceled || deliveryToken.IsCancellationRequested
+                ? processingToken
+                : deliveryToken;
+        }
 
-            if (!deliveryToken.IsCancellationRequested)
-            {
-                return deliveryToken;
-            }
-
-            return processingToken;
+        /// <summary>
+        /// Emits a canonical-boundary rejection event when materialization cannot represent parser-accepted bytes within hard canonical limits.
+        /// </summary>
+        /// <param name="logger">Logger receiving the canonical-boundary rejection event.</param>
+        /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
+        /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
+        /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
+        /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
+        /// <param name="deliveryTag">RabbitMQ delivery tag negatively acknowledged by the broker.</param>
+        /// <param name="reason">Canonical-boundary rejection reason.</param>
+        private static void LogRabbitMqCanonicalMaterializationBoundaryRejected(
+            ILogger logger,
+            Guid requestId,
+            string? correlationId,
+            string messageId,
+            string backbone,
+            ulong deliveryTag,
+            string reason)
+        {
+            CanonicalMaterializationBoundaryRejectedLog(logger, requestId, correlationId, messageId, backbone, deliveryTag, reason, null);
         }
 
         /// <summary>
