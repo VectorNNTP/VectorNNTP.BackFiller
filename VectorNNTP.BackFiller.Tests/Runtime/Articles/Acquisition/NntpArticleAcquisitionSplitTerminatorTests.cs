@@ -59,6 +59,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 await using (session)
                 {
                     Task<NntpArticleAcquisitionResult> download = session.DownloadArticleAsync(messageId, CancellationToken.None).AsTask();
+                    await server.FirstTerminatorFragmentWritten.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                    Assert.False(download.IsCompleted);
+
+                    server.ReleaseSecondTerminatorFragment();
+
                     NntpArticleAcquisitionResult result = await download.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                     using (result)
                     {
@@ -69,6 +74,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
 
             await server.ConnectionClosed.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             Assert.True(server.SplitTerminatorWritten, "The test server must have written the terminator as two separate writes.");
+            Assert.True(server.SecondTerminatorFragmentWritten, "The test server must have written the second terminator fragment after client-side drain was active.");
+            Assert.Null(server.ServerFailure);
         }
 
         /// <summary>
@@ -82,6 +89,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
             private readonly CancellationTokenSource _shutdown = new();
             private readonly Task _acceptLoop;
             private readonly TaskCompletionSource<bool> _connectionClosed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _firstTerminatorFragmentWritten = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<bool> _releaseSecondTerminatorFragment = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             private SplitTerminatorServer(TcpListener listener, string messageId, byte[] article)
             {
@@ -101,7 +110,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
 
             internal Task ConnectionClosed => _connectionClosed.Task;
 
+            internal Task FirstTerminatorFragmentWritten => _firstTerminatorFragmentWritten.Task;
+
             internal bool SplitTerminatorWritten { get; private set; }
+
+            internal bool SecondTerminatorFragmentWritten { get; private set; }
+
+            internal Exception? ServerFailure { get; private set; }
+
+            internal void ReleaseSecondTerminatorFragment() => _releaseSecondTerminatorFragment.TrySetResult(true);
 
             internal static ValueTask<SplitTerminatorServer> StartAsync(string messageId, byte[] article)
             {
@@ -140,12 +157,17 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                     await WriteAsync(stream, _article).ConfigureAwait(false);
                     await WriteAsync(stream, "."u8.ToArray()).ConfigureAwait(false);
                     SplitTerminatorWritten = true;
-                    await WriteAsync(stream, "\r\n"u8.ToArray()).ConfigureAwait(false);
+                    _firstTerminatorFragmentWritten.TrySetResult(true);
 
+                    await _releaseSecondTerminatorFragment.Task.WaitAsync(TimeSpan.FromSeconds(5), _shutdown.Token).ConfigureAwait(false);
+                    await WriteAsync(stream, "\r\n"u8.ToArray()).ConfigureAwait(false);
+                    SecondTerminatorFragmentWritten = true;
+
+                    byte[] singleByte = new byte[1];
                     while (true)
                     {
-                        int value = await stream.ReadByteAsync(_shutdown.Token).ConfigureAwait(false);
-                        if (value < 0)
+                        int read = await stream.ReadAsync(singleByte, _shutdown.Token).ConfigureAwait(false);
+                        if (read == 0)
                         {
                             break;
                         }
@@ -154,8 +176,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Acquisition
                 catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
                 {
                 }
-                catch (IOException)
+                catch (Exception ex)
                 {
+                    ServerFailure = ex;
                 }
                 finally
                 {

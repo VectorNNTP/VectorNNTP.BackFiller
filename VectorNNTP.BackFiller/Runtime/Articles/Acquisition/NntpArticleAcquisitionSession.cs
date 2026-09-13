@@ -832,7 +832,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Acquisition
                     atLineStart = current is (byte)'\r' or (byte)'\n';
                 }
 
-                _reader.AdvanceTo(reader.Position, reader.Position);
+                _reader.AdvanceTo(reader.Position, sequence.End);
                 if (readResult.IsCompleted)
                 {
                     throw new EndOfStreamException("NNTP connection closed before oversized ARTICLE cleanup reached terminator.");
