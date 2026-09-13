@@ -6,6 +6,7 @@
 // Immutable runtime configuration snapshot used by startup validation and hosted services.
 
 using System.Net;
+using MySqlConnector;
 
 namespace VectorNNTP.Backfiller.Configuration
 {
@@ -116,6 +117,21 @@ namespace VectorNNTP.Backfiller.Configuration
         /// </summary>
         /// <value>Original configured bind-address tokens preserved for runtime consumers that need token-level semantics.</value>
         internal IReadOnlyList<string> EffectiveConfiguredBindAddressTokens => ConfiguredBindAddressTokens ?? [];
+
+        /// <summary>
+        /// Gets the immutable validated GrabberDB runtime projection.
+        /// </summary>
+        /// <value>
+        /// Canonical GrabberDB connection semantics derived once during startup validation. Runtime consumers must use
+        /// this value instead of rereading mutable configuration sources.
+        /// </value>
+        internal GrabberDbRuntimeOptions GrabberDb { get; init; } = new(
+            ConnectionString: string.Empty,
+            Server: string.Empty,
+            Port: 3306,
+            Database: string.Empty,
+            UserId: string.Empty,
+            SslMode: MySqlSslMode.None);
 
         /// <summary>
         /// Gets effective article-retention runtime options for shared in-memory article ownership.

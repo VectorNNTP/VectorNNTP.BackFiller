@@ -53,60 +53,50 @@ The application performs the following validation checks at startup **before** a
 - **Test Coverage:** `Validate_ExcessiveMinPoolSize_ReturnsPoolingWarning`, `Validate_ExcessiveMaxPoolSize_ReturnsPoolingWarning`, `Validate_AppropriatePoolSize_AcceptsConfiguration`
 - **Note:** See [Validation Errors vs. Warnings](./validation-errors-vs-warnings.md) for why pool settings are warnings, not errors
 
-### Phase 2: Runtime MySQL Connectivity Validation (Startup)
+### Phase 2: Startup Dependency Probe (Server-Level MySQL Validation)
 
-After configuration validation passes, the application performs a **MySQL connectivity test** using actual `MySqlConnection.OpenAsync()` and query execution. This validates what static validation cannot detect.
+After configuration validation and runtime snapshot creation pass, startup runs a **server-level MySQL dependency probe** against the frozen GrabberDB projection. This probe intentionally validates the MySQL endpoint without selecting the target runtime database.
 
-#### 2.1 MySQL Runtime Validation
+#### 2.1 Server-Level Probe Contract
 
 **What It Validates:**
 - ✅ Network reachability (can we reach the MySQL server on host:port?)
-- ✅ Authentication (are credentials valid? is the auth plugin supported?)
-- ✅ Database accessibility (does the database exist? is it accessible?)
-- ✅ Permissions (can we execute basic queries like `SELECT 1`?)
-- ✅ TLS/SSL negotiation (if `SslMode` is configured)
-- ✅ Protocol compatibility (server version, authentication plugins)
+- ✅ Authentication handshake (are credentials accepted?)
+- ✅ TLS/SSL negotiation (if configured)
+- ✅ Protocol compatibility (server/auth plugin compatibility)
 
-**What Static Validation CANNOT Catch:**
-- ❌ Invalid credentials (wrong username/password or expired token)
-- ❌ MySQL server unreachable (network down, firewall, wrong host/port)
-- ❌ Unsupported authentication plugin (e.g., `caching_sha2_password` issues)
-- ❌ Database doesn't exist or is inaccessible
-- ❌ Permission denied (user lacks necessary privileges)
-- ❌ TLS/SSL configuration failures
-- ❌ Incompatible MySQL server version
+**What It Does NOT Validate:**
+- ❌ Target database existence/accessibility
+- ❌ Required table existence
+- ❌ Target-database query permissions via `SELECT 1`
+
+A missing target database is **not** a dependency-probe failure under this contract.
 
 **Implementation:**
-- **Provider:** This application uses **MySQL exclusively** via `MySqlConnector`
-- **Method:** `ValidateDatabaseConnectivityAsync()` in `Program.Validation.cs`
-- **Steps:**
-  1. Create `MySqlConnector.MySqlConnection` with configured connection string
-  2. Call `OpenAsync()` with timeout to validate network, auth, TLS
-  3. Execute `SELECT 1` to verify database access and permissions
-  4. Log success with actual server and database name from connection properties
+- **Provider:** `MySqlConnector`
+- **Method:** `DatabaseDependencyProbe.ValidateDatabaseConnectivityAsync(...)`
+- **Behavior:** Builds a server-level connection from the frozen runtime projection, clears the database selection, and validates `OpenAsync(...)` only.
 
-- **Timeout:** Configurable (default: 10 seconds via `dependencyTimeout`)
-- **Success:** Logs `"GrabberDB connectivity validated successfully (Server: {Server}, Database: {Database})"`
-- **Failures:**
-  - **Timeout:** `"Connection timeout after {timeout}s"` (network/firewall/wrong host)
-  - **MySqlException:** `"MySQL connection failed: {message} (Error #{errorNumber})"` with specific error codes:
-    - `1045` - Access denied (wrong username/password)
-    - `1049` - Unknown database (database doesn't exist)
-    - `1130` - Host not allowed (IP restriction)
-    - `2002` - Can't connect to MySQL server (Unix socket)
-    - `2003` - Can't connect to MySQL server (TCP - host/port unreachable)
-    - `2013` - Lost connection during query
-    - `2026` - SSL connection error (TLS handshake failure)
-    - `2061` - Authentication plugin error (unsupported auth method)
-  - **Other Exception:** `"Failed to connect: {message}"` (DNS failure, socket errors, etc.)
+**Failure Classification:**
+- Distinguishes timeouts, authentication failures, TLS/protocol problems, and network reachability failures.
+- Uses sanitized startup dependency diagnostics without exposing credentials or full connection strings.
 
-- **Cancellation:** Propagates shutdown cancellation token
+### Phase 3: Authoritative Startup Provisioning Boundary
 
-**Critical Principle:** Provider validation happens at **runtime** via actual connectivity testing with MySqlConnector, not via unreliable connection string heuristics. If the connection string is for a non-MySQL database, the connectivity test will fail with a clear error.
+Target-database and schema readiness are enforced later by the authoritative startup provisioning boundary:
 
-**Control-Plane Constraint:** This validation runs **ONCE** during startup, **NOT** in the article retrieval data path. Temporary database outages after startup MUST NOT interrupt active article operations.
+- Hosted initializer: `NntpAccountSnapshotStartupInitializer.StartAsync(...)`
+- Provisioning owner: `MySqlNntpAccountSnapshotProvider.EnsureStartupDependenciesAsync(...)`
+- Production store operation sequence:
+  1. Ensure database exists (`CREATE DATABASE IF NOT EXISTS ...`)
+  2. Open selected database
+  3. Ensure required table exists (`CREATE TABLE IF NOT EXISTS nntpbackfilleraccounts ...`)
 
-**Documentation:** See [MySQL Runtime Validation](./mysql-runtime-validation.md) for complete details, error codes, and design rationale.
+This boundary is where missing-database and missing-table scenarios are resolved (or fail deterministically when privileges are insufficient).
+
+**Control-Plane Constraint:** Validation/provisioning run during startup only and remain outside the article retrieval data path.
+
+**Documentation:** See [MySQL Runtime Validation](./mysql-runtime-validation.md) for startup dependency/provisioning sequencing and diagnostics semantics.
 
 ## Error Handling Philosophy
 
@@ -129,14 +119,16 @@ After configuration validation passes, the application performs a **MySQL connec
   - Connection pooling validation
   - **No provider inference:** Provider validation happens at runtime via actual connectivity testing
 
-- **`VectorNNTP.BackFiller/Program.Validation.cs`**
-  - `ConfigurationValidationResult` class
-  - `DependencyValidationResult` class
-  - `ValidateConfigurationAndDependenciesAsync(...)` orchestrator
-  - `ValidateConnectionStrings(...)` configuration validator
-  - `ValidateDatabaseConnectivityAsync(...)` MySQL connectivity tester
-  - `ValidateAnnotatedObject<TOptions>(...)` DataAnnotations helper
-  - Logging helpers
+- **`VectorNNTP.BackFiller/Startup/Validation/StartupValidationPipeline.cs`**
+  - Startup validation orchestration and runtime snapshot construction
+- **`VectorNNTP.BackFiller/Startup/Validation/DependencyProbeRunner.cs`**
+  - Dependency probe coordination using frozen runtime options
+- **`VectorNNTP.BackFiller/Startup/Validation/DatabaseDependencyProbe.cs`**
+  - Server-level MySQL dependency probe (`OpenAsync` on server-level target)
+- **`VectorNNTP.BackFiller/Runtime/Accounts/NntpAccountSnapshotStartupInitializer.cs`**
+  - Authoritative hosted startup provisioning boundary invocation
+- **`VectorNNTP.BackFiller/Runtime/Accounts/MySqlNntpAccountSnapshotProvider.cs`**
+  - Database/table provisioning and initial account snapshot load boundary
 
 ### Test Coverage
 - **`VectorNNTP.BackFiller.Tests/ConnectionStringValidationTests.cs`**
@@ -161,17 +153,18 @@ Test summary: total: 185, failed: 0, succeeded: 185, skipped: 0
 ```json
 {
   "ConnectionStrings": {
-	"GrabberDB": "Server=198.18.0.3;User ID=nntparticles;Password=1e916heXBfHu673mtsrK8ZAVFnvhc4qC;Database=nntp;Minimum Pool Size=1;Maximum Pool Size=5;Connection Idle Timeout=10"
+	"GrabberDB": "Server=198.18.0.3;User ID=nntparticles;Password=<redacted>;Database=nntp;Minimum Pool Size=1;Maximum Pool Size=5;Connection Idle Timeout=10"
   }
 }
 ```
 
 ### Validation Flow
-1. **Startup:** `Program.cs` calls `ValidateConfigurationAndDependenciesAsync(...)`
-2. **Configuration Phase:** Validates syntax, server, database, authentication, pooling
-3. **Dependency Phase:** Attempts MySQL connection with 5-second timeout
-4. **Success:** Logs `"GrabberDB connectivity validated successfully (Server: ..., Database: ...)"`
-5. **Failure:** Blocks startup, logs errors, exits with code 2
+1. **Startup:** `Program.cs` calls startup validation pipeline to validate config and build frozen runtime options.
+2. **Configuration Phase:** Validates syntax, server, database, authentication, pooling.
+3. **Dependency Probe Phase:** Performs server-level MySQL reachability/auth/TLS validation against frozen runtime projection (no target database selection).
+4. **Host Startup Provisioning Phase:** `NntpAccountSnapshotStartupInitializer` invokes provider provisioning to create/verify target database and required accounts table.
+5. **Initial Snapshot Phase:** Provider loads and publishes initial account snapshot.
+6. **Failure Handling:** Configuration errors fail configuration validation; dependency probe failures fail dependency validation; provisioning failures fail hosted startup deterministically.
 
 ## Operational Semantics
 

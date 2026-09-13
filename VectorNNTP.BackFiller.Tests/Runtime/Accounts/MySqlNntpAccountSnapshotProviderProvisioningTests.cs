@@ -6,8 +6,11 @@
 // Focused tests for my sql nntp account snapshot provider provisioning, covering NNTP article and transport behavior; dependency integration and failure handling.
 // Primary responsibility: documents the executable contracts covered by the my sql nntp account snapshot provider provisioning test suite.
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Accounts;
+using VectorNNTP.Backfiller.Startup.Configuration;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
@@ -24,9 +27,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
         public async Task EnsureStartupDependenciesAsync_UsesConfiguredDatabaseAndTableAndAuthoritativeSchema()
         {
             CapturingProvisioningStore store = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=grabber_db_main;User ID=runtime_user;SslMode=Required");
 
             MySqlNntpAccountSnapshotProvider provider = new(
-                1,
+                runtimeOptions,
                 NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
                 _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
                 store);
@@ -35,7 +39,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
 
             _ = Assert.Single(store.Calls);
             (string databaseName, string tableName, string createTableSql) call = store.Calls[0];
-            Assert.Equal("test", call.databaseName);
+            Assert.Equal("grabber_db_main", call.databaseName);
             Assert.Equal("nntpbackfilleraccounts", call.tableName);
             Assert.Equal(MySqlNntpAccountSnapshotProvider.AccountsTableCreateSql, call.createTableSql);
 
@@ -61,9 +65,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
         public async Task EnsureStartupDependenciesAsync_WhenRepeated_RemainsIdempotentAtProviderBoundary()
         {
             CapturingProvisioningStore store = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=grabber_db_main;User ID=runtime_user;SslMode=Required");
 
             MySqlNntpAccountSnapshotProvider provider = new(
-                1,
+                runtimeOptions,
                 NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
                 _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
                 store);
@@ -86,15 +91,166 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
         {
             MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore store =
                 new DelegateProvisioningStore(static _ => throw new InvalidOperationException("permission denied"));
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=grabber_db_main;User ID=runtime_user;SslMode=Required");
 
             MySqlNntpAccountSnapshotProvider provider = new(
-                1,
+                runtimeOptions,
                 NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
                 _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
                 store);
 
-            _ = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
+            Assert.Equal("permission denied", exception.Message);
         }
+
+        /// <summary>
+        /// Confirms provider uses frozen runtime projection for startup provisioning target even when mutable inputs change after snapshot creation.
+        /// </summary>
+        [Fact]
+        public async Task EnsureStartupDependenciesAsync_WhenFrozenRuntimeProjectionProvided_UsesFrozenDatabaseTarget()
+        {
+            CapturingProvisioningStore store = new();
+            IConfigurationRoot configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=mysql-a;Port=3306;Database=DatabaseA;User ID=usera;Password=secret;SslMode=Required",
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> errors = [];
+
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                errors,
+                includeLetsEncryptRuntimeOptions: false);
+
+            Assert.NotNull(runtimeOptions);
+            Assert.Empty(errors);
+
+            configuration["ConnectionStrings:GrabberDB"] = "Server=mysql-b;Port=3307;Database=DatabaseB;User ID=userb;Password=secret2;SslMode=None";
+
+            MySqlNntpAccountSnapshotProvider provider = new(
+                runtimeOptions,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
+                store);
+
+            await provider.EnsureStartupDependenciesAsync(CancellationToken.None);
+
+            (string databaseName, string tableName, string createTableSql) call = Assert.Single(store.Calls);
+            Assert.Equal("DatabaseA", call.databaseName);
+            Assert.Equal("nntpbackfilleraccounts", call.tableName);
+            Assert.Equal(MySqlNntpAccountSnapshotProvider.AccountsTableCreateSql, call.createTableSql);
+            Assert.DoesNotContain(store.Calls, static call => string.Equals(call.databaseName, "DatabaseB", StringComparison.Ordinal));
+        }
+        /// <summary>
+        /// Confirms missing database startup path succeeds when provisioning boundary permits creation.
+        /// </summary>
+        [Fact]
+        public async Task EnsureStartupDependenciesAsync_WhenDatabaseMissingAndProvisioningAllowed_Completes()
+        {
+            CapturingProvisioningStore store = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=missing_db;User ID=runtime_user;SslMode=Required");
+
+            MySqlNntpAccountSnapshotProvider provider = new(
+                runtimeOptions,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
+                store);
+
+            await provider.EnsureStartupDependenciesAsync(CancellationToken.None);
+
+            (string databaseName, _, _) = Assert.Single(store.Calls);
+            Assert.Equal("missing_db", databaseName);
+        }
+
+        /// <summary>
+        /// Confirms missing database startup path fails deterministically when provisioning creation is denied.
+        /// </summary>
+        [Fact]
+        public async Task EnsureStartupDependenciesAsync_WhenDatabaseMissingAndProvisioningDenied_ThrowsDeterministicFailure()
+        {
+            MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore store =
+                new DelegateProvisioningStore(static _ => throw new InvalidOperationException("MySQL startup provisioning failed at stage 'create-database' (Error #1044): Unable to create or verify the target database during startup provisioning."));
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=missing_db;User ID=runtime_user;SslMode=Required");
+
+            MySqlNntpAccountSnapshotProvider provider = new(
+                runtimeOptions,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
+                store);
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
+            Assert.Equal(
+                MySqlNntpAccountSnapshotProvider.FormatStartupProvisioningFailureMessage(
+                    "create-database",
+                    1044,
+                    "Unable to create or verify the target database during startup provisioning."),
+                exception.Message);
+        }
+
+        /// <summary>
+        /// Confirms existing database path remains successful and provisioning boundary remains idempotent.
+        /// </summary>
+        [Fact]
+        public async Task EnsureStartupDependenciesAsync_WhenDatabaseAlreadyExists_RemainsSuccessfulAndIdempotent()
+        {
+            CapturingProvisioningStore store = new();
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=existing_db;User ID=runtime_user;SslMode=Required");
+
+            MySqlNntpAccountSnapshotProvider provider = new(
+                runtimeOptions,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
+                store);
+
+            await provider.EnsureStartupDependenciesAsync(CancellationToken.None);
+            await provider.EnsureStartupDependenciesAsync(CancellationToken.None);
+
+            Assert.Equal(2, store.Calls.Count);
+            Assert.All(store.Calls, static call => Assert.Equal("existing_db", call.databaseName));
+        }
+
+        /// <summary>
+        /// Confirms missing required table startup path fails deterministically when table provisioning is denied.
+        /// </summary>
+        [Fact]
+        public async Task EnsureStartupDependenciesAsync_WhenTableMissingAndProvisioningDenied_ThrowsDeterministicFailure()
+        {
+            MySqlNntpAccountSnapshotProvider.IStartupProvisioningStore store =
+                new DelegateProvisioningStore(static _ => throw new InvalidOperationException("MySQL startup provisioning failed at stage 'create-table' (Error #1142): Startup provisioning could not create or validate the required accounts table."));
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions("Server=mysql-primary;Port=3307;Database=existing_db;User ID=runtime_user;SslMode=Required");
+
+            MySqlNntpAccountSnapshotProvider provider = new(
+                runtimeOptions,
+                NullLogger<MySqlNntpAccountSnapshotProvider>.Instance,
+                _ => Task.FromResult<List<NntpAccountSnapshot>>([]),
+                store);
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.EnsureStartupDependenciesAsync(CancellationToken.None));
+            Assert.Equal(
+                MySqlNntpAccountSnapshotProvider.FormatStartupProvisioningFailureMessage(
+                    "create-table",
+                    1142,
+                    "Startup provisioning could not create or validate the required accounts table."),
+                exception.Message);
+        }
+
+        /// <summary>
+        /// Confirms startup provisioning failure formatting remains deterministic and preserves stage/error classification.
+        /// </summary>
+        [Theory]
+        [InlineData("server-connect", 2003, "Unable to connect to MySQL server for startup provisioning.")]
+        [InlineData("create-database", 1044, "Unable to create or verify the target database during startup provisioning.")]
+        [InlineData("select-database", 1049, "Startup provisioning could not access the target database.")]
+        [InlineData("create-table", 1142, "Startup provisioning could not create or validate the required accounts table.")]
+        public void FormatStartupProvisioningFailureMessage_WhenCalled_ReturnsDeterministicClassifiedMessage(string stage, int errorNumber, string detail)
+        {
+            string message = MySqlNntpAccountSnapshotProvider.FormatStartupProvisioningFailureMessage(stage, errorNumber, detail);
+
+            Assert.Equal($"MySQL startup provisioning failed at stage '{stage}' (Error #{errorNumber}): {detail}", message);
+        }
+
         /// <summary>
         /// Confirms the accounts table create sql uses new backfiller table name and not legacy name behavior.
         /// </summary>
@@ -158,6 +314,74 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Accounts
             {
                 return callback(cancellationToken);
             }
+        }
+
+        /// <summary>
+        /// Creates runtime options with a deterministic frozen GrabberDB projection for provider-construction tests.
+        /// </summary>
+        /// <param name="connectionString">Connection string used for the frozen runtime projection.</param>
+        /// <returns>A runtime options instance with the requested frozen GrabberDB projection.</returns>
+        private static BackFillerRuntimeOptions CreateRuntimeOptions(string connectionString)
+        {
+            MySqlConnector.MySqlConnectionStringBuilder builder = new(connectionString);
+
+            return new BackFillerRuntimeOptions(
+                CanonicalBackFillerFqdn: "bf-1.example.com",
+                BackFillerId: 1,
+                CanonicalDnsSuffix: "example.com",
+                ValidatedLogDirectory: Path.GetTempPath(),
+                ValidatedCertificateDirectory: Path.GetTempPath(),
+                RabbitMqHosts: ["localhost"],
+                RabbitMqPort: 5672,
+                RabbitMqEnableSsl: false,
+                TransitServerHost: "localhost",
+                TransitServerPort: 119,
+                TransitServerUseSsl: false)
+            {
+                GrabberDb = new GrabberDbRuntimeOptions(
+                    ConnectionString: builder.ConnectionString,
+                    Server: builder.Server,
+                    Port: builder.Port,
+                    Database: builder.Database,
+                    UserId: builder.UserID,
+                    SslMode: builder.SslMode),
+            };
+        }
+
+        private static IConfigurationRoot BuildConfiguration(Dictionary<string, string?> values)
+        {
+            Dictionary<string, string?> baseline = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["BackFiller:BindPort"] = "119",
+                ["BackFiller:Name"] = "Grabber",
+                ["BackFiller:Id"] = "1",
+                ["BackFiller:DnsSuffix"] = "example.com",
+                ["BackFiller:DirLogs"] = Path.Combine(Path.GetTempPath(), "logs"),
+                ["BackFiller:DirCerts"] = Path.Combine(Path.GetTempPath(), "certs"),
+                ["BackFiller:LetsEncrypt:AcmeAccountEmail"] = "ops@example.com",
+                ["BackFiller:LetsEncrypt:AcmeAccountKeyPem"] = "account.key",
+                ["BackFiller:LetsEncrypt:PfxExportPassword"] = "secret",
+                ["BackFiller:LetsEncrypt:CloudFlareApiToken"] = "test-only-cloudflare-token-1deeff5c65baf93f1db745d8",
+                ["BackFiller:LetsEncrypt:CloudFlareZoneId"] = "5811a29d39a0732afb5f160c9b137c3d",
+                ["BackFiller:RabbitMQ:Hosts:0"] = "localhost",
+                ["BackFiller:RabbitMQ:Port"] = "5672",
+                ["BackFiller:RabbitMQ:EnableSsl"] = "false",
+                ["BackFiller:RabbitMQ:Username"] = "nntparticles",
+                ["BackFiller:RabbitMQ:Password"] = "password",
+                ["BackFiller:RabbitMQ:VirtualHost"] = "/",
+                ["BackFiller:TransitServer:Host"] = "localhost",
+                ["BackFiller:TransitServer:Port"] = "119",
+                ["BackFiller:TransitServer:UseSsl"] = "false",
+            };
+
+            foreach (KeyValuePair<string, string?> kv in values)
+            {
+                baseline[kv.Key] = kv.Value;
+            }
+
+            return new ConfigurationBuilder()
+                .AddInMemoryCollection(baseline)
+                .Build();
         }
     }
 }

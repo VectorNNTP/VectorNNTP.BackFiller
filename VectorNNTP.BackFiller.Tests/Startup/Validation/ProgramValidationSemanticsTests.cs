@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using MySqlConnector;
 using System.Security.Cryptography;
 using VectorNNTP.BackFiller.Tests.TestInfrastructure.Certificates;
 using VectorNNTP.Backfiller.Configuration;
@@ -427,6 +428,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         {
             IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Port=3306;Database=GrabberDB;User ID=admin;Password=secret;SslMode=None",
                 ["BackFiller:DirCerts"] = string.Empty,
             });
             BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
@@ -455,6 +457,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         {
             IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
+                ["ConnectionStrings:GrabberDB"] = "Server=localhost;Port=3306;Database=GrabberDB;User ID=admin;Password=secret;SslMode=None",
                 ["BackFiller:DirCerts"] = string.Empty,
             });
             BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
@@ -1121,15 +1124,16 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
         [Fact]
         public async Task ValidateDatabaseConnectivityAsync_WhenUnexpectedExceptionOccurs_ReturnsSanitizedFailureReason()
         {
-            IConfiguration configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["ConnectionStrings:GrabberDB"] = "Server==invalid",
-                })
-                .Build();
+            GrabberDbRuntimeOptions grabberDb = new(
+                ConnectionString: "Server==invalid",
+                Server: "invalid",
+                Port: 3306,
+                Database: "GrabberDB",
+                UserId: "admin",
+                SslMode: MySqlSslMode.None);
 
             DependencyValidationResult result = await DatabaseDependencyProbe
-                .ValidateDatabaseConnectivityAsync(configuration, TimeSpan.FromSeconds(1), CancellationToken.None);
+                .ValidateDatabaseConnectivityAsync(grabberDb, TimeSpan.FromSeconds(1), CancellationToken.None);
 
             Assert.Contains(result.FailedDependencies, static d =>
                 d.Dependency == "GrabberDB" &&
@@ -3954,6 +3958,62 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Validation
             {
                 return false;
             }
+        }
+
+        [Fact]
+        public void BuildRuntimeOptionsSnapshot_WhenGrabberDbConfigured_PopulatesFrozenGrabberDbProjection()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=mysql-a;Port=3307;Database=DatabaseA;User ID=usera;Password=secret;SslMode=Required",
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> errors = [];
+
+            BackFillerRuntimeOptions? runtimeOptions = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                errors,
+                includeLetsEncryptRuntimeOptions: false);
+
+            Assert.NotNull(runtimeOptions);
+            Assert.Empty(errors);
+            Assert.Equal("mysql-a", runtimeOptions.GrabberDb.Server);
+            Assert.Equal((uint)3307, runtimeOptions.GrabberDb.Port);
+            Assert.Equal("DatabaseA", runtimeOptions.GrabberDb.Database);
+            Assert.Equal("usera", runtimeOptions.GrabberDb.UserId);
+            Assert.Equal(MySqlSslMode.Required, runtimeOptions.GrabberDb.SslMode);
+        }
+
+        [Fact]
+        public void RuntimeSnapshotFactory_WhenConfigurationChangesAfterSnapshot_GrabberDbProjectionRemainsFrozen()
+        {
+            IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ConnectionStrings:GrabberDB"] = "Server=mysql-a;Port=3306;Database=DatabaseA;User ID=usera;Password=secret;SslMode=Required",
+            });
+            BackFillerOptions backFiller = configuration.GetSection("BackFiller").Get<BackFillerOptions>()
+                ?? throw new InvalidOperationException("BackFiller section is required for this test scenario.");
+            List<(string Setting, string Error)> initialErrors = [];
+
+            BackFillerRuntimeOptions? frozenSnapshot = RuntimeSnapshotFactory.BuildRuntimeOptionsSnapshot(
+                configuration,
+                backFiller,
+                initialErrors,
+                includeLetsEncryptRuntimeOptions: false);
+
+            Assert.NotNull(frozenSnapshot);
+            Assert.Empty(initialErrors);
+
+            configuration["ConnectionStrings:GrabberDB"] = "Server=mysql-b;Port=3307;Database=DatabaseB;User ID=userb;Password=secret2;SslMode=None";
+
+            Assert.Equal("DatabaseA", frozenSnapshot.GrabberDb.Database);
+            Assert.Equal("mysql-a", frozenSnapshot.GrabberDb.Server);
+            MySqlConnectionStringBuilder frozenConnectionBuilder = new(frozenSnapshot.GrabberDb.ConnectionString);
+            Assert.Equal("DatabaseA", frozenConnectionBuilder.Database);
+            Assert.Equal("mysql-a", frozenConnectionBuilder.Server);
+            Assert.Equal("usera", frozenConnectionBuilder.UserID);
         }
 
         private sealed class SingleBackFillerBindConfiguration : IConfiguration

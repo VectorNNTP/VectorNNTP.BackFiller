@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using MySqlConnector;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.ControlPlane;
 using VectorNNTP.Backfiller.Runtime.Accounts;
@@ -174,7 +175,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
                 WriteBatchCoalesceMicroseconds: 250,
-                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
+                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false))
+            {
+                GrabberDb = CreateGrabberDbRuntimeOptions(),
+            };
 
             ServiceLifecycle lifecycle = new(TimeProvider.System);
 
@@ -252,7 +256,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 ShutdownDrainQueuedWork: true,
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
-                WriteBatchCoalesceMicroseconds: 250);
+                WriteBatchCoalesceMicroseconds: 250)
+            {
+                GrabberDb = CreateGrabberDbRuntimeOptions(),
+            };
 
             HostComposer.ConfigureHostServices(builder, runtimeOptions);
 
@@ -295,7 +302,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 ShutdownDrainQueuedWork: true,
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
-                WriteBatchCoalesceMicroseconds: 250);
+                WriteBatchCoalesceMicroseconds: 250)
+            {
+                GrabberDb = CreateGrabberDbRuntimeOptions(),
+            };
 
             HostComposer.ConfigureHostServices(builder, runtimeOptions);
 
@@ -340,7 +350,10 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 ShutdownFinishActiveArticles: true,
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
                 WriteBatchCoalesceMicroseconds: 250,
-                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
+                RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false))
+            {
+                GrabberDb = CreateGrabberDbRuntimeOptions(),
+            };
 
             HostComposer.ConfigureHostServices(builder, runtimeOptions, new ServiceLifecycle(TimeProvider.System));
             _ = builder.Services.AddSingleton(runtimeOptions);
@@ -518,7 +531,7 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
         /// <returns>The value returned by the create runtime options for testing helper.</returns>
         private static BackFillerRuntimeOptions CreateRuntimeOptionsForTesting()
         {
-            return new BackFillerRuntimeOptions(
+            BackFillerRuntimeOptions runtimeOptions = new(
                 CanonicalBackFillerFqdn: "bf-12.example.com",
                 BackFillerId: 12,
                 CanonicalDnsSuffix: "example.com",
@@ -538,6 +551,22 @@ namespace VectorNNTP.BackFiller.Tests.Startup.Hosting
                 RabbitMqMaximumShutdownDrainTimeoutSeconds: 30,
                 WriteBatchCoalesceMicroseconds: 250,
                 RabbitMq: CreateRabbitMqRuntimeOptions(enableSsl: false));
+
+            return runtimeOptions with
+            {
+                GrabberDb = CreateGrabberDbRuntimeOptions(),
+            };
+        }
+
+        private static GrabberDbRuntimeOptions CreateGrabberDbRuntimeOptions()
+        {
+            return new GrabberDbRuntimeOptions(
+                ConnectionString: "Server=localhost;Database=GrabberDB;User ID=admin;Password=secret;SslMode=None",
+                Server: "localhost",
+                Port: 3306,
+                Database: "GrabberDB",
+                UserId: "admin",
+                SslMode: MySqlSslMode.None);
         }
 
         /// <summary>
