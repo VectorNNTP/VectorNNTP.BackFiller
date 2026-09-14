@@ -730,6 +730,40 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Parsing
         }
 
         /// <summary>
+        /// Verifies parser accepts mixed blank-line boundary terminator combinations when each physical terminator token is individually valid.
+        /// </summary>
+        /// <param name="lastHeaderTerminator">Terminator ending the final physical header line.</param>
+        /// <param name="boundaryTerminator">Terminator used for the empty separator line before the body.</param>
+        [Theory]
+        [InlineData("\r\n", "\n")]
+        [InlineData("\n", "\r\n")]
+        [InlineData("\n", "\r")]
+        [InlineData("\r", "\r\n")]
+        [InlineData("\r\n", "\r")]
+        public void Parse_WhenHeaderBodyBoundaryUsesMixedTerminators_AcceptsAndPreservesBodySplit(string lastHeaderTerminator, string boundaryTerminator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            string body = "body-line-1\r\nbody-line-2\nbody-line-3\rEND";
+            string articleText =
+                "Date: Fri, 23 Aug 2024 07:30:10 +0000\r\n" +
+                "Message-ID: <m16-mixed-boundary@example.test>\r\n" +
+                "Newsgroups: alt.test\r\n" +
+                "From: user@example.test" + lastHeaderTerminator +
+                boundaryTerminator +
+                body;
+
+            byte[] article = Encoding.ASCII.GetBytes(articleText);
+            NntpArticleParseResult result = parser.Parse(article);
+
+            Assert.True(result.IsAccepted);
+            Assert.Equal(body, Encoding.ASCII.GetString(result.BodyBytes.Span));
+            Assert.Equal(articleText.Length - body.Length, result.HeaderBytes.Length);
+
+            byte[] boundaryBytes = Encoding.ASCII.GetBytes(lastHeaderTerminator + boundaryTerminator);
+            Assert.True(result.HeaderBytes.Span.EndsWith(boundaryBytes));
+        }
+
+        /// <summary>
         /// Verifies yEnc body classification remains deterministic when yEnc detection scan bytes are smaller than the marker offset.
         /// </summary>
         [Fact]

@@ -205,6 +205,101 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(parse.BodyBytes.ToArray(), GetBodyBytes(materialized.Memory.Span, separator));
         }
 
+        [Theory]
+        [InlineData("\n", "\r\n")]
+        [InlineData("\r\n", "\r")]
+        [InlineData("\r", "\r\n")]
+        public void Materialize_WhenPathMissingAndBoundaryUsesMixedTerminators_PreservesBodyAndMaterializes(string lastHeaderTerminator, string boundaryTerminator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] body = Encoding.ASCII.GetBytes("body-a\r\nbody-b\nbody-c\r\n\rmarker");
+            byte[] article = BuildArticleWithCustomBoundary(
+                [
+                    ("Date: Tue, 10 May 2011 13:48:50 -0500", "\r\n"),
+                    ("Message-ID: <materialize-mixed-path-missing@example.test>", "\r\n"),
+                    ("Newsgroups: alt.test", "\r\n"),
+                    ("From: user@example.test", "\r\n"),
+                    ("X-Keep: separator-contract", lastHeaderTerminator),
+                ],
+                boundaryTerminator,
+                body);
+
+            NntpArticleParseResult parse = parser.Parse(article);
+            Assert.True(parse.IsAccepted);
+
+            using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+            string materializedText = Encoding.ASCII.GetString(materialized.Memory.Span);
+            Assert.Contains($"Path: {LocalFqdn}{lastHeaderTerminator}", materializedText, StringComparison.Ordinal);
+            Assert.Contains($"Date: Tue, 10 May 2011 18:48:50 +0000\r\n", materializedText, StringComparison.Ordinal);
+            Assert.Contains($"X-Keep: separator-contract{lastHeaderTerminator}", materializedText, StringComparison.Ordinal);
+
+            NntpArticleParseResult reparsed = parser.Parse(materialized.Memory.ToArray());
+            Assert.True(reparsed.IsAccepted);
+            Assert.Equal(parse.BodyBytes.ToArray(), reparsed.BodyBytes.ToArray());
+        }
+
+        [Theory]
+        [InlineData("\n", "\r\n")]
+        [InlineData("\r\n", "\r")]
+        public void Materialize_WhenPathPresentAsFinalHeaderAndBoundaryUsesMixedTerminators_RewritesPathWithoutChangingBody(string lastHeaderTerminator, string boundaryTerminator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] body = Encoding.ASCII.GetBytes("body-path-last\r\n\ntrailer");
+            byte[] article = BuildArticleWithCustomBoundary(
+                [
+                    ("Date: Tue, 10 May 2011 13:48:50 -0500", "\r\n"),
+                    ("Message-ID: <materialize-mixed-path-last@example.test>", "\r\n"),
+                    ("Newsgroups: alt.test", "\r\n"),
+                    ("From: user@example.test", "\r\n"),
+                    ("Path: upstream.example.test!feed2", lastHeaderTerminator),
+                ],
+                boundaryTerminator,
+                body);
+
+            NntpArticleParseResult parse = parser.Parse(article);
+            Assert.True(parse.IsAccepted);
+            Assert.Equal($"{LocalFqdn}!upstream.example.test!feed2", parse.CanonicalPath);
+
+            using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+            string materializedText = Encoding.ASCII.GetString(materialized.Memory.Span);
+            Assert.Contains($"Path: {LocalFqdn}!upstream.example.test!feed2{lastHeaderTerminator}", materializedText, StringComparison.Ordinal);
+            Assert.DoesNotContain("Path: upstream.example.test!feed2", materializedText, StringComparison.Ordinal);
+
+            NntpArticleParseResult reparsed = parser.Parse(materialized.Memory.ToArray());
+            Assert.True(reparsed.IsAccepted);
+            Assert.Equal(parse.BodyBytes.ToArray(), reparsed.BodyBytes.ToArray());
+        }
+
+        [Theory]
+        [InlineData("\n", "\r\n")]
+        [InlineData("\r\n", "\r")]
+        public void Materialize_WhenDateIsFinalHeaderAndBoundaryUsesMixedTerminators_RewritesDateAndPreservesBody(string lastHeaderTerminator, string boundaryTerminator)
+        {
+            NntpArticleParser parser = new(LocalFqdn);
+            byte[] body = Encoding.ASCII.GetBytes("body-date-last\n\r\nEND");
+            byte[] article = BuildArticleWithCustomBoundary(
+                [
+                    ("Message-ID: <materialize-mixed-date-last@example.test>", "\r\n"),
+                    ("Newsgroups: alt.test", "\r\n"),
+                    ("From: user@example.test", "\r\n"),
+                    ("Date: Tue, 10 May 2011 13:48:50 -0500", lastHeaderTerminator),
+                ],
+                boundaryTerminator,
+                body);
+
+            NntpArticleParseResult parse = parser.Parse(article);
+            Assert.True(parse.IsAccepted);
+
+            using DownloadedArticleBuffer materialized = NntpArticleCanonicalMaterializer.Materialize(parse);
+            string materializedText = Encoding.ASCII.GetString(materialized.Memory.Span);
+            Assert.Contains($"Date: Tue, 10 May 2011 18:48:50 +0000{lastHeaderTerminator}", materializedText, StringComparison.Ordinal);
+            Assert.Contains($"Path: {LocalFqdn}{lastHeaderTerminator}", materializedText, StringComparison.Ordinal);
+
+            NntpArticleParseResult reparsed = parser.Parse(materialized.Memory.ToArray());
+            Assert.True(reparsed.IsAccepted);
+            Assert.Equal(parse.BodyBytes.ToArray(), reparsed.BodyBytes.ToArray());
+        }
+
         [Fact]
         public void Materialize_WhenArticleIsRejected_ThrowsAndDoesNotBypassValidation()
         {
@@ -504,6 +599,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         private static byte[] BuildArticle(IReadOnlyList<string> headers, string body)
         {
             return BuildArticle(headers, Encoding.ASCII.GetBytes(body));
+        }
+
+        private static byte[] BuildArticleWithCustomBoundary(IReadOnlyList<(string Header, string Terminator)> headerLines, string boundaryTerminator, byte[] body)
+        {
+            StringBuilder builder = new();
+            for (int i = 0; i < headerLines.Count; i++)
+            {
+                _ = builder.Append(headerLines[i].Header).Append(headerLines[i].Terminator);
+            }
+
+            _ = builder.Append(boundaryTerminator);
+            byte[] headerBytes = Encoding.ASCII.GetBytes(builder.ToString());
+            byte[] article = new byte[headerBytes.Length + body.Length];
+            Buffer.BlockCopy(headerBytes, 0, article, 0, headerBytes.Length);
+            Buffer.BlockCopy(body, 0, article, headerBytes.Length, body.Length);
+            return article;
         }
 
         private static byte[] BuildSafeBody(int length)

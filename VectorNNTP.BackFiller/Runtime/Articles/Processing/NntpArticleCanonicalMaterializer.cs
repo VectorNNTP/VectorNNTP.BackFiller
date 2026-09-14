@@ -215,21 +215,44 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 ? throw new InvalidOperationException("Accepted parse result does not contain a valid header section boundary for Path insertion.")
                 : 0;
 
-            return headerLength >= 4
-                && source[headerLength - 4] == (byte)'\r'
-                && source[headerLength - 3] == (byte)'\n'
-                && source[headerLength - 2] == (byte)'\r'
-                && source[headerLength - 1] == (byte)'\n'
-                ? new HeaderSeparator(headerLength - 2, "\r\n"u8.ToArray())
-                : headerLength >= 2
-                && source[headerLength - 2] == (byte)'\n'
-                && source[headerLength - 1] == (byte)'\n'
-                ? new HeaderSeparator(headerLength - 1, "\n"u8.ToArray())
-                : headerLength >= 2
-                && source[headerLength - 2] == (byte)'\r'
-                && source[headerLength - 1] == (byte)'\r'
-                ? new HeaderSeparator(headerLength - 1, "\r"u8.ToArray())
-                : throw new InvalidOperationException("Accepted parse result header section does not terminate with an accepted separator style and cannot be safely materialized.");
+            static int ResolveTerminatorLengthEndingAt(ReadOnlySpan<byte> buffer, int endExclusive)
+            {
+                if (endExclusive <= 0)
+                {
+                    return 0;
+                }
+
+                byte last = buffer[endExclusive - 1];
+                if (last == (byte)'\n')
+                {
+                    return endExclusive >= 2 && buffer[endExclusive - 2] == (byte)'\r' ? 2 : 1;
+                }
+
+                return last == (byte)'\r' ? 1 : 0;
+            }
+
+            int boundaryTerminatorLength = ResolveTerminatorLengthEndingAt(source, headerLength);
+            if (boundaryTerminatorLength == 0)
+            {
+                throw new InvalidOperationException("Accepted parse result header section does not terminate with an accepted separator style and cannot be safely materialized.");
+            }
+
+            int boundaryTerminatorStart = headerLength - boundaryTerminatorLength;
+            int precedingHeaderTerminatorLength = ResolveTerminatorLengthEndingAt(source, boundaryTerminatorStart);
+            if (precedingHeaderTerminatorLength == 0)
+            {
+                throw new InvalidOperationException("Accepted parse result header section does not terminate with an accepted separator style and cannot be safely materialized.");
+            }
+
+            int precedingHeaderTerminatorStart = boundaryTerminatorStart - precedingHeaderTerminatorLength;
+            if (precedingHeaderTerminatorStart < 0)
+            {
+                throw new InvalidOperationException("Accepted parse result header section does not terminate with an accepted separator style and cannot be safely materialized.");
+            }
+
+            return new HeaderSeparator(
+                boundaryTerminatorStart,
+                source.Slice(precedingHeaderTerminatorStart, precedingHeaderTerminatorLength).ToArray());
         }
 
         /// <summary>
