@@ -80,7 +80,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <para>When retention admission is rejected for non-duplicate reasons, the sink reattaches payload ownership when possible, otherwise disposes it, and negatively acknowledges with requeue.
         /// Duplicate Message-ID admission keeps existing retained ownership authoritative and disposes the duplicate payload owner.</para>
         /// <para>If Transit admission is not accepted after retention is available, the sink negatively acknowledges without requeue and does not publish a response.</para>
-        /// <para>When response publication is required, RabbitMQ publish/confirm must succeed before final settlement; non-confirmed publication paths negatively acknowledge with requeue.</para>
+        /// <para>When response publication is required, RabbitMQ publish/confirm must satisfy response-publication policy before final settlement:
+        /// <see cref="RabbitMqResponsePublishStatus.Confirmed"/> continues normal settlement,
+        /// <see cref="RabbitMqResponsePublishStatus.ReturnedUnroutable"/> negatively acknowledges with <c>requeue=false</c>,
+        /// and <see cref="RabbitMqResponsePublishStatus.Failed"/>, <see cref="RabbitMqResponsePublishStatus.TimedOut"/>,
+        /// <see cref="RabbitMqResponsePublishStatus.Canceled"/>, or <see cref="RabbitMqResponsePublishStatus.StaleGeneration"/>
+        /// negatively acknowledge with <c>requeue=true</c>.</para>
         /// <para>Successful broker settlement acknowledges only after required prior steps complete. Non-success outcomes follow the disposition plan for ACK/NACK and requeue behavior.</para>
         /// <para>All paths guarantee cleanup in <c>finally</c>: any detached payload owner not transferred is disposed, and <paramref name="result"/> is disposed exactly once.</para>
         /// <para>Cancellation is observed through the supplied token and is also reflected in the disposition plan used for final settlement behavior.</para>
@@ -252,14 +257,20 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
                     if (publishResult.Status is not RabbitMqResponsePublishStatus.Confirmed)
                     {
-                        await result.Delivery.Settlement.NackAsync(requeue: true, cancellationToken).ConfigureAwait(false);
-                        LogRabbitMqResponsePublishNotConfirmedRequeue(
+                        bool requeue = publishResult.Status is not RabbitMqResponsePublishStatus.ReturnedUnroutable;
+                        CancellationToken settlementToken = SelectPublishFailureSettlementToken(
+                            publishStatus: publishResult.Status,
+                            processingToken: cancellationToken,
+                            deliveryToken: result.Delivery.CancellationToken);
+                        await result.Delivery.Settlement.NackAsync(requeue, settlementToken).ConfigureAwait(false);
+                        LogRabbitMqResponsePublishNotConfirmedDisposition(
                             _logger,
                             result.Request.RequestId,
                             result.CorrelationId,
                             result.Request.MessageId,
                             result.Request.Backbone ?? result.Delivery.Backbone,
-                            publishResult.Status);
+                            publishResult.Status,
+                            requeue);
                         return;
                     }
                 }
@@ -320,6 +331,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             CancellationToken deliveryToken)
         {
             return admissionStatus != TransitAdmissionStatus.Canceled || deliveryToken.IsCancellationRequested
+                ? processingToken
+                : deliveryToken;
+        }
+
+        private static CancellationToken SelectPublishFailureSettlementToken(
+            RabbitMqResponsePublishStatus publishStatus,
+            CancellationToken processingToken,
+            CancellationToken deliveryToken)
+        {
+            return publishStatus != RabbitMqResponsePublishStatus.Canceled || deliveryToken.IsCancellationRequested
                 ? processingToken
                 : deliveryToken;
         }
@@ -390,25 +411,24 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             ArticleRetentionAdmissionStatus admissionStatus);
 
         /// <summary>
-        /// Emits the response publish-not-confirmed requeue log event when RabbitMQ refuses confirmation and the delivery must be requeued.
+        /// Emits the response publish-not-confirmed disposition event when RabbitMQ response publication cannot satisfy required publish/routing semantics.
         /// </summary>
-        /// <param name="logger">Logger receiving the requeue event.</param>
+        /// <param name="logger">Logger receiving the disposition event.</param>
         /// <param name="requestId">Phase 3 request identifier associated with the completed work item.</param>
         /// <param name="correlationId">AMQP correlation identifier copied from the delivery when one is available.</param>
         /// <param name="messageId">Canonical Message-ID associated with the processed article.</param>
         /// <param name="backbone">Backbone name for the retrieval target used for the request.</param>
-        /// <param name="publishStatus">Terminal publish status that caused the requeue decision.</param>
-        [LoggerMessage(
-            EventId = 3403,
-            Level = LogLevel.Warning,
-            Message = "RabbitMQ response publish was not confirmed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} PublishStatus={PublishStatus}")]
-        private static partial void LogRabbitMqResponsePublishNotConfirmedRequeue(
+        /// <param name="publishStatus">Terminal publish status that caused this disposition decision.</param>
+        /// <param name="requeue">Whether the delivery was negatively acknowledged with requeue.</param>
+        [LoggerMessage(EventId = 3403, Level = LogLevel.Warning, Message = "RabbitMQ response publish did not satisfy confirmation/routing requirements; applying negative acknowledgement. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} PublishStatus={PublishStatus} Requeue={Requeue}")]
+        private static partial void LogRabbitMqResponsePublishNotConfirmedDisposition(
             ILogger logger,
             Guid? requestId,
             string? correlationId,
             string? messageId,
             string backbone,
-            RabbitMqResponsePublishStatus publishStatus);
+            RabbitMqResponsePublishStatus publishStatus,
+            bool requeue);
 
         /// <summary>
         /// Emits a warning when transit admission rejects a retained success-path article and the delivery is dropped without requeue.

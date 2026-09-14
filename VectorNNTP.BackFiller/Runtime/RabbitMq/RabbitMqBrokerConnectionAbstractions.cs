@@ -113,6 +113,11 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
     internal interface IRabbitMqChannel : IAsyncDisposable
     {
         /// <summary>
+        /// Raised when RabbitMQ returns a mandatory publication as unroutable.
+        /// </summary>
+        public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync;
+
+        /// <summary>
         /// Gets the underlying RabbitMQ.Client channel instance.
         /// </summary>
         public IChannel UnderlyingChannel { get; }
@@ -446,6 +451,13 @@ namespace VectorNNTP.Backfiller.Runtime.RabbitMq
         internal RabbitMqChannelAdapter(IChannel channel)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
+        }
+
+        /// <inheritdoc/>
+        public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync
+        {
+            add => _channel.BasicReturnAsync += value;
+            remove => _channel.BasicReturnAsync -= value;
         }
 
         /// <inheritdoc/>

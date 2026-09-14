@@ -681,6 +681,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
 
         private sealed class FakeRabbitMqChannel(int id) : IRabbitMqChannel
         {
+            /// <inheritdoc/>
+            public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync
+            {
+                add { }
+                remove { }
+            }
+
             /// <summary>
             /// Confirms underlying channel behavior.
             /// </summary>

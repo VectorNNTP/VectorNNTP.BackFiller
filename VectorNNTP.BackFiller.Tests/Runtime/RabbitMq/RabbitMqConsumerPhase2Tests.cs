@@ -4737,6 +4737,13 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             public IChannel UnderlyingChannel => _underlyingChannel;
 
+            /// <inheritdoc/>
+            public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync
+            {
+                add { }
+                remove { }
+            }
+
             /// <summary>
             /// Supplies disposed for the fixture or scenario under test.
             /// </summary>

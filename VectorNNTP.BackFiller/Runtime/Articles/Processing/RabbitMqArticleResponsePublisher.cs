@@ -7,6 +7,8 @@
 // confirms publication before ACK/NACK disposition is finalized.
 
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
+using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.RabbitMq;
 
@@ -64,7 +66,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="result">Processed result that supplies authoritative reply queue, correlation identifier, and source connection generation.</param>
         /// <param name="response">Application-level response body to publish.</param>
         /// <param name="cancellationToken">Cancellation token for gate acquisition, channel acquisition, publish, and confirm waiting.</param>
-        /// <returns>A publish result describing confirmed, timed-out, or failed publication.</returns>
+        /// <returns>
+        /// A publish result whose status is one of: <see cref="RabbitMqResponsePublishStatus.Confirmed"/>,
+        /// <see cref="RabbitMqResponsePublishStatus.ReturnedUnroutable"/>, <see cref="RabbitMqResponsePublishStatus.Failed"/>,
+        /// <see cref="RabbitMqResponsePublishStatus.TimedOut"/>, <see cref="RabbitMqResponsePublishStatus.Canceled"/>,
+        /// or <see cref="RabbitMqResponsePublishStatus.StaleGeneration"/>.
+        /// </returns>
         public async ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
             ArticleWorkProcessingResult result,
             RabbitMqArticleWorkResponse response,
@@ -83,15 +90,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Failed, result.Delivery.ConnectionGeneration, new InvalidOperationException("AMQP ReplyTo is required for RPC response publishing."));
             }
 
-            await _publishGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            bool publishGateAcquired = false;
             try
             {
+                await _publishGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                publishGateAcquired = true;
+
                 string backbone = result.Request.Backbone ?? result.Delivery.Backbone;
 
                 RabbitMqOwnedChannel? ownedChannel;
                 try
                 {
                     ownedChannel = await GetOrCreatePublishChannelAsync(backbone, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+                {
+                    return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Canceled, result.Delivery.ConnectionGeneration, ex);
                 }
                 catch (Exception ex)
                 {
@@ -110,7 +124,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 {
                     await ResetPublishChannelAsync().ConfigureAwait(false);
                     return new RabbitMqResponsePublishResult(
-                        RabbitMqResponsePublishStatus.Failed,
+                        RabbitMqResponsePublishStatus.StaleGeneration,
                         ownedChannel.ConnectionGeneration,
                         new InvalidOperationException("Owned publish channel generation is stale."));
                 }
@@ -129,23 +143,66 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         DeliveryMode = DeliveryModes.Transient,
                     };
 
-                    await ownedChannel.Channel
-                        .BasicPublishAsync(
-                            exchange: string.Empty,
-                            routingKey: result.ReplyTo,
-                            mandatory: false,
-                            basicProperties: properties,
-                            body: payload,
-                            confirmTimeoutCts.Token)
-                        .ConfigureAwait(false);
+                    bool unroutableReturnObserved = false;
+
+                    Task OnBasicReturnAsync(object _, BasicReturnEventArgs eventArgs)
+                    {
+                        if (eventArgs.BasicProperties?.MessageId is string returnedMessageId
+                            && string.Equals(returnedMessageId, properties.MessageId, StringComparison.Ordinal))
+                        {
+                            unroutableReturnObserved = true;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+
+                    ownedChannel.Channel.BasicReturnAsync += OnBasicReturnAsync;
+
+                    try
+                    {
+                        await ownedChannel.Channel
+                            .BasicPublishAsync(
+                                exchange: string.Empty,
+                                routingKey: result.ReplyTo,
+                                mandatory: true,
+                                basicProperties: properties,
+                                body: payload,
+                                confirmTimeoutCts.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (PublishException ex) when (ex.IsReturn)
+                    {
+                        if (unroutableReturnObserved)
+                        {
+                            return new RabbitMqResponsePublishResult(
+                                RabbitMqResponsePublishStatus.ReturnedUnroutable,
+                                ownedChannel.ConnectionGeneration,
+                                ex);
+                        }
+
+                        await ResetPublishChannelAsync().ConfigureAwait(false);
+                        return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Failed, ownedChannel.ConnectionGeneration, ex);
+                    }
+                    finally
+                    {
+                        ownedChannel.Channel.BasicReturnAsync -= OnBasicReturnAsync;
+                    }
 
                     if (ownedChannel.ConnectionGeneration != _connectionManager.ConnectionGeneration)
                     {
                         await ResetPublishChannelAsync().ConfigureAwait(false);
                         return new RabbitMqResponsePublishResult(
-                            RabbitMqResponsePublishStatus.Failed,
+                            RabbitMqResponsePublishStatus.StaleGeneration,
                             ownedChannel.ConnectionGeneration,
                             new InvalidOperationException("RabbitMQ connection generation changed during response publication."));
+                    }
+
+                    if (unroutableReturnObserved)
+                    {
+                        return new RabbitMqResponsePublishResult(
+                            RabbitMqResponsePublishStatus.ReturnedUnroutable,
+                            ownedChannel.ConnectionGeneration,
+                            null);
                     }
 
                     LogRabbitMqRpcResponsePublishedAndConfirmed(
@@ -156,6 +213,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         backbone);
 
                     return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Confirmed, ownedChannel.ConnectionGeneration, null);
+                }
+                catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+                {
+                    return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Canceled, ownedChannel.ConnectionGeneration, ex);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -176,9 +237,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Failed, ownedChannel.ConnectionGeneration, ex);
                 }
             }
+            catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+            {
+                return new RabbitMqResponsePublishResult(RabbitMqResponsePublishStatus.Canceled, result.Delivery.ConnectionGeneration, ex);
+            }
             finally
             {
-                _ = _publishGate.Release();
+                if (publishGateAcquired)
+                {
+                    _ = _publishGate.Release();
+                }
             }
         }
 
