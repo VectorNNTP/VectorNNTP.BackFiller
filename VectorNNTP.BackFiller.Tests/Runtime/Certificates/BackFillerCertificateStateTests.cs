@@ -35,7 +35,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             Assert.NotNull(runtimeMaterial);
             Assert.NotNull(runtimeMaterial!.CertificateContext);
             Assert.True(runtimeMaterial.Bundle.Certificate.HasPrivateKey);
-            Assert.Contains(runtimeMaterial.Bundle.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(expectedIntermediateRaw));
+
+            X509Certificate2 runtimeIntermediate = Assert.Single(runtimeMaterial.Bundle.IntermediateCertificates);
+            Assert.NotSame(publishedBundle.IntermediateCertificates[0], runtimeIntermediate);
+            Assert.False(runtimeIntermediate.HasPrivateKey);
+            Assert.Equal(expectedIntermediateRaw, runtimeIntermediate.RawData);
         }
 
         [Fact]
