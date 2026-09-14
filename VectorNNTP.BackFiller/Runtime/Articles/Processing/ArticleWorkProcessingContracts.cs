@@ -290,19 +290,34 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     internal enum RabbitMqResponsePublishStatus
     {
         /// <summary>
-        /// Response was published and positively confirmed by RabbitMQ.
+        /// Response publish was broker-confirmed and no mandatory return was observed for the publication.
         /// </summary>
         Confirmed = 0,
 
         /// <summary>
+        /// Response publish was broker-confirmed but RabbitMQ returned it as unroutable under mandatory routing.
+        /// </summary>
+        ReturnedUnroutable = 1,
+
+        /// <summary>
         /// Response publish operation failed before confirmation.
         /// </summary>
-        Failed = 1,
+        Failed = 2,
 
         /// <summary>
         /// Response publish confirmation timed out.
         /// </summary>
-        TimedOut = 2,
+        TimedOut = 3,
+
+        /// <summary>
+        /// Response publish operation was canceled by caller or shutdown cancellation.
+        /// </summary>
+        Canceled = 4,
+
+        /// <summary>
+        /// Response publish channel generation became stale relative to the active RabbitMQ connection generation.
+        /// </summary>
+        StaleGeneration = 5,
     }
 
     /// <summary>
@@ -310,7 +325,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// </summary>
     /// <param name="Status">Publication completion status.</param>
     /// <param name="ConnectionGeneration">Connection generation used for the publish attempt.</param>
-    /// <param name="Exception">Optional captured failure exception when publication failed before confirmation. This value is reported, not rethrown by the result object.</param>
+    /// <param name="Exception">Optional captured exception for failed publication paths. This value is reported, not rethrown by the result object.</param>
     internal sealed record RabbitMqResponsePublishResult(
         RabbitMqResponsePublishStatus Status,
         long ConnectionGeneration,
@@ -330,7 +345,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     }
 
     /// <summary>
-    /// Publishes RabbitMQ RPC responses using AMQP CorrelationId/ReplyTo and confirm semantics.
+    /// Publishes RabbitMQ RPC responses using AMQP CorrelationId/ReplyTo, publisher confirms, and mandatory-routing observation.
     /// </summary>
     internal interface IRabbitMqArticleResponsePublisher
     {
@@ -340,7 +355,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="result">Processed source result holding authoritative AMQP metadata.</param>
         /// <param name="response">Response payload to publish.</param>
         /// <param name="cancellationToken">Cancellation token for channel acquisition, publish, and confirm waiting.</param>
-        /// <returns>A result describing whether publish confirm succeeded, timed out, or failed before confirmation.</returns>
+        /// <returns>A result describing whether publish confirm succeeded, was returned as unroutable, timed out, canceled, failed, or became stale.</returns>
         public ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
             ArticleWorkProcessingResult result,
             RabbitMqArticleWorkResponse response,

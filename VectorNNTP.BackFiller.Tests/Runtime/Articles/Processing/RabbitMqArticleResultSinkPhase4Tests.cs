@@ -210,6 +210,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(914UL, settlement.NackDeliveryTag);
             Assert.True(settlement.NackRequeue);
         }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenPublishReturnedUnroutable_DoesNotAckAndNacksWithoutRequeueAsync()
+        {
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<publish-unroutable@example.com>", "BackboneA"),
+                correlationId: "corr-publish-unroutable",
+                replyTo: "rpc.responses",
+                deliveryTag: 915,
+                connectionGeneration: 43,
+                settlement: settlement);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<publish-unroutable@example.com>", "publish-unroutable-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<publish-unroutable@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(RabbitMqResponsePublishStatus.ReturnedUnroutable);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher);
+
+            await sink.OnProcessedAsync(result, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(915UL, settlement.NackDeliveryTag);
+            Assert.False(settlement.NackRequeue);
+        }
         /// <summary>
         /// Confirms the on processed async when article not found nacks without requeue async behavior.
         /// </summary>

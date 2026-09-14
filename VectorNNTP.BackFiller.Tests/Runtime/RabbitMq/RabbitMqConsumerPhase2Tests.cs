@@ -4737,6 +4737,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             /// </summary>
             public IChannel UnderlyingChannel => _underlyingChannel;
 
+            /// <inheritdoc/>
+#pragma warning disable CS0067
+            public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync;
+#pragma warning restore CS0067
+
             /// <summary>
             /// Supplies disposed for the fixture or scenario under test.
             /// </summary>
