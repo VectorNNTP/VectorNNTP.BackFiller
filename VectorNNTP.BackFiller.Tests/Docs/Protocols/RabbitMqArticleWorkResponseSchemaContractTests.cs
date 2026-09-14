@@ -7,6 +7,7 @@
 
 using NJsonSchema;
 using NJsonSchema.Validation;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 using Xunit;
 
 namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
@@ -250,35 +251,218 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
         }
 
         [Theory]
-        [InlineData("<12345@example.invalid>", true)]
-        [InlineData("not-message-id", false)]
-        [InlineData("", false)]
-        [InlineData("   ", false)]
-        public void Schema_WhenOutcomeSuccessMessageIdCanonicality_IsEnforced(string messageId, bool expectValid)
+        [InlineData("Success")]
+        [InlineData("ArticleNotFound")]
+        [InlineData("InvalidArticle")]
+        [InlineData("InvalidRequest")]
+        public void Schema_WhenOutcomeBackboneWhitespaceOnly_IsInvalid(string outcome)
         {
-            string escapedMessageId = messageId.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
-            string json = $$"""
-                {
-                  "version": 1,
-                  "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
-                  "messageId": "{{escapedMessageId}}",
-                  "backbone": "Giganews",
-                  "outcome": "Success",
-                  "uri": "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"
-                }
-                """;
+            string json = outcome switch
+            {
+                "Success" => """
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": "<12345@example.invalid>",
+                      "backbone": "   ",
+                      "outcome": "Success",
+                      "uri": "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"
+                    }
+                    """,
+                "ArticleNotFound" => """
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": "<12345@example.invalid>",
+                      "backbone": "\t\n",
+                      "outcome": "ArticleNotFound",
+                      "error": "No article with that message-id"
+                    }
+                    """,
+                "InvalidArticle" => """
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": "<12345@example.invalid>",
+                      "backbone": "\t",
+                      "outcome": "InvalidArticle",
+                      "error": "Article content was invalid."
+                    }
+                    """,
+                "InvalidRequest" => """
+                    {
+                      "version": 1,
+                      "requestId": null,
+                      "messageId": null,
+                      "backbone": "\n",
+                      "outcome": "InvalidRequest",
+                      "error": "Request payload was invalid."
+                    }
+                    """,
+                _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
+            };
 
             ICollection<ValidationError> errors = Validate(json);
-            if (expectValid)
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("backbone", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Theory]
+        [InlineData("messageId", "123")]
+        [InlineData("messageId", "true")]
+        [InlineData("messageId", "[]")]
+        [InlineData("messageId", "{}")]
+        [InlineData("backbone", "123")]
+        [InlineData("backbone", "true")]
+        [InlineData("backbone", "[]")]
+        [InlineData("backbone", "{}")]
+        [InlineData("error", "123")]
+        [InlineData("error", "true")]
+        [InlineData("error", "[]")]
+        [InlineData("error", "{}")]
+        [InlineData("uri", "123")]
+        [InlineData("uri", "true")]
+        [InlineData("uri", "[]")]
+        [InlineData("uri", "{}")]
+        public void Schema_WhenPropertyHasWrongJsonType_IsInvalid(string propertyName, string rawJsonValue)
+        {
+            string payload = propertyName switch
             {
-                Assert.Empty(errors);
+                "messageId" => $$"""
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": {{rawJsonValue}},
+                      "backbone": "Giganews",
+                      "outcome": "Success",
+                      "uri": "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"
+                    }
+                    """,
+                "backbone" => $$"""
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": "<12345@example.invalid>",
+                      "backbone": {{rawJsonValue}},
+                      "outcome": "Success",
+                      "uri": "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"
+                    }
+                    """,
+                "error" => $$"""
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": "<12345@example.invalid>",
+                      "backbone": "Giganews",
+                      "outcome": "ArticleNotFound",
+                      "error": {{rawJsonValue}}
+                    }
+                    """,
+                "uri" => $$"""
+                    {
+                      "version": 1,
+                      "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                      "messageId": "<12345@example.invalid>",
+                      "backbone": "Giganews",
+                      "outcome": "Success",
+                      "uri": {{rawJsonValue}}
+                    }
+                    """,
+                _ => throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, null),
+            };
+
+            ICollection<ValidationError> errors = Validate(payload);
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, error =>
+                error.ToString().Contains(propertyName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeSuccessMessageIdCanonicalityMatchesRuntimeVectors()
+        {
+            string[] validMessageIds =
+            [
+                "<12345@example.invalid>",
+                "<abc.def+tag@example.invalid>",
+                "<a@b>",
+                "<abc@[127.0.0.1]>",
+                "<abc@[IPv6:2001:db8::1]>",
+                "<abc@[x@y]>",
+                BuildMessageIdWithTotalLength(250)
+            ];
+
+            string[] invalidMessageIds =
+            [
+                "not-message-id",
+                string.Empty,
+                "   ",
+                "<double..dot@example.com>",
+                "<\"quoted\"@example.com>",
+                "<nodomain@>",
+                "<@example.com>",
+                "<abc@example..com>",
+                "<abc@exa mple.com>",
+                "<abc@@example.com>",
+                "<abc@[127.0.0.1>",
+                "<abc@[]>",
+                "abc@example.com",
+                "<abc@example.com",
+                "abc@example.com>",
+                BuildMessageIdWithTotalLength(251)
+            ];
+
+            foreach (string messageId in validMessageIds)
+            {
+                Assert.True(NntpMessageIdValidation.IsValidMessageId(messageId), $"Runtime validator unexpectedly rejected: {messageId}");
+                ICollection<ValidationError> validErrors = Validate(BuildSuccessPayloadWithMessageId(messageId));
+                Assert.Empty(validErrors);
             }
-            else
+
+            foreach (string messageId in invalidMessageIds)
             {
-                Assert.NotEmpty(errors);
-                Assert.Contains(errors, static error =>
+                Assert.False(NntpMessageIdValidation.IsValidMessageId(messageId), $"Runtime validator unexpectedly accepted: {messageId}");
+                ICollection<ValidationError> invalidErrors = Validate(BuildSuccessPayloadWithMessageId(messageId));
+                Assert.NotEmpty(invalidErrors);
+                Assert.Contains(invalidErrors, static error =>
                     error.ToString().Contains("messageId", StringComparison.OrdinalIgnoreCase));
             }
+        }
+
+        [Fact]
+        public void Schema_WhenOutcomeInvalidRequestHasStringMessageId_CanonicalityIsEnforced()
+        {
+            const string validMessageId = "<abc@[127.0.0.1]>";
+            const string invalidMessageId = "<double..dot@example.com>";
+
+            Assert.True(NntpMessageIdValidation.IsValidMessageId(validMessageId));
+            Assert.False(NntpMessageIdValidation.IsValidMessageId(invalidMessageId));
+
+            ICollection<ValidationError> validErrors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": null,
+                  "messageId": "<abc@[127.0.0.1]>",
+                  "backbone": null,
+                  "outcome": "InvalidRequest",
+                  "error": "Request payload was invalid."
+                }
+                """);
+            Assert.Empty(validErrors);
+
+            ICollection<ValidationError> invalidErrors = Validate("""
+                {
+                  "version": 1,
+                  "requestId": null,
+                  "messageId": "<double..dot@example.com>",
+                  "backbone": null,
+                  "outcome": "InvalidRequest",
+                  "error": "Request payload was invalid."
+                }
+                """);
+            Assert.NotEmpty(invalidErrors);
+            Assert.Contains(invalidErrors, static error =>
+                error.ToString().Contains("messageId", StringComparison.OrdinalIgnoreCase));
         }
 
         [Theory]
@@ -320,16 +504,34 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
 
         private static string BuildSuccessPayload(string uri)
         {
+            return BuildSuccessPayloadWithMessageId("<12345@example.invalid>", uri);
+        }
+
+        private static string BuildSuccessPayloadWithMessageId(string messageId, string uri = "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")
+        {
+            string escapedMessageId = messageId.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
             return $$"""
                 {
                   "version": 1,
                   "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
-                  "messageId": "<12345@example.invalid>",
+                  "messageId": "{{escapedMessageId}}",
                   "backbone": "Giganews",
                   "outcome": "Success",
                   "uri": "{{uri}}"
                 }
                 """;
+        }
+
+        private static string BuildMessageIdWithTotalLength(int totalLength)
+        {
+            const string domainPart = "@example.invalid>";
+            if (totalLength < 3 + domainPart.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(totalLength));
+            }
+
+            int localLength = totalLength - 1 - domainPart.Length;
+            return $"<{new string('a', localLength)}{domainPart}";
         }
 
         private static JsonSchema LoadSchema()

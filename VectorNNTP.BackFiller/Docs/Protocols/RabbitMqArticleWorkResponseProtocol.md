@@ -36,7 +36,7 @@ Identity availability contract:
 - `requestId`, `messageId`, and `backbone` represent request-body identity values when those values were successfully parsed before failure.
 - BackFiller never fabricates synthetic request identity for failure responses.
 - For `InvalidRequest` only, any of these identity fields may be `null` when parsing failed before that identity could be established.
-- For `Success`, `ArticleNotFound`, and `InvalidArticle`, identity fields remain concrete, non-empty request-body values and `messageId` must be a canonical NNTP Message-ID.
+- For `Success`, `ArticleNotFound`, and `InvalidArticle`, identity fields remain concrete, non-empty request-body values; `messageId` must be a canonical NNTP Message-ID and `backbone` must be non-whitespace.
 
 Canonical success response payload:
 
@@ -55,8 +55,8 @@ Canonical terminal failure response payload:
 |---|---|---:|---|
 | `version` | Integer | Yes | Application-level response schema version. Current value: `1`. |
 | `requestId` | String (GUID) or `null` | Yes | Original application request identity from request JSON body when available; `null` is permitted only for `InvalidRequest` when request identity could not be parsed. |
-| `messageId` | String or `null` | Yes | Original Message-ID from request JSON body when available; `null` is permitted only for `InvalidRequest` when message identity could not be parsed. Any present non-null value must satisfy the canonical NNTP Message-ID contract. |
-| `backbone` | String or `null` | Yes | Original backbone from request JSON body when available; `null` is permitted only for `InvalidRequest` when backbone identity could not be parsed. |
+| `messageId` | String or `null` | Yes | Original Message-ID from request JSON body when available; `null` is permitted only for `InvalidRequest` when message identity could not be parsed. Any present non-null value must satisfy the canonical NNTP Message-ID contract (ASCII bracketed local@domain, dot-atom local part and dot-atom-or-literal domain, length 3..250). |
+| `backbone` | String or `null` | Yes | Original backbone from request JSON body when available; any non-null value must be non-whitespace. `null` is permitted only for `InvalidRequest` when backbone identity could not be parsed. |
 | `outcome` | String | Yes | Terminal outcome classification string. |
 | `uri` | String | No | Success-only canonical article cache URI: `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` where `MessageIdMd5` is lowercase hexadecimal MD5 of ASCII bytes of the exact `messageId` string. Property MUST be absent for non-success outcomes. |
 | `error` | String | No | Required and non-whitespace for response-carrying terminal failure outcomes; property MUST be absent for success. |
@@ -110,6 +110,9 @@ Hashing input and transform rules:
 Deterministic vectors used by repository tests:
 - `<12345@example.invalid>` -> `30edc94157aa16fe644a45a1f1ffe160`
 - `<abc@example.invalid>` -> `de438dc83d64b1fa9206cf4da9eed5cc`
+
+## Schema/Runtime Message-ID Parity Boundary
+The runtime validator (`NntpMessageIdValidation`) is authoritative. The published schema mirrors runtime grammar with ASCII bracketed local@domain structure, dot-atom local-part restrictions, dot-atom or bracketed-literal domain handling, and min/max length constraints (3..250). Runtime/parser validation remains the final authority for canonical acceptance at integration boundaries.
 
 ## Identity and Redelivery Semantics
 - `messageId`: canonical article identity from JSON request body and the identity used to derive `uri` when outcome is `Success`.

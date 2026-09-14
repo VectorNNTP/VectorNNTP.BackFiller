@@ -273,8 +273,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// <param name="MessageId">Canonical Message-ID from JSON request payload when available; <see langword="null"/> when invalid-request parsing failed before message identity could be established.</param>
     /// <param name="Backbone">Backbone from JSON request payload when available; <see langword="null"/> when invalid-request parsing failed before backbone identity could be established.</param>
     /// <param name="Outcome">Terminal outcome string for RPC consumers.</param>
-    /// <param name="Uri">Optional retrieval URI when a stable location exists in runtime architecture.</param>
-    /// <param name="Error">Optional terminal error detail for non-success terminal outcomes.</param>
+    /// <param name="Uri">Required canonical cache URI for <c>Success</c>; must be <see langword="null"/> for all non-success outcomes.</param>
+    /// <param name="Error">Required non-whitespace terminal detail for <c>ArticleNotFound</c>, <c>InvalidArticle</c>, and <c>InvalidRequest</c>; must be <see langword="null"/> for <c>Success</c>.</param>
     internal sealed record RabbitMqArticleWorkResponse(
         int Version,
         Guid? RequestId,
@@ -450,7 +450,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <inheritdoc/>
         public async Task WaitForDrainAsync(CancellationToken cancellationToken)
         {
-            await _drained.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _drained.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private void TrySignalDrainedNoLock()

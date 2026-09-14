@@ -21,7 +21,14 @@
     },
     "canonicalMessageId": {
       "type": "string",
-      "pattern": "^<[!-~]+@[!-~]+>$"
+      "minLength": 3,
+      "maxLength": 250,
+      "pattern": "^<[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\\[[A-Za-z0-9!#$%&'*+/=?^_`{|}~\"(),.:;<@-]+\\])>$"
+    },
+    "meaningfulBackbone": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     },
     "meaningfulError": {
       "type": "string",
@@ -60,14 +67,13 @@
     "backbone": {
       "oneOf": [
         {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulBackbone"
         },
         {
           "type": "null"
         }
       ],
-      "description": "Backbone identity copied from request JSON payload when available; null indicates identity was unavailable during InvalidRequest parsing."
+      "description": "Backbone identity copied from request JSON payload when available; any non-null value must be meaningful (non-whitespace). Null indicates identity was unavailable during InvalidRequest parsing."
     },
     "outcome": {
       "type": "string",
@@ -86,7 +92,7 @@
     },
     "error": {
       "$ref": "#/$defs/meaningfulError",
-      "description": "Terminal failure detail for non-success terminal outcomes."
+      "description": "Terminal failure detail for non-success terminal outcomes; must be meaningful (non-whitespace) when present."
     }
   },
   "oneOf": [
@@ -112,8 +118,7 @@
           "$ref": "#/$defs/canonicalMessageId"
         },
         "backbone": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulBackbone"
         }
       },
       "not": {
@@ -144,8 +149,7 @@
           "$ref": "#/$defs/canonicalMessageId"
         },
         "backbone": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulBackbone"
         },
         "error": {
           "$ref": "#/$defs/meaningfulError"
@@ -179,8 +183,7 @@
           "$ref": "#/$defs/canonicalMessageId"
         },
         "backbone": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulBackbone"
         },
         "error": {
           "$ref": "#/$defs/meaningfulError"
@@ -230,8 +233,7 @@
         "backbone": {
           "oneOf": [
             {
-              "type": "string",
-              "minLength": 1
+              "$ref": "#/$defs/meaningfulBackbone"
             },
             {
               "type": "null"

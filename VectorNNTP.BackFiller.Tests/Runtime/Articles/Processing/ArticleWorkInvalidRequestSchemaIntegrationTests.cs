@@ -22,23 +22,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         private static readonly Lazy<JsonSchema> ResponseSchema = new(LoadSchema);
 
         [Theory]
-        [InlineData("", true, true, true, false, false)]
-        [InlineData("{", true, true, true, false, false)]
-        [InlineData("[]", true, true, true, false, false)]
-        [InlineData("{\"version\":1,\"messageId\":\"<missing-requestid@example.com>\",\"backbone\":\"BackboneA\"}", true, false, false, false, true)]
-        [InlineData("{\"version\":1,\"requestId\":\"not-a-guid\",\"messageId\":\"<invalid-requestid@example.com>\",\"backbone\":\"BackboneA\"}", true, false, false, false, true)]
-        [InlineData("{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<guid-empty-requestid@example.com>\",\"backbone\":\"BackboneA\"}", true, false, false, false, true)]
-        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"backbone\":\"BackboneA\"}", false, true, false, true, false)]
-        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"not-message-id\",\"backbone\":\"BackboneA\"}", false, true, false, true, false)]
-        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<missing-backbone@example.com>\"}", false, false, true, true, true)]
-        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<mismatch@example.com>\",\"backbone\":\"Eweka\"}", false, false, true, true, true)]
-        public async Task ParseToSchema_WhenInvalidRequestAndReplyable_ProducesSchemaValidResponse(
+        [InlineData("", null, null, null)]
+        [InlineData("{", null, null, null)]
+        [InlineData("[]", null, null, null)]
+        [InlineData("{\"version\":1,\"messageId\":\"<missing-requestid@example.com>\",\"backbone\":\"BackboneA\"}", null, "<missing-requestid@example.com>", "BackboneA")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"backbone\":\"BackboneA\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<missing-backbone@example.com>\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<missing-backbone@example.com>", null)]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<all-identity@example.com>\",\"backbone\":\"Eweka\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<all-identity@example.com>", null)]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"not-message-id\",\"backbone\":\"BackboneA\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA")]
+        [InlineData("{\"version\":1,\"requestId\":\"not-a-guid\",\"messageId\":\"<invalid-requestid@example.com>\",\"backbone\":\"BackboneA\"}", null, "<invalid-requestid@example.com>", "BackboneA")]
+        [InlineData("{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<guid-empty-requestid@example.com>\",\"backbone\":\"BackboneA\"}", null, "<guid-empty-requestid@example.com>", "BackboneA")]
+        public async Task ParseToSchema_WhenInvalidRequestAndReplyable_PreservesExactIdentityAndProducesSchemaValidResponse(
             string payload,
-            bool expectRequestIdUnavailable,
-            bool expectMessageIdUnavailable,
-            bool expectBackboneUnavailable,
-            bool expectRequestIdAvailable,
-            bool expectMessageIdAvailable)
+            string? expectedRequestId,
+            string? expectedMessageId,
+            string? expectedBackbone)
         {
             RabbitMqArticleDelivery delivery = CreateDelivery(payload, backbone: "BackboneA", correlationId: "corr-invalid-request", replyTo: "rpc.responses");
             RabbitMqArticleWorkRequestParser parser = new();
@@ -51,30 +49,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
             Assert.False(string.IsNullOrWhiteSpace(failure.ResponseText));
 
-            if (expectRequestIdUnavailable)
-            {
-                Assert.Null(failure.Request.RequestId);
-            }
+            Guid? expectedRequestGuid = expectedRequestId is null ? null : Guid.Parse(expectedRequestId);
 
-            if (expectMessageIdUnavailable)
-            {
-                Assert.Null(failure.Request.MessageId);
-            }
-
-            if (expectBackboneUnavailable)
-            {
-                Assert.Null(failure.Request.Backbone);
-            }
-
-            if (expectRequestIdAvailable)
-            {
-                Assert.NotNull(failure.Request.RequestId);
-            }
-
-            if (expectMessageIdAvailable)
-            {
-                Assert.False(string.IsNullOrWhiteSpace(failure.Request.MessageId));
-            }
+            Assert.Equal(expectedRequestGuid, failure.Request.RequestId);
+            Assert.Equal(expectedMessageId, failure.Request.MessageId);
+            Assert.Equal(expectedBackbone, failure.Request.Backbone);
 
             ArticleWorkDispositionPlanner planner = new();
             RabbitMqDispositionPlan plan = planner.CreatePlan(failure, CancellationToken.None);
@@ -85,12 +64,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(nameof(ArticleWorkProcessingOutcome.InvalidRequest), response.Outcome);
             Assert.False(string.IsNullOrWhiteSpace(response.Error));
 
+            Assert.Equal(expectedRequestGuid, response.RequestId);
+            Assert.Equal(expectedMessageId, response.MessageId);
+            Assert.Equal(expectedBackbone, response.Backbone);
+
             byte[] payloadBytes = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
             RabbitMqArticleWorkResponse parsedResponse = RabbitMqArticleWorkResponseWireProtocol.ParseV1(payloadBytes);
 
-            Assert.Equal(response.RequestId, parsedResponse.RequestId);
-            Assert.Equal(response.MessageId, parsedResponse.MessageId);
-            Assert.Equal(response.Backbone, parsedResponse.Backbone);
+            Assert.Equal(expectedRequestGuid, parsedResponse.RequestId);
+            Assert.Equal(expectedMessageId, parsedResponse.MessageId);
+            Assert.Equal(expectedBackbone, parsedResponse.Backbone);
             Assert.Equal(response.Error, parsedResponse.Error);
 
             ICollection<ValidationError> schemaErrors = ResponseSchema.Value.Validate(System.Text.Encoding.UTF8.GetString(payloadBytes));
@@ -109,6 +92,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
             Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, failure.InvalidRequestReplyability);
+            Assert.Equal(Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa"), failure.Request.RequestId);
+            Assert.Equal("<missing-correlation@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
 
             RabbitMqDispositionPlan plan = new ArticleWorkDispositionPlanner().CreatePlan(failure, CancellationToken.None);
             Assert.False(plan.PublishResponse);
@@ -126,6 +112,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
             Assert.Equal(InvalidRequestReplyability.NonReplyableMissingMetadata, failure.InvalidRequestReplyability);
+            Assert.Equal(Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa"), failure.Request.RequestId);
+            Assert.Equal("<missing-replyto@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
 
             RabbitMqDispositionPlan plan = new ArticleWorkDispositionPlanner().CreatePlan(failure, CancellationToken.None);
             Assert.False(plan.PublishResponse);
@@ -152,6 +141,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Null(response.Backbone);
 
             byte[] responsePayload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
+            RabbitMqArticleWorkResponse parsedResponse = RabbitMqArticleWorkResponseWireProtocol.ParseV1(responsePayload);
+            Assert.Null(parsedResponse.RequestId);
+            Assert.Null(parsedResponse.MessageId);
+            Assert.Null(parsedResponse.Backbone);
+
             ICollection<ValidationError> schemaErrors = ResponseSchema.Value.Validate(System.Text.Encoding.UTF8.GetString(responsePayload));
             Assert.Empty(schemaErrors);
         }

@@ -63,7 +63,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Confirms success responses with null uri serialize with explicit null for schema-compatibility assertions.
+        /// Confirms contract-invalid responses are rejected before any serialization output is emitted, including success responses missing canonical URI.
         /// </summary>
         [Theory]
         [InlineData(1, "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<12345@example.invalid>", "Giganews", "Success", null, null)]
@@ -185,13 +185,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":null,\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":null,\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":123,\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":true,\"backbone\":\"B\",\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":123,\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":[],\"outcome\":\"Success\",\"uri\":\"cache://backfiller01.usenet.ninja:119/86590d16c882d3a0b763fdb57cb0ce2f\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"ArticleNotFound\",\"error\":\"No article\"}")]
         [InlineData("{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"\",\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"   \",\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":\"not-message-id\",\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":123,\"backbone\":null,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":\"\",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":\"   \",\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
+        [InlineData("{\"version\":1,\"requestId\":null,\"messageId\":null,\"backbone\":123,\"outcome\":\"InvalidRequest\",\"error\":\"Request payload was invalid.\"}")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"ProviderFailure\",\"error\":\"Provider failure\"}")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"Cancelled\",\"error\":\"Cancelled\"}")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<m@example.invalid>\",\"backbone\":\"B\",\"outcome\":\"UnexpectedFailure\",\"error\":\"Unexpected failure\"}")]

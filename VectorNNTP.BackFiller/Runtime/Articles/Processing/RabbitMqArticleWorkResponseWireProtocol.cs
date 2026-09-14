@@ -17,8 +17,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// Defines the canonical JSON body contract for RabbitMQ article-work responses.
     /// </summary>
     /// <remarks>
-    /// Success responses always emit an explicit <c>uri</c> property using the canonical cache URI contract,
-    /// while failure responses omit <c>uri</c> and include <c>error</c> only when text is available.
+    /// Version-1 responses enforce outcome-specific property contracts:
+    /// <list type="bullet">
+    /// <item><description><c>Success</c> requires concrete identity, a canonical hash-bound <c>uri</c>, and an absent <c>error</c>.</description></item>
+    /// <item><description><c>ArticleNotFound</c> and <c>InvalidArticle</c> require concrete identity, required non-whitespace <c>error</c>, and an absent <c>uri</c>.</description></item>
+    /// <item><description><c>InvalidRequest</c> requires non-whitespace <c>error</c>, absent <c>uri</c>, and permits nullable identity only where parsing could not establish request-body identity.</description></item>
+    /// </list>
+    /// Serialization validates the full outcome contract before writing bytes.
     /// </remarks>
     internal static partial class RabbitMqArticleWorkResponseWireProtocol
     {
@@ -269,6 +274,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 throw new InvalidOperationException($"Unsupported response outcome '{response.Outcome}'.");
             }
 
+            string? concreteMessageId = null;
             if (successOutcome || articleNotFoundOutcome || invalidArticleOutcome)
             {
                 if (!response.RequestId.HasValue || response.RequestId.Value == Guid.Empty)
@@ -276,7 +282,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     throw new InvalidOperationException("Terminal non-invalid-request response payload requires a concrete non-empty 'requestId'.");
                 }
 
-                if (string.IsNullOrWhiteSpace(response.MessageId) || !NntpMessageIdValidation.IsValidMessageId(response.MessageId.AsSpan()))
+                if (response.MessageId is not { } validatedMessageId || string.IsNullOrWhiteSpace(validatedMessageId) || !NntpMessageIdValidation.IsValidMessageId(validatedMessageId.AsSpan()))
                 {
                     throw new InvalidOperationException("Terminal non-invalid-request response payload requires a canonical non-empty 'messageId'.");
                 }
@@ -285,6 +291,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 {
                     throw new InvalidOperationException("Terminal non-invalid-request response payload requires a non-empty 'backbone'.");
                 }
+
+                concreteMessageId = validatedMessageId;
             }
 
             if (successOutcome)
@@ -294,7 +302,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     throw new InvalidOperationException("Success response payload requires a canonical non-empty 'uri'.");
                 }
 
-                string expectedHash = MessageIdHashing.ComputeCanonicalMd5Hex(response.MessageId!);
+                string expectedHash = MessageIdHashing.ComputeCanonicalMd5Hex(concreteMessageId ?? throw new InvalidOperationException("Success response payload requires a canonical non-empty 'messageId'."));
                 if (!string.Equals(uriHash, expectedHash, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException("Success response payload uri hash must match canonical messageId hash.");

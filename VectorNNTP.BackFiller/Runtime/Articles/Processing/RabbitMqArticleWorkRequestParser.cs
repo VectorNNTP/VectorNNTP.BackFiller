@@ -372,12 +372,15 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         }
 
         /// <summary>
-        /// Reads a required GUID property from the request object.
+        /// Reads an optional GUID identity property from the request object.
         /// </summary>
         /// <param name="root">Root JSON object representing the payload.</param>
-        /// <param name="propertyName">Required property name.</param>
-        /// <param name="value">Parsed GUID value when the property exists and contains a non-blank GUID string.</param>
-        /// <returns><see langword="true"/> when the property exists, is a string, and parses as a GUID.</returns>
+        /// <param name="propertyName">Optional property name.</param>
+        /// <param name="value">Parsed non-empty GUID value when available; otherwise <see langword="null"/>.</param>
+        /// <returns><see langword="true"/> when the property is present as a non-blank GUID string and parses to a non-empty GUID; otherwise <see langword="false"/>.</returns>
+        /// <remarks>
+        /// Missing, non-string, blank, malformed, or nil (<see cref="Guid.Empty"/>) values are treated as unavailable identity and leave <paramref name="value"/> as <see langword="null"/>.
+        /// </remarks>
         private static bool TryReadOptionalGuid(JsonElement root, string propertyName, out Guid? value)
         {
             value = null;
