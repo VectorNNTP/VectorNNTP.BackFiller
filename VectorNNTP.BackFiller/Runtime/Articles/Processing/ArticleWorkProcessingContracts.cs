@@ -295,7 +295,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         Confirmed = 0,
 
         /// <summary>
-        /// Response publish was broker-confirmed but RabbitMQ returned it as unroutable under mandatory routing.
+        /// Response publish requested mandatory routing and RabbitMQ reported an unroutable return correlated to this publication.
         /// </summary>
         ReturnedUnroutable = 1,
 

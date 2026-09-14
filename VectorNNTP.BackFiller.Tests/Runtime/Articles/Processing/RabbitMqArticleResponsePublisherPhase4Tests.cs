@@ -299,6 +299,67 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         }
 
         [Fact]
+        public async Task PublishAndConfirmAsync_WhenDelayedReturnFromCanceledPublicationArrivesDuringNextPublish_DoesNotMisclassifyNextPublishAsReturnedUnroutableAsync()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            RecordingBrokerConnector connector = new()
+            {
+                BlockPublishUntilCancelled = true,
+            };
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
+            RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            await connectionManager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+
+            RabbitMqArticleResponsePublisher publisher = new(runtimeOptions, connectionManager, NullLogger<RabbitMqArticleResponsePublisher>.Instance);
+
+            ArticleWorkProcessingResult firstResult = CreateSuccessResult(806, connectionManager.ConnectionGeneration, "corr-publisher-delayed-return-a", "rpc.reply.delayed.a");
+            ArticleWorkProcessingResult secondResult = CreateSuccessResult(807, connectionManager.ConnectionGeneration, "corr-publisher-delayed-return-b", "rpc.reply.delayed.b");
+            ArticleWorkProcessingResult thirdResult = CreateSuccessResult(808, connectionManager.ConnectionGeneration, "corr-publisher-delayed-return-c", "rpc.reply.delayed.c");
+
+            Assert.NotNull(firstResult.Request.MessageId);
+            Assert.NotNull(secondResult.Request.MessageId);
+            Assert.NotNull(thirdResult.Request.MessageId);
+
+            RabbitMqArticleWorkResponse firstResponse = new(1, firstResult.Request.RequestId, firstResult.Request.MessageId, firstResult.Request.Backbone, "Success", $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(firstResult.Request.MessageId)}", null);
+            RabbitMqArticleWorkResponse secondResponse = new(1, secondResult.Request.RequestId, secondResult.Request.MessageId, secondResult.Request.Backbone, "Success", $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(secondResult.Request.MessageId)}", null);
+            RabbitMqArticleWorkResponse thirdResponse = new(1, thirdResult.Request.RequestId, thirdResult.Request.MessageId, thirdResult.Request.Backbone, "Success", $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(thirdResult.Request.MessageId)}", null);
+
+            using CancellationTokenSource firstPublishCts = new();
+            Task<RabbitMqResponsePublishResult> firstPublishTask = publisher.PublishAndConfirmAsync(firstResult, firstResponse, firstPublishCts.Token).AsTask();
+            await connector.WaitForFirstPublishStartedAsync().ConfigureAwait(false);
+
+            RecordingBrokerConnection connection = connector.RequireLastConnection();
+            RecordingChannel channel = Assert.Single(connection.CreatedChannels);
+            Assert.False(string.IsNullOrWhiteSpace(channel.LastPublishMessageId));
+            string delayedReturnMessageId = channel.LastPublishMessageId!;
+
+            firstPublishCts.Cancel();
+            RabbitMqResponsePublishResult firstPublishResult = await firstPublishTask.ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.Canceled, firstPublishResult.Status);
+
+            connector.QueueDelayedReturn(delayedReturnMessageId, throwReturnPublishException: false);
+            Task<RabbitMqResponsePublishResult> secondPublishTask = publisher.PublishAndConfirmAsync(secondResult, secondResponse, CancellationToken.None).AsTask();
+            await connector.WaitForFirstPublishStartedAsync().ConfigureAwait(false);
+            connector.ReleasePublishBlock();
+
+            RabbitMqResponsePublishResult secondPublishResult = await secondPublishTask.ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.Confirmed, secondPublishResult.Status);
+            Assert.NotEqual(RabbitMqResponsePublishStatus.ReturnedUnroutable, secondPublishResult.Status);
+
+            connector.ReturnMandatoryPublishesAsUnroutable = true;
+            connector.ThrowReturnPublishExceptionWhenUnroutable = true;
+            RabbitMqResponsePublishResult thirdPublishResult = await publisher.PublishAndConfirmAsync(thirdResult, thirdResponse, CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.ReturnedUnroutable, thirdPublishResult.Status);
+
+            Assert.Equal(0, channel.BasicReturnSubscriberCount);
+
+            await connectionManager.DisposeAsync().ConfigureAwait(false);
+            firstResult.Dispose();
+            secondResult.Dispose();
+            thirdResult.Dispose();
+        }
+
+        [Fact]
         public async Task PublishAndConfirmAsync_WhenCallerCancelsDuringChannelAcquisition_ReturnsCanceledAsync()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
@@ -335,10 +396,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             result.Dispose();
         }
         /// <summary>
-        /// Confirms the publish and confirm async when connection generation changes during publish returns failed async behavior.
+        /// Confirms the publish and confirm async when connection generation changes during publish returns stale generation async behavior.
         /// </summary>
         [Fact]
-        public async Task PublishAndConfirmAsync_WhenConnectionGenerationChangesDuringPublish_ReturnsFailedAsync()
+        public async Task PublishAndConfirmAsync_WhenConnectionGenerationChangesDuringPublish_ReturnsStaleGenerationAsync()
         {
             using ShutdownCoordinator shutdownCoordinator = new();
             RecordingBrokerConnector connector = new();
@@ -703,10 +764,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// </summary>
             private readonly SemaphoreSlim _publishStarted = new(0, 1);
             private readonly SemaphoreSlim _connectStarted = new(0, 1);
+            private TaskCompletionSource<bool> _publishRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
             /// <summary>
             /// Confirms  gate behavior.
             /// </summary>
             private readonly object _gate = new();
+            private readonly Queue<(string MessageId, bool ThrowReturnPublishException)> _delayedReturns = [];
             /// <summary>
             /// Supplies  connections for the fixture or scenario under test.
             /// </summary>
@@ -745,6 +808,30 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// Supplies whether channel creation should block until canceled for channel-acquisition cancellation tests.
             /// </summary>
             internal bool BlockChannelCreateUntilCancelled { get; set; }
+
+            internal bool TryTakeDelayedReturn(out string messageId, out bool throwReturnPublishException)
+            {
+                lock (_gate)
+                {
+                    if (_delayedReturns.Count == 0)
+                    {
+                        messageId = string.Empty;
+                        throwReturnPublishException = false;
+                        return false;
+                    }
+
+                    (messageId, throwReturnPublishException) = _delayedReturns.Dequeue();
+                    return true;
+                }
+            }
+
+            internal void QueueDelayedReturn(string messageId, bool throwReturnPublishException)
+            {
+                lock (_gate)
+                {
+                    _delayedReturns.Enqueue((messageId, throwReturnPublishException));
+                }
+            }
 
             /// <summary>
             /// Confirms the connect async behavior.
@@ -866,6 +953,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             internal void ReleasePublishBlock()
             {
                 BlockPublishUntilCancelled = false;
+                _ = _publishRelease.TrySetResult(true);
+            }
+
+            internal Task WaitForPublishReleaseAsync(CancellationToken cancellationToken)
+            {
+                return _publishRelease.Task.WaitAsync(cancellationToken);
             }
 
             /// <summary>
@@ -877,6 +970,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 {
                     _ = _publishStarted.Release();
                 }
+
+                _publishRelease = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             }
         }
 
@@ -1315,9 +1410,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                     throw _owner.FailPublishWith;
                 }
 
-                while (_owner.BlockPublishUntilCancelled)
+                if (_owner.TryTakeDelayedReturn(out string delayedReturnMessageId, out bool throwReturnPublishException))
                 {
-                    await Task.Delay(20, cancellationToken).ConfigureAwait(false);
+                    AsyncEventHandler<BasicReturnEventArgs>? delayedReturnHandler = _basicReturnAsync;
+                    if (delayedReturnHandler is not null)
+                    {
+                        BasicProperties delayedReturnProperties = new()
+                        {
+                            MessageId = delayedReturnMessageId,
+                        };
+
+                        await delayedReturnHandler(
+                            this,
+                            new BasicReturnEventArgs(
+                                replyCode: 312,
+                                replyText: "NO_ROUTE",
+                                exchange: exchange,
+                                routingKey: routingKey,
+                                basicProperties: delayedReturnProperties,
+                                body: body,
+                                cancellationToken: cancellationToken)).ConfigureAwait(false);
+                    }
+
+                    if (throwReturnPublishException)
+                    {
+                        throw new PublishException(1UL, isReturn: true, message: "Queued delayed return publish failure.");
+                    }
+                }
+
+                if (_owner.BlockPublishUntilCancelled)
+                {
+                    await _owner.WaitForPublishReleaseAsync(cancellationToken).ConfigureAwait(false);
                 }
 
                 if (mandatory && _owner.ReturnMandatoryPublishesAsUnroutable)

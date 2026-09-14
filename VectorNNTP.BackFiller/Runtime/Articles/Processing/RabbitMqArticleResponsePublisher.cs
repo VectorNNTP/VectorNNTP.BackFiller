@@ -66,7 +66,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <param name="result">Processed result that supplies authoritative reply queue, correlation identifier, and source connection generation.</param>
         /// <param name="response">Application-level response body to publish.</param>
         /// <param name="cancellationToken">Cancellation token for gate acquisition, channel acquisition, publish, and confirm waiting.</param>
-        /// <returns>A publish result describing confirmed, timed-out, or failed publication.</returns>
+        /// <returns>
+        /// A publish result whose status is one of: <see cref="RabbitMqResponsePublishStatus.Confirmed"/>,
+        /// <see cref="RabbitMqResponsePublishStatus.ReturnedUnroutable"/>, <see cref="RabbitMqResponsePublishStatus.Failed"/>,
+        /// <see cref="RabbitMqResponsePublishStatus.TimedOut"/>, <see cref="RabbitMqResponsePublishStatus.Canceled"/>,
+        /// or <see cref="RabbitMqResponsePublishStatus.StaleGeneration"/>.
+        /// </returns>
         public async ValueTask<RabbitMqResponsePublishResult> PublishAndConfirmAsync(
             ArticleWorkProcessingResult result,
             RabbitMqArticleWorkResponse response,

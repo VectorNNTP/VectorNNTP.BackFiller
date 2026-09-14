@@ -80,7 +80,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <para>When retention admission is rejected for non-duplicate reasons, the sink reattaches payload ownership when possible, otherwise disposes it, and negatively acknowledges with requeue.
         /// Duplicate Message-ID admission keeps existing retained ownership authoritative and disposes the duplicate payload owner.</para>
         /// <para>If Transit admission is not accepted after retention is available, the sink negatively acknowledges without requeue and does not publish a response.</para>
-        /// <para>When response publication is required, RabbitMQ publish/confirm must succeed before final settlement; non-confirmed publication paths negatively acknowledge with requeue.</para>
+        /// <para>When response publication is required, RabbitMQ publish/confirm must satisfy response-publication policy before final settlement:
+        /// <see cref="RabbitMqResponsePublishStatus.Confirmed"/> continues normal settlement,
+        /// <see cref="RabbitMqResponsePublishStatus.ReturnedUnroutable"/> negatively acknowledges with <c>requeue=false</c>,
+        /// and <see cref="RabbitMqResponsePublishStatus.Failed"/>, <see cref="RabbitMqResponsePublishStatus.TimedOut"/>,
+        /// <see cref="RabbitMqResponsePublishStatus.Canceled"/>, or <see cref="RabbitMqResponsePublishStatus.StaleGeneration"/>
+        /// negatively acknowledge with <c>requeue=true</c>.</para>
         /// <para>Successful broker settlement acknowledges only after required prior steps complete. Non-success outcomes follow the disposition plan for ACK/NACK and requeue behavior.</para>
         /// <para>All paths guarantee cleanup in <c>finally</c>: any detached payload owner not transferred is disposed, and <paramref name="result"/> is disposed exactly once.</para>
         /// <para>Cancellation is observed through the supplied token and is also reflected in the disposition plan used for final settlement behavior.</para>
