@@ -17,14 +17,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// Represents one parsed application-level article-work request from the JSON payload body.
     /// </summary>
     /// <param name="Version">Application-level article-work request schema version.</param>
-    /// <param name="RequestId">Application request identifier that remains stable across redelivery.</param>
-    /// <param name="MessageId">Canonical NNTP Message-ID requested by work payload.</param>
-    /// <param name="Backbone">Backbone namespace declared by payload and validated against delivery queue context.</param>
+    /// <param name="RequestId">Application request identifier from payload when available; <see langword="null"/> when payload parsing failed before request identity could be established.</param>
+    /// <param name="MessageId">Canonical NNTP Message-ID from payload when available; <see langword="null"/> when payload parsing failed before message identity could be established.</param>
+    /// <param name="Backbone">Backbone namespace from payload when available; <see langword="null"/> when payload parsing failed before backbone identity could be established.</param>
     internal sealed record RabbitMqArticleWorkRequest(
         int Version,
-        Guid RequestId,
-        string MessageId,
-        string Backbone);
+        Guid? RequestId,
+        string? MessageId,
+        string? Backbone);
 
     /// <summary>
     /// Represents deterministic high-level terminal outcomes for one article-work request.
@@ -269,17 +269,17 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
     /// Transport fields such as AMQP <c>CorrelationId</c> and <c>ReplyTo</c> remain on the delivery envelope and are intentionally excluded from this body contract.
     /// </remarks>
     /// <param name="Version">Application-level response protocol version.</param>
-    /// <param name="RequestId">Application request identifier from JSON request payload.</param>
-    /// <param name="MessageId">Canonical Message-ID from JSON request payload.</param>
-    /// <param name="Backbone">Backbone from JSON request payload.</param>
+    /// <param name="RequestId">Application request identifier from JSON request payload when available; <see langword="null"/> when invalid-request parsing failed before request identity could be established.</param>
+    /// <param name="MessageId">Canonical Message-ID from JSON request payload when available; <see langword="null"/> when invalid-request parsing failed before message identity could be established.</param>
+    /// <param name="Backbone">Backbone from JSON request payload when available; <see langword="null"/> when invalid-request parsing failed before backbone identity could be established.</param>
     /// <param name="Outcome">Terminal outcome string for RPC consumers.</param>
-    /// <param name="Uri">Optional retrieval URI when a stable location exists in runtime architecture.</param>
-    /// <param name="Error">Optional terminal error detail for non-success terminal outcomes.</param>
+    /// <param name="Uri">Required canonical cache URI for <c>Success</c>; must be <see langword="null"/> for all non-success outcomes.</param>
+    /// <param name="Error">Required non-whitespace terminal detail for <c>ArticleNotFound</c>, <c>InvalidArticle</c>, and <c>InvalidRequest</c>; must be <see langword="null"/> for <c>Success</c>.</param>
     internal sealed record RabbitMqArticleWorkResponse(
         int Version,
-        Guid RequestId,
-        string MessageId,
-        string Backbone,
+        Guid? RequestId,
+        string? MessageId,
+        string? Backbone,
         string Outcome,
         string? Uri,
         string? Error);
@@ -450,7 +450,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         /// <inheritdoc/>
         public async Task WaitForDrainAsync(CancellationToken cancellationToken)
         {
-            await _drained.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            _ = await _drained.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         private void TrySignalDrainedNoLock()

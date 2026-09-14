@@ -80,6 +80,47 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.False(root.TryGetProperty("replyTo", out _));
         }
 
+        [Theory]
+        [InlineData(null, "<wire-null-requestid@example.com>", "BackboneA", "Canonical request serialization requires a concrete non-empty requestId.")]
+        [InlineData("00000000-0000-0000-0000-000000000000", "<wire-empty-requestid@example.com>", "BackboneA", "Canonical request serialization requires a concrete non-empty requestId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "", "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "   ", "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "not-message-id", "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<wire-empty-backbone@example.com>", null, "Canonical request serialization requires a non-empty backbone.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<wire-whitespace-backbone@example.com>", "   ", "Canonical request serialization requires a non-empty backbone.")]
+        public void SerializeV1_WhenRequestIdentityOrRequiredFieldsInvalid_ThrowsInvalidOperationException(
+            string? requestId,
+            string? messageId,
+            string? backbone,
+            string expectedMessage)
+        {
+            Guid? parsedRequestId = requestId is null ? null : Guid.Parse(requestId);
+            RabbitMqArticleWorkRequest request = new(
+                Version: 1,
+                RequestId: parsedRequestId,
+                MessageId: messageId,
+                Backbone: backbone);
+
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => RabbitMqArticleWorkRequestWireProtocol.SerializeV1(request));
+            Assert.Equal(expectedMessage, exception.Message);
+        }
+
+        [Fact]
+        public void SerializeV1_WhenRequestIdentityConcreteAndRequiredFieldsPresent_WritesCanonicalJson()
+        {
+            RabbitMqArticleWorkRequest request = new(
+                Version: 1,
+                RequestId: Guid.Parse("9c5c0e4f-5161-4d4e-9db2-2d7d9d4a1d22"),
+                MessageId: "<wire-valid@example.com>",
+                Backbone: "BackboneA");
+
+            byte[] payload = RabbitMqArticleWorkRequestWireProtocol.SerializeV1(request);
+            string json = Encoding.UTF8.GetString(payload);
+
+            Assert.Equal("{\"version\":1,\"requestId\":\"9c5c0e4f-5161-4d4e-9db2-2d7d9d4a1d22\",\"messageId\":\"<wire-valid@example.com>\",\"backbone\":\"BackboneA\"}", json);
+        }
+
         /// <summary>
         /// Confirms a serialized RabbitMQ work-request payload exactly at the configured envelope ceiling is accepted.
         /// </summary>
@@ -269,25 +310,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// Confirms the parse async when version missing returns invalid request async behavior.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenVersionMissing_ReturnsInvalidRequestAsync()
+        public async Task ParseAsync_WhenVersionMissing_ReturnsInvalidRequestAndPreservesIndependentIdentityAsync()
         {
-            string payload = $$"""{"requestId":"{{Guid.NewGuid()}}","messageId":"<v-missing@example.com>","backbone":"BackboneA"}""";
+            Guid requestId = Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa");
+            string payload = $$"""{"requestId":"{{requestId}}","messageId":"<v-missing@example.com>","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
                 .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-missing", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Equal(requestId, failure.Request.RequestId);
+            Assert.Equal("<v-missing@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
         }
         /// <summary>
         /// Confirms the parse async when version unsupported returns invalid request async behavior.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenVersionUnsupported_ReturnsInvalidRequestAsync()
+        public async Task ParseAsync_WhenVersionUnsupported_ReturnsInvalidRequestAndPreservesIndependentIdentityAsync()
         {
-            string payload = $$"""{"version":2,"requestId":"{{Guid.NewGuid()}}","messageId":"<v-unsupported@example.com>","backbone":"BackboneA"}""";
+            Guid requestId = Guid.Parse("6916327f-e58f-4496-808f-a4076dc44ce6");
+            string payload = $$"""{"version":2,"requestId":"{{requestId}}","messageId":"<v-unsupported@example.com>","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
                 .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-unsupported", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Equal(requestId, failure.Request.RequestId);
+            Assert.Equal("<v-unsupported@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
         }
         /// <summary>
         /// Confirms the parse async when request id missing returns invalid request async behavior.
@@ -313,6 +366,38 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             AssertInvalidRequest(parseResult);
         }
+
+        [Fact]
+        public async Task ParseAsync_WhenRequestIdGuidEmpty_ReturnsInvalidRequestAndPreservesIndependentIdentityAsync()
+        {
+            string payload = "{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<guid-empty@example.com>\",\"backbone\":\"BackboneA\"}";
+            RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-guid-empty", replyTo: "rpc.replies"), CancellationToken.None);
+
+            AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Null(failure.Request.RequestId);
+            Assert.Equal("<guid-empty@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
+        }
+
+        [Fact]
+        public async Task ParseAsync_WhenRequestIdConcreteNonEmpty_ParsesSuccessfullyAsync()
+        {
+            Guid requestId = Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa");
+            string payload = $$"""{"version":1,"requestId":"{{requestId}}","messageId":"<guid-concrete@example.com>","backbone":"BackboneA"}""";
+
+            RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
+                .ParseAsync(CreateDelivery(payload, correlationId: "rpc-requestid-concrete", replyTo: "rpc.replies"), CancellationToken.None);
+
+            Assert.True(parseResult.IsSuccess);
+            RabbitMqArticleWorkRequest request = Assert.IsType<RabbitMqArticleWorkRequest>(parseResult.Request);
+            Assert.Equal(requestId, request.RequestId);
+            Assert.Equal("<guid-concrete@example.com>", request.MessageId);
+            Assert.Equal("BackboneA", request.Backbone);
+        }
+
         /// <summary>
         /// Confirms the parse async when message id missing returns invalid request async behavior.
         /// </summary>
@@ -365,13 +450,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// Confirms the parse async when backbone mismatches delivery context returns invalid request async behavior.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenBackboneMismatchesDeliveryContext_ReturnsInvalidRequestAsync()
+        public async Task ParseAsync_WhenBackboneMismatchesDeliveryContext_ReturnsInvalidRequestAndPreservesParsedBackboneAsync()
         {
-            string payload = CreateValidJsonPayload(Guid.NewGuid(), "<mismatch@example.com>", "Eweka");
+            Guid requestId = Guid.Parse("37ec3af7-fd42-4f02-a6f5-e55d3f3e6f06");
+            string payload = CreateValidJsonPayload(requestId, "<mismatch@example.com>", "Eweka");
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
                 .ParseAsync(CreateDelivery(payload, backbone: "Giganews", correlationId: "rpc-backbone-mismatch", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Equal(requestId, failure.Request.RequestId);
+            Assert.Equal("<mismatch@example.com>", failure.Request.MessageId);
+            Assert.Equal("Eweka", failure.Request.Backbone);
         }
         /// <summary>
         /// Confirms the parse async when backbone case differs uses case insensitive matching async behavior.
@@ -517,7 +608,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<phase3-notfound@example.com>", "BackboneA");
             RabbitMqArticleDelivery delivery = CreateDelivery(
-                CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone),
+                CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!),
                 correlationId: "rpc-notfound",
                 replyTo: "rpc.responses");
 
@@ -538,7 +629,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<phase3-cancel@example.com>", "BackboneA");
             RabbitMqArticleDelivery delivery = CreateDelivery(
-                CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone),
+                CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!),
                 correlationId: "rpc-cancel",
                 replyTo: "rpc.responses");
 
@@ -569,7 +660,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-success@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-success", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-success", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -599,7 +690,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-failure@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-failure", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-failure", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -626,7 +717,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-ordering@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-order", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-order", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -663,11 +754,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
 
             RabbitMqArticleWorkRequest firstRequest = new(1, Guid.NewGuid(), "<lease-reuse-1@example.com>", "BackboneA");
-            RabbitMqArticleDelivery firstDelivery = CreateDelivery(CreateValidJsonPayload(firstRequest.RequestId, firstRequest.MessageId, firstRequest.Backbone), correlationId: "rpc-lease-reuse-1", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery firstDelivery = CreateDelivery(CreateValidJsonPayload(firstRequest.RequestId!.Value, firstRequest.MessageId!, firstRequest.Backbone!), correlationId: "rpc-lease-reuse-1", replyTo: "rpc.responses");
             ArticleWorkProcessingResult firstResult = await processor.ProcessAsync(firstRequest, firstDelivery, CancellationToken.None).ConfigureAwait(false);
 
             RabbitMqArticleWorkRequest secondRequest = new(1, Guid.NewGuid(), "<lease-reuse-2@example.com>", "BackboneA");
-            RabbitMqArticleDelivery secondDelivery = CreateDelivery(CreateValidJsonPayload(secondRequest.RequestId, secondRequest.MessageId, secondRequest.Backbone), correlationId: "rpc-lease-reuse-2", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery secondDelivery = CreateDelivery(CreateValidJsonPayload(secondRequest.RequestId!.Value, secondRequest.MessageId!, secondRequest.Backbone!), correlationId: "rpc-lease-reuse-2", replyTo: "rpc.responses");
             ArticleWorkProcessingResult secondResult = await processor.ProcessAsync(secondRequest, secondDelivery, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Equal(2, slotIds.Count);
@@ -693,7 +784,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
 
             ArticleWorkProcessor processor = new(retriever, NullLogger<ArticleWorkProcessor>.Instance);
             RabbitMqArticleWorkRequest request = new(1, Guid.NewGuid(), "<lease-no-double-dispose@example.com>", "BackboneA");
-            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId, request.MessageId, request.Backbone), correlationId: "rpc-lease-nodouble", replyTo: "rpc.responses");
+            RabbitMqArticleDelivery delivery = CreateDelivery(CreateValidJsonPayload(request.RequestId!.Value, request.MessageId!, request.Backbone!), correlationId: "rpc-lease-nodouble", replyTo: "rpc.responses");
 
             ArticleWorkProcessingResult result = await processor.ProcessAsync(request, delivery, CancellationToken.None).ConfigureAwait(false);
 
@@ -783,9 +874,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// <param name="messageId">The message id used by this test scenario.</param>
         /// <param name="backbone">The backbone used by this test scenario.</param>
         /// <returns>The value returned by the create valid json payload helper.</returns>
-        private static string CreateValidJsonPayload(Guid requestId, string messageId, string backbone)
+        private static string CreateValidJsonPayload(Guid? requestId, string? messageId, string? backbone)
         {
-            return $"{{\"version\":1,\"requestId\":\"{requestId}\",\"messageId\":\"{messageId}\",\"backbone\":\"{backbone}\"}}";
+            Guid concreteRequestId = requestId ?? throw new InvalidOperationException("requestId is required for valid payload generation.");
+            string concreteMessageId = messageId ?? throw new InvalidOperationException("messageId is required for valid payload generation.");
+            string concreteBackbone = backbone ?? throw new InvalidOperationException("backbone is required for valid payload generation.");
+            return $"{{\"version\":1,\"requestId\":\"{concreteRequestId}\",\"messageId\":\"{concreteMessageId}\",\"backbone\":\"{concreteBackbone}\"}}";
         }
 
         /// <summary>

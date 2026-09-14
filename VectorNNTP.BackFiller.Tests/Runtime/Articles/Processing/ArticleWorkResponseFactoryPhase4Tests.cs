@@ -138,6 +138,42 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.NotEqual(firstPayload.Uri, secondPayload.Uri);
         }
 
+        [Fact]
+        public void CreateResponse_WhenInvalidRequestIdentityUnavailable_UsesNullIdentityAndNonEmptyError()
+        {
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleWorkResponseFactory factory = new(runtimeOptions);
+            ArticleWorkProcessingResult result = CreateResult(
+                outcome: ArticleWorkProcessingOutcome.InvalidRequest,
+                requestId: null,
+                messageId: null,
+                backbone: null,
+                responseText: " ");
+
+            RabbitMqArticleWorkResponse payload = Assert.IsType<RabbitMqArticleWorkResponse>(factory.CreateResponse(result));
+
+            Assert.Null(payload.RequestId);
+            Assert.Null(payload.MessageId);
+            Assert.Null(payload.Backbone);
+            Assert.Equal("Request payload was invalid.", payload.Error);
+        }
+
+        [Fact]
+        public void CreateResponse_WhenInvalidArticleErrorIsWhitespace_UsesDeterministicFallback()
+        {
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions();
+            ArticleWorkResponseFactory factory = new(runtimeOptions);
+            ArticleWorkProcessingResult result = CreateResult(
+                outcome: ArticleWorkProcessingOutcome.InvalidArticle,
+                requestId: Guid.NewGuid(),
+                messageId: "<invalid-article-fallback@example.invalid>",
+                backbone: "BackboneA",
+                responseText: "\t");
+
+            RabbitMqArticleWorkResponse payload = Assert.IsType<RabbitMqArticleWorkResponse>(factory.CreateResponse(result));
+            Assert.Equal("Article content was invalid.", payload.Error);
+        }
+
         /// <summary>
         /// Creates deterministic runtime options for URI contract assertions.
         /// </summary>
@@ -164,14 +200,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// </summary>
         private static ArticleWorkProcessingResult CreateResult(
             ArticleWorkProcessingOutcome outcome,
-            Guid requestId,
-            string messageId,
-            string backbone,
+            Guid? requestId,
+            string? messageId,
+            string? backbone,
             string responseText)
         {
+            string deliveryBackbone = backbone ?? "BackboneA";
             RabbitMqArticleWorkRequest request = new(1, requestId, messageId, backbone);
             RabbitMqArticleDelivery delivery = new(
-                Backbone: backbone,
+                Backbone: deliveryBackbone,
                 Queue: "grabbers.backbonea",
                 ConsumerTag: "ctag-factory",
                 ConsumerIdentity: "consumer-factory",

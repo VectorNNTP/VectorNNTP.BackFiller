@@ -99,18 +99,25 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             {
                 if (result.Outcome is ArticleWorkProcessingOutcome.Success)
                 {
+                    string requestMessageId = result.Request.MessageId
+                        ?? throw new InvalidOperationException("Successful article processing result did not provide a request Message-ID.");
+                    string requestBackbone = result.Request.Backbone
+                        ?? throw new InvalidOperationException("Successful article processing result did not provide a request backbone.");
+                    Guid requestId = result.Request.RequestId
+                        ?? throw new InvalidOperationException("Successful article processing result did not provide a request identifier.");
+
                     NntpArticleParseResult parseResult = result.GrabberResult?.Success?.Parse
                         ?? throw new InvalidOperationException("Successful article processing result did not provide parser metadata required for canonical materialization.");
 
-                    if (!MessageIdMatchesRequestIdentity(parseResult, result.Request.MessageId))
+                    if (!MessageIdMatchesRequestIdentity(parseResult, requestMessageId))
                     {
                         await result.Delivery.Settlement.NackAsync(requeue: false, cancellationToken).ConfigureAwait(false);
                         LogRabbitMqArticleMessageIdMismatchRejected(
                             _logger,
-                            result.Request.RequestId,
+                            requestId,
                             result.CorrelationId,
-                            result.Request.MessageId,
-                            result.Request.Backbone,
+                            requestMessageId,
+                            requestBackbone,
                             result.Delivery.DeliveryTag);
                         return;
                     }
@@ -139,10 +146,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
                         LogRabbitMqCanonicalMaterializationBoundaryRejected(
                             _logger,
-                            result.Request.RequestId,
+                            requestId,
                             result.CorrelationId,
-                            result.Request.MessageId,
-                            result.Request.Backbone,
+                            requestMessageId,
+                            requestBackbone,
                             result.Delivery.DeliveryTag,
                             boundaryEx.Message);
                     }
@@ -152,7 +159,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         originalPayloadOwner.Dispose();
                         detachedPayloadOwner = payloadOwner;
 
-                        ArticleRetentionAdmissionResult retentionAdmissionResult = _retentionAuthority.TryRetainSuccessArticle(result.Request.MessageId, payloadOwner!);
+                        ArticleRetentionAdmissionResult retentionAdmissionResult = _retentionAuthority.TryRetainSuccessArticle(requestMessageId, payloadOwner!);
                         bool retainedAvailableForTransit = retentionAdmissionResult.Status switch
                         {
                             ArticleRetentionAdmissionStatus.Admitted => true,
@@ -175,7 +182,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                             detachedPayloadOwner = null;
 
                             TransitAdmissionResult transitAdmissionResult = await _transitAdmissionGateway
-                                .AdmitAsync(result.Request.MessageId, cancellationToken)
+                                .AdmitAsync(requestMessageId, cancellationToken)
                                 .ConfigureAwait(false);
 
                             if (!transitAdmissionResult.IsAccepted)
@@ -189,10 +196,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                                 {
                                     LogRabbitMqTransitAdmissionRejectedDropWarning(
                                         _logger,
-                                        result.Request.RequestId,
+                                        requestId,
                                         result.CorrelationId,
-                                        result.Request.MessageId,
-                                        result.Request.Backbone,
+                                        requestMessageId,
+                                        requestBackbone,
                                         result.Delivery.DeliveryTag,
                                         transitAdmissionResult.Status,
                                         transitAdmissionResult.Error);
@@ -201,10 +208,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                                 {
                                     LogRabbitMqTransitAdmissionRejectedDropInformation(
                                         _logger,
-                                        result.Request.RequestId,
+                                        requestId,
                                         result.CorrelationId,
-                                        result.Request.MessageId,
-                                        result.Request.Backbone,
+                                        requestMessageId,
+                                        requestBackbone,
                                         result.Delivery.DeliveryTag,
                                         transitAdmissionResult.Status,
                                         transitAdmissionResult.Error);
@@ -224,10 +231,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                             await result.Delivery.Settlement.NackAsync(requeue: true, cancellationToken).ConfigureAwait(false);
                             LogRabbitMqRetentionAdmissionFailedRequeue(
                                 _logger,
-                                result.Request.RequestId,
+                                requestId,
                                 result.CorrelationId,
-                                result.Request.MessageId,
-                                result.Request.Backbone,
+                                requestMessageId,
+                                requestBackbone,
                                 retentionAdmissionResult.Status);
                             return;
                         }
@@ -251,7 +258,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                             result.Request.RequestId,
                             result.CorrelationId,
                             result.Request.MessageId,
-                            result.Request.Backbone,
+                            result.Request.Backbone ?? result.Delivery.Backbone,
                             publishResult.Status);
                         return;
                     }
@@ -265,7 +272,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
-                        result.Request.Backbone,
+                        result.Request.Backbone ?? result.Delivery.Backbone,
                         result.Delivery.DeliveryTag);
                 }
                 else
@@ -276,7 +283,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         result.Request.RequestId,
                         result.CorrelationId,
                         result.Request.MessageId,
-                        result.Request.Backbone,
+                        result.Request.Backbone ?? result.Delivery.Backbone,
                         result.Delivery.DeliveryTag,
                         plan.Requeue);
                 }
@@ -333,9 +340,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ success-path canonical materialization rejected article due to hard boundary. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Reason={Reason}")]
         private static partial void LogRabbitMqCanonicalMaterializationBoundaryRejected(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             ulong deliveryTag,
             string reason);
@@ -355,9 +362,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ success-path article identity mismatch rejected. RequestId={RequestId} CorrelationId={CorrelationId} RequestedMessageId={RequestedMessageId} Backbone={Backbone} DeliveryTag={DeliveryTag}")]
         private static partial void LogRabbitMqArticleMessageIdMismatchRejected(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string requestedMessageId,
+            string? requestedMessageId,
             string backbone,
             ulong deliveryTag);
 
@@ -376,9 +383,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ success-path retention admission failed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} AdmissionStatus={AdmissionStatus}")]
         private static partial void LogRabbitMqRetentionAdmissionFailedRequeue(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             ArticleRetentionAdmissionStatus admissionStatus);
 
@@ -397,9 +404,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ response publish was not confirmed; request will be requeued. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} PublishStatus={PublishStatus}")]
         private static partial void LogRabbitMqResponsePublishNotConfirmedRequeue(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             RabbitMqResponsePublishStatus publishStatus);
 
@@ -421,9 +428,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "Transit admission rejected retained success-path article; dropping RabbitMQ delivery with requeue=false. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} TransitAdmissionStatus={AdmissionStatus} TransitAdmissionError={AdmissionError} Requeue={Requeue}")]
         private static partial void LogRabbitMqTransitAdmissionRejectedDropWarning(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             ulong deliveryTag,
             TransitAdmissionStatus admissionStatus,
@@ -448,9 +455,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "Transit admission rejected retained success-path article; dropping RabbitMQ delivery with requeue=false. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} TransitAdmissionStatus={AdmissionStatus} TransitAdmissionError={AdmissionError} Requeue={Requeue}")]
         private static partial void LogRabbitMqTransitAdmissionRejectedDropInformation(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             ulong deliveryTag,
             TransitAdmissionStatus admissionStatus,
@@ -472,9 +479,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ delivery acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag}")]
         private static partial void LogRabbitMqDeliveryAcknowledged(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             ulong deliveryTag);
 
@@ -494,9 +501,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             Message = "RabbitMQ delivery negatively acknowledged. RequestId={RequestId} CorrelationId={CorrelationId} MessageId={MessageId} Backbone={Backbone} DeliveryTag={DeliveryTag} Requeue={Requeue}")]
         private static partial void LogRabbitMqDeliveryNegativelyAcknowledged(
             ILogger logger,
-            Guid requestId,
+            Guid? requestId,
             string? correlationId,
-            string messageId,
+            string? messageId,
             string backbone,
             ulong deliveryTag,
             bool requeue);

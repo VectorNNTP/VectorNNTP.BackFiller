@@ -12,6 +12,30 @@
     "backbone",
     "outcome"
   ],
+  "$defs": {
+    "concreteRequestId": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 1,
+      "pattern": "^(?!00000000-0000-0000-0000-000000000000$).+"
+    },
+    "canonicalMessageId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 250,
+      "pattern": "^<[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*|\\[[A-Za-z0-9!#$%&'*+/=?^_`{|}~\"(),.:;<@-]+\\])>$"
+    },
+    "meaningfulBackbone": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
+    },
+    "meaningfulError": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
+    }
+  },
   "properties": {
     "version": {
       "type": "integer",
@@ -19,20 +43,37 @@
       "description": "Application-level protocol version identifier."
     },
     "requestId": {
-      "type": "string",
-      "format": "uuid",
-      "minLength": 1,
-      "description": "Application request identity copied from request JSON payload."
+      "oneOf": [
+        {
+          "$ref": "#/$defs/concreteRequestId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Application request identity copied from request JSON payload when available; null indicates identity was unavailable during InvalidRequest parsing."
     },
     "messageId": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Canonical NNTP Message-ID copied from request JSON payload."
+      "oneOf": [
+        {
+          "$ref": "#/$defs/canonicalMessageId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Canonical NNTP Message-ID copied from request JSON payload when available; null indicates identity was unavailable during InvalidRequest parsing."
     },
     "backbone": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Backbone identity copied from request JSON payload."
+      "oneOf": [
+        {
+          "$ref": "#/$defs/meaningfulBackbone"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Backbone identity copied from request JSON payload when available; any non-null value must be meaningful (non-whitespace). Null indicates identity was unavailable during InvalidRequest parsing."
     },
     "outcome": {
       "type": "string",
@@ -50,58 +91,163 @@
       "description": "Success-only canonical article cache URI in the form cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}, where CanonicalBackFillerFqdn is a DNS hostname and MessageIdMd5 is the 32-character lowercase hexadecimal MD5 digest of the ASCII bytes of the exact messageId string."
     },
     "error": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Terminal failure detail for non-success terminal outcomes."
+      "$ref": "#/$defs/meaningfulError",
+      "description": "Terminal failure detail for non-success terminal outcomes; must be meaningful (non-whitespace) when present."
     }
   },
-  "allOf": [
+  "oneOf": [
     {
-      "if": {
-        "properties": {
-          "outcome": {
-            "const": "Success"
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "uri"
-        ],
-        "not": {
-          "required": [
-            "error"
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "uri"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "Success"
           ]
+        },
+        "requestId": {
+          "$ref": "#/$defs/concreteRequestId"
+        },
+        "messageId": {
+          "$ref": "#/$defs/canonicalMessageId"
+        },
+        "backbone": {
+          "$ref": "#/$defs/meaningfulBackbone"
         }
+      },
+      "not": {
+        "required": [
+          "error"
+        ]
       }
     },
     {
-      "if": {
-        "properties": {
-          "outcome": {
-            "enum": [
-              "ArticleNotFound",
-              "InvalidArticle",
-              "InvalidRequest"
-            ]
-          }
-        },
-        "required": [
-          "outcome"
-        ]
-      },
-      "then": {
-        "required": [
-          "error"
-        ],
-        "not": {
-          "required": [
-            "uri"
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "error"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "ArticleNotFound"
           ]
+        },
+        "requestId": {
+          "$ref": "#/$defs/concreteRequestId"
+        },
+        "messageId": {
+          "$ref": "#/$defs/canonicalMessageId"
+        },
+        "backbone": {
+          "$ref": "#/$defs/meaningfulBackbone"
+        },
+        "error": {
+          "$ref": "#/$defs/meaningfulError"
         }
+      },
+      "not": {
+        "required": [
+          "uri"
+        ]
+      }
+    },
+    {
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "error"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "InvalidArticle"
+          ]
+        },
+        "requestId": {
+          "$ref": "#/$defs/concreteRequestId"
+        },
+        "messageId": {
+          "$ref": "#/$defs/canonicalMessageId"
+        },
+        "backbone": {
+          "$ref": "#/$defs/meaningfulBackbone"
+        },
+        "error": {
+          "$ref": "#/$defs/meaningfulError"
+        }
+      },
+      "not": {
+        "required": [
+          "uri"
+        ]
+      }
+    },
+    {
+      "required": [
+        "version",
+        "requestId",
+        "messageId",
+        "backbone",
+        "outcome",
+        "error"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "InvalidRequest"
+          ]
+        },
+        "requestId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/concreteRequestId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messageId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/canonicalMessageId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backbone": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/meaningfulBackbone"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "$ref": "#/$defs/meaningfulError"
+        }
+      },
+      "not": {
+        "required": [
+          "uri"
+        ]
       }
     }
   ]

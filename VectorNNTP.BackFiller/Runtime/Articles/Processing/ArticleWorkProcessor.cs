@@ -56,6 +56,13 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             ArgumentNullException.ThrowIfNull(request);
             ArgumentNullException.ThrowIfNull(delivery);
 
+            Guid requestId = request.RequestId
+                ?? throw new InvalidOperationException("Article work processing requires a concrete requestId.");
+            string messageId = request.MessageId
+                ?? throw new InvalidOperationException("Article work processing requires a concrete messageId.");
+            string backbone = request.Backbone
+                ?? throw new InvalidOperationException("Article work processing requires a concrete backbone.");
+
             try
             {
                 BackboneArticleRetrievalResult retrieval = await _retriever.RetrieveAsync(request, cancellationToken).ConfigureAwait(false);
@@ -78,10 +85,10 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
                     LogArticleProcessingCompleted(
                         _logger,
-                        request.RequestId,
+                        requestId,
                         result.CorrelationId,
-                        request.MessageId,
-                        request.Backbone,
+                        messageId,
+                        backbone,
                         result.Outcome,
                         result.Disposition,
                         result.ProviderFailureCode,
@@ -112,7 +119,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             }
             catch (Exception ex)
             {
-                LogArticleProcessingFailedUnexpectedly(ex, _logger, request.RequestId, delivery.CorrelationId, request.MessageId, request.Backbone);
+                LogArticleProcessingFailedUnexpectedly(ex, _logger, requestId, delivery.CorrelationId, messageId, backbone);
                 return new ArticleWorkProcessingResult(
                     Request: request,
                     Delivery: delivery,

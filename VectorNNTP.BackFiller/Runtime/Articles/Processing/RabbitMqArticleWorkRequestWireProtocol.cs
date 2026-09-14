@@ -9,6 +9,7 @@
 using System.Buffers;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
@@ -47,9 +48,24 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             });
 
+            if (!request.RequestId.HasValue || request.RequestId.Value == Guid.Empty)
+            {
+                throw new InvalidOperationException("Canonical request serialization requires a concrete non-empty requestId.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.MessageId) || !NntpMessageIdValidation.IsValidMessageId(request.MessageId.AsSpan()))
+            {
+                throw new InvalidOperationException("Canonical request serialization requires a canonical non-empty messageId.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Backbone))
+            {
+                throw new InvalidOperationException("Canonical request serialization requires a non-empty backbone.");
+            }
+
             jsonWriter.WriteStartObject();
             jsonWriter.WriteNumber("version", request.Version);
-            jsonWriter.WriteString("requestId", request.RequestId);
+            jsonWriter.WriteString("requestId", request.RequestId.Value);
             jsonWriter.WriteString("messageId", request.MessageId);
             jsonWriter.WriteString("backbone", request.Backbone);
             jsonWriter.WriteEndObject();
