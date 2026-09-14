@@ -249,8 +249,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.True(evaluation.HasCertificate);
                 Assert.True(evaluation.IsUsable);
                 Assert.NotNull(evaluation.Certificate);
-                Assert.Contains(evaluation.Certificate!.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
+                Assert.True(evaluation.Certificate!.Certificate.HasPrivateKey);
+                Assert.NotNull(evaluation.Certificate.Certificate.GetRSAPrivateKey());
+                Assert.Equal(chain.LeafCertificate.RawData, evaluation.Certificate.Certificate.RawData);
+                Assert.Contains(evaluation.Certificate.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
                 Assert.Contains(evaluation.Certificate.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.RootCertificate.RawData));
+                Assert.False(evaluation.Certificate.IntermediateCertificates.Any(cert => cert.HasPrivateKey));
+                AssertAuthorityKeyIdentifierMatchesIssuerSubjectKeyIdentifier(chain.IntermediateCertificate, chain.RootCertificate);
+                AssertAuthorityKeyIdentifierMatchesIssuerSubjectKeyIdentifier(chain.LeafCertificate, chain.IntermediateCertificate);
                 evaluation.Certificate.Dispose();
             }
             finally
@@ -531,6 +537,33 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             }
 
             return Convert.FromHexString(subjectKeyIdentifier);
+        }
+
+        private static void AssertAuthorityKeyIdentifierMatchesIssuerSubjectKeyIdentifier(X509Certificate2 childCertificate, X509Certificate2 issuerCertificate)
+        {
+            ArgumentNullException.ThrowIfNull(childCertificate);
+            ArgumentNullException.ThrowIfNull(issuerCertificate);
+
+            X509SubjectKeyIdentifierExtension issuerSubjectKeyIdentifierExtension = issuerCertificate.Extensions
+                .OfType<X509SubjectKeyIdentifierExtension>()
+                .FirstOrDefault()
+                ?? throw new Xunit.Sdk.XunitException("Issuer certificate does not contain Subject Key Identifier extension.");
+
+            byte[] expectedKeyIdentifier = ParseSubjectKeyIdentifierHex(issuerSubjectKeyIdentifierExtension.SubjectKeyIdentifier);
+            X509Extension authorityKeyIdentifierExtension = childCertificate.Extensions["2.5.29.35"]
+                ?? throw new Xunit.Sdk.XunitException("Child certificate does not contain Authority Key Identifier extension.");
+
+            AsnReader extensionReader = new(authorityKeyIdentifierExtension.RawData, AsnEncodingRules.DER);
+            AsnReader sequenceReader = extensionReader.ReadSequence();
+            Asn1Tag keyIdentifierTag = sequenceReader.PeekTag();
+            byte[] actualKeyIdentifier = sequenceReader.ReadOctetString(new Asn1Tag(TagClass.ContextSpecific, 0));
+
+            Assert.Equal(TagClass.ContextSpecific, keyIdentifierTag.TagClass);
+            Assert.False(keyIdentifierTag.IsConstructed);
+            Assert.Equal(0, keyIdentifierTag.TagValue);
+            Assert.False(sequenceReader.HasData);
+            Assert.False(extensionReader.HasData);
+            Assert.Equal(expectedKeyIdentifier, actualKeyIdentifier);
         }
 
         private sealed class GeneratedCertificateChain(
