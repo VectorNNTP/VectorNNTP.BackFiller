@@ -249,8 +249,24 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
                 Assert.True(evaluation.HasCertificate);
                 Assert.True(evaluation.IsUsable);
                 Assert.NotNull(evaluation.Certificate);
-                Assert.Contains(evaluation.Certificate!.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
+                Assert.True(evaluation.Certificate!.Certificate.HasPrivateKey);
+                Assert.Equal(chain.LeafCertificate.RawData, evaluation.Certificate.Certificate.RawData);
+
+                byte[] privateKeyExercisePayload = RandomNumberGenerator.GetBytes(32);
+                using RSA rsaPrivateKey = evaluation.Certificate.Certificate.GetRSAPrivateKey()
+                    ?? throw new Xunit.Sdk.XunitException("Expected persisted listener leaf certificate to expose an RSA private key.");
+                byte[] signature = rsaPrivateKey.SignData(privateKeyExercisePayload, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                Assert.NotEmpty(signature);
+
+                using RSA rsaPublicKey = evaluation.Certificate.Certificate.GetRSAPublicKey()
+                    ?? throw new Xunit.Sdk.XunitException("Expected persisted listener leaf certificate to expose an RSA public key.");
+                bool signatureValid = rsaPublicKey.VerifyData(privateKeyExercisePayload, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                Assert.True(signatureValid);
+                Assert.Contains(evaluation.Certificate.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.IntermediateCertificate.RawData));
                 Assert.Contains(evaluation.Certificate.IntermediateCertificates, cert => cert.RawData.AsSpan().SequenceEqual(chain.RootCertificate.RawData));
+                Assert.False(evaluation.Certificate.IntermediateCertificates.Any(cert => cert.HasPrivateKey));
+                AssertAuthorityKeyIdentifierMatchesIssuerSubjectKeyIdentifier(chain.IntermediateCertificate, chain.RootCertificate);
+                AssertAuthorityKeyIdentifierMatchesIssuerSubjectKeyIdentifier(chain.LeafCertificate, chain.IntermediateCertificate);
                 evaluation.Certificate.Dispose();
             }
             finally
@@ -531,6 +547,44 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
             }
 
             return Convert.FromHexString(subjectKeyIdentifier);
+        }
+
+        /// <summary>
+        /// Asserts that a generated child certificate's Authority Key Identifier references the expected issuer certificate Subject Key Identifier.
+        /// </summary>
+        /// <remarks>
+        /// The <paramref name="childCertificate"/> is the issued certificate whose AKI identifies its signer, and <paramref name="issuerCertificate"/>
+        /// is the signer certificate whose SKI must be referenced. This helper validates AKI keyIdentifier DER as [0] IMPLICIT OCTET STRING,
+        /// requiring a primitive context-specific tag 0 (not a constructed wrapper), then asserts the decoded keyIdentifier exactly equals issuer SKI.
+        /// This invariant is part of the generated certificate-chain fixture contract and must not be weakened casually.
+        /// </remarks>
+        /// <param name="childCertificate">Child certificate whose Authority Key Identifier extension is validated.</param>
+        /// <param name="issuerCertificate">Issuer certificate expected to be referenced by the child AKI keyIdentifier.</param>
+        private static void AssertAuthorityKeyIdentifierMatchesIssuerSubjectKeyIdentifier(X509Certificate2 childCertificate, X509Certificate2 issuerCertificate)
+        {
+            ArgumentNullException.ThrowIfNull(childCertificate);
+            ArgumentNullException.ThrowIfNull(issuerCertificate);
+
+            X509SubjectKeyIdentifierExtension issuerSubjectKeyIdentifierExtension = issuerCertificate.Extensions
+                .OfType<X509SubjectKeyIdentifierExtension>()
+                .FirstOrDefault()
+                ?? throw new Xunit.Sdk.XunitException("Issuer certificate does not contain Subject Key Identifier extension.");
+
+            byte[] expectedKeyIdentifier = ParseSubjectKeyIdentifierHex(issuerSubjectKeyIdentifierExtension.SubjectKeyIdentifier);
+            X509Extension authorityKeyIdentifierExtension = childCertificate.Extensions["2.5.29.35"]
+                ?? throw new Xunit.Sdk.XunitException("Child certificate does not contain Authority Key Identifier extension.");
+
+            AsnReader extensionReader = new(authorityKeyIdentifierExtension.RawData, AsnEncodingRules.DER);
+            AsnReader sequenceReader = extensionReader.ReadSequence();
+            Asn1Tag keyIdentifierTag = sequenceReader.PeekTag();
+            byte[] actualKeyIdentifier = sequenceReader.ReadOctetString(new Asn1Tag(TagClass.ContextSpecific, 0));
+
+            Assert.Equal(TagClass.ContextSpecific, keyIdentifierTag.TagClass);
+            Assert.False(keyIdentifierTag.IsConstructed);
+            Assert.Equal(0, keyIdentifierTag.TagValue);
+            Assert.False(sequenceReader.HasData);
+            Assert.False(extensionReader.HasData);
+            Assert.Equal(expectedKeyIdentifier, actualKeyIdentifier);
         }
 
         private sealed class GeneratedCertificateChain(
