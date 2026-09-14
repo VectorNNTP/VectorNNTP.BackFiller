@@ -204,6 +204,84 @@ namespace VectorNNTP.BackFiller.Tests.Docs.Protocols
         }
 
         [Theory]
+        [InlineData("ArticleNotFound")]
+        [InlineData("InvalidArticle")]
+        [InlineData("InvalidRequest")]
+        public void Schema_WhenOutcomeErrorWhitespaceOnly_IsInvalid(string outcome)
+        {
+            string json = $$"""
+                {
+                  "version": 1,
+                  "requestId": {{(string.Equals(outcome, "InvalidRequest", StringComparison.Ordinal) ? "null" : "\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\"")}},
+                  "messageId": {{(string.Equals(outcome, "InvalidRequest", StringComparison.Ordinal) ? "null" : "\"<12345@example.invalid>\"")}},
+                  "backbone": {{(string.Equals(outcome, "InvalidRequest", StringComparison.Ordinal) ? "null" : "\"Giganews\"")}},
+                  "outcome": "{{outcome}}",
+                  "error": "   "
+                }
+                """;
+
+            ICollection<ValidationError> errors = Validate(json);
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("error", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Theory]
+        [InlineData("ArticleNotFound")]
+        [InlineData("InvalidArticle")]
+        [InlineData("InvalidRequest")]
+        public void Schema_WhenOutcomeErrorTabsOrNewlinesOnly_IsInvalid(string outcome)
+        {
+            string json = $$"""
+                {
+                  "version": 1,
+                  "requestId": {{(string.Equals(outcome, "InvalidRequest", StringComparison.Ordinal) ? "null" : "\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\"")}},
+                  "messageId": {{(string.Equals(outcome, "InvalidRequest", StringComparison.Ordinal) ? "null" : "\"<12345@example.invalid>\"")}},
+                  "backbone": {{(string.Equals(outcome, "InvalidRequest", StringComparison.Ordinal) ? "null" : "\"Giganews\"")}},
+                  "outcome": "{{outcome}}",
+                  "error": "\n\t"
+                }
+                """;
+
+            ICollection<ValidationError> errors = Validate(json);
+            Assert.NotEmpty(errors);
+            Assert.Contains(errors, static error =>
+                error.ToString().Contains("error", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Theory]
+        [InlineData("<12345@example.invalid>", true)]
+        [InlineData("not-message-id", false)]
+        [InlineData("", false)]
+        [InlineData("   ", false)]
+        public void Schema_WhenOutcomeSuccessMessageIdCanonicality_IsEnforced(string messageId, bool expectValid)
+        {
+            string escapedMessageId = messageId.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+            string json = $$"""
+                {
+                  "version": 1,
+                  "requestId": "7c1cb8a0-95f9-4c13-8e53-339773e3afaa",
+                  "messageId": "{{escapedMessageId}}",
+                  "backbone": "Giganews",
+                  "outcome": "Success",
+                  "uri": "cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160"
+                }
+                """;
+
+            ICollection<ValidationError> errors = Validate(json);
+            if (expectValid)
+            {
+                Assert.Empty(errors);
+            }
+            else
+            {
+                Assert.NotEmpty(errors);
+                Assert.Contains(errors, static error =>
+                    error.ToString().Contains("messageId", StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        [Theory]
         [InlineData("cache://backfiller01.usenet.ninja:1/30edc94157aa16fe644a45a1f1ffe160")]
         [InlineData("cache://backfiller01.usenet.ninja:119/30edc94157aa16fe644a45a1f1ffe160")]
         [InlineData("cache://backfiller01.usenet.ninja:65535/30edc94157aa16fe644a45a1f1ffe160")]

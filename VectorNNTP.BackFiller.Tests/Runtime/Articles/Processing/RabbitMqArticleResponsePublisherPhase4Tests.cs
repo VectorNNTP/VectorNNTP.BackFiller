@@ -100,7 +100,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 correlationId: "corr-publisher-failed",
                 replyTo: "rpc.reply.failed");
 
-            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", null, null);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", expectedUri, null);
             RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None);
 
             Assert.Equal(RabbitMqResponsePublishStatus.Failed, publishResult.Status);
@@ -132,7 +133,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 correlationId: "corr-publisher-timeout",
                 replyTo: "rpc.reply.timeout");
 
-            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", null, null);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", expectedUri, null);
             RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Equal(RabbitMqResponsePublishStatus.TimedOut, publishResult.Status);
@@ -160,7 +162,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 correlationId: "corr-publisher-generation-change",
                 replyTo: "rpc.reply.generation-change");
 
-            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", null, null);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", expectedUri, null);
 
             connector.BlockPublishUntilCancelled = true;
             Task<RabbitMqResponsePublishResult> publishTask = publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).AsTask();
@@ -198,7 +201,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 correlationId: "corr-publisher-replaced-before",
                 replyTo: "rpc.reply.replaced-before");
 
-            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", null, null);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", expectedUri, null);
             RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
 
             RecordingBrokerConnection connection = connector.RequireLastConnection();
@@ -231,7 +235,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 correlationId: "corr-publisher-shutdown",
                 replyTo: "rpc.reply.shutdown");
 
-            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", null, null);
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(result.Request.MessageId)}";
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", expectedUri, null);
             RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Equal(RabbitMqResponsePublishStatus.Failed, publishResult.Status);
@@ -257,8 +262,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ArticleWorkProcessingResult firstResult = CreateSuccessResult(801, connectionManager.ConnectionGeneration, "corr-concurrent-1", "rpc.reply.concurrent.1");
             ArticleWorkProcessingResult secondResult = CreateSuccessResult(802, connectionManager.ConnectionGeneration, "corr-concurrent-2", "rpc.reply.concurrent.2");
 
-            RabbitMqArticleWorkResponse firstResponse = new(1, firstResult.Request.RequestId, firstResult.Request.MessageId, firstResult.Request.Backbone, "Success", null, null);
-            RabbitMqArticleWorkResponse secondResponse = new(1, secondResult.Request.RequestId, secondResult.Request.MessageId, secondResult.Request.Backbone, "Success", null, null);
+            string firstUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(firstResult.Request.MessageId)}";
+            string secondUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(secondResult.Request.MessageId)}";
+            RabbitMqArticleWorkResponse firstResponse = new(1, firstResult.Request.RequestId, firstResult.Request.MessageId, firstResult.Request.Backbone, "Success", firstUri, null);
+            RabbitMqArticleWorkResponse secondResponse = new(1, secondResult.Request.RequestId, secondResult.Request.MessageId, secondResult.Request.Backbone, "Success", secondUri, null);
 
             Task<RabbitMqResponsePublishResult> firstPublish = publisher.PublishAndConfirmAsync(firstResult, firstResponse, CancellationToken.None).AsTask();
             Task<RabbitMqResponsePublishResult> secondPublish = publisher.PublishAndConfirmAsync(secondResult, secondResponse, CancellationToken.None).AsTask();

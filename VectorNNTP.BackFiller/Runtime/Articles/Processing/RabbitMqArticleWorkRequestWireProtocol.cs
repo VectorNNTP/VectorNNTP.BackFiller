@@ -9,6 +9,7 @@
 using System.Buffers;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using VectorNNTP.Backfiller.Runtime.Articles.Validation;
 
 namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 {
@@ -52,9 +53,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 throw new InvalidOperationException("Canonical request serialization requires a concrete non-empty requestId.");
             }
 
-            if (string.IsNullOrWhiteSpace(request.MessageId))
+            if (string.IsNullOrWhiteSpace(request.MessageId) || !NntpMessageIdValidation.IsValidMessageId(request.MessageId.AsSpan()))
             {
-                throw new InvalidOperationException("Canonical request serialization requires a non-empty messageId.");
+                throw new InvalidOperationException("Canonical request serialization requires a canonical non-empty messageId.");
             }
 
             if (string.IsNullOrWhiteSpace(request.Backbone))

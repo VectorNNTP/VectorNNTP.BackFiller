@@ -83,8 +83,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [Theory]
         [InlineData(null, "<wire-null-requestid@example.com>", "BackboneA", "Canonical request serialization requires a concrete non-empty requestId.")]
         [InlineData("00000000-0000-0000-0000-000000000000", "<wire-empty-requestid@example.com>", "BackboneA", "Canonical request serialization requires a concrete non-empty requestId.")]
-        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA", "Canonical request serialization requires a non-empty messageId.")]
-        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "   ", "BackboneA", "Canonical request serialization requires a non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "", "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "   ", "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
+        [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "not-message-id", "BackboneA", "Canonical request serialization requires a canonical non-empty messageId.")]
         [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<wire-empty-backbone@example.com>", null, "Canonical request serialization requires a non-empty backbone.")]
         [InlineData("7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<wire-whitespace-backbone@example.com>", "   ", "Canonical request serialization requires a non-empty backbone.")]
         public void SerializeV1_WhenRequestIdentityOrRequiredFieldsInvalid_ThrowsInvalidOperationException(

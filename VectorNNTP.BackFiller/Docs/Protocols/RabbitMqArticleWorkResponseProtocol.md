@@ -36,7 +36,7 @@ Identity availability contract:
 - `requestId`, `messageId`, and `backbone` represent request-body identity values when those values were successfully parsed before failure.
 - BackFiller never fabricates synthetic request identity for failure responses.
 - For `InvalidRequest` only, any of these identity fields may be `null` when parsing failed before that identity could be established.
-- For `Success`, `ArticleNotFound`, and `InvalidArticle`, identity fields remain concrete, non-empty request-body values.
+- For `Success`, `ArticleNotFound`, and `InvalidArticle`, identity fields remain concrete, non-empty request-body values and `messageId` must be a canonical NNTP Message-ID.
 
 Canonical success response payload:
 
@@ -55,19 +55,19 @@ Canonical terminal failure response payload:
 |---|---|---:|---|
 | `version` | Integer | Yes | Application-level response schema version. Current value: `1`. |
 | `requestId` | String (GUID) or `null` | Yes | Original application request identity from request JSON body when available; `null` is permitted only for `InvalidRequest` when request identity could not be parsed. |
-| `messageId` | String or `null` | Yes | Original Message-ID from request JSON body when available; `null` is permitted only for `InvalidRequest` when message identity could not be parsed. |
+| `messageId` | String or `null` | Yes | Original Message-ID from request JSON body when available; `null` is permitted only for `InvalidRequest` when message identity could not be parsed. Any present non-null value must satisfy the canonical NNTP Message-ID contract. |
 | `backbone` | String or `null` | Yes | Original backbone from request JSON body when available; `null` is permitted only for `InvalidRequest` when backbone identity could not be parsed. |
 | `outcome` | String | Yes | Terminal outcome classification string. |
-| `uri` | String | No | Success-only canonical article cache URI: `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` where `MessageIdMd5` is lowercase hexadecimal MD5 of ASCII bytes of the exact `messageId` string. |
-| `error` | String | No | Required and non-empty for response-carrying terminal failure outcomes; omitted for success. |
+| `uri` | String | No | Success-only canonical article cache URI: `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` where `MessageIdMd5` is lowercase hexadecimal MD5 of ASCII bytes of the exact `messageId` string. Property MUST be absent for non-success outcomes. |
+| `error` | String | No | Required and non-whitespace for response-carrying terminal failure outcomes; property MUST be absent for success. |
 
 ## Outcome and Disposition Matrix
 | Processing Outcome | RPC Response | RabbitMQ Disposition | Requeue |
 |---|---|---|---:|
-| Success | Yes (required): `outcome=Success`, `uri` present and formatted as `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` | ACK | N/A |
-| ArticleNotFound | Yes (required terminal failure): `outcome=ArticleNotFound`, `error` present | NACK | false |
-| InvalidArticle | Yes (required terminal failure): `outcome=InvalidArticle`, `error` present | NACK | false |
-| InvalidRequest | Replyable only: `outcome=InvalidRequest`, `error` required/non-empty, identity fields preserve parsed values and may be `null` when unavailable | NACK | false |
+| Success | Yes (required): `outcome=Success`, concrete identity required, `uri` present and formatted as `cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}` with hash bound to exact `messageId`; `error` must be absent | ACK | N/A |
+| ArticleNotFound | Yes (required terminal failure): `outcome=ArticleNotFound`, concrete identity required, `error` present/non-whitespace, `uri` absent | NACK | false |
+| InvalidArticle | Yes (required terminal failure): `outcome=InvalidArticle`, concrete identity required, `error` present/non-whitespace, `uri` absent | NACK | false |
+| InvalidRequest | Replyable only: `outcome=InvalidRequest`, `error` required/non-whitespace, identity fields preserve parsed values and may be `null` when unavailable, any present identity must be valid, `uri` absent | NACK | false |
 | ProviderFailure | No terminal response | NACK | true |
 | Cancelled | No terminal response | NACK | true |
 | UnexpectedFailure | No terminal response | NACK | true |

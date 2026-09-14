@@ -18,6 +18,15 @@
       "format": "uuid",
       "minLength": 1,
       "pattern": "^(?!00000000-0000-0000-0000-000000000000$).+"
+    },
+    "canonicalMessageId": {
+      "type": "string",
+      "pattern": "^<[!-~]+@[!-~]+>$"
+    },
+    "meaningfulError": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
     }
   },
   "properties": {
@@ -40,8 +49,7 @@
     "messageId": {
       "oneOf": [
         {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/canonicalMessageId"
         },
         {
           "type": "null"
@@ -77,8 +85,7 @@
       "description": "Success-only canonical article cache URI in the form cache://{CanonicalBackFillerFqdn}:{BindPort}/{MessageIdMd5}, where CanonicalBackFillerFqdn is a DNS hostname and MessageIdMd5 is the 32-character lowercase hexadecimal MD5 digest of the ASCII bytes of the exact messageId string."
     },
     "error": {
-      "type": "string",
-      "minLength": 1,
+      "$ref": "#/$defs/meaningfulError",
       "description": "Terminal failure detail for non-success terminal outcomes."
     }
   },
@@ -102,8 +109,7 @@
           "$ref": "#/$defs/concreteRequestId"
         },
         "messageId": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/canonicalMessageId"
         },
         "backbone": {
           "type": "string",
@@ -135,16 +141,14 @@
           "$ref": "#/$defs/concreteRequestId"
         },
         "messageId": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/canonicalMessageId"
         },
         "backbone": {
           "type": "string",
           "minLength": 1
         },
         "error": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulError"
         }
       },
       "not": {
@@ -172,16 +176,14 @@
           "$ref": "#/$defs/concreteRequestId"
         },
         "messageId": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/canonicalMessageId"
         },
         "backbone": {
           "type": "string",
           "minLength": 1
         },
         "error": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulError"
         }
       },
       "not": {
@@ -218,8 +220,7 @@
         "messageId": {
           "oneOf": [
             {
-              "type": "string",
-              "minLength": 1
+              "$ref": "#/$defs/canonicalMessageId"
             },
             {
               "type": "null"
@@ -238,8 +239,7 @@
           ]
         },
         "error": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "#/$defs/meaningfulError"
         }
       },
       "not": {

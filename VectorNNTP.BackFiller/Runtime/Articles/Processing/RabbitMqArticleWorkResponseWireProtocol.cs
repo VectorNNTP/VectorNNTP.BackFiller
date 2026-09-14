@@ -41,6 +41,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         {
             ArgumentNullException.ThrowIfNull(response);
 
+            ValidateResponseForSerialization(response);
+
             ArrayBufferWriter<byte> writer = new();
             using Utf8JsonWriter jsonWriter = new(writer, new JsonWriterOptions
             {
@@ -83,17 +85,9 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
 
             if (string.Equals(response.Outcome, nameof(ArticleWorkProcessingOutcome.Success), StringComparison.Ordinal))
             {
-                if (response.Uri is null)
-                {
-                    jsonWriter.WriteNull("uri");
-                }
-                else
-                {
-                    jsonWriter.WriteString("uri", response.Uri);
-                }
+                jsonWriter.WriteString("uri", response.Uri);
             }
-
-            if (!string.IsNullOrWhiteSpace(response.Error))
+            else
             {
                 jsonWriter.WriteString("error", response.Error);
             }
@@ -153,17 +147,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                 throw new InvalidOperationException($"Unsupported response outcome '{outcome}'.");
             }
 
-            string? uri = null;
-            if (root.TryGetProperty("uri", out JsonElement uriElement) && uriElement.ValueKind == JsonValueKind.String)
-            {
-                uri = uriElement.GetString();
-            }
+            bool hasUriProperty = root.TryGetProperty("uri", out JsonElement uriElement);
+            bool hasErrorProperty = root.TryGetProperty("error", out JsonElement errorElement);
 
-            string? error = null;
-            if (root.TryGetProperty("error", out JsonElement errorElement) && errorElement.ValueKind == JsonValueKind.String)
-            {
-                error = errorElement.GetString();
-            }
+            string? uri = hasUriProperty
+                ? ReadStringProperty(uriElement, "uri")
+                : null;
+
+            string? error = hasErrorProperty
+                ? ReadStringProperty(errorElement, "error")
+                : null;
 
             if (successOutcome)
             {
@@ -182,12 +175,18 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     throw new InvalidOperationException("Success response payload requires a non-empty 'backbone'.");
                 }
 
-                if (string.IsNullOrWhiteSpace(uri) || !IsCanonicalCacheUri(uri))
+                if (!hasUriProperty || !TryGetCanonicalCacheUriHash(uri, out string? uriHash))
                 {
                     throw new InvalidOperationException("Success response payload requires a canonical non-empty 'uri'.");
                 }
 
-                if (error is not null)
+                string expectedHash = MessageIdHashing.ComputeCanonicalMd5Hex(messageId);
+                if (!string.Equals(uriHash, expectedHash, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Success response payload uri hash must match canonical messageId hash.");
+                }
+
+                if (hasErrorProperty)
                 {
                     throw new InvalidOperationException("Success response payload must not include 'error'.");
                 }
@@ -209,12 +208,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     throw new InvalidOperationException("Terminal non-invalid-request response payload requires a non-empty 'backbone'.");
                 }
 
-                if (uri is not null)
+                if (hasUriProperty)
                 {
                     throw new InvalidOperationException("Terminal failure response payload must not include 'uri'.");
                 }
 
-                if (string.IsNullOrWhiteSpace(error))
+                if (!hasErrorProperty || string.IsNullOrWhiteSpace(error))
                 {
                     throw new InvalidOperationException("Terminal failure response payload requires a non-empty 'error'.");
                 }
@@ -236,12 +235,12 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     throw new InvalidOperationException("InvalidRequest payload backbone, when provided, must be non-empty.");
                 }
 
-                if (uri is not null)
+                if (hasUriProperty)
                 {
                     throw new InvalidOperationException("InvalidRequest payload must not include 'uri'.");
                 }
 
-                if (string.IsNullOrWhiteSpace(error))
+                if (!hasErrorProperty || string.IsNullOrWhiteSpace(error))
                 {
                     throw new InvalidOperationException("InvalidRequest payload requires a non-empty 'error'.");
                 }
@@ -250,12 +249,122 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             return new RabbitMqArticleWorkResponse(version, requestId, messageId, backbone, outcome, uri, error);
         }
 
-        [GeneratedRegex("^cache://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?:(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3})/[0-9a-f]{32}$", RegexOptions.CultureInvariant)]
+        [GeneratedRegex("^cache://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?:(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[1-9][0-9]{0,3})/(?<hash>[0-9a-f]{32})$", RegexOptions.CultureInvariant)]
         private static partial Regex CanonicalCacheUriRegex();
 
-        private static bool IsCanonicalCacheUri(string uri)
+        private static void ValidateResponseForSerialization(RabbitMqArticleWorkResponse response)
         {
-            return CanonicalCacheUriRegex().IsMatch(uri);
+            if (response.Version != CurrentVersion)
+            {
+                throw new InvalidOperationException($"Unsupported response version '{response.Version}'.");
+            }
+
+            bool successOutcome = string.Equals(response.Outcome, nameof(ArticleWorkProcessingOutcome.Success), StringComparison.Ordinal);
+            bool articleNotFoundOutcome = string.Equals(response.Outcome, nameof(ArticleWorkProcessingOutcome.ArticleNotFound), StringComparison.Ordinal);
+            bool invalidArticleOutcome = string.Equals(response.Outcome, nameof(ArticleWorkProcessingOutcome.InvalidArticle), StringComparison.Ordinal);
+            bool invalidRequestOutcome = string.Equals(response.Outcome, nameof(ArticleWorkProcessingOutcome.InvalidRequest), StringComparison.Ordinal);
+
+            if (!successOutcome && !articleNotFoundOutcome && !invalidArticleOutcome && !invalidRequestOutcome)
+            {
+                throw new InvalidOperationException($"Unsupported response outcome '{response.Outcome}'.");
+            }
+
+            if (successOutcome || articleNotFoundOutcome || invalidArticleOutcome)
+            {
+                if (!response.RequestId.HasValue || response.RequestId.Value == Guid.Empty)
+                {
+                    throw new InvalidOperationException("Terminal non-invalid-request response payload requires a concrete non-empty 'requestId'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(response.MessageId) || !NntpMessageIdValidation.IsValidMessageId(response.MessageId.AsSpan()))
+                {
+                    throw new InvalidOperationException("Terminal non-invalid-request response payload requires a canonical non-empty 'messageId'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(response.Backbone))
+                {
+                    throw new InvalidOperationException("Terminal non-invalid-request response payload requires a non-empty 'backbone'.");
+                }
+            }
+
+            if (successOutcome)
+            {
+                if (!TryGetCanonicalCacheUriHash(response.Uri, out string? uriHash))
+                {
+                    throw new InvalidOperationException("Success response payload requires a canonical non-empty 'uri'.");
+                }
+
+                string expectedHash = MessageIdHashing.ComputeCanonicalMd5Hex(response.MessageId!);
+                if (!string.Equals(uriHash, expectedHash, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("Success response payload uri hash must match canonical messageId hash.");
+                }
+
+                if (response.Error is not null)
+                {
+                    throw new InvalidOperationException("Success response payload must not include 'error'.");
+                }
+
+                return;
+            }
+
+            if (articleNotFoundOutcome || invalidArticleOutcome)
+            {
+                if (response.Uri is not null)
+                {
+                    throw new InvalidOperationException("Terminal failure response payload must not include 'uri'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(response.Error))
+                {
+                    throw new InvalidOperationException("Terminal failure response payload requires a non-empty 'error'.");
+                }
+
+                return;
+            }
+
+            if (response.RequestId.HasValue && response.RequestId.Value == Guid.Empty)
+            {
+                throw new InvalidOperationException("InvalidRequest payload must not use Guid.Empty sentinel request identity.");
+            }
+
+            if (response.MessageId is not null && (string.IsNullOrWhiteSpace(response.MessageId) || !NntpMessageIdValidation.IsValidMessageId(response.MessageId.AsSpan())))
+            {
+                throw new InvalidOperationException("InvalidRequest payload messageId, when provided, must be canonical and non-empty.");
+            }
+
+            if (response.Backbone is not null && string.IsNullOrWhiteSpace(response.Backbone))
+            {
+                throw new InvalidOperationException("InvalidRequest payload backbone, when provided, must be non-empty.");
+            }
+
+            if (response.Uri is not null)
+            {
+                throw new InvalidOperationException("InvalidRequest payload must not include 'uri'.");
+            }
+
+            if (string.IsNullOrWhiteSpace(response.Error))
+            {
+                throw new InvalidOperationException("InvalidRequest payload requires a non-empty 'error'.");
+            }
+        }
+
+        private static bool TryGetCanonicalCacheUriHash(string? uri, out string? hash)
+        {
+            hash = null;
+            if (string.IsNullOrWhiteSpace(uri))
+            {
+                return false;
+            }
+
+            Match match = CanonicalCacheUriRegex().Match(uri);
+            if (!match.Success)
+            {
+                return false;
+            }
+
+            hash = match.Groups["hash"].Value;
+            return !string.IsNullOrWhiteSpace(hash);
         }
 
         private static Guid? ReadOptionalGuidProperty(JsonElement root, string propertyName)
@@ -278,6 +387,22 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
         private static string? ReadOptionalStringProperty(JsonElement root, string propertyName)
         {
             JsonElement property = root.GetProperty(propertyName);
+            return property.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => property.GetString() ?? throw new InvalidOperationException($"Response payload property '{propertyName}' string value was null."),
+                JsonValueKind.Undefined => throw new InvalidOperationException($"Response payload property '{propertyName}' is undefined."),
+                JsonValueKind.Object => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be an object."),
+                JsonValueKind.Array => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be an array."),
+                JsonValueKind.Number => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be numeric."),
+                JsonValueKind.True => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be boolean true."),
+                JsonValueKind.False => throw new InvalidOperationException($"Response payload property '{propertyName}' must not be boolean false."),
+                _ => throw new InvalidOperationException($"Response payload property '{propertyName}' must be a JSON string or null."),
+            };
+        }
+
+        private static string? ReadStringProperty(JsonElement property, string propertyName)
+        {
             return property.ValueKind switch
             {
                 JsonValueKind.Null => null,
