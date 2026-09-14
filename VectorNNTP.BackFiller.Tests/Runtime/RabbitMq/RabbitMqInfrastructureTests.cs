@@ -682,9 +682,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
         private sealed class FakeRabbitMqChannel(int id) : IRabbitMqChannel
         {
             /// <inheritdoc/>
-#pragma warning disable CS0067
-            public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync;
-#pragma warning restore CS0067
+            public event AsyncEventHandler<BasicReturnEventArgs>? BasicReturnAsync
+            {
+                add { }
+                remove { }
+            }
 
             /// <summary>
             /// Confirms underlying channel behavior.
@@ -885,7 +887,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.RabbitMq
             public ValueTask DisposeAsync()
             {
                 _ = id;
-                BasicReturnAsync = null;
                 return ValueTask.CompletedTask;
             }
         }

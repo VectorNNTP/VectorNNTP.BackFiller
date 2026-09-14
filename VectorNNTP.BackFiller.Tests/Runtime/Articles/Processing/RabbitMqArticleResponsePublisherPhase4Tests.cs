@@ -9,6 +9,7 @@
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using RabbitMQ.Client.Events;
 using VectorNNTP.Backfiller.Configuration;
 using VectorNNTP.Backfiller.Runtime.Articles.Processing;
@@ -121,6 +122,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             ()
             {
                 ReturnMandatoryPublishesAsUnroutable = true,
+                ThrowReturnPublishExceptionWhenUnroutable = true,
             };
             BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
             RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
@@ -144,6 +146,43 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             RecordingChannel channel = Assert.Single(connection.CreatedChannels);
             Assert.Equal(RabbitMqResponsePublishStatus.ReturnedUnroutable, publishResult.Status);
             Assert.True(channel.LastPublishMandatory);
+            PublishException publishException = Assert.IsType<PublishException>(publishResult.Exception);
+            Assert.True(publishException.IsReturn);
+
+            await connectionManager.DisposeAsync().ConfigureAwait(false);
+            result.Dispose();
+        }
+
+        [Fact]
+        public async Task PublishAndConfirmAsync_WhenPublishExceptionIsNotReturn_ReturnsFailedAsync()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            RecordingBrokerConnector connector = new
+            ()
+            {
+                FailPublishWith = new PublishException(1UL, isReturn: false, message: "non-return publish failure"),
+            };
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
+            RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            await connectionManager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+
+            RabbitMqArticleResponsePublisher publisher = new(runtimeOptions, connectionManager, NullLogger<RabbitMqArticleResponsePublisher>.Instance);
+            ArticleWorkProcessingResult result = CreateSuccessResult(
+                deliveryTag: 719,
+                connectionGeneration: connectionManager.ConnectionGeneration,
+                correlationId: "corr-publisher-publish-exception-non-return",
+                replyTo: "rpc.reply.publish-exception-non-return");
+
+            Assert.NotNull(result.Request.MessageId);
+            string requestMessageId = result.Request.MessageId;
+            string expectedUri = $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(requestMessageId)}";
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", expectedUri, null);
+
+            RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.Failed, publishResult.Status);
+            PublishException publishException = Assert.IsType<PublishException>(publishResult.Exception);
+            Assert.False(publishException.IsReturn);
 
             await connectionManager.DisposeAsync().ConfigureAwait(false);
             result.Dispose();
@@ -213,6 +252,84 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             RabbitMqResponsePublishResult publishResult = await publisher.PublishAndConfirmAsync(result, response, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Equal(RabbitMqResponsePublishStatus.TimedOut, publishResult.Status);
+
+            await connectionManager.DisposeAsync().ConfigureAwait(false);
+            result.Dispose();
+        }
+
+        [Fact]
+        public async Task PublishAndConfirmAsync_WhenCallerCancelsWhileWaitingForPublishGate_ReturnsCanceledAsync()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            RecordingBrokerConnector connector = new
+            ()
+            {
+                BlockPublishUntilCancelled = true,
+            };
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
+            RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            await connectionManager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+
+            RabbitMqArticleResponsePublisher publisher = new(runtimeOptions, connectionManager, NullLogger<RabbitMqArticleResponsePublisher>.Instance);
+
+            ArticleWorkProcessingResult firstResult = CreateSuccessResult(901, connectionManager.ConnectionGeneration, "corr-publisher-gate-1", "rpc.reply.gate.1");
+            ArticleWorkProcessingResult secondResult = CreateSuccessResult(902, connectionManager.ConnectionGeneration, "corr-publisher-gate-2", "rpc.reply.gate.2");
+
+            Assert.NotNull(firstResult.Request.MessageId);
+            Assert.NotNull(secondResult.Request.MessageId);
+            RabbitMqArticleWorkResponse firstResponse = new(1, firstResult.Request.RequestId, firstResult.Request.MessageId, firstResult.Request.Backbone, "Success", $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(firstResult.Request.MessageId)}", null);
+            RabbitMqArticleWorkResponse secondResponse = new(1, secondResult.Request.RequestId, secondResult.Request.MessageId, secondResult.Request.Backbone, "Success", $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(secondResult.Request.MessageId)}", null);
+
+            Task<RabbitMqResponsePublishResult> firstPublishTask = publisher.PublishAndConfirmAsync(firstResult, firstResponse, CancellationToken.None).AsTask();
+            await connector.WaitForFirstPublishStartedAsync().ConfigureAwait(false);
+
+            using CancellationTokenSource canceledTokenSource = new();
+            canceledTokenSource.Cancel();
+            RabbitMqResponsePublishResult secondPublishResult = await publisher.PublishAndConfirmAsync(secondResult, secondResponse, canceledTokenSource.Token).ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.Canceled, secondPublishResult.Status);
+
+            connector.ReleasePublishBlock();
+            RabbitMqResponsePublishResult firstPublishResult = await firstPublishTask.ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.Confirmed, firstPublishResult.Status);
+
+            await connectionManager.DisposeAsync().ConfigureAwait(false);
+            firstResult.Dispose();
+            secondResult.Dispose();
+        }
+
+        [Fact]
+        public async Task PublishAndConfirmAsync_WhenCallerCancelsDuringChannelAcquisition_ReturnsCanceledAsync()
+        {
+            using ShutdownCoordinator shutdownCoordinator = new();
+            RecordingBrokerConnector connector = new
+            ()
+            {
+                BlockChannelCreateUntilCancelled = true,
+            };
+
+            BackFillerRuntimeOptions runtimeOptions = CreateRuntimeOptions(publishConfirmTimeoutSeconds: 10);
+            RabbitMqConnectionManager connectionManager = new(runtimeOptions, shutdownCoordinator, TimeProvider.System, NullLogger<RabbitMqConnectionManager>.Instance, connector);
+            await connectionManager.EnsureConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+            RabbitMqArticleResponsePublisher publisher = new(runtimeOptions, connectionManager, NullLogger<RabbitMqArticleResponsePublisher>.Instance);
+
+            ArticleWorkProcessingResult result = CreateSuccessResult(
+                deliveryTag: 903,
+                connectionGeneration: connectionManager.ConnectionGeneration,
+                correlationId: "corr-publisher-acquire-canceled",
+                replyTo: "rpc.reply.acquire-canceled");
+
+            Assert.NotNull(result.Request.MessageId);
+            string requestMessageId = result.Request.MessageId;
+            RabbitMqArticleWorkResponse response = new(1, result.Request.RequestId, result.Request.MessageId, result.Request.Backbone, "Success", $"cache://{runtimeOptions.CanonicalBackFillerFqdn}:{runtimeOptions.BindPort}/{MessageIdHashing.ComputeCanonicalMd5Hex(requestMessageId)}", null);
+
+            using CancellationTokenSource cts = new();
+            Task<RabbitMqResponsePublishResult> publishTask = publisher.PublishAndConfirmAsync(result, response, cts.Token).AsTask();
+            await connector.WaitForFirstChannelCreateStartedAsync().ConfigureAwait(false);
+            cts.Cancel();
+
+            RabbitMqResponsePublishResult publishResult = await publishTask.ConfigureAwait(false);
+            Assert.Equal(RabbitMqResponsePublishStatus.Canceled, publishResult.Status);
 
             await connectionManager.DisposeAsync().ConfigureAwait(false);
             result.Dispose();
@@ -585,6 +702,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// Confirms  publish started behavior.
             /// </summary>
             private readonly SemaphoreSlim _publishStarted = new(0, 1);
+            private readonly SemaphoreSlim _connectStarted = new(0, 1);
             /// <summary>
             /// Confirms  gate behavior.
             /// </summary>
@@ -614,6 +732,21 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             internal bool ReturnMandatoryPublishesAsUnroutable { get; set; }
 
             /// <summary>
+            /// Supplies whether mandatory return simulation faults the publish await with return-specific publish exception semantics.
+            /// </summary>
+            internal bool ThrowReturnPublishExceptionWhenUnroutable { get; set; }
+
+            /// <summary>
+            /// Supplies whether broker connect attempts should block until canceled for cancellation classification tests.
+            /// </summary>
+            internal bool BlockConnectUntilCancelled { get; set; }
+
+            /// <summary>
+            /// Supplies whether channel creation should block until canceled for channel-acquisition cancellation tests.
+            /// </summary>
+            internal bool BlockChannelCreateUntilCancelled { get; set; }
+
+            /// <summary>
             /// Confirms the connect async behavior.
             /// </summary>
             /// <returns>The value returned by the connect async helper.</returns>
@@ -627,6 +760,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             public Task<IRabbitMqBrokerConnection> ConnectAsync(RabbitMqRuntimeOptions runtimeOptions, string clientProvidedConnectionName, CancellationToken cancellationToken)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (_connectStarted.CurrentCount == 0)
+                {
+                    _ = _connectStarted.Release();
+                }
+
+                if (BlockConnectUntilCancelled)
+                {
+                    return WaitForConnectCancellationAsync(cancellationToken);
+                }
+
                 int nextCount = Interlocked.Increment(ref _connectCount);
                 RecordingBrokerConnection connection = new(
                     endpointHostName: runtimeOptions.Hosts[0],
@@ -642,6 +785,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 }
 
                 return Task.FromResult<IRabbitMqBrokerConnection>(connection);
+            }
+
+            private async Task<IRabbitMqBrokerConnection> WaitForConnectCancellationAsync(CancellationToken cancellationToken)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                throw new InvalidOperationException("Unreachable after cancellation.");
             }
 
             /// <summary>
@@ -673,6 +822,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             internal async Task WaitForFirstPublishStartedAsync()
             {
                 _ = await _publishStarted.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+
+            internal async Task WaitForFirstConnectStartedAsync()
+            {
+                _ = await _connectStarted.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+
+            internal async Task WaitForFirstChannelCreateStartedAsync()
+            {
+                await RequireLastConnection().WaitForFirstChannelCreateStartedAsync().ConfigureAwait(false);
             }
 
             /// <summary>
@@ -730,6 +889,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// Supplies  owner for the fixture or scenario under test.
             /// </summary>
             private readonly RecordingBrokerConnector _owner;
+            private readonly SemaphoreSlim _channelCreateStarted = new(0, 1);
 
             /// <summary>
             /// Confirms the recording broker connection behavior.
@@ -827,9 +987,31 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             public Task<IRabbitMqChannel> CreateChannelAsync(CancellationToken cancellationToken, bool enablePublisherConfirmations = false)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                if (_channelCreateStarted.CurrentCount == 0)
+                {
+                    _ = _channelCreateStarted.Release();
+                }
+
+                if (_owner.BlockChannelCreateUntilCancelled)
+                {
+                    return WaitForChannelCreateCancellationAsync(cancellationToken);
+                }
+
                 RecordingChannel channel = new(enablePublisherConfirmations, Generation, _owner);
                 CreatedChannels.Add(channel);
                 return Task.FromResult<IRabbitMqChannel>(channel);
+            }
+
+            internal async Task WaitForFirstChannelCreateStartedAsync()
+            {
+                _ = await _channelCreateStarted.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            }
+
+            private static async Task<IRabbitMqChannel> WaitForChannelCreateCancellationAsync(CancellationToken cancellationToken)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                throw new InvalidOperationException("Unreachable after cancellation.");
             }
 
             /// <summary>
@@ -1153,6 +1335,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                                 basicProperties: basicProperties,
                                 body: body,
                                 cancellationToken: cancellationToken)).ConfigureAwait(false);
+                    }
+
+                    if (_owner.ThrowReturnPublishExceptionWhenUnroutable)
+                    {
+                        throw new PublishException(1UL, isReturn: true, message: "Mandatory publish was returned as unroutable.");
                     }
                 }
             }

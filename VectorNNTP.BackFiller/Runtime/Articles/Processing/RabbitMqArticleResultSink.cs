@@ -253,7 +253,11 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     if (publishResult.Status is not RabbitMqResponsePublishStatus.Confirmed)
                     {
                         bool requeue = publishResult.Status is not RabbitMqResponsePublishStatus.ReturnedUnroutable;
-                        await result.Delivery.Settlement.NackAsync(requeue, cancellationToken).ConfigureAwait(false);
+                        CancellationToken settlementToken = SelectPublishFailureSettlementToken(
+                            publishStatus: publishResult.Status,
+                            processingToken: cancellationToken,
+                            deliveryToken: result.Delivery.CancellationToken);
+                        await result.Delivery.Settlement.NackAsync(requeue, settlementToken).ConfigureAwait(false);
                         LogRabbitMqResponsePublishNotConfirmedDisposition(
                             _logger,
                             result.Request.RequestId,
@@ -322,6 +326,16 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
             CancellationToken deliveryToken)
         {
             return admissionStatus != TransitAdmissionStatus.Canceled || deliveryToken.IsCancellationRequested
+                ? processingToken
+                : deliveryToken;
+        }
+
+        private static CancellationToken SelectPublishFailureSettlementToken(
+            RabbitMqResponsePublishStatus publishStatus,
+            CancellationToken processingToken,
+            CancellationToken deliveryToken)
+        {
+            return publishStatus != RabbitMqResponsePublishStatus.Canceled || deliveryToken.IsCancellationRequested
                 ? processingToken
                 : deliveryToken;
         }

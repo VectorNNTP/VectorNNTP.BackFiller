@@ -241,6 +241,50 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.Equal(915UL, settlement.NackDeliveryTag);
             Assert.False(settlement.NackRequeue);
         }
+
+        [Fact]
+        public async Task OnProcessedAsync_WhenPublishCanceledAndProcessingTokenCanceled_UsesDeliveryTokenForNackRequeueTrueAsync()
+        {
+            using CancellationTokenSource deliveryCts = new();
+            using CancellationTokenSource operationCts = new();
+            TrackingDeliverySettlement settlement = new();
+            RabbitMqArticleDelivery delivery = CreateDelivery(
+                payloadText: CreateValidJsonPayload(Guid.NewGuid(), "<publish-canceled@example.com>", "BackboneA"),
+                correlationId: "corr-publish-canceled",
+                replyTo: "rpc.responses",
+                deliveryTag: 916,
+                connectionGeneration: 43,
+                settlement: settlement,
+                cancellationToken: deliveryCts.Token);
+
+            NntpArticleGrabberResult grabberResult = ArticleRetentionTestDataFactory.CreateSuccessfulGrabberResult("<publish-canceled@example.com>", "publish-canceled-payload");
+            ArticleWorkProcessingResult result = CreateResult(
+                delivery,
+                outcome: ArticleWorkProcessingOutcome.Success,
+                requestId: Guid.NewGuid(),
+                messageId: "<publish-canceled@example.com>",
+                backbone: "BackboneA",
+                grabberResult: grabberResult);
+
+            TrackingResponsePublisher publisher = new(
+                RabbitMqResponsePublishStatus.Canceled,
+                throwOnCancellation: false,
+                beforeReturn: static (_, state) =>
+                {
+                    CancellationTokenSource cancellationSource = (CancellationTokenSource)state!;
+                    cancellationSource.Cancel();
+                },
+                beforeReturnState: operationCts);
+            TrackingTransitAdmissionGateway transitAdmissionGateway = new(TransitAdmissionStatus.Accepted);
+            RabbitMqArticleResultSink sink = CreateSink(responsePublisher: publisher, transitAdmissionGateway: transitAdmissionGateway);
+
+            await sink.OnProcessedAsync(result, operationCts.Token).ConfigureAwait(false);
+
+            Assert.Null(settlement.AckDeliveryTag);
+            Assert.Equal(916UL, settlement.NackDeliveryTag);
+            Assert.True(settlement.NackRequeue);
+            Assert.False(settlement.NackTokenWasCancellationRequested);
+        }
         /// <summary>
         /// Confirms the on processed async when article not found nacks without requeue async behavior.
         /// </summary>
@@ -1271,14 +1315,28 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             /// Supplies  shared operation log for the fixture or scenario under test.
             /// </summary>
             private readonly List<string>? _sharedOperationLog;
+            /// <summary>
+            /// Supplies whether cancellation is enforced by this publisher fake.
+            /// </summary>
+            private readonly bool _throwOnCancellation;
+            private readonly Action<CancellationToken, object?>? _beforeReturn;
+            private readonly object? _beforeReturnState;
 
             /// <summary>
             /// Confirms the tracking response publisher behavior.
             /// </summary>
-            internal TrackingResponsePublisher(RabbitMqResponsePublishStatus status, List<string>? sharedOperationLog = null)
+            internal TrackingResponsePublisher(
+                RabbitMqResponsePublishStatus status,
+                List<string>? sharedOperationLog = null,
+                bool throwOnCancellation = true,
+                Action<CancellationToken, object?>? beforeReturn = null,
+                object? beforeReturnState = null)
             {
                 _status = status;
                 _sharedOperationLog = sharedOperationLog;
+                _throwOnCancellation = throwOnCancellation;
+                _beforeReturn = beforeReturn;
+                _beforeReturnState = beforeReturnState;
             }
 
             /// <summary>
@@ -1319,7 +1377,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                 RabbitMqArticleWorkResponse response,
                 CancellationToken cancellationToken)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if (_throwOnCancellation)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 PublishCallCount++;
                 LastRoutingKey = result.ReplyTo;
                 LastCorrelationId = result.CorrelationId;
@@ -1333,6 +1395,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
                     OperationLog.Add("confirm");
                     _sharedOperationLog?.Add("confirm");
                 }
+
+                _beforeReturn?.Invoke(cancellationToken, _beforeReturnState);
 
                 return ValueTask.FromResult(new RabbitMqResponsePublishResult(_status, result.Delivery.ConnectionGeneration, null));
             }
