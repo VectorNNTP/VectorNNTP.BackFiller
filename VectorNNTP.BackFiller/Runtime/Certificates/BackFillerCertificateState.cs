@@ -44,14 +44,7 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                             _ = intermediateCollection.Add(bundle.IntermediateCertificates[index]);
                         }
 
-                        try
-                        {
-                            CertificateContext = SslStreamCertificateContext.Create(bundle.Certificate, intermediateCollection, offline: true);
-                        }
-                        catch (System.Security.Cryptography.CryptographicException)
-                        {
-                            CertificateContext = null;
-                        }
+                        CertificateContext = SslStreamCertificateContext.Create(bundle.Certificate, intermediateCollection, offline: true);
                     }
                 }
                 catch

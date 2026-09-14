@@ -1656,7 +1656,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             RSA rootKey = RSA.Create(2048);
             CertificateRequest rootRequest = new(
-                "CN=BackFiller Listener Test Root CA",
+                $"CN=BackFiller Listener Test Root CA {dnsName}",
                 rootKey,
                 HashAlgorithmName.SHA256,
                 RSASignaturePadding.Pkcs1);
@@ -1670,7 +1670,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             RSA intermediateKey = RSA.Create(2048);
             CertificateRequest intermediateRequest = new(
-                "CN=BackFiller Listener Test Intermediate CA",
+                $"CN=BackFiller Listener Test Intermediate CA {dnsName}",
                 intermediateKey,
                 HashAlgorithmName.SHA256,
                 RSASignaturePadding.Pkcs1);
@@ -1730,9 +1730,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
 
             AsnWriter extensionWriter = new(AsnEncodingRules.DER);
             extensionWriter.PushSequence();
-            extensionWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
-            extensionWriter.WriteOctetString(ParseSubjectKeyIdentifierHex(issuerSubjectKeyIdentifier.SubjectKeyIdentifier));
-            extensionWriter.PopSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
+            extensionWriter.WriteOctetString(ParseSubjectKeyIdentifierHex(issuerSubjectKeyIdentifier.SubjectKeyIdentifier), new Asn1Tag(TagClass.ContextSpecific, 0));
             extensionWriter.PopSequence();
             return new X509Extension("2.5.29.35", extensionWriter.Encode(), critical: false);
         }
