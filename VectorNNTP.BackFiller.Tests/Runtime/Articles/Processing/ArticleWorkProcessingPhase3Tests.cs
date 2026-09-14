@@ -310,25 +310,37 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// Confirms the parse async when version missing returns invalid request async behavior.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenVersionMissing_ReturnsInvalidRequestAsync()
+        public async Task ParseAsync_WhenVersionMissing_ReturnsInvalidRequestAndPreservesIndependentIdentityAsync()
         {
-            string payload = $$"""{"requestId":"{{Guid.NewGuid()}}","messageId":"<v-missing@example.com>","backbone":"BackboneA"}""";
+            Guid requestId = Guid.Parse("7c1cb8a0-95f9-4c13-8e53-339773e3afaa");
+            string payload = $$"""{"requestId":"{{requestId}}","messageId":"<v-missing@example.com>","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
                 .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-missing", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Equal(requestId, failure.Request.RequestId);
+            Assert.Equal("<v-missing@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
         }
         /// <summary>
         /// Confirms the parse async when version unsupported returns invalid request async behavior.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenVersionUnsupported_ReturnsInvalidRequestAsync()
+        public async Task ParseAsync_WhenVersionUnsupported_ReturnsInvalidRequestAndPreservesIndependentIdentityAsync()
         {
-            string payload = $$"""{"version":2,"requestId":"{{Guid.NewGuid()}}","messageId":"<v-unsupported@example.com>","backbone":"BackboneA"}""";
+            Guid requestId = Guid.Parse("6916327f-e58f-4496-808f-a4076dc44ce6");
+            string payload = $$"""{"version":2,"requestId":"{{requestId}}","messageId":"<v-unsupported@example.com>","backbone":"BackboneA"}""";
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
                 .ParseAsync(CreateDelivery(payload, correlationId: "rpc-v-unsupported", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Equal(requestId, failure.Request.RequestId);
+            Assert.Equal("<v-unsupported@example.com>", failure.Request.MessageId);
+            Assert.Equal("BackboneA", failure.Request.Backbone);
         }
         /// <summary>
         /// Confirms the parse async when request id missing returns invalid request async behavior.
@@ -438,13 +450,19 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         /// Confirms the parse async when backbone mismatches delivery context returns invalid request async behavior.
         /// </summary>
         [Fact]
-        public async Task ParseAsync_WhenBackboneMismatchesDeliveryContext_ReturnsInvalidRequestAsync()
+        public async Task ParseAsync_WhenBackboneMismatchesDeliveryContext_ReturnsInvalidRequestAndPreservesParsedBackboneAsync()
         {
-            string payload = CreateValidJsonPayload(Guid.NewGuid(), "<mismatch@example.com>", "Eweka");
+            Guid requestId = Guid.Parse("37ec3af7-fd42-4f02-a6f5-e55d3f3e6f06");
+            string payload = CreateValidJsonPayload(requestId, "<mismatch@example.com>", "Eweka");
             RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
                 .ParseAsync(CreateDelivery(payload, backbone: "Giganews", correlationId: "rpc-backbone-mismatch", replyTo: "rpc.replies"), CancellationToken.None);
 
             AssertInvalidRequest(parseResult);
+            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
+            Assert.Equal(InvalidRequestReplyability.Replyable, failure.InvalidRequestReplyability);
+            Assert.Equal(requestId, failure.Request.RequestId);
+            Assert.Equal("<mismatch@example.com>", failure.Request.MessageId);
+            Assert.Equal("Eweka", failure.Request.Backbone);
         }
         /// <summary>
         /// Confirms the parse async when backbone case differs uses case insensitive matching async behavior.

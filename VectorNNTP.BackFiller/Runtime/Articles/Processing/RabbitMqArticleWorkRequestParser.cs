@@ -120,15 +120,8 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload must be a JSON object."));
                 }
 
-                if (!TryReadRequiredInt32(root, "version", out int version))
-                {
-                    return ValueTask.FromResult(Failed(delivery, "RabbitMQ article-work payload is missing required integer property 'version'."));
-                }
-
-                if (version != SupportedVersion)
-                {
-                    return ValueTask.FromResult(Failed(delivery, $"RabbitMQ article-work payload uses unsupported version '{version}'."));
-                }
+                bool hasVersion = TryReadRequiredInt32(root, "version", out int version);
+                bool hasSupportedVersion = hasVersion && version == SupportedVersion;
 
                 _ = TryReadOptionalGuid(root, "requestId", out Guid? requestId);
                 _ = TryReadOptionalString(root, "messageId", out string? rawMessageId);
@@ -138,10 +131,26 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                     ? rawMessageId
                     : null;
 
-                string? validatedBackbone = !string.IsNullOrWhiteSpace(rawBackbone)
-                    && string.Equals(rawBackbone, delivery.Backbone, StringComparison.OrdinalIgnoreCase)
-                        ? rawBackbone
-                        : null;
+                string? parsedBackbone = !string.IsNullOrWhiteSpace(rawBackbone)
+                    ? rawBackbone
+                    : null;
+
+                bool backboneMatchesContext = parsedBackbone is not null
+                    && string.Equals(parsedBackbone, delivery.Backbone, StringComparison.OrdinalIgnoreCase);
+
+                if (!hasSupportedVersion)
+                {
+                    string versionFailureReason = hasVersion
+                        ? $"RabbitMQ article-work payload uses unsupported version '{version}'."
+                        : "RabbitMQ article-work payload is missing required integer property 'version'.";
+
+                    return ValueTask.FromResult(Failed(
+                        delivery,
+                        versionFailureReason,
+                        requestId: requestId,
+                        messageId: canonicalMessageId,
+                        messageBackbone: parsedBackbone));
+                }
 
                 if (requestId is null)
                 {
@@ -150,7 +159,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         "RabbitMQ article-work payload contains missing or invalid 'requestId'.",
                         requestId: null,
                         messageId: canonicalMessageId,
-                        messageBackbone: validatedBackbone));
+                        messageBackbone: parsedBackbone));
                 }
 
                 if (string.IsNullOrWhiteSpace(rawMessageId))
@@ -160,7 +169,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         "RabbitMQ article-work payload contains missing or invalid 'messageId'.",
                         requestId: requestId,
                         messageId: null,
-                        messageBackbone: validatedBackbone));
+                        messageBackbone: parsedBackbone));
                 }
 
                 if (canonicalMessageId is null)
@@ -170,7 +179,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         "RabbitMQ article-work payload 'messageId' is not a canonical NNTP Message-ID.",
                         requestId: requestId,
                         messageId: null,
-                        messageBackbone: validatedBackbone));
+                        messageBackbone: parsedBackbone));
                 }
 
                 if (string.IsNullOrWhiteSpace(rawBackbone))
@@ -183,14 +192,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         messageBackbone: null));
                 }
 
-                if (validatedBackbone is null)
+                if (!backboneMatchesContext)
                 {
                     return ValueTask.FromResult(Failed(
                         delivery,
                         "RabbitMQ article-work payload backbone does not match the consuming queue backbone context.",
                         requestId: requestId,
                         messageId: canonicalMessageId,
-                        messageBackbone: null));
+                        messageBackbone: parsedBackbone));
                 }
 
                 if (string.IsNullOrWhiteSpace(delivery.CorrelationId))
@@ -200,7 +209,7 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         "RabbitMQ delivery is missing required AMQP CorrelationId property.",
                         requestId: requestId,
                         messageId: canonicalMessageId,
-                        messageBackbone: validatedBackbone));
+                        messageBackbone: parsedBackbone));
                 }
 
                 if (string.IsNullOrWhiteSpace(delivery.ReplyTo))
@@ -210,14 +219,14 @@ namespace VectorNNTP.Backfiller.Runtime.Articles.Processing
                         "RabbitMQ delivery is missing required AMQP ReplyTo property.",
                         requestId: requestId,
                         messageId: canonicalMessageId,
-                        messageBackbone: validatedBackbone));
+                        messageBackbone: parsedBackbone));
                 }
 
                 RabbitMqArticleWorkRequest request = new(
                     Version: version,
                     RequestId: requestId,
                     MessageId: canonicalMessageId,
-                    Backbone: validatedBackbone);
+                    Backbone: parsedBackbone);
 
                 return ValueTask.FromResult(new RabbitMqArticleWorkParseResult(request, Failure: null));
             }

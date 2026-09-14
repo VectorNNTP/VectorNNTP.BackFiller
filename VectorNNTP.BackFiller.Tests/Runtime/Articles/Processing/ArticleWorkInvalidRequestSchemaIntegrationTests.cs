@@ -28,10 +28,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
         [InlineData("{\"version\":1,\"messageId\":\"<missing-requestid@example.com>\",\"backbone\":\"BackboneA\"}", null, "<missing-requestid@example.com>", "BackboneA")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"backbone\":\"BackboneA\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<missing-backbone@example.com>\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<missing-backbone@example.com>", null)]
-        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<all-identity@example.com>\",\"backbone\":\"Eweka\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<all-identity@example.com>", null)]
+        [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<all-identity@example.com>\",\"backbone\":\"Eweka\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<all-identity@example.com>", "Eweka")]
         [InlineData("{\"version\":1,\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"not-message-id\",\"backbone\":\"BackboneA\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", null, "BackboneA")]
         [InlineData("{\"version\":1,\"requestId\":\"not-a-guid\",\"messageId\":\"<invalid-requestid@example.com>\",\"backbone\":\"BackboneA\"}", null, "<invalid-requestid@example.com>", "BackboneA")]
         [InlineData("{\"version\":1,\"requestId\":\"00000000-0000-0000-0000-000000000000\",\"messageId\":\"<guid-empty-requestid@example.com>\",\"backbone\":\"BackboneA\"}", null, "<guid-empty-requestid@example.com>", "BackboneA")]
+        [InlineData("{\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<missing-version@example.com>\",\"backbone\":\"BackboneA\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<missing-version@example.com>", "BackboneA")]
+        [InlineData("{\"version\":\"not-an-int\",\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<invalid-version-type@example.com>\",\"backbone\":\"BackboneA\"}", "7c1cb8a0-95f9-4c13-8e53-339773e3afaa", "<invalid-version-type@example.com>", "BackboneA")]
         public async Task ParseToSchema_WhenInvalidRequestAndReplyable_PreservesExactIdentityAndProducesSchemaValidResponse(
             string payload,
             string? expectedRequestId,
@@ -120,35 +122,6 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Articles.Processing
             Assert.False(plan.PublishResponse);
         }
 
-        [Fact]
-        public async Task ParseToSchema_WhenVersionMissing_PreservesUnavailableIdentityWithoutSyntheticValues()
-        {
-            string payload = "{\"requestId\":\"7c1cb8a0-95f9-4c13-8e53-339773e3afaa\",\"messageId\":\"<missing-version@example.com>\",\"backbone\":\"BackboneA\"}";
-            RabbitMqArticleDelivery delivery = CreateDelivery(payload, backbone: "BackboneA", correlationId: "corr-missing-version", replyTo: "rpc.responses");
-
-            RabbitMqArticleWorkParseResult parseResult = await new RabbitMqArticleWorkRequestParser()
-                .ParseAsync(delivery, CancellationToken.None)
-                .ConfigureAwait(false);
-
-            ArticleWorkProcessingResult failure = Assert.IsType<ArticleWorkProcessingResult>(parseResult.Failure);
-            Assert.Null(failure.Request.RequestId);
-            Assert.Null(failure.Request.MessageId);
-            Assert.Null(failure.Request.Backbone);
-
-            RabbitMqArticleWorkResponse response = Assert.IsType<RabbitMqArticleWorkResponse>(new ArticleWorkResponseFactory(CreateRuntimeOptions()).CreateResponse(failure));
-            Assert.Null(response.RequestId);
-            Assert.Null(response.MessageId);
-            Assert.Null(response.Backbone);
-
-            byte[] responsePayload = RabbitMqArticleWorkResponseWireProtocol.SerializeV1(response);
-            RabbitMqArticleWorkResponse parsedResponse = RabbitMqArticleWorkResponseWireProtocol.ParseV1(responsePayload);
-            Assert.Null(parsedResponse.RequestId);
-            Assert.Null(parsedResponse.MessageId);
-            Assert.Null(parsedResponse.Backbone);
-
-            ICollection<ValidationError> schemaErrors = ResponseSchema.Value.Validate(System.Text.Encoding.UTF8.GetString(responsePayload));
-            Assert.Empty(schemaErrors);
-        }
 
         private static RabbitMqArticleDelivery CreateDelivery(
             string payloadText,
