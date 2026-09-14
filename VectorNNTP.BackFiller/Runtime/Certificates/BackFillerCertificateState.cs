@@ -34,6 +34,8 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
 
                 try
                 {
+                    _ = bundle.Certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Cert);
+
                     if (bundle.IntermediateCertificates.Count > 0)
                     {
                         System.Security.Cryptography.X509Certificates.X509Certificate2Collection intermediateCollection = [];
@@ -42,7 +44,14 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
                             _ = intermediateCollection.Add(bundle.IntermediateCertificates[index]);
                         }
 
-                        CertificateContext = SslStreamCertificateContext.Create(bundle.Certificate, intermediateCollection, offline: true);
+                        try
+                        {
+                            CertificateContext = SslStreamCertificateContext.Create(bundle.Certificate, intermediateCollection, offline: true);
+                        }
+                        catch (System.Security.Cryptography.CryptographicException)
+                        {
+                            CertificateContext = null;
+                        }
                     }
                 }
                 catch
@@ -60,11 +69,18 @@ namespace VectorNNTP.Backfiller.Runtime.Certificates
             /// <summary>
             /// Gets TLS certificate context carrying leaf and intermediates for server authentication.
             /// </summary>
+            /// <remarks>
+            /// The context is derived from the owned cloned certificates and remains valid for the runtime material lifetime.
+            /// </remarks>
             public SslStreamCertificateContext? CertificateContext { get; }
 
             /// <summary>
-            /// Disposes the owned certificate bundle clone.
+            /// Disposes owned certificate bundle clone.
             /// </summary>
+            /// <remarks>
+            /// <see cref="SslStreamCertificateContext"/> does not expose deterministic disposal in this target framework;
+            /// runtime material therefore releases the owned cloned certificates that back any context created for handshake use.
+            /// </remarks>
             public void Dispose()
             {
                 Bundle.Dispose();

@@ -1662,7 +1662,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 RSASignaturePadding.Pkcs1);
             rootRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
             rootRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-            rootRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(rootRequest.PublicKey, false));
+            X509SubjectKeyIdentifierExtension rootSki = new(rootRequest.PublicKey, false);
+            rootRequest.CertificateExtensions.Add(rootSki);
 
             DateTimeOffset now = DateTimeOffset.UtcNow;
             X509Certificate2 rootCertificate = rootRequest.CreateSelfSigned(now.AddDays(-2), now.AddDays(90));
@@ -1675,7 +1676,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 RSASignaturePadding.Pkcs1);
             intermediateRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
             intermediateRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-            intermediateRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(intermediateRequest.PublicKey, false));
+            X509SubjectKeyIdentifierExtension intermediateSki = new(intermediateRequest.PublicKey, false);
+            intermediateRequest.CertificateExtensions.Add(intermediateSki);
+            intermediateRequest.CertificateExtensions.Add(CreateAuthorityKeyIdentifierExtension(rootSki));
 
             byte[] intermediateSerial = RandomNumberGenerator.GetBytes(16);
             using X509Certificate2 intermediateSignedNoKey = intermediateRequest.Create(rootCertificate, now.AddDays(-2), now.AddDays(60), intermediateSerial);
@@ -1698,6 +1701,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             OidCollection enhancedKeyUsages = [new Oid("1.3.6.1.5.5.7.3.1")];
             leafRequest.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(enhancedKeyUsages, critical: true));
             leafRequest.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(leafRequest.PublicKey, false));
+            leafRequest.CertificateExtensions.Add(CreateAuthorityKeyIdentifierExtension(intermediateSki));
 
             byte[] leafSerial = RandomNumberGenerator.GetBytes(16);
             using X509Certificate2 leafSignedNoKey = leafRequest.Create(intermediateCertificate, now.AddDays(-1), now.AddDays(30), leafSerial);
@@ -1718,6 +1722,29 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
             }
 
             return new BackFillerCertificateBundle(clonedLeaf, intermediates, "memory", DateTimeOffset.UtcNow);
+        }
+
+        private static X509Extension CreateAuthorityKeyIdentifierExtension(X509SubjectKeyIdentifierExtension issuerSubjectKeyIdentifier)
+        {
+            ArgumentNullException.ThrowIfNull(issuerSubjectKeyIdentifier);
+
+            AsnWriter extensionWriter = new(AsnEncodingRules.DER);
+            extensionWriter.PushSequence();
+            extensionWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
+            extensionWriter.WriteOctetString(ParseSubjectKeyIdentifierHex(issuerSubjectKeyIdentifier.SubjectKeyIdentifier));
+            extensionWriter.PopSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
+            extensionWriter.PopSequence();
+            return new X509Extension("2.5.29.35", extensionWriter.Encode(), critical: false);
+        }
+
+        private static byte[] ParseSubjectKeyIdentifierHex(string? subjectKeyIdentifier)
+        {
+            if (string.IsNullOrWhiteSpace(subjectKeyIdentifier))
+            {
+                throw new InvalidOperationException("Issuer Subject Key Identifier must be available for AKI extension generation.");
+            }
+
+            return Convert.FromHexString(subjectKeyIdentifier);
         }
 
         /// <summary>
