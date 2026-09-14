@@ -24,12 +24,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Certificates
         public void GetCurrentRuntimeCertificateMaterialClone_WhenBundleContainsIntermediate_PreservesIntermediateRawIdentity()
         {
             using GeneratedCertificateChain chain = CreateGeneratedCertificateChain("bf-state-chain.example.com");
-            using BackFillerCertificateBundle publishedBundle = CreateBundleFromChain(chain);
+            BackFillerCertificateBundle publishedBundle = CreateBundleFromChain(chain);
             using BackFillerCertificateState state = new();
 
             byte[] expectedIntermediateRaw = chain.IntermediateCertificate.RawData;
 
-            state.Publish(publishedBundle.CloneOwned());
+            state.Publish(publishedBundle);
 
             using BackFillerCertificateState.RuntimeCertificateMaterial? runtimeMaterial = state.GetCurrentRuntimeCertificateMaterialClone();
             Assert.NotNull(runtimeMaterial);
