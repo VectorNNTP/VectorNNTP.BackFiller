@@ -86,6 +86,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
         /// <summary>
+        /// Configures initialization-stage timeout for transit connection.
+        /// </summary>
+        private readonly TimeSpan _initializationProgressTimeout;
+        /// <summary>
         /// Configures response progress timeout for transit connection.
         /// </summary>
         private readonly TimeSpan _responseProgressTimeout;
@@ -273,6 +277,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Stopwatch tick of the last definitive response progress observed by the connection.
         /// </summary>
         private long _lastDefinitiveResponseProgressTick;
+        /// <summary>
+        /// Number of active pending submissions participating in the response-progress epoch.
+        /// </summary>
+        private int _activeResponsePendingCount;
 
         /// <summary>
         /// Initializes a transit connection configuration using platform-default server certificate validation.
@@ -287,6 +295,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="perConnectionPipelineDepth">Maximum number of work items expected to be pipelined per batch on this connection.</param>
         /// <param name="writeBatchCoalesceMicroseconds">Validation input for configured write coalescing window in microseconds.</param>
         /// <param name="expectedBatchIntentCountProvider">Reserved provider for batch-intent accounting in the global queue architecture.</param>
+        /// <param name="initializationProgressTimeout">Optional timeout for initialization-stage protocol progress.</param>
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
@@ -299,6 +308,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int perConnectionPipelineDepth = 8,
             int writeBatchCoalesceMicroseconds = 250,
             Func<int>? expectedBatchIntentCountProvider = null,
+            TimeSpan? initializationProgressTimeout = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
@@ -312,6 +322,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 perConnectionPipelineDepth,
                 writeBatchCoalesceMicroseconds,
                 expectedBatchIntentCountProvider,
+                initializationProgressTimeout,
                 responseProgressTimeout,
                 responseProgressCheckInterval,
                 timingCollector,
@@ -336,6 +347,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="perConnectionPipelineDepth">Maximum number of work items expected to be pipelined per batch on this connection.</param>
         /// <param name="writeBatchCoalesceMicroseconds">Validation input for configured write coalescing window in microseconds.</param>
         /// <param name="expectedBatchIntentCountProvider">Reserved provider for batch-intent accounting in the global queue architecture.</param>
+        /// <param name="initializationProgressTimeout">Optional timeout for initialization-stage protocol progress.</param>
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
@@ -360,6 +372,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int perConnectionPipelineDepth = 8,
             int writeBatchCoalesceMicroseconds = 250,
             Func<int>? expectedBatchIntentCountProvider = null,
+            TimeSpan? initializationProgressTimeout = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
@@ -393,6 +406,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new ArgumentOutOfRangeException(nameof(responseProgressTimeout), effectiveResponseProgressTimeout, "Response progress timeout must be greater than zero.");
             }
 
+            TimeSpan effectiveInitializationProgressTimeout = initializationProgressTimeout ?? effectiveResponseProgressTimeout;
+            if (effectiveInitializationProgressTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(initializationProgressTimeout), effectiveInitializationProgressTimeout, "Initialization progress timeout must be greater than zero.");
+            }
+
             TimeSpan effectiveResponseProgressCheckInterval = responseProgressCheckInterval ?? DefaultResponseProgressCheckInterval;
             if (effectiveResponseProgressCheckInterval <= TimeSpan.Zero)
             {
@@ -405,6 +424,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _logger = logger;
             _serverCertificateValidationCallback = serverCertificateValidationCallback;
             PipelineDepth = perConnectionPipelineDepth;
+            _initializationProgressTimeout = effectiveInitializationProgressTimeout;
             _responseProgressTimeout = effectiveResponseProgressTimeout;
             _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
             _timingCollector = timingCollector;
@@ -444,6 +464,45 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <value>The current count of entries in the pending Message-ID map.</value>
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
+
+        /// <summary>
+        /// Registers pending-work admission in the active response-progress epoch.
+        /// </summary>
+        /// <remarks>
+        /// A zero-to-one transition starts a fresh active watchdog epoch anchored to current monotonic time.
+        /// </remarks>
+        private void OnPendingWorkRegistered()
+        {
+            if (Interlocked.Increment(ref _activeResponsePendingCount) == 1)
+            {
+                Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+            }
+        }
+
+        /// <summary>
+        /// Registers pending-work settlement in the active response-progress epoch.
+        /// </summary>
+        /// <remarks>
+        /// A transition back to zero clears the active epoch so idle time cannot age future submissions.
+        /// </remarks>
+        private void OnPendingWorkSettled()
+        {
+            int updated = Interlocked.Decrement(ref _activeResponsePendingCount);
+            if (updated <= 0)
+            {
+                Volatile.Write(ref _activeResponsePendingCount, 0);
+                Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+            }
+        }
+
+        /// <summary>
+        /// Clears active response-progress epoch state.
+        /// </summary>
+        private void ResetActiveResponseProgressEpoch()
+        {
+            Volatile.Write(ref _activeResponsePendingCount, 0);
+            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+        }
 
         /// <summary>
         /// Gets the configured per-connection pipeline depth used by upstream scheduling and diagnostics.
@@ -717,7 +776,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _responseProgressWatchdogCancellation = CancellationTokenSource.CreateLinkedTokenSource(_responseLoopCancellation.Token);
                 _responseLoopFault = null;
                 Volatile.Write(ref _responseLoopFaulted, 0);
-                Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+                ResetActiveResponseProgressEpoch();
                 _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
                 _responseProgressWatchdogTask = Task.Run(() => ResponseProgressWatchdogLoopAsync(_responseProgressWatchdogCancellation.Token), CancellationToken.None);
             }
@@ -799,7 +858,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _responseProgressWatchdogTask = null;
             _responseLoopFault = null;
             Volatile.Write(ref _responseLoopFaulted, 0);
-            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+            ResetActiveResponseProgressEpoch();
 
             _responseLoopCancellation?.Dispose();
             _responseProgressWatchdogCancellation?.Dispose();
@@ -860,6 +919,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     {
                         throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
                     }
+
+                    OnPendingWorkRegistered();
 
 
                     _pendingBySendOrder.Enqueue(item.MessageId);
@@ -1101,6 +1162,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     && pending.T2SocketWriteBeginTick == 0
                     && _pendingByMessageId.TryRemove(messageId, out _))
                 {
+                    OnPendingWorkSettled();
                     AcknowledgeSendOrder(messageId);
                 }
 
@@ -1165,6 +1227,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 if (_pendingByMessageId.TryRemove(messageId, out PendingOwnedWork? removed) && removed is not null)
                 {
+                    OnPendingWorkSettled();
                     AcknowledgeSendOrder(messageId);
                     unresolved.Add(removed);
                 }
@@ -1286,6 +1349,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     bool removed = _pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
                     if (removed && pendingCandidate is not null)
                     {
+                        OnPendingWorkSettled();
                         pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
                         TransitPublishResult correlatedResult = mapped with
                         {
@@ -1294,7 +1358,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
 
-                        if (correlatedResult.ResponseCode is 239 or 439)
+                        if (correlatedResult.ResponseCode is 239 or 439 && Volatile.Read(ref _activeResponsePendingCount) > 0)
                         {
                             Volatile.Write(ref _lastDefinitiveResponseProgressTick, pendingCandidate.T6ResponseCorrelatedTick);
                         }
@@ -1349,6 +1413,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
 
                     if (_pendingByMessageId.IsEmpty)
+                    {
+                        if (Volatile.Read(ref _activeResponsePendingCount) == 0)
+                        {
+                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+                        }
+
+                        continue;
+                    }
+
+                    if (Volatile.Read(ref _activeResponsePendingCount) == 0)
                     {
                         continue;
                     }
@@ -1701,7 +1775,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
 
             using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            stageTimeout.CancelAfter(_responseProgressTimeout);
+            stageTimeout.CancelAfter(_initializationProgressTimeout);
 
             try
             {
@@ -1737,7 +1811,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
 
             using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            stageTimeout.CancelAfter(_responseProgressTimeout);
+            stageTimeout.CancelAfter(_initializationProgressTimeout);
 
             try
             {
@@ -2078,6 +2152,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _responseLoopCancellation = null;
                 _responseProgressWatchdogTask = null;
                 _responseProgressWatchdogCancellation = null;
+                ResetActiveResponseProgressEpoch();
                 TransitionState(TransitConnectionState.Disconnected);
             }
         }

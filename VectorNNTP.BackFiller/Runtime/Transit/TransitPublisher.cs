@@ -1577,7 +1577,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     useSsl: _runtimeOptions.TransitServerUseSsl,
                     logger: _logger,
                     perConnectionPipelineDepth: _perConnectionPipelineDepth,
-                    responseProgressTimeout: initializationResponseProgressTimeout,
+                    responseProgressTimeout: _connectionResponseProgressTimeout,
+                    initializationProgressTimeout: initializationResponseProgressTimeout,
                     responseProgressCheckInterval: _connectionResponseProgressCheckInterval,
                     timingCollector: _timingCollector,
                     watchdogProbe: _watchdogProbe);
@@ -1716,28 +1717,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
             if (exception is TransitConnection.TransitConnectionLifecycleException lifecycleException)
             {
-                if (lifecycleException.Failure == TransitConnection.TransitConnectionLifecycleFailure.InitializationNegotiationProtocolFailure)
-                {
-                    return true;
-                }
-
                 return true;
             }
 
-            bool result = (connection.CurrentState == TransitConnectionState.Faulted || connection.IsResponseLoopFaulted
-                    ? exception is IOException
+            return connection.CurrentState == TransitConnectionState.Faulted || connection.IsResponseLoopFaulted
+                ? exception is IOException
                     or ObjectDisposedException
                     or SocketException
                     or TimeoutException
                     or System.Threading.Channels.ChannelClosedException
-                    : exception is IOException
+                : exception is IOException
                     or ObjectDisposedException
                     or SocketException
                     || (exception is InvalidOperationException invalid
                         && (IsInitializationProtocolFailure(connection, invalid)
                             || invalid.Message.Contains("connection", StringComparison.OrdinalIgnoreCase)
-                            || invalid.Message.Contains("Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal))));
-            return result;
+                            || invalid.Message.Contains("Duplicate in-flight Message-ID on same connection.", StringComparison.Ordinal)));
         }
 
         /// <summary>
