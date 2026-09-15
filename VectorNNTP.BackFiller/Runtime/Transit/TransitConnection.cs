@@ -26,6 +26,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal enum TransitWatchdogProbePoint
     {
         /// <summary>
+        /// Indicates the watchdog observed active pending work and confirmed elapsed progress age is still within timeout.
+        /// </summary>
+        ActivePendingElapsedWithinTimeout,
+
+        /// <summary>
         /// Indicates the watchdog observed stale definitive progress while pending work still existed and is about to perform its final no-fault guard check.
         /// </summary>
         TimeoutElapsedWithPendingBeforeFinalRecheck,
@@ -293,7 +298,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private int _activeResponsePendingCount;
         /// <summary>
-        /// Synchronizes active response-epoch transitions so pending-count and progress-tick updates remain linearizable.
+        /// Synchronizes pending ownership and active response-epoch transitions so dictionary mutation and epoch updates remain linearizable.
         /// </summary>
         private readonly object _activeResponseEpochGate = new();
         /// <summary>
@@ -513,65 +518,135 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
+        /// Sets the active response-progress tick for deterministic test coordination.
+        /// </summary>
+        /// <param name="progressTick">Stopwatch tick to assign.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="progressTick"/> is negative.</exception>
+        internal void SetActiveResponseProgressTickForTesting(long progressTick)
+        {
+            if (progressTick < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(progressTick), progressTick, "Progress tick must be non-negative.");
+            }
+
+            lock (_activeResponseEpochGate)
+            {
+                _lastDefinitiveResponseProgressTick = progressTick;
+            }
+        }
+
+        /// <summary>
         /// Registers pending-work admission in the active response-progress epoch.
         /// </summary>
         /// <remarks>
+        /// Callers must hold <c>_activeResponseEpochGate</c> while mutating <c>_pendingByMessageId</c> and invoking this method
+        /// so pending ownership and epoch state are committed as one coherent transition.
         /// A zero-to-one transition starts a fresh active watchdog epoch anchored to current monotonic time.
         /// </remarks>
-        private (int PendingCount, long ProgressTick) OnPendingWorkRegistered()
+        private (int PendingCount, long ProgressTick) OnPendingWorkRegisteredUnderEpochGate()
         {
-            lock (_activeResponseEpochGate)
+            _activeResponsePendingCount++;
+            if (_activeResponsePendingCount == 1)
             {
-                _activeResponsePendingCount++;
-                if (_activeResponsePendingCount == 1)
-                {
-                    _lastDefinitiveResponseProgressTick = Stopwatch.GetTimestamp();
-                }
-
-                return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick);
+                _lastDefinitiveResponseProgressTick = Stopwatch.GetTimestamp();
             }
+
+            return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick);
         }
 
         /// <summary>
         /// Registers pending-work settlement in the active response-progress epoch.
         /// </summary>
         /// <remarks>
+        /// Callers must hold <c>_activeResponseEpochGate</c> while mutating <c>_pendingByMessageId</c> and invoking this method
+        /// so pending ownership and epoch state are committed as one coherent transition.
         /// A transition back to zero clears the active epoch so idle time cannot age future submissions.
         /// When the transition reaches zero, the clear is guarded by a second gate pass so a newer
         /// zero-to-one admission cannot be overwritten by an older settle path.
         /// </remarks>
-        private int OnPendingWorkSettled()
+        private int OnPendingWorkSettledUnderEpochGate()
         {
+            if (_activeResponsePendingCount <= 1)
+            {
+                _activeResponsePendingCount = 0;
+                return 0;
+            }
+
+            _activeResponsePendingCount--;
+            return _activeResponsePendingCount;
+        }
+
+        /// <summary>
+        /// Removes one pending entry and settles its active response-epoch ownership under one synchronization boundary.
+        /// </summary>
+        /// <param name="messageId">Message-ID key to remove.</param>
+        /// <param name="removed">Removed pending entry when present.</param>
+        /// <returns>Epoch settle result for the remove path, including whether ownership was removed and idle transition metadata.</returns>
+        private PendingRemovalResult TryRemovePendingAndSettleEpoch(string messageId, out PendingOwnedWork? removed)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+
             bool transitionedToIdle = false;
+            int remainingPendingCount = 0;
+            bool removedPending;
 
             lock (_activeResponseEpochGate)
             {
-                if (_activeResponsePendingCount <= 1)
+                removedPending = _pendingByMessageId.TryRemove(messageId, out removed);
+                if (!removedPending)
                 {
-                    _activeResponsePendingCount = 0;
-                    transitionedToIdle = true;
+                    return new PendingRemovalResult(Removed: false, RemainingPendingCount: _activeResponsePendingCount);
                 }
-                else
-                {
-                    _activeResponsePendingCount--;
-                    return _activeResponsePendingCount;
-                }
+
+                remainingPendingCount = OnPendingWorkSettledUnderEpochGate();
+                transitionedToIdle = remainingPendingCount == 0;
             }
 
             if (transitionedToIdle)
             {
                 _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.PendingTransitioningToIdleBeforeEpochClear);
+
+                lock (_activeResponseEpochGate)
+                {
+                    if (_activeResponsePendingCount == 0)
+                    {
+                        _lastDefinitiveResponseProgressTick = 0;
+                        remainingPendingCount = 0;
+                    }
+                    else
+                    {
+                        remainingPendingCount = _activeResponsePendingCount;
+                    }
+                }
             }
+
+            return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount);
+        }
+
+        /// <summary>
+        /// Registers one pending entry and active response-epoch ownership under one synchronization boundary.
+        /// </summary>
+        /// <param name="messageId">Message-ID key for the pending entry.</param>
+        /// <param name="pending">Pending entry value to register.</param>
+        /// <param name="activePendingCount">Receives the active pending count snapshot after registration attempt.</param>
+        /// <param name="activeProgressTick">Receives the active definitive progress tick snapshot after registration attempt.</param>
+        /// <returns><see langword="true"/> when registration succeeds; otherwise <see langword="false"/>.</returns>
+        private bool TryRegisterPendingAndEpoch(string messageId, PendingOwnedWork pending, out int activePendingCount, out long activeProgressTick)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+            ArgumentNullException.ThrowIfNull(pending);
 
             lock (_activeResponseEpochGate)
             {
-                if (_activeResponsePendingCount == 0)
+                if (!_pendingByMessageId.TryAdd(messageId, pending))
                 {
-                    _lastDefinitiveResponseProgressTick = 0;
-                    return 0;
+                    activePendingCount = _activeResponsePendingCount;
+                    activeProgressTick = _lastDefinitiveResponseProgressTick;
+                    return false;
                 }
 
-                return _activeResponsePendingCount;
+                (activePendingCount, activeProgressTick) = OnPendingWorkRegisteredUnderEpochGate();
+                return true;
             }
         }
 
@@ -1016,12 +1091,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 {
                     TransitWorkItem item = entry.WorkItem;
                     PendingOwnedWork pending = new(item);
-                    if (!_pendingByMessageId.TryAdd(item.MessageId, pending))
+                    if (!TryRegisterPendingAndEpoch(item.MessageId, pending, out int activePendingCount, out long activeProgressTick))
                     {
                         throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
                     }
 
-                    (int activePendingCount, long activeProgressTick) = OnPendingWorkRegistered();
                     _pendingRegistrationProbe?.Invoke(activePendingCount, activeProgressTick);
 
 
@@ -1261,11 +1335,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 if (_pendingByMessageId.TryGetValue(messageId, out PendingOwnedWork? pending)
-                    && pending.T2SocketWriteBeginTick == 0
-                    && _pendingByMessageId.TryRemove(messageId, out _))
+                    && pending.T2SocketWriteBeginTick == 0)
                 {
-                    OnPendingWorkSettled();
-                    AcknowledgeSendOrder(messageId);
+                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(messageId, out _);
+                    if (removal.Removed)
+                    {
+                        AcknowledgeSendOrder(messageId);
+                    }
                 }
 
                 return new TransitPublishResult(
@@ -1327,9 +1403,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                if (_pendingByMessageId.TryRemove(messageId, out PendingOwnedWork? removed) && removed is not null)
+                PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(messageId, out PendingOwnedWork? removed);
+                if (removal.Removed && removed is not null)
                 {
-                    OnPendingWorkSettled();
                     AcknowledgeSendOrder(messageId);
                     unresolved.Add(removed);
                 }
@@ -1448,10 +1524,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    bool removed = _pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
-                    if (removed && pendingCandidate is not null)
+                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
+                    if (removal.Removed && pendingCandidate is not null)
                     {
-                        int remainingPending = OnPendingWorkSettled();
+                        int remainingPending = removal.RemainingPendingCount;
                         pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
                         TransitPublishResult correlatedResult = mapped with
                         {
@@ -1515,18 +1591,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     }
 
                     (int pendingCount, long lastProgressTick) = CaptureActiveResponseEpochSnapshot();
-                    if (_pendingByMessageId.IsEmpty)
+                    if (pendingCount == 0)
                     {
-                        if (pendingCount == 0 && lastProgressTick != 0)
+                        if (lastProgressTick != 0)
                         {
                             ResetActiveResponseProgressEpoch();
                         }
 
-                        continue;
-                    }
-
-                    if (pendingCount == 0)
-                    {
                         continue;
                     }
 
@@ -1538,13 +1609,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     TimeSpan elapsed = Stopwatch.GetElapsedTime(lastProgressTick);
                     if (elapsed <= _responseProgressTimeout)
                     {
+                        _watchdogProbe?.Invoke(TransitWatchdogProbePoint.ActivePendingElapsedWithinTimeout);
                         continue;
                     }
 
                     _watchdogProbe?.Invoke(TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck);
 
                     (int recheckedPendingCount, long recheckedProgressTick) = CaptureActiveResponseEpochSnapshot();
-                    if (recheckedPendingCount == 0 || recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)
+                    if (recheckedPendingCount == 0 || recheckedProgressTick != lastProgressTick)
                     {
                         continue;
                     }
@@ -2569,6 +2641,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Immutable completion tuple pairing a settled work item with its publish result.
         /// </summary>
         private sealed record CompletedWork(TransitWorkItem WorkItem, TransitPublishResult Result);
+
+        /// <summary>
+        /// Captures the outcome of removing one pending entry and applying the corresponding epoch-settlement transition.
+        /// </summary>
+        /// <param name="Removed">Indicates whether the pending Message-ID entry was removed.</param>
+        /// <param name="RemainingPendingCount">Active pending count after the removal settle transition.</param>
+        private readonly record struct PendingRemovalResult(bool Removed, int RemainingPendingCount);
 
         /// <summary>
         /// Metrics emitted by payload dot-stuff staging for instrumentation.

@@ -1923,7 +1923,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
                 await blockingRetention.MarkTransitCompletedEntered.Task.WaitAsync(observationTimeout.Token);
 
-                long progressTickAfterFirstDefinitive = GetConnectionDefinitiveResponseProgressTick(connection);
+                long progressTickAfterFirstDefinitive = CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick;
                 Assert.NotEqual(baselineProgressTick, progressTickAfterFirstDefinitive);
                 Assert.Equal(1, connection.OutstandingSubmissionCount);
                 Assert.False(connection.IsResponseLoopFaulted);
@@ -2002,7 +2002,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TransitPublishResult firstResult = await first.WaitAsync(observationTimeout.Token);
             firstCompleted.TrySetResult(true);
 
-            long tickAfterNonDefinitiveResponse = GetConnectionDefinitiveResponseProgressTick(connection);
+            long tickAfterNonDefinitiveResponse = CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick;
             Assert.Equal(initialTick, tickAfterNonDefinitiveResponse);
             Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
             Assert.Equal(400, firstResult.ResponseCode);
@@ -2090,11 +2090,11 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
                 Assert.Equal(TransitPublishStatus.Ambiguous, firstResult.Status);
                 Assert.Equal(400, firstResult.ResponseCode);
-                Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.Equal(baselineProgressTick, CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick);
                 Assert.Equal(1, connection.OutstandingSubmissionCount);
 
                 await watchdogReachedFinalRecheckBoundary.Task.WaitAsync(observationTimeout.Token);
-                Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.Equal(baselineProgressTick, CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick);
                 Assert.Equal(1, connection.OutstandingSubmissionCount);
 
                 allowSecondResponse.TrySetResult(true);
@@ -2104,7 +2104,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 Assert.Equal(TransitPublishStatus.Ambiguous, secondResult.Status);
                 Assert.Equal(400, secondResult.ResponseCode);
                 Assert.Equal(0, connection.OutstandingSubmissionCount);
-                Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.Equal(0L, CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick);
                 Assert.False(connection.IsResponseLoopFaulted);
                 Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
             }
@@ -2163,10 +2163,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
             long baselineProgressTick = await WaitForActiveResponseEpochAsync(connection, observationTimeout.Token);
             await WaitForOutstandingAwaitingResponsesAsync(publisher, minimumAwaitingResponses: 1, observationTimeout.Token);
-            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.Equal(baselineProgressTick, CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick);
 
             await watchdogReachedFinalRecheckBoundary.Task.WaitAsync(observationTimeout.Token);
-            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.Equal(baselineProgressTick, CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick);
             Assert.Equal(1, connection.OutstandingSubmissionCount);
 
             while (!connection.IsResponseLoopFaulted)
@@ -2242,10 +2242,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(239, firstResult.ResponseCode);
 
             Assert.Equal(0, connection.OutstandingSubmissionCount);
-            Assert.Equal(0, GetConnectionActiveResponsePendingCount(connection));
+            Assert.Equal(0, CaptureConnectionActiveResponseEpochSnapshot(connection).PendingCount);
 
             const long staleTick = 1;
-            SetConnectionDefinitiveResponseProgressTick(connection, staleTick);
+            connection.SetActiveResponseProgressTickForTesting(staleTick);
 
             Task<TransitPublishResult> publishTask = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
 
@@ -2255,7 +2255,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             long activeEpochTick = await WaitForActiveResponseEpochAsync(connection, observationTimeout.Token);
             Assert.NotEqual(staleTick, activeEpochTick);
-            Assert.Equal(1, GetConnectionActiveResponsePendingCount(connection));
+            Assert.Equal(1, CaptureConnectionActiveResponseEpochSnapshot(connection).PendingCount);
 
             allowSecondResponse.TrySetResult(true);
             TransitPublishResult result = await publishTask.WaitAsync(observationTimeout.Token);
@@ -2264,8 +2264,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(TransitPublishStatus.Accepted, result.Status);
             Assert.Equal(239, result.ResponseCode);
             Assert.Equal(0, connection.OutstandingSubmissionCount);
-            Assert.Equal(0, GetConnectionActiveResponsePendingCount(connection));
-            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+            (int pendingAfterSettle, long progressAfterSettle) = CaptureConnectionActiveResponseEpochSnapshot(connection);
+            Assert.Equal(0, pendingAfterSettle);
+            Assert.Equal(0L, progressAfterSettle);
         }
 
         /// <summary>
@@ -2281,7 +2282,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             byte[] payload = [(byte)'S', (byte)'\n'];
             TaskCompletionSource<bool> takethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> allowResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            TaskCompletionSource<bool> watchdogProbeReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> watchdogObservedWithinTimeout = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> watchdogObservedTimeoutElapsed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
             {
@@ -2318,9 +2320,15 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionResponseProgressCheckInterval: responseProgressCheckInterval,
                 watchdogProbe: point =>
                 {
+                    if (point == TransitWatchdogProbePoint.ActivePendingElapsedWithinTimeout)
+                    {
+                        watchdogObservedWithinTimeout.TrySetResult(true);
+                        return;
+                    }
+
                     if (point == TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck)
                     {
-                        watchdogProbeReached.TrySetResult(true);
+                        watchdogObservedTimeoutElapsed.TrySetResult(true);
                     }
                 });
 
@@ -2335,10 +2343,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 1, observationTimeout.Token);
 
             long staleUnderInitializationOnly = Stopwatch.GetTimestamp() - ToStopwatchTicks(TimeSpan.FromMilliseconds(100));
-            SetConnectionDefinitiveResponseProgressTick(connection, staleUnderInitializationOnly);
+            connection.SetActiveResponseProgressTickForTesting(staleUnderInitializationOnly);
 
-            using CancellationTokenSource shortObservation = new(TimeSpan.FromMilliseconds(200));
-            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchdogProbeReached.Task.WaitAsync(shortObservation.Token));
+            await watchdogObservedWithinTimeout.Task.WaitAsync(observationTimeout.Token);
+            Assert.False(watchdogObservedTimeoutElapsed.Task.IsCompleted);
+
+            (int pendingCount, long activeTick) = connection.CaptureActiveResponseEpochSnapshot();
+            Assert.Equal(1, pendingCount);
+            Assert.Equal(staleUnderInitializationOnly, activeTick);
 
             allowResponse.TrySetResult(true);
             TransitPublishResult result = await publishTask.WaitAsync(observationTimeout.Token);
@@ -2407,11 +2419,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             allowFirstResponse.TrySetResult(true);
             TransitPublishResult firstResult = await firstPublish.WaitAsync(observationTimeout.Token);
             Assert.Equal(TransitPublishStatus.Accepted, firstResult.Status);
-            Assert.Equal(0, GetConnectionActiveResponsePendingCount(connection));
-            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+            (int pendingAfterFirstCycle, long progressAfterFirstCycle) = CaptureConnectionActiveResponseEpochSnapshot(connection);
+            Assert.Equal(0, pendingAfterFirstCycle);
+            Assert.Equal(0L, progressAfterFirstCycle);
 
             const long staleIdleTick = 1;
-            SetConnectionDefinitiveResponseProgressTick(connection, staleIdleTick);
+            connection.SetActiveResponseProgressTickForTesting(staleIdleTick);
 
             Task<TransitPublishResult> secondPublish = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
             await secondTakethisObserved.Task.WaitAsync(observationTimeout.Token);
@@ -2420,15 +2433,16 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             Assert.NotEqual(staleIdleTick, secondActiveEpoch);
             Assert.NotEqual(firstActiveEpoch, secondActiveEpoch);
-            Assert.Equal(1, GetConnectionActiveResponsePendingCount(connection));
+            Assert.Equal(1, CaptureConnectionActiveResponseEpochSnapshot(connection).PendingCount);
 
             allowSecondResponse.TrySetResult(true);
             TransitPublishResult secondResult = await secondPublish.WaitAsync(observationTimeout.Token);
 
             Assert.Equal(TransitPublishStatus.Accepted, secondResult.Status);
             Assert.Equal(239, secondResult.ResponseCode);
-            Assert.Equal(0, GetConnectionActiveResponsePendingCount(connection));
-            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+            (int pendingAfterSecondCycle, long progressAfterSecondCycle) = CaptureConnectionActiveResponseEpochSnapshot(connection);
+            Assert.Equal(0, pendingAfterSecondCycle);
+            Assert.Equal(0L, progressAfterSecondCycle);
         }
 
         /// <summary>
@@ -2553,21 +2567,22 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             Assert.NotEqual(0L, epochAfterOne);
             Assert.Equal(epochAfterOne, epochAfterManyAdmission);
-            Assert.Equal(2, GetConnectionActiveResponsePendingCount(connection));
+            Assert.Equal(2, CaptureConnectionActiveResponseEpochSnapshot(connection).PendingCount);
 
             allowFirstResponse.TrySetResult(true);
             TransitPublishResult firstResult = await firstPublish.WaitAsync(observationTimeout.Token);
-            long progressAfterFirstDefinitive = GetConnectionDefinitiveResponseProgressTick(connection);
+            long progressAfterFirstDefinitive = CaptureConnectionActiveResponseEpochSnapshot(connection).ProgressTick;
 
             Assert.Equal(TransitPublishStatus.Accepted, firstResult.Status);
             Assert.NotEqual(epochAfterManyAdmission, progressAfterFirstDefinitive);
-            Assert.Equal(1, GetConnectionActiveResponsePendingCount(connection));
+            Assert.Equal(1, CaptureConnectionActiveResponseEpochSnapshot(connection).PendingCount);
 
             allowSecondResponse.TrySetResult(true);
             TransitPublishResult secondResult = await secondPublish.WaitAsync(observationTimeout.Token);
             Assert.Equal(TransitPublishStatus.Accepted, secondResult.Status);
-            Assert.Equal(0, GetConnectionActiveResponsePendingCount(connection));
-            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+            (int pendingAfterSecondResult, long progressAfterSecondResult) = CaptureConnectionActiveResponseEpochSnapshot(connection);
+            Assert.Equal(0, pendingAfterSecondResult);
+            Assert.Equal(0L, progressAfterSecondResult);
 
             Task<TransitPublishResult> thirdPublish = publisher.PublishAsync(thirdMessageId, payload, CancellationToken.None).AsTask();
             TransitConnection replacementConnection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
@@ -2577,13 +2592,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             Assert.NotEqual(0L, epochAfterSecondCycleStart);
             Assert.NotEqual(progressAfterFirstDefinitive, epochAfterSecondCycleStart);
-            Assert.Equal(1, GetConnectionActiveResponsePendingCount(replacementConnection));
+            Assert.Equal(1, CaptureConnectionActiveResponseEpochSnapshot(replacementConnection).PendingCount);
 
             allowThirdResponse.TrySetResult(true);
             TransitPublishResult thirdResult = await thirdPublish.WaitAsync(observationTimeout.Token);
             Assert.Equal(TransitPublishStatus.Accepted, thirdResult.Status);
-            Assert.Equal(0, GetConnectionActiveResponsePendingCount(replacementConnection));
-            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(replacementConnection));
+            (int pendingAfterThirdResult, long progressAfterThirdResult) = CaptureConnectionActiveResponseEpochSnapshot(replacementConnection);
+            Assert.Equal(0, pendingAfterThirdResult);
+            Assert.Equal(0L, progressAfterThirdResult);
         }
 
         /// <summary>
@@ -6174,49 +6190,14 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         }
 
         /// <summary>
-        /// Reads the connection's last definitive response-progress tick through reflection for watchdog boundary assertions.
-        /// </summary>
-        /// <param name="connection">The connection whose progress tick is inspected.</param>
-        /// <returns>The raw stopwatch tick of the last definitive response progress.</returns>
-        private static long GetConnectionDefinitiveResponseProgressTick(TransitConnection connection)
-        {
-            ArgumentNullException.ThrowIfNull(connection);
-
-            FieldInfo? field = typeof(TransitConnection).GetField("_lastDefinitiveResponseProgressTick", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(field);
-
-            object? value = field.GetValue(connection);
-            return Assert.IsType<long>(value);
-        }
-
-        /// <summary>
-        /// Sets the connection's definitive response-progress tick through reflection.
+        /// Captures one coherent active response-epoch snapshot from the connection.
         /// </summary>
         /// <param name="connection">Connection under test.</param>
-        /// <param name="tick">Tick value to assign.</param>
-        private static void SetConnectionDefinitiveResponseProgressTick(TransitConnection connection, long tick)
+        /// <returns>The current active pending count and definitive progress tick from one synchronized read.</returns>
+        private static (int PendingCount, long ProgressTick) CaptureConnectionActiveResponseEpochSnapshot(TransitConnection connection)
         {
             ArgumentNullException.ThrowIfNull(connection);
-
-            FieldInfo? field = typeof(TransitConnection).GetField("_lastDefinitiveResponseProgressTick", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(field);
-            field.SetValue(connection, tick);
-        }
-
-        /// <summary>
-        /// Reads the connection's active pending-response epoch count through reflection.
-        /// </summary>
-        /// <param name="connection">Connection under test.</param>
-        /// <returns>Current active pending-response epoch count.</returns>
-        private static int GetConnectionActiveResponsePendingCount(TransitConnection connection)
-        {
-            ArgumentNullException.ThrowIfNull(connection);
-
-            FieldInfo? field = typeof(TransitConnection).GetField("_activeResponsePendingCount", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(field);
-
-            object? value = field.GetValue(connection);
-            return Assert.IsType<int>(value);
+            return connection.CaptureActiveResponseEpochSnapshot();
         }
 
         /// <summary>
@@ -6256,8 +6237,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                int pendingCount = GetConnectionActiveResponsePendingCount(connection);
-                long progressTick = GetConnectionDefinitiveResponseProgressTick(connection);
+                (int pendingCount, long progressTick) = CaptureConnectionActiveResponseEpochSnapshot(connection);
                 if (pendingCount > 0 && progressTick > 0)
                 {
                     return progressTick;

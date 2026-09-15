@@ -198,25 +198,30 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             await settleBeforeEpochClearObserved.Task.WaitAsync(observationTimeout.Token);
 
             Task<TransitPublishResult> secondPublish = connection.SubmitTakethisAsync(secondMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
-            await secondTakethisObserved.Task.WaitAsync(observationTimeout.Token);
-            await WaitForConditionAsync(
-                () =>
-                {
-                    (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
-                    return connection.OutstandingSubmissionCount == 1 && pendingCount == 1 && progressTick > 0;
-                },
-                observationTimeout.Token);
+            try
+            {
+                await secondTakethisObserved.Task.WaitAsync(observationTimeout.Token);
+                await WaitForConditionAsync(
+                    () =>
+                    {
+                        (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
+                        return connection.OutstandingSubmissionCount == 1 && pendingCount == 1 && progressTick > 0;
+                    },
+                    observationTimeout.Token);
 
-            allowSettleEpochClear.TrySetResult(true);
-            await WaitForConditionAsync(
-                () =>
-                {
-                    (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
-                    return pendingCount == 1 && progressTick > 0;
-                },
-                observationTimeout.Token);
-
-            allowSecondResponse.TrySetResult(true);
+                await WaitForConditionAsync(
+                    () =>
+                    {
+                        (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
+                        return pendingCount == 1 && progressTick > 0;
+                    },
+                    observationTimeout.Token);
+            }
+            finally
+            {
+                allowSettleEpochClear.TrySetResult(true);
+                allowSecondResponse.TrySetResult(true);
+            }
 
             TransitPublishResult firstResult = await firstPublish.WaitAsync(observationTimeout.Token);
             TransitPublishResult secondResult = await secondPublish.WaitAsync(observationTimeout.Token);
