@@ -1602,7 +1602,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         out PendingOwnedWork? pendingCandidate);
                     if (removal.Removed && pendingCandidate is not null)
                     {
-                        int remainingPending = removal.RemainingPendingCount;
                         pendingCandidate.T6ResponseCorrelatedTick = responseCorrelatedTick;
                         TransitPublishResult correlatedResult = mapped with
                         {

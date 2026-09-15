@@ -523,11 +523,24 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Listener
                 Buffer.BlockCopy(ack, 0, coalesced, request.Length, ack.Length);
                 Buffer.BlockCopy(duplicateAck, 0, coalesced, request.Length + ack.Length, duplicateAck.Length);
 
-                FoundHandler earlyHandler = new();
+                BlockingAllRequestsHandler earlyHandler = new();
                 TestTransport earlyTransport = new([coalesced], 4096);
                 ListenerProtocolSession earlySession = new(earlyTransport, earlyHandler);
 
-                await earlySession.RunAsync(CancellationToken.None);
+                Task earlyRunTask = earlySession.RunAsync(CancellationToken.None);
+                byte[] earlyPayload = Encoding.ASCII.GetBytes("found-payload");
+
+                try
+                {
+                    await earlyHandler.WaitForInvocationsAtLeastAsync(1);
+                    earlyHandler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(earlyPayload));
+                    await earlyRunTask;
+                }
+                finally
+                {
+                    earlyHandler.ReleaseAll(ListenerSessionRequestDispatchResult.Found(earlyPayload));
+                    await earlyRunTask;
+                }
 
                 Assert.Equal(0, earlySession.OutstandingRequestCount);
                 Assert.Equal(0, earlySession.AwaitingReceiptAckCount);
