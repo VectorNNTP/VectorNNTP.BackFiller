@@ -50,6 +50,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Indicates pending settlement observed a transition to idle and is about to clear the active epoch.
         /// </summary>
         PendingTransitioningToIdleBeforeEpochClear,
+
+        /// <summary>
+        /// Indicates a definitive response has removed pending ownership and is about to attempt epoch progress attribution.
+        /// </summary>
+        DefinitiveResponseBeforeEpochProgressAttribution,
     }
 
     /// <summary>
@@ -303,6 +308,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private int _activeResponsePendingCount;
         /// <summary>
+        /// Monotonic identity for the currently active response-progress epoch.
+        /// </summary>
+        private long _activeResponseEpochId;
+        /// <summary>
         /// Synchronizes pending ownership and active response-epoch transitions so dictionary mutation and epoch updates remain linearizable.
         /// </summary>
         private readonly object _activeResponseEpochGate = new();
@@ -548,15 +557,21 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// so pending ownership and epoch state are committed as one coherent transition.
         /// A zero-to-one transition starts a fresh active watchdog epoch anchored to current monotonic time.
         /// </remarks>
-        private (int PendingCount, long ProgressTick) OnPendingWorkRegisteredUnderEpochGate()
+        private (int PendingCount, long ProgressTick, long EpochId) OnPendingWorkRegisteredUnderEpochGate()
         {
             _activeResponsePendingCount++;
             if (_activeResponsePendingCount == 1)
             {
+                _activeResponseEpochId++;
+                if (_activeResponseEpochId <= 0)
+                {
+                    _activeResponseEpochId = 1;
+                }
+
                 _lastDefinitiveResponseProgressTick = Stopwatch.GetTimestamp();
             }
 
-            return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick);
+            return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick, _activeResponseEpochId);
         }
 
         /// <summary>
@@ -600,11 +615,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 removedPending = _pendingByMessageId.TryRemove(messageId, out removed);
                 if (!removedPending)
                 {
-                    return new PendingRemovalResult(Removed: false, RemainingPendingCount: _activeResponsePendingCount);
+                    return new PendingRemovalResult(Removed: false, RemainingPendingCount: _activeResponsePendingCount, RemovedEpochId: 0);
                 }
+
+                long removedEpochId = removed?.ActiveResponseEpochId ?? 0;
 
                 remainingPendingCount = OnPendingWorkSettledUnderEpochGate();
                 transitionedToIdle = remainingPendingCount == 0;
+                if (!transitionedToIdle)
+                {
+                    return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount, RemovedEpochId: removedEpochId);
+                }
             }
 
             if (transitionedToIdle)
@@ -625,7 +646,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
             }
 
-            return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount);
+            long finalizedRemovedEpochId = removed?.ActiveResponseEpochId ?? 0;
+            return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount, RemovedEpochId: finalizedRemovedEpochId);
         }
 
         /// <summary>
@@ -650,7 +672,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     return false;
                 }
 
-                (activePendingCount, activeProgressTick) = OnPendingWorkRegisteredUnderEpochGate();
+                (activePendingCount, activeProgressTick, long activeEpochId) = OnPendingWorkRegisteredUnderEpochGate();
+                pending.ActiveResponseEpochId = activeEpochId;
                 return true;
             }
         }
@@ -699,14 +722,20 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         }
 
         /// <summary>
-        /// Advances definitive response-progress tick only while active pending work remains in the current epoch.
+        /// Advances definitive response-progress tick only when the correlated response belongs to the currently active epoch.
         /// </summary>
+        /// <param name="responseEpochId">Epoch identity captured when the now-settled pending entry was registered.</param>
         /// <param name="correlatedTick">Monotonic timestamp captured when a definitive response was correlated.</param>
-        private void AdvanceDefinitiveResponseProgressIfActive(long correlatedTick)
+        private void AdvanceDefinitiveResponseProgressIfActiveEpochMatches(long responseEpochId, long correlatedTick)
         {
+            if (responseEpochId <= 0)
+            {
+                return;
+            }
+
             lock (_activeResponseEpochGate)
             {
-                if (_activeResponsePendingCount > 0)
+                if (_activeResponsePendingCount > 0 && _activeResponseEpochId == responseEpochId)
                 {
                     _lastDefinitiveResponseProgressTick = correlatedTick;
                 }
@@ -1575,7 +1604,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                         if (correlatedResult.ResponseCode is 239 or 439 && remainingPending > 0)
                         {
-                            AdvanceDefinitiveResponseProgressIfActive(pendingCandidate.T6ResponseCorrelatedTick);
+                            _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.DefinitiveResponseBeforeEpochProgressAttribution);
+                            AdvanceDefinitiveResponseProgressIfActiveEpochMatches(removal.RemovedEpochId, pendingCandidate.T6ResponseCorrelatedTick);
                         }
 
                         _timingCollector?.RecordResponseCorrelation(
@@ -2650,6 +2680,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             internal TransitWorkItem WorkItem { get; }
 
             /// <summary>
+            /// Active response-epoch identity captured when this pending entry was admitted.
+            /// </summary>
+            internal long ActiveResponseEpochId;
+
+            /// <summary>
             /// Timestamp marking the beginning of socket write staging for this work item.
             /// </summary>
             internal long T2SocketWriteBeginTick;
@@ -2685,7 +2720,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <param name="Removed">Indicates whether the pending Message-ID entry was removed.</param>
         /// <param name="RemainingPendingCount">Active pending count after the removal settle transition.</param>
-        private readonly record struct PendingRemovalResult(bool Removed, int RemainingPendingCount);
+        /// <param name="RemovedEpochId">Epoch identity owned by the removed pending entry; zero when removal did not occur.</param>
+        private readonly record struct PendingRemovalResult(bool Removed, int RemainingPendingCount, long RemovedEpochId);
 
         /// <summary>
         /// Metrics emitted by payload dot-stuff staging for instrumentation.
