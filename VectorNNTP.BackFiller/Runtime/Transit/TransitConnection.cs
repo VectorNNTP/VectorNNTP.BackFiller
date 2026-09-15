@@ -32,6 +32,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     }
 
     /// <summary>
+    /// Identifies deterministic active-response epoch transition checkpoints used by concurrency regression tests.
+    /// </summary>
+    internal enum TransitActiveResponseEpochProbePoint
+    {
+        /// <summary>
+        /// Indicates pending settlement observed a transition to idle and is about to clear the active epoch.
+        /// </summary>
+        PendingTransitioningToIdleBeforeEpochClear,
+    }
+
+    /// <summary>
     /// Owns one outbound NNTP transit session, including transport establishment, protocol negotiation,
     /// TAKETHIS submission, and response correlation for work assigned to this connection.
     /// </summary>
@@ -281,6 +292,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Number of active pending submissions participating in the response-progress epoch.
         /// </summary>
         private int _activeResponsePendingCount;
+        /// <summary>
+        /// Synchronizes active response-epoch transitions so pending-count and progress-tick updates remain linearizable.
+        /// </summary>
+        private readonly object _activeResponseEpochGate = new();
+        /// <summary>
+        /// Optional probe invoked at deterministic active-response epoch transition checkpoints.
+        /// </summary>
+        private readonly Action<TransitActiveResponseEpochProbePoint>? _activeResponseEpochProbe;
+        /// <summary>
+        /// Optional probe invoked after each pending-work registration with the active epoch pending count and tick snapshot.
+        /// </summary>
+        private readonly Action<int, long>? _pendingRegistrationProbe;
 
         /// <summary>
         /// Initializes a transit connection configuration using platform-default server certificate validation.
@@ -300,6 +323,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
         /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
+        /// <param name="activeResponseEpochProbe">Optional test hook invoked at deterministic active-epoch transition checkpoints.</param>
+        /// <param name="pendingRegistrationProbe">Optional test hook invoked after each pending-work registration with active pending count and progress-tick snapshot.</param>
         internal TransitConnection(
             string host,
             int port,
@@ -312,7 +337,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<TransitActiveResponseEpochProbePoint>? activeResponseEpochProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
             : this(
                 host,
                 port,
@@ -326,7 +353,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 responseProgressTimeout,
                 responseProgressCheckInterval,
                 timingCollector,
-                watchdogProbe)
+                watchdogProbe,
+                activeResponseEpochProbe,
+                pendingRegistrationProbe)
         {
         }
 
@@ -352,11 +381,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
         /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
+        /// <param name="activeResponseEpochProbe">Optional test hook invoked at deterministic active-epoch transition checkpoints.</param>
+        /// <param name="pendingRegistrationProbe">Optional test hook invoked after each pending-work registration with active pending count and progress-tick snapshot.</param>
         /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException">
         /// Thrown when <paramref name="port"/>, <paramref name="perConnectionPipelineDepth"/>,
-        /// <paramref name="writeBatchCoalesceMicroseconds"/>, <paramref name="responseProgressTimeout"/>, or
+        /// <paramref name="writeBatchCoalesceMicroseconds"/>, <paramref name="initializationProgressTimeout"/>, <paramref name="responseProgressTimeout"/>, or
         /// <paramref name="responseProgressCheckInterval"/> is outside the accepted range.
         /// </exception>
         /// <remarks>
@@ -376,7 +407,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<TransitActiveResponseEpochProbePoint>? activeResponseEpochProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
         {
             if (string.IsNullOrWhiteSpace(host))
             {
@@ -429,6 +462,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
             _timingCollector = timingCollector;
             _watchdogProbe = watchdogProbe;
+            _activeResponseEpochProbe = activeResponseEpochProbe;
+            _pendingRegistrationProbe = pendingRegistrationProbe;
             _ = expectedBatchIntentCountProvider;
         }
 
@@ -466,16 +501,34 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
 
         /// <summary>
+        /// Captures a coherent snapshot of active response-epoch state.
+        /// </summary>
+        /// <returns>Current active pending count and definitive progress tick under one synchronization boundary.</returns>
+        internal (int PendingCount, long ProgressTick) CaptureActiveResponseEpochSnapshot()
+        {
+            lock (_activeResponseEpochGate)
+            {
+                return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick);
+            }
+        }
+
+        /// <summary>
         /// Registers pending-work admission in the active response-progress epoch.
         /// </summary>
         /// <remarks>
         /// A zero-to-one transition starts a fresh active watchdog epoch anchored to current monotonic time.
         /// </remarks>
-        private void OnPendingWorkRegistered()
+        private (int PendingCount, long ProgressTick) OnPendingWorkRegistered()
         {
-            if (Interlocked.Increment(ref _activeResponsePendingCount) == 1)
+            lock (_activeResponseEpochGate)
             {
-                Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+                _activeResponsePendingCount++;
+                if (_activeResponsePendingCount == 1)
+                {
+                    _lastDefinitiveResponseProgressTick = Stopwatch.GetTimestamp();
+                }
+
+                return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick);
             }
         }
 
@@ -484,14 +537,41 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <remarks>
         /// A transition back to zero clears the active epoch so idle time cannot age future submissions.
+        /// When the transition reaches zero, the clear is guarded by a second gate pass so a newer
+        /// zero-to-one admission cannot be overwritten by an older settle path.
         /// </remarks>
-        private void OnPendingWorkSettled()
+        private int OnPendingWorkSettled()
         {
-            int updated = Interlocked.Decrement(ref _activeResponsePendingCount);
-            if (updated <= 0)
+            bool transitionedToIdle = false;
+
+            lock (_activeResponseEpochGate)
             {
-                Volatile.Write(ref _activeResponsePendingCount, 0);
-                Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+                if (_activeResponsePendingCount <= 1)
+                {
+                    _activeResponsePendingCount = 0;
+                    transitionedToIdle = true;
+                }
+                else
+                {
+                    _activeResponsePendingCount--;
+                    return _activeResponsePendingCount;
+                }
+            }
+
+            if (transitionedToIdle)
+            {
+                _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.PendingTransitioningToIdleBeforeEpochClear);
+            }
+
+            lock (_activeResponseEpochGate)
+            {
+                if (_activeResponsePendingCount == 0)
+                {
+                    _lastDefinitiveResponseProgressTick = 0;
+                    return 0;
+                }
+
+                return _activeResponsePendingCount;
             }
         }
 
@@ -500,8 +580,26 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         private void ResetActiveResponseProgressEpoch()
         {
-            Volatile.Write(ref _activeResponsePendingCount, 0);
-            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+            lock (_activeResponseEpochGate)
+            {
+                _activeResponsePendingCount = 0;
+                _lastDefinitiveResponseProgressTick = 0;
+            }
+        }
+
+        /// <summary>
+        /// Advances definitive response-progress tick only while active pending work remains in the current epoch.
+        /// </summary>
+        /// <param name="correlatedTick">Monotonic timestamp captured when a definitive response was correlated.</param>
+        private void AdvanceDefinitiveResponseProgressIfActive(long correlatedTick)
+        {
+            lock (_activeResponseEpochGate)
+            {
+                if (_activeResponsePendingCount > 0)
+                {
+                    _lastDefinitiveResponseProgressTick = correlatedTick;
+                }
+            }
         }
 
         /// <summary>
@@ -641,7 +739,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 if (_useSsl)
                 {
                     TransitionState(TransitConnectionState.StartingTls);
-                    await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+                    await AwaitInitializationStageAsync(
+                        UpgradeToTlsAsync,
+                        "immediate TLS handshake",
+                        cancellationToken).ConfigureAwait(false);
                     TransitionState(TransitConnectionState.TlsEstablished);
                 }
 
@@ -920,7 +1021,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
                     }
 
-                    OnPendingWorkRegistered();
+                    (int activePendingCount, long activeProgressTick) = OnPendingWorkRegistered();
+                    _pendingRegistrationProbe?.Invoke(activePendingCount, activeProgressTick);
 
 
                     _pendingBySendOrder.Enqueue(item.MessageId);
@@ -1349,7 +1451,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     bool removed = _pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
                     if (removed && pendingCandidate is not null)
                     {
-                        OnPendingWorkSettled();
+                        int remainingPending = OnPendingWorkSettled();
                         pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
                         TransitPublishResult correlatedResult = mapped with
                         {
@@ -1358,9 +1460,9 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
 
-                        if (correlatedResult.ResponseCode is 239 or 439 && Volatile.Read(ref _activeResponsePendingCount) > 0)
+                        if (correlatedResult.ResponseCode is 239 or 439 && remainingPending > 0)
                         {
-                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, pendingCandidate.T6ResponseCorrelatedTick);
+                            AdvanceDefinitiveResponseProgressIfActive(pendingCandidate.T6ResponseCorrelatedTick);
                         }
 
                         _timingCollector?.RecordResponseCorrelation(
@@ -1412,22 +1514,22 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
+                    (int pendingCount, long lastProgressTick) = CaptureActiveResponseEpochSnapshot();
                     if (_pendingByMessageId.IsEmpty)
                     {
-                        if (Volatile.Read(ref _activeResponsePendingCount) == 0)
+                        if (pendingCount == 0 && lastProgressTick != 0)
                         {
-                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+                            ResetActiveResponseProgressEpoch();
                         }
 
                         continue;
                     }
 
-                    if (Volatile.Read(ref _activeResponsePendingCount) == 0)
+                    if (pendingCount == 0)
                     {
                         continue;
                     }
 
-                    long lastProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
                     if (lastProgressTick == 0)
                     {
                         continue;
@@ -1441,8 +1543,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                     _watchdogProbe?.Invoke(TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck);
 
-                    long recheckedProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
-                    if (recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)
+                    (int recheckedPendingCount, long recheckedProgressTick) = CaptureActiveResponseEpochSnapshot();
+                    if (recheckedPendingCount == 0 || recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)
                     {
                         continue;
                     }

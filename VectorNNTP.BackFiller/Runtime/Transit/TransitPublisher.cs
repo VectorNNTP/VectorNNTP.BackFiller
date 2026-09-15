@@ -110,6 +110,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Optional internal watchdog probe forwarded to created connections for deterministic watchdog regression coordination.
         /// </summary>
         private readonly Action<TransitWatchdogProbePoint>? _watchdogProbe;
+        /// <summary>
+        /// Optional internal pending-registration probe forwarded to created connections for deterministic admission-order coordination.
+        /// </summary>
+        private readonly Action<int, long>? _pendingRegistrationProbe;
 
         /// <summary>
         /// Monotonic identifier source for newly admitted work items.
@@ -183,6 +187,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
         /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
         /// <param name="watchdogProbe">Optional internal callback invoked at deterministic watchdog semantic checkpoints.</param>
+        /// <param name="pendingRegistrationProbe">Optional internal callback invoked after connection pending registration with active pending count and progress tick snapshot.</param>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -194,7 +199,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TimeSpan? connectionResponseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
             Action? claimBoundaryObserved = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
         {
             ArgumentNullException.ThrowIfNull(runtimeOptions);
             ArgumentNullException.ThrowIfNull(timeProvider);
@@ -218,6 +224,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _timingCollector = timingCollector;
             _claimBoundaryObserved = claimBoundaryObserved;
             _watchdogProbe = watchdogProbe;
+            _pendingRegistrationProbe = pendingRegistrationProbe;
             _connectionPoolSize = connectionPoolSize;
             _perConnectionPipelineDepth = perConnectionPipelineDepth;
             _connectionResponseProgressTimeout = connectionResponseProgressTimeout;
@@ -249,6 +256,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="timingCollector">Optional collector for timing measurements emitted by admission and completion observation.</param>
         /// <param name="claimBoundaryObserved">Optional internal callback invoked immediately before each queue claim attempt.</param>
         /// <param name="watchdogProbe">Optional internal callback invoked at deterministic watchdog semantic checkpoints.</param>
+        /// <param name="pendingRegistrationProbe">Optional internal callback invoked after connection pending registration with active pending count and progress tick snapshot.</param>
         public TransitPublisher(
             BackFillerRuntimeOptions runtimeOptions,
             TimeProvider timeProvider,
@@ -259,7 +267,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             TimeSpan? connectionResponseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
             Action? claimBoundaryObserved = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
             : this(
                 runtimeOptions,
                 timeProvider,
@@ -271,7 +280,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 connectionResponseProgressCheckInterval,
                 timingCollector,
                 claimBoundaryObserved,
-                watchdogProbe)
+                watchdogProbe,
+                pendingRegistrationProbe)
         {
         }
 
@@ -1581,7 +1591,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     initializationProgressTimeout: initializationResponseProgressTimeout,
                     responseProgressCheckInterval: _connectionResponseProgressCheckInterval,
                     timingCollector: _timingCollector,
-                    watchdogProbe: _watchdogProbe);
+                    watchdogProbe: _watchdogProbe,
+                    pendingRegistrationProbe: _pendingRegistrationProbe);
 
                 try
                 {
@@ -1715,7 +1726,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentNullException.ThrowIfNull(connection);
             ArgumentNullException.ThrowIfNull(exception);
 
-            if (exception is TransitConnection.TransitConnectionLifecycleException lifecycleException)
+            if (exception is TransitConnection.TransitConnectionLifecycleException)
             {
                 return true;
             }

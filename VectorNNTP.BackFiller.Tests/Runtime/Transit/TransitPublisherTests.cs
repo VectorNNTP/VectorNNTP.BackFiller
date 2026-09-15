@@ -1996,8 +1996,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
-            long initialTick = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(0L, initialTick);
+            long initialTick = await WaitForActiveResponseEpochAsync(connection, observationTimeout.Token);
 
             await firstResponseSent.Task.WaitAsync(observationTimeout.Token);
             TransitPublishResult firstResult = await first.WaitAsync(observationTimeout.Token);
@@ -2449,6 +2448,9 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TaskCompletionSource<bool> allowFirstResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource<bool> thirdTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowThirdResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<long> firstAdmissionEpoch = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<long> secondAdmissionEpoch = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
             async Task HandleFirstSessionAsync(NetworkStream stream, CancellationToken cancellationToken)
             {
@@ -2488,6 +2490,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                     Assert.Equal($"TAKETHIS {thirdMessageId}", nextCommand);
                     _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
                     thirdTakethisObserved.TrySetResult(true);
+                    await allowThirdResponse.Task.WaitAsync(cancellationToken);
                     await FakePublisherServer.WriteLineAsync(stream, $"239 {thirdMessageId} transferred");
                 }
                 catch (InvalidOperationException ex) when (ex.Message.Contains("Unexpected EOF while reading stream data.", StringComparison.Ordinal))
@@ -2510,6 +2513,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 Assert.Equal($"TAKETHIS {thirdMessageId}", thirdTakethis);
                 _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
                 thirdTakethisObserved.TrySetResult(true);
+                await allowThirdResponse.Task.WaitAsync(cancellationToken);
                 await FakePublisherServer.WriteLineAsync(stream, $"239 {thirdMessageId} transferred");
             }
 
@@ -2523,7 +2527,18 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionPoolSize: 1,
                 perConnectionPipelineDepth: 2,
                 connectionResponseProgressTimeout: responseProgressTimeout,
-                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval,
+                pendingRegistrationProbe: (count, tick) =>
+                {
+                    if (count == 1 && tick > 0)
+                    {
+                        firstAdmissionEpoch.TrySetResult(tick);
+                    }
+                    else if (count == 2 && tick > 0)
+                    {
+                        secondAdmissionEpoch.TrySetResult(tick);
+                    }
+                });
 
             await publisher.InitializeAsync(CancellationToken.None);
 
@@ -2531,11 +2546,10 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Task<TransitPublishResult> firstPublish = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
             Task<TransitPublishResult> secondPublish = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            long epochAfterOne = await firstAdmissionEpoch.Task.WaitAsync(observationTimeout.Token);
+            long epochAfterManyAdmission = await secondAdmissionEpoch.Task.WaitAsync(observationTimeout.Token);
             await firstTakethisObserved.Task.WaitAsync(observationTimeout.Token);
             await secondTakethisObserved.Task.WaitAsync(observationTimeout.Token);
-            await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 2, observationTimeout.Token);
-            long epochAfterOne = await WaitForActiveResponseEpochAsync(connection, observationTimeout.Token);
-            long epochAfterManyAdmission = GetConnectionDefinitiveResponseProgressTick(connection);
 
             Assert.NotEqual(0L, epochAfterOne);
             Assert.Equal(epochAfterOne, epochAfterManyAdmission);
@@ -2565,6 +2579,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.NotEqual(progressAfterFirstDefinitive, epochAfterSecondCycleStart);
             Assert.Equal(1, GetConnectionActiveResponsePendingCount(replacementConnection));
 
+            allowThirdResponse.TrySetResult(true);
             TransitPublishResult thirdResult = await thirdPublish.WaitAsync(observationTimeout.Token);
             Assert.Equal(TransitPublishStatus.Accepted, thirdResult.Status);
             Assert.Equal(0, GetConnectionActiveResponsePendingCount(replacementConnection));
@@ -5691,6 +5706,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
         /// <param name="connectionResponseProgressTimeout">Optional response-progress watchdog timeout.</param>
         /// <param name="connectionResponseProgressCheckInterval">Optional response-progress watchdog polling interval.</param>
         /// <param name="watchdogProbe">Optional deterministic watchdog probe hook for semantic test coordination.</param>
+        /// <param name="pendingRegistrationProbe">Optional deterministic probe invoked after each connection pending registration with active pending count and progress-tick snapshot.</param>
         /// <returns>Returns a configured but uninitialized publisher instance.</returns>
         private static TransitPublisher CreatePublisher(
             int port,
@@ -5701,7 +5717,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             TimeSpan? connectionResponseProgressCheckInterval = null,
             Action? claimBoundaryObserved = null,
             IArticleRetentionAuthority? retentionAuthority = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
         {
             BackFillerRuntimeOptions options = CreatePublisherOptions(port, transitRetryMaxAttempts);
 
@@ -5716,7 +5733,8 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 connectionResponseProgressCheckInterval,
                 timingCollector: null,
                 claimBoundaryObserved: claimBoundaryObserved,
-                watchdogProbe: watchdogProbe);
+                watchdogProbe: watchdogProbe,
+                pendingRegistrationProbe: pendingRegistrationProbe);
         }
 
         /// <summary>

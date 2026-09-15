@@ -109,6 +109,123 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(439, result.ResponseCode);
             Assert.Equal(messageId, result.MessageId);
         }
+
+        /// <summary>
+        /// Verifies that a stale settle path cannot clear a newer active epoch after pending transitions from one-to-zero and back to one.
+        /// </summary>
+        [Fact]
+        public async Task SubmitTakethisAsync_WhenSettleTransitionsToIdleAndNewPendingRegisters_PreservesNewActiveEpoch()
+        {
+            string firstMessageId = "<epoch-race-first@example.com>";
+            string secondMessageId = "<epoch-race-second@example.com>";
+            byte[] payload = [(byte)'E', (byte)'\n'];
+            TaskCompletionSource<bool> firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> secondTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowFirstResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> settleBeforeEpochClearObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowSettleEpochClear = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakeTakethisServer server = await FakeTakethisServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakeTakethisServer.WriteLineAsync(stream, "200 transit ready");
+                await FakeTakethisServer.ExpectCommandAsync(stream, "CAPABILITIES");
+                await FakeTakethisServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakeTakethisServer.WriteLineAsync(stream, "STREAMING");
+                await FakeTakethisServer.WriteLineAsync(stream, ".");
+                await FakeTakethisServer.ExpectCommandAsync(stream, "MODE STREAM");
+                await FakeTakethisServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                firstTakethisObserved.TrySetResult(true);
+
+                await allowFirstResponse.Task.WaitAsync(cancellationToken);
+                await FakeTakethisServer.WriteLineAsync(stream, $"239 {firstMessageId} transferred");
+
+                string secondTakethis = await FakeTakethisServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {secondMessageId}", secondTakethis);
+                _ = await FakeTakethisServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                secondTakethisObserved.TrySetResult(true);
+
+                await allowSecondResponse.Task.WaitAsync(cancellationToken);
+                await FakeTakethisServer.WriteLineAsync(stream, $"239 {secondMessageId} transferred");
+            });
+
+            await using TransitConnection connection = new(
+                host: IPAddress.Loopback.ToString(),
+                port: server.Port,
+                useSsl: false,
+                NullLogger<TransitConnection>.Instance,
+                responseProgressTimeout: TimeSpan.FromSeconds(2),
+                responseProgressCheckInterval: TimeSpan.FromMilliseconds(10),
+                activeResponseEpochProbe: point =>
+                {
+                    if (point != TransitActiveResponseEpochProbePoint.PendingTransitioningToIdleBeforeEpochClear)
+                    {
+                        return;
+                    }
+
+                    settleBeforeEpochClearObserved.TrySetResult(true);
+                    allowSettleEpochClear.Task.GetAwaiter().GetResult();
+                });
+
+            await connection.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
+
+            static async Task WaitForConditionAsync(Func<bool> condition, CancellationToken cancellationToken)
+            {
+                while (!condition())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await Task.Yield();
+                }
+            }
+
+            Task<TransitPublishResult> firstPublish = connection.SubmitTakethisAsync(firstMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
+            await firstTakethisObserved.Task.WaitAsync(observationTimeout.Token);
+            await WaitForConditionAsync(
+                () =>
+                {
+                    (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
+                    return connection.OutstandingSubmissionCount == 1 && pendingCount == 1 && progressTick > 0;
+                },
+                observationTimeout.Token);
+
+            allowFirstResponse.TrySetResult(true);
+            await settleBeforeEpochClearObserved.Task.WaitAsync(observationTimeout.Token);
+
+            Task<TransitPublishResult> secondPublish = connection.SubmitTakethisAsync(secondMessageId, payload, 0L, 0L, cancellationToken: CancellationToken.None).AsTask();
+            await secondTakethisObserved.Task.WaitAsync(observationTimeout.Token);
+            await WaitForConditionAsync(
+                () =>
+                {
+                    (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
+                    return connection.OutstandingSubmissionCount == 1 && pendingCount == 1 && progressTick > 0;
+                },
+                observationTimeout.Token);
+
+            allowSettleEpochClear.TrySetResult(true);
+            await WaitForConditionAsync(
+                () =>
+                {
+                    (int pendingCount, long progressTick) = connection.CaptureActiveResponseEpochSnapshot();
+                    return pendingCount == 1 && progressTick > 0;
+                },
+                observationTimeout.Token);
+
+            allowSecondResponse.TrySetResult(true);
+
+            TransitPublishResult firstResult = await firstPublish.WaitAsync(observationTimeout.Token);
+            TransitPublishResult secondResult = await secondPublish.WaitAsync(observationTimeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, firstResult.Status);
+            Assert.Equal(239, firstResult.ResponseCode);
+            Assert.Equal(TransitPublishStatus.Accepted, secondResult.Status);
+            Assert.Equal(239, secondResult.ResponseCode);
+        }
         /// <summary>
         /// Confirms the submit takethis async when server returns400 marks ambiguous behavior.
         /// </summary>
