@@ -26,9 +26,35 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal enum TransitWatchdogProbePoint
     {
         /// <summary>
+        /// Indicates the watchdog observed an idle epoch with stale progress tick and is about to attempt an idle-only conditional reset.
+        /// </summary>
+        IdleStaleProgressBeforeConditionalReset,
+
+        /// <summary>
+        /// Indicates the watchdog observed active pending work and confirmed elapsed progress age is still within timeout.
+        /// </summary>
+        ActivePendingElapsedWithinTimeout,
+
+        /// <summary>
         /// Indicates the watchdog observed stale definitive progress while pending work still existed and is about to perform its final no-fault guard check.
         /// </summary>
         TimeoutElapsedWithPendingBeforeFinalRecheck,
+    }
+
+    /// <summary>
+    /// Identifies deterministic active-response epoch transition checkpoints used by concurrency regression tests.
+    /// </summary>
+    internal enum TransitActiveResponseEpochProbePoint
+    {
+        /// <summary>
+        /// Indicates pending settlement observed a transition to idle and is about to clear the active epoch.
+        /// </summary>
+        PendingTransitioningToIdleBeforeEpochClear,
+
+        /// <summary>
+        /// Indicates a definitive response has removed pending ownership and is about to attempt epoch progress attribution.
+        /// </summary>
+        DefinitiveResponseBeforeEpochProgressAttribution,
     }
 
     /// <summary>
@@ -85,6 +111,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Optional TLS certificate validation callback used when STARTTLS or implicit TLS is negotiated.
         /// </summary>
         private readonly RemoteCertificateValidationCallback? _serverCertificateValidationCallback;
+        /// <summary>
+        /// Configures initialization-stage timeout for transit connection.
+        /// </summary>
+        private readonly TimeSpan _initializationProgressTimeout;
         /// <summary>
         /// Configures response progress timeout for transit connection.
         /// </summary>
@@ -273,6 +303,26 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Stopwatch tick of the last definitive response progress observed by the connection.
         /// </summary>
         private long _lastDefinitiveResponseProgressTick;
+        /// <summary>
+        /// Number of active pending submissions participating in the response-progress epoch.
+        /// </summary>
+        private int _activeResponsePendingCount;
+        /// <summary>
+        /// Monotonic identity for the currently active response-progress epoch.
+        /// </summary>
+        private long _activeResponseEpochId;
+        /// <summary>
+        /// Synchronizes pending ownership and active response-epoch transitions so dictionary mutation and epoch updates remain linearizable.
+        /// </summary>
+        private readonly object _activeResponseEpochGate = new();
+        /// <summary>
+        /// Optional probe invoked at deterministic active-response epoch transition checkpoints.
+        /// </summary>
+        private readonly Action<TransitActiveResponseEpochProbePoint>? _activeResponseEpochProbe;
+        /// <summary>
+        /// Optional probe invoked after each pending-work registration with the active epoch pending count and tick snapshot.
+        /// </summary>
+        private readonly Action<int, long>? _pendingRegistrationProbe;
 
         /// <summary>
         /// Initializes a transit connection configuration using platform-default server certificate validation.
@@ -287,10 +337,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="perConnectionPipelineDepth">Maximum number of work items expected to be pipelined per batch on this connection.</param>
         /// <param name="writeBatchCoalesceMicroseconds">Validation input for configured write coalescing window in microseconds.</param>
         /// <param name="expectedBatchIntentCountProvider">Reserved provider for batch-intent accounting in the global queue architecture.</param>
+        /// <param name="initializationProgressTimeout">Optional timeout for initialization-stage protocol progress.</param>
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
         /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
+        /// <param name="activeResponseEpochProbe">Optional test hook invoked at deterministic active-epoch transition checkpoints.</param>
+        /// <param name="pendingRegistrationProbe">Optional test hook invoked after each pending-work registration with active pending count and progress-tick snapshot.</param>
         internal TransitConnection(
             string host,
             int port,
@@ -299,10 +352,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int perConnectionPipelineDepth = 8,
             int writeBatchCoalesceMicroseconds = 250,
             Func<int>? expectedBatchIntentCountProvider = null,
+            TimeSpan? initializationProgressTimeout = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<TransitActiveResponseEpochProbePoint>? activeResponseEpochProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
             : this(
                 host,
                 port,
@@ -312,10 +368,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 perConnectionPipelineDepth,
                 writeBatchCoalesceMicroseconds,
                 expectedBatchIntentCountProvider,
+                initializationProgressTimeout,
                 responseProgressTimeout,
                 responseProgressCheckInterval,
                 timingCollector,
-                watchdogProbe)
+                watchdogProbe,
+                activeResponseEpochProbe,
+                pendingRegistrationProbe)
         {
         }
 
@@ -336,15 +395,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <param name="perConnectionPipelineDepth">Maximum number of work items expected to be pipelined per batch on this connection.</param>
         /// <param name="writeBatchCoalesceMicroseconds">Validation input for configured write coalescing window in microseconds.</param>
         /// <param name="expectedBatchIntentCountProvider">Reserved provider for batch-intent accounting in the global queue architecture.</param>
+        /// <param name="initializationProgressTimeout">Optional timeout for initialization-stage protocol progress.</param>
         /// <param name="responseProgressTimeout">Optional watchdog timeout for definitive response progress; defaults to <c>30s</c>.</param>
         /// <param name="responseProgressCheckInterval">Optional interval for watchdog checks; defaults to <c>250ms</c>.</param>
         /// <param name="timingCollector">Optional collector that receives staging, flush, and response timing events.</param>
         /// <param name="watchdogProbe">Optional test hook invoked at deterministic watchdog semantic checkpoints.</param>
+        /// <param name="activeResponseEpochProbe">Optional test hook invoked at deterministic active-epoch transition checkpoints.</param>
+        /// <param name="pendingRegistrationProbe">Optional test hook invoked after each pending-work registration with active pending count and progress-tick snapshot.</param>
         /// <exception cref="ArgumentException">Thrown when <paramref name="host"/> is null, empty, or whitespace.</exception>
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="logger"/> is <see langword="null"/>.</exception>
         /// <exception cref="ArgumentOutOfRangeException">
         /// Thrown when <paramref name="port"/>, <paramref name="perConnectionPipelineDepth"/>,
-        /// <paramref name="writeBatchCoalesceMicroseconds"/>, <paramref name="responseProgressTimeout"/>, or
+        /// <paramref name="writeBatchCoalesceMicroseconds"/>, <paramref name="initializationProgressTimeout"/>, <paramref name="responseProgressTimeout"/>, or
         /// <paramref name="responseProgressCheckInterval"/> is outside the accepted range.
         /// </exception>
         /// <remarks>
@@ -360,10 +422,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             int perConnectionPipelineDepth = 8,
             int writeBatchCoalesceMicroseconds = 250,
             Func<int>? expectedBatchIntentCountProvider = null,
+            TimeSpan? initializationProgressTimeout = null,
             TimeSpan? responseProgressTimeout = null,
             TimeSpan? responseProgressCheckInterval = null,
             TransitTimingCollector? timingCollector = null,
-            Action<TransitWatchdogProbePoint>? watchdogProbe = null)
+            Action<TransitWatchdogProbePoint>? watchdogProbe = null,
+            Action<TransitActiveResponseEpochProbePoint>? activeResponseEpochProbe = null,
+            Action<int, long>? pendingRegistrationProbe = null)
         {
             if (string.IsNullOrWhiteSpace(host))
             {
@@ -393,6 +458,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 throw new ArgumentOutOfRangeException(nameof(responseProgressTimeout), effectiveResponseProgressTimeout, "Response progress timeout must be greater than zero.");
             }
 
+            TimeSpan effectiveInitializationProgressTimeout = initializationProgressTimeout ?? effectiveResponseProgressTimeout;
+            if (effectiveInitializationProgressTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(initializationProgressTimeout), effectiveInitializationProgressTimeout, "Initialization progress timeout must be greater than zero.");
+            }
+
             TimeSpan effectiveResponseProgressCheckInterval = responseProgressCheckInterval ?? DefaultResponseProgressCheckInterval;
             if (effectiveResponseProgressCheckInterval <= TimeSpan.Zero)
             {
@@ -405,10 +476,13 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _logger = logger;
             _serverCertificateValidationCallback = serverCertificateValidationCallback;
             PipelineDepth = perConnectionPipelineDepth;
+            _initializationProgressTimeout = effectiveInitializationProgressTimeout;
             _responseProgressTimeout = effectiveResponseProgressTimeout;
             _responseProgressCheckInterval = effectiveResponseProgressCheckInterval;
             _timingCollector = timingCollector;
             _watchdogProbe = watchdogProbe;
+            _activeResponseEpochProbe = activeResponseEpochProbe;
+            _pendingRegistrationProbe = pendingRegistrationProbe;
             _ = expectedBatchIntentCountProvider;
         }
 
@@ -444,6 +518,224 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// </summary>
         /// <value>The current count of entries in the pending Message-ID map.</value>
         internal int OutstandingSubmissionCount => _pendingByMessageId.Count;
+
+        /// <summary>
+        /// Captures a coherent snapshot of active response-epoch state.
+        /// </summary>
+        /// <returns>Current active pending count and definitive progress tick under one synchronization boundary.</returns>
+        internal (int PendingCount, long ProgressTick) CaptureActiveResponseEpochSnapshot()
+        {
+            lock (_activeResponseEpochGate)
+            {
+                return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick);
+            }
+        }
+
+        /// <summary>
+        /// Sets the active response-progress tick for deterministic test coordination.
+        /// </summary>
+        /// <param name="progressTick">Stopwatch tick to assign.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="progressTick"/> is negative.</exception>
+        internal void SetActiveResponseProgressTickForTesting(long progressTick)
+        {
+            if (progressTick < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(progressTick), progressTick, "Progress tick must be non-negative.");
+            }
+
+            lock (_activeResponseEpochGate)
+            {
+                _lastDefinitiveResponseProgressTick = progressTick;
+            }
+        }
+
+        /// <summary>
+        /// Registers pending-work admission in the active response-progress epoch.
+        /// </summary>
+        /// <remarks>
+        /// Callers must hold <c>_activeResponseEpochGate</c> while mutating <c>_pendingByMessageId</c> and invoking this method
+        /// so pending ownership and epoch state are committed as one coherent transition.
+        /// A zero-to-one transition starts a fresh active watchdog epoch anchored to current monotonic time.
+        /// </remarks>
+        private (int PendingCount, long ProgressTick, long EpochId) OnPendingWorkRegisteredUnderEpochGate()
+        {
+            _activeResponsePendingCount++;
+            if (_activeResponsePendingCount == 1)
+            {
+                _activeResponseEpochId++;
+                if (_activeResponseEpochId <= 0)
+                {
+                    _activeResponseEpochId = 1;
+                }
+
+                _lastDefinitiveResponseProgressTick = Stopwatch.GetTimestamp();
+            }
+
+            return (_activeResponsePendingCount, _lastDefinitiveResponseProgressTick, _activeResponseEpochId);
+        }
+
+        /// <summary>
+        /// Registers pending-work settlement in the active response-progress epoch.
+        /// </summary>
+        /// <remarks>
+        /// Callers must hold <c>_activeResponseEpochGate</c> while mutating <c>_pendingByMessageId</c> and invoking this method
+        /// so pending ownership and epoch state are committed as one coherent transition.
+        /// A transition back to zero clears the active epoch so idle time cannot age future submissions.
+        /// When the transition reaches zero, the clear is guarded by a second gate pass so a newer
+        /// zero-to-one admission cannot be overwritten by an older settle path.
+        /// </remarks>
+        private int OnPendingWorkSettledUnderEpochGate()
+        {
+            if (_activeResponsePendingCount <= 1)
+            {
+                _activeResponsePendingCount = 0;
+                return 0;
+            }
+
+            _activeResponsePendingCount--;
+            return _activeResponsePendingCount;
+        }
+
+        /// <summary>
+        /// Removes one pending entry and settles its active response-epoch ownership under one synchronization boundary.
+        /// </summary>
+        /// <param name="messageId">Message-ID key to remove.</param>
+        /// <param name="isDefinitiveResponse">Indicates whether the removal is triggered by a definitive <c>239</c>/<c>439</c> response.</param>
+        /// <param name="definitiveProgressTick">Correlation tick for definitive progress attribution when <paramref name="isDefinitiveResponse"/> is <see langword="true"/>.</param>
+        /// <param name="removed">Removed pending entry when present.</param>
+        /// <returns>Epoch settle result for the remove path, including whether ownership was removed and idle transition metadata.</returns>
+        private PendingRemovalResult TryRemovePendingAndSettleEpoch(
+            string messageId,
+            bool isDefinitiveResponse,
+            long definitiveProgressTick,
+            out PendingOwnedWork? removed)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+
+            bool transitionedToIdle = false;
+            int remainingPendingCount = 0;
+            bool removedPending;
+
+            lock (_activeResponseEpochGate)
+            {
+                removedPending = _pendingByMessageId.TryRemove(messageId, out removed);
+                if (!removedPending)
+                {
+                    return new PendingRemovalResult(Removed: false, RemainingPendingCount: _activeResponsePendingCount, RemovedEpochId: 0);
+                }
+
+                long removedEpochId = removed?.ActiveResponseEpochId ?? 0;
+
+                remainingPendingCount = OnPendingWorkSettledUnderEpochGate();
+                transitionedToIdle = remainingPendingCount == 0;
+
+                if (isDefinitiveResponse
+                    && remainingPendingCount > 0
+                    && removedEpochId > 0
+                    && _activeResponseEpochId == removedEpochId)
+                {
+                    _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.DefinitiveResponseBeforeEpochProgressAttribution);
+                    _lastDefinitiveResponseProgressTick = definitiveProgressTick;
+                }
+
+                if (!transitionedToIdle)
+                {
+                    return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount, RemovedEpochId: removedEpochId);
+                }
+            }
+
+            if (transitionedToIdle)
+            {
+                _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.PendingTransitioningToIdleBeforeEpochClear);
+
+                lock (_activeResponseEpochGate)
+                {
+                    if (_activeResponsePendingCount == 0)
+                    {
+                        _lastDefinitiveResponseProgressTick = 0;
+                        remainingPendingCount = 0;
+                    }
+                    else
+                    {
+                        remainingPendingCount = _activeResponsePendingCount;
+                    }
+                }
+            }
+
+            long finalizedRemovedEpochId = removed?.ActiveResponseEpochId ?? 0;
+            return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount, RemovedEpochId: finalizedRemovedEpochId);
+        }
+
+        /// <summary>
+        /// Registers one pending entry and active response-epoch ownership under one synchronization boundary.
+        /// </summary>
+        /// <param name="messageId">Message-ID key for the pending entry.</param>
+        /// <param name="pending">Pending entry value to register.</param>
+        /// <param name="activePendingCount">Receives the active pending count snapshot after registration attempt.</param>
+        /// <param name="activeProgressTick">Receives the active definitive progress tick snapshot after registration attempt.</param>
+        /// <returns><see langword="true"/> when registration succeeds; otherwise <see langword="false"/>.</returns>
+        private bool TryRegisterPendingAndEpoch(string messageId, PendingOwnedWork pending, out int activePendingCount, out long activeProgressTick)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+            ArgumentNullException.ThrowIfNull(pending);
+
+            lock (_activeResponseEpochGate)
+            {
+                if (!_pendingByMessageId.TryAdd(messageId, pending))
+                {
+                    activePendingCount = _activeResponsePendingCount;
+                    activeProgressTick = _lastDefinitiveResponseProgressTick;
+                    return false;
+                }
+
+                (activePendingCount, activeProgressTick, long activeEpochId) = OnPendingWorkRegisteredUnderEpochGate();
+                pending.ActiveResponseEpochId = activeEpochId;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Clears active response-progress epoch state.
+        /// </summary>
+        /// <remarks>
+        /// This unconditional reset is reserved for lifecycle transitions where this connection is being initialized,
+        /// torn down, or fully disconnected.
+        /// </remarks>
+        private void ResetActiveResponseProgressEpoch()
+        {
+            lock (_activeResponseEpochGate)
+            {
+                _activeResponsePendingCount = 0;
+                _lastDefinitiveResponseProgressTick = 0;
+            }
+        }
+
+        /// <summary>
+        /// Clears stale idle progress tick only if idle state is still authoritative at mutation time.
+        /// </summary>
+        /// <param name="observedProgressTick">Progress tick observed by caller before attempting conditional clear.</param>
+        private void ResetActiveResponseProgressEpochIfIdleAndProgressTickMatches(long observedProgressTick)
+        {
+            if (observedProgressTick <= 0)
+            {
+                return;
+            }
+
+            lock (_activeResponseEpochGate)
+            {
+                if (_activeResponsePendingCount != 0)
+                {
+                    return;
+                }
+
+                if (_lastDefinitiveResponseProgressTick != observedProgressTick)
+                {
+                    return;
+                }
+
+                _lastDefinitiveResponseProgressTick = 0;
+            }
+        }
 
         /// <summary>
         /// Gets the configured per-connection pipeline depth used by upstream scheduling and diagnostics.
@@ -550,7 +842,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Thrown when internal initialization invariants are violated, such as missing transport read/write streams after a required stage transition.
         /// </exception>
         /// <exception cref="TransitConnectionLifecycleException">
-        /// Thrown when initialization exceeds the configured response-progress timeout or when protocol negotiation fails during greeting,
+        /// Thrown when any initialization stage exceeds the configured initialization-progress timeout (including immediate TLS handshake)
+        /// or when protocol negotiation fails during greeting,
         /// CAPABILITIES, STARTTLS, post-STARTTLS CAPABILITIES, STREAMING capability validation, or MODE STREAM response validation.
         /// </exception>
         /// <remarks>
@@ -582,7 +875,10 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 if (_useSsl)
                 {
                     TransitionState(TransitConnectionState.StartingTls);
-                    await UpgradeToTlsAsync(cancellationToken).ConfigureAwait(false);
+                    await AwaitInitializationStageAsync(
+                        UpgradeToTlsAsync,
+                        "immediate TLS handshake",
+                        cancellationToken).ConfigureAwait(false);
                     TransitionState(TransitConnectionState.TlsEstablished);
                 }
 
@@ -717,7 +1013,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _responseProgressWatchdogCancellation = CancellationTokenSource.CreateLinkedTokenSource(_responseLoopCancellation.Token);
                 _responseLoopFault = null;
                 Volatile.Write(ref _responseLoopFaulted, 0);
-                Volatile.Write(ref _lastDefinitiveResponseProgressTick, Stopwatch.GetTimestamp());
+                ResetActiveResponseProgressEpoch();
                 _responseLoopTask = Task.Run(() => ResponseLoopAsync(_responseLoopCancellation.Token), CancellationToken.None);
                 _responseProgressWatchdogTask = Task.Run(() => ResponseProgressWatchdogLoopAsync(_responseProgressWatchdogCancellation.Token), CancellationToken.None);
             }
@@ -799,7 +1095,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             _responseProgressWatchdogTask = null;
             _responseLoopFault = null;
             Volatile.Write(ref _responseLoopFaulted, 0);
-            Volatile.Write(ref _lastDefinitiveResponseProgressTick, 0);
+            ResetActiveResponseProgressEpoch();
 
             _responseLoopCancellation?.Dispose();
             _responseProgressWatchdogCancellation?.Dispose();
@@ -856,10 +1152,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 {
                     TransitWorkItem item = entry.WorkItem;
                     PendingOwnedWork pending = new(item);
-                    if (!_pendingByMessageId.TryAdd(item.MessageId, pending))
+                    if (!TryRegisterPendingAndEpoch(item.MessageId, pending, out int activePendingCount, out long activeProgressTick))
                     {
                         throw new InvalidOperationException("Duplicate in-flight Message-ID on same connection.");
                     }
+
+                    _pendingRegistrationProbe?.Invoke(activePendingCount, activeProgressTick);
 
 
                     _pendingBySendOrder.Enqueue(item.MessageId);
@@ -1098,10 +1396,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 if (_pendingByMessageId.TryGetValue(messageId, out PendingOwnedWork? pending)
-                    && pending.T2SocketWriteBeginTick == 0
-                    && _pendingByMessageId.TryRemove(messageId, out _))
+                    && pending.T2SocketWriteBeginTick == 0)
                 {
-                    AcknowledgeSendOrder(messageId);
+                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(
+                        messageId,
+                        isDefinitiveResponse: false,
+                        definitiveProgressTick: 0,
+                        out _);
+                    if (removal.Removed)
+                    {
+                        AcknowledgeSendOrder(messageId);
+                    }
                 }
 
                 return new TransitPublishResult(
@@ -1163,7 +1468,12 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                if (_pendingByMessageId.TryRemove(messageId, out PendingOwnedWork? removed) && removed is not null)
+                PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(
+                    messageId,
+                    isDefinitiveResponse: false,
+                    definitiveProgressTick: 0,
+                    out PendingOwnedWork? removed);
+                if (removal.Removed && removed is not null)
                 {
                     AcknowledgeSendOrder(messageId);
                     unresolved.Add(removed);
@@ -1283,10 +1593,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    bool removed = _pendingByMessageId.TryRemove(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
-                    if (removed && pendingCandidate is not null)
+                    bool isDefinitiveResponse = mapped.ResponseCode is 239 or 439;
+                    long responseCorrelatedTick = Stopwatch.GetTimestamp();
+                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(
+                        mapped.MessageId,
+                        isDefinitiveResponse,
+                        responseCorrelatedTick,
+                        out PendingOwnedWork? pendingCandidate);
+                    if (removal.Removed && pendingCandidate is not null)
                     {
-                        pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
+                        pendingCandidate.T6ResponseCorrelatedTick = responseCorrelatedTick;
                         TransitPublishResult correlatedResult = mapped with
                         {
                             T2SocketWriteBeginTick = pendingCandidate.T2SocketWriteBeginTick,
@@ -1294,16 +1610,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
 
-                        if (correlatedResult.ResponseCode is 239 or 439)
-                        {
-                            Volatile.Write(ref _lastDefinitiveResponseProgressTick, pendingCandidate.T6ResponseCorrelatedTick);
-                        }
-
                         _timingCollector?.RecordResponseCorrelation(
                             elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
                             responseAvailableTick: responseAvailableTick,
                             correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
-                            definitive: mapped.ResponseCode is 239 or 439);
+                            definitive: isDefinitiveResponse);
                         AcknowledgeSendOrder(mapped.MessageId);
 
                         RecordSubmissionResult(correlatedResult.Status);
@@ -1348,12 +1659,18 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    if (_pendingByMessageId.IsEmpty)
+                    (int pendingCount, long lastProgressTick) = CaptureActiveResponseEpochSnapshot();
+                    if (pendingCount == 0)
                     {
+                        if (lastProgressTick != 0)
+                        {
+                            _watchdogProbe?.Invoke(TransitWatchdogProbePoint.IdleStaleProgressBeforeConditionalReset);
+                            ResetActiveResponseProgressEpochIfIdleAndProgressTickMatches(lastProgressTick);
+                        }
+
                         continue;
                     }
 
-                    long lastProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
                     if (lastProgressTick == 0)
                     {
                         continue;
@@ -1362,13 +1679,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     TimeSpan elapsed = Stopwatch.GetElapsedTime(lastProgressTick);
                     if (elapsed <= _responseProgressTimeout)
                     {
+                        _watchdogProbe?.Invoke(TransitWatchdogProbePoint.ActivePendingElapsedWithinTimeout);
                         continue;
                     }
 
                     _watchdogProbe?.Invoke(TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck);
 
-                    long recheckedProgressTick = Volatile.Read(ref _lastDefinitiveResponseProgressTick);
-                    if (recheckedProgressTick != lastProgressTick || _pendingByMessageId.IsEmpty)
+                    (int recheckedPendingCount, long recheckedProgressTick) = CaptureActiveResponseEpochSnapshot();
+                    if (recheckedPendingCount == 0 || recheckedProgressTick != lastProgressTick)
                     {
                         continue;
                     }
@@ -1701,7 +2019,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
 
             using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            stageTimeout.CancelAfter(_responseProgressTimeout);
+            stageTimeout.CancelAfter(_initializationProgressTimeout);
 
             try
             {
@@ -1737,7 +2055,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
 
             using CancellationTokenSource stageTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            stageTimeout.CancelAfter(_responseProgressTimeout);
+            stageTimeout.CancelAfter(_initializationProgressTimeout);
 
             try
             {
@@ -2078,6 +2396,7 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 _responseLoopCancellation = null;
                 _responseProgressWatchdogTask = null;
                 _responseProgressWatchdogCancellation = null;
+                ResetActiveResponseProgressEpoch();
                 TransitionState(TransitConnectionState.Disconnected);
             }
         }
@@ -2363,6 +2682,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
             internal TransitWorkItem WorkItem { get; }
 
             /// <summary>
+            /// Active response-epoch identity captured when this pending entry was admitted.
+            /// </summary>
+            internal long ActiveResponseEpochId;
+
+            /// <summary>
             /// Timestamp marking the beginning of socket write staging for this work item.
             /// </summary>
             internal long T2SocketWriteBeginTick;
@@ -2392,6 +2716,14 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Immutable completion tuple pairing a settled work item with its publish result.
         /// </summary>
         private sealed record CompletedWork(TransitWorkItem WorkItem, TransitPublishResult Result);
+
+        /// <summary>
+        /// Captures the outcome of removing one pending entry and applying the corresponding epoch-settlement transition.
+        /// </summary>
+        /// <param name="Removed">Indicates whether the pending Message-ID entry was removed.</param>
+        /// <param name="RemainingPendingCount">Active pending count after the removal settle transition.</param>
+        /// <param name="RemovedEpochId">Epoch identity owned by the removed pending entry; zero when removal did not occur.</param>
+        private readonly record struct PendingRemovalResult(bool Removed, int RemainingPendingCount, long RemovedEpochId);
 
         /// <summary>
         /// Metrics emitted by payload dot-stuff staging for instrumentation.

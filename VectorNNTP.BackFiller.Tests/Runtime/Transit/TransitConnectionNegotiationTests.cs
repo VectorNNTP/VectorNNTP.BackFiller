@@ -547,6 +547,34 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.NotNull(ex);
             Assert.True(ex is AuthenticationException or IOException);
         }
+
+        /// <summary>
+        /// Verifies that immediate TLS handshake progress is governed by initialization timeout policy.
+        /// </summary>
+        [Fact]
+        public async Task InitializeAsync_WhenUseSslTrueAndTlsHandshakeStalls_ThrowsInitializationProgressTimeout()
+        {
+            await using FakeNntpServer server = await FakeNntpServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitConnection connection = new(
+                host: IPAddress.Loopback.ToString(),
+                port: server.Port,
+                useSsl: true,
+                NullLogger<TransitPublisher>.Instance,
+                _tlsFixture.ServerCertificateValidationCallback,
+                initializationProgressTimeout: TimeSpan.FromMilliseconds(100),
+                responseProgressTimeout: TimeSpan.FromSeconds(2),
+                responseProgressCheckInterval: TimeSpan.FromMilliseconds(10));
+
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(5));
+            TransitConnection.TransitConnectionLifecycleException ex = await Assert.ThrowsAsync<TransitConnection.TransitConnectionLifecycleException>(() => connection.InitializeAsync(observationTimeout.Token));
+            Assert.Equal(TransitConnection.TransitConnectionLifecycleFailure.InitializationProgressTimeout, ex.Failure);
+            Assert.Equal("immediate TLS handshake", ex.StageName);
+            Assert.Equal(TransitConnectionState.Disconnected, connection.CurrentState);
+        }
         /// <summary>
         /// Confirms the initialize async when use ssl true and compression advertised uses tls without compression behavior.
         /// </summary>
