@@ -1915,8 +1915,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
-            long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(0L, baselineProgressTick);
+            long baselineProgressTick = await WaitForActiveResponseEpochAsync(connection, observationTimeout.Token);
             allowFirstResponse.TrySetResult(true);
 
             try
@@ -1997,6 +1996,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 2, observationTimeout.Token);
             long initialTick = GetConnectionDefinitiveResponseProgressTick(connection);
             Assert.NotEqual(0L, initialTick);
 
@@ -2082,8 +2082,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
-            long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(0L, baselineProgressTick);
+            long baselineProgressTick = await WaitForActiveResponseEpochAsync(connection, observationTimeout.Token);
 
             try
             {
@@ -2107,7 +2106,7 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
                 Assert.Equal(TransitPublishStatus.Ambiguous, secondResult.Status);
                 Assert.Equal(400, secondResult.ResponseCode);
                 Assert.Equal(0, connection.OutstandingSubmissionCount);
-                Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+                Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
                 Assert.False(connection.IsResponseLoopFaulted);
                 Assert.NotEqual(TransitConnectionState.Faulted, publisher.CurrentState);
             }
@@ -2164,13 +2163,12 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
             Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, new byte[] { (byte)'T', (byte)'\n' }, CancellationToken.None).AsTask();
             TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
-            long baselineProgressTick = GetConnectionDefinitiveResponseProgressTick(connection);
-            Assert.NotEqual(0L, baselineProgressTick);
             await WaitForOutstandingAwaitingResponsesAsync(publisher, minimumAwaitingResponses: 1, observationTimeout.Token);
-            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+            long activeEpochTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, activeEpochTick);
 
             await watchdogReachedFinalRecheckBoundary.Task.WaitAsync(observationTimeout.Token);
-            Assert.Equal(baselineProgressTick, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.Equal(activeEpochTick, GetConnectionDefinitiveResponseProgressTick(connection));
             Assert.Equal(1, connection.OutstandingSubmissionCount);
 
             while (!connection.IsResponseLoopFaulted)
@@ -2230,6 +2228,368 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
             Assert.Equal(0, snapshot.TotalArticlesSubmitted);
             Assert.Equal(0, snapshot.TotalReconnects);
             Assert.Equal(0, snapshot.OutstandingSubmissions);
+        }
+
+        /// <summary>
+        /// Verifies that an idle-ready connection does not charge stale idle duration against the next admitted pending publish.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenConnectionIdleBeforeFirstPendingAfterReady_StartsFreshActiveResponseEpoch()
+        {
+            TimeSpan responseProgressTimeout = TimeSpan.FromMilliseconds(200);
+            TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
+            string firstMessageId = "<watchdog-idle-epoch-reset-first@example.com>";
+            string secondMessageId = "<watchdog-idle-epoch-reset-second@example.com>";
+            byte[] payload = [(byte)'I', (byte)'\n'];
+
+            TaskCompletionSource<bool> allowServerResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                if (string.Equals(firstTakethis, "QUIT", StringComparison.Ordinal))
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "205 closing connection");
+                    return;
+                }
+
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {firstMessageId} accepted");
+
+                string secondTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                if (string.Equals(secondTakethis, "QUIT", StringComparison.Ordinal))
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "205 closing connection");
+                    return;
+                }
+
+                Assert.Equal($"TAKETHIS {secondMessageId}", secondTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+
+                await allowServerResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {secondMessageId} accepted");
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(
+                server.Port,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 1,
+                connectionResponseProgressTimeout: responseProgressTimeout,
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
+            Task<TransitPublishResult> firstPublishTask = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+
+            TransitPublishResult firstResult = await firstPublishTask.WaitAsync(observationTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, firstResult.Status);
+            Assert.Equal(0, connection.OutstandingSubmissionCount);
+            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+
+            long staleIdleTick = Stopwatch.GetTimestamp() - GetStopwatchTickDuration(responseProgressTimeout + responseProgressTimeout);
+            SetConnectionDefinitiveResponseProgressTick(connection, staleIdleTick);
+            Assert.Equal(staleIdleTick, GetConnectionDefinitiveResponseProgressTick(connection));
+
+            Task<TransitPublishResult> publishTask = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
+
+            await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 1, observationTimeout.Token);
+            long activeEpochTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, activeEpochTick);
+            Assert.NotEqual(staleIdleTick, activeEpochTick);
+            Assert.True(activeEpochTick > staleIdleTick);
+
+            allowServerResponse.TrySetResult(true);
+            TransitPublishResult result = await publishTask.WaitAsync(observationTimeout.Token);
+
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+            Assert.Equal(0, connection.OutstandingSubmissionCount);
+            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.False(connection.IsResponseLoopFaulted);
+        }
+
+        /// <summary>
+        /// Verifies multi-pending epoch semantics: zero-to-one starts an epoch, one-to-many does not reset it, definitive responses advance it, and zero pending deactivates it until the next fresh zero-to-one transition.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenPendingTransitionsAcrossOneAndMany_ActiveEpochTransitionsAreConsistent()
+        {
+            TimeSpan responseProgressTimeout = TimeSpan.FromSeconds(30);
+            TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
+            string firstMessageId = "<watchdog-multi-pending-first@example.com>";
+            string secondMessageId = "<watchdog-multi-pending-second@example.com>";
+            string thirdMessageId = "<watchdog-multi-pending-third@example.com>";
+            byte[] payload = [(byte)'M', (byte)'\n'];
+
+            TaskCompletionSource<bool> allowFirstResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowThirdResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> firstTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> secondTakethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                if (string.Equals(firstTakethis, "QUIT", StringComparison.Ordinal))
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "205 closing connection");
+                    return;
+                }
+
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                firstTakethisObserved.TrySetResult(true);
+
+                string secondTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                if (string.Equals(secondTakethis, "QUIT", StringComparison.Ordinal))
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "205 closing connection");
+                    return;
+                }
+
+                Assert.Equal($"TAKETHIS {secondMessageId}", secondTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                secondTakethisObserved.TrySetResult(true);
+
+                await allowFirstResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {firstMessageId} accepted");
+
+                await allowSecondResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {secondMessageId} accepted");
+
+                string thirdTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                if (string.Equals(thirdTakethis, "QUIT", StringComparison.Ordinal))
+                {
+                    await FakePublisherServer.WriteLineAsync(stream, "205 closing connection");
+                    return;
+                }
+
+                Assert.Equal($"TAKETHIS {thirdMessageId}", thirdTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+
+                await allowThirdResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {thirdMessageId} accepted");
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(
+                server.Port,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 2,
+                connectionResponseProgressTimeout: responseProgressTimeout,
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(20));
+            Task<TransitPublishResult> firstPublish = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
+            Task<TransitPublishResult> secondPublish = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            await firstTakethisObserved.Task.WaitAsync(observationTimeout.Token);
+            long firstEpochTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, firstEpochTick);
+
+            await secondTakethisObserved.Task.WaitAsync(observationTimeout.Token);
+            long tickAfterSecondPending = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.Equal(firstEpochTick, tickAfterSecondPending);
+
+            allowFirstResponse.TrySetResult(true);
+            TransitPublishResult firstResult = await firstPublish.WaitAsync(observationTimeout.Token);
+            long tickAfterFirstDefinitive = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.Equal(TransitPublishStatus.Accepted, firstResult.Status);
+            Assert.NotEqual(firstEpochTick, tickAfterFirstDefinitive);
+            Assert.NotEqual(0L, tickAfterFirstDefinitive);
+
+            allowSecondResponse.TrySetResult(true);
+            TransitPublishResult secondResult = await secondPublish.WaitAsync(observationTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, secondResult.Status);
+            Assert.Equal(0, connection.OutstandingSubmissionCount);
+            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+
+            Task<TransitPublishResult> thirdPublish = publisher.PublishAsync(thirdMessageId, payload, CancellationToken.None).AsTask();
+            await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 1, observationTimeout.Token);
+            long thirdEpochTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, thirdEpochTick);
+            Assert.NotEqual(tickAfterFirstDefinitive, thirdEpochTick);
+
+            allowThirdResponse.TrySetResult(true);
+            TransitPublishResult thirdResult = await thirdPublish.WaitAsync(observationTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, thirdResult.Status);
+            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+        }
+
+        /// <summary>
+        /// Verifies that initialization timeout remains distinct from steady-state active response timeout after a connection reaches ready.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenReadyReached_UsesSteadyStateTimeoutInsteadOfInitializationTimeout()
+        {
+            TimeSpan steadyStateTimeout = TimeSpan.FromSeconds(2);
+            TimeSpan initializationTimeout = TimeSpan.FromSeconds(1);
+            TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
+            string messageId = "<watchdog-init-vs-active-timeout@example.com>";
+            byte[] payload = [(byte)'T', (byte)'\n'];
+
+            TaskCompletionSource<bool> takethisObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowDeferredResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> watchdogReachedTimeoutBoundary = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string takethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {messageId}", takethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                takethisObserved.TrySetResult(true);
+
+                await allowDeferredResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {messageId} accepted");
+            });
+
+            BackFillerRuntimeOptions options = CreatePublisherOptions(server.Port) with
+            {
+                TransitReconnectInitializationTimeout = initializationTimeout,
+            };
+
+            await using TransitPublisher publisher = new(
+                options,
+                TimeProvider.System,
+                NullLogger<TransitPublisher>.Instance,
+                new ArticleRetentionAuthority(options),
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 1,
+                connectionResponseProgressTimeout: steadyStateTimeout,
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval,
+                watchdogProbe: point =>
+                {
+                    if (point == TransitWatchdogProbePoint.TimeoutElapsedWithPendingBeforeFinalRecheck)
+                    {
+                        watchdogReachedTimeoutBoundary.TrySetResult(true);
+                    }
+                });
+
+            await publisher.InitializeAsync(CancellationToken.None);
+
+            Task<TransitPublishResult> publishTask = publisher.PublishAsync(messageId, payload, CancellationToken.None).AsTask();
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(20));
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+
+            await takethisObserved.Task.WaitAsync(observationTimeout.Token);
+
+            long betweenEpochTick = Stopwatch.GetTimestamp() - GetStopwatchTickDuration(initializationTimeout + TimeSpan.FromMilliseconds(40));
+            SetConnectionDefinitiveResponseProgressTick(connection, betweenEpochTick);
+
+            using CancellationTokenSource noProbeWindow = new(TimeSpan.FromMilliseconds(150));
+            _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchdogReachedTimeoutBoundary.Task.WaitAsync(noProbeWindow.Token));
+            Assert.False(publishTask.IsCompleted, "Publish should remain pending when elapsed is above initialization timeout but below steady-state timeout.");
+
+            allowDeferredResponse.TrySetResult(true);
+            TransitPublishResult result = await publishTask.WaitAsync(observationTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, result.Status);
+            Assert.Equal(239, result.ResponseCode);
+        }
+
+        /// <summary>
+        /// Verifies idle-active-idle-active reuse starts a fresh response epoch for the second publish and does not inherit stale idle time.
+        /// </summary>
+        [Fact]
+        public async Task PublishAsync_WhenConnectionCyclesIdleToActiveToIdleToActive_SecondActiveEpochIsFresh()
+        {
+            TimeSpan responseProgressTimeout = TimeSpan.FromMilliseconds(250);
+            TimeSpan responseProgressCheckInterval = TimeSpan.FromMilliseconds(10);
+            string firstMessageId = "<watchdog-cycle-first@example.com>";
+            string secondMessageId = "<watchdog-cycle-second@example.com>";
+            byte[] payload = [(byte)'C', (byte)'\n'];
+
+            TaskCompletionSource<bool> allowFirstResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<bool> allowSecondResponse = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await using FakePublisherServer server = await FakePublisherServer.StartAsync(async (stream, cancellationToken) =>
+            {
+                await FakePublisherServer.WriteLineAsync(stream, "200 transit ready");
+                await FakePublisherServer.ExpectCommandAsync(stream, "CAPABILITIES", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "101 Capability list:");
+                await FakePublisherServer.WriteLineAsync(stream, "STREAMING");
+                await FakePublisherServer.WriteLineAsync(stream, ".");
+                await FakePublisherServer.ExpectCommandAsync(stream, "MODE STREAM", cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, "203 Streaming permitted");
+
+                string firstTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {firstMessageId}", firstTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                await allowFirstResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {firstMessageId} accepted");
+
+                string secondTakethis = await FakePublisherServer.ReadLineAsync(stream, cancellationToken);
+                Assert.Equal($"TAKETHIS {secondMessageId}", secondTakethis);
+                _ = await FakePublisherServer.ReadTakethisPayloadAsync(stream, cancellationToken);
+                await allowSecondResponse.Task.WaitAsync(cancellationToken);
+                await FakePublisherServer.WriteLineAsync(stream, $"239 {secondMessageId} accepted");
+            });
+
+            await using TransitPublisher publisher = CreatePublisher(
+                server.Port,
+                connectionPoolSize: 1,
+                perConnectionPipelineDepth: 1,
+                connectionResponseProgressTimeout: responseProgressTimeout,
+                connectionResponseProgressCheckInterval: responseProgressCheckInterval);
+
+            await publisher.InitializeAsync(CancellationToken.None);
+            using CancellationTokenSource observationTimeout = new(TimeSpan.FromSeconds(10));
+            Task<TransitPublishResult> firstPublish = publisher.PublishAsync(firstMessageId, payload, CancellationToken.None).AsTask();
+            TransitConnection connection = await WaitForPrimaryConnectionAsync(publisher, observationTimeout.Token);
+            await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 1, observationTimeout.Token);
+            long firstEpochTick = GetConnectionDefinitiveResponseProgressTick(connection);
+            Assert.NotEqual(0L, firstEpochTick);
+
+            allowFirstResponse.TrySetResult(true);
+            TransitPublishResult firstResult = await firstPublish.WaitAsync(observationTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, firstResult.Status);
+            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+
+            long staleIdleTick = Stopwatch.GetTimestamp() - GetStopwatchTickDuration(responseProgressTimeout + responseProgressTimeout);
+            SetConnectionDefinitiveResponseProgressTick(connection, staleIdleTick);
+            Assert.Equal(staleIdleTick, GetConnectionDefinitiveResponseProgressTick(connection));
+
+            Task<TransitPublishResult> secondPublish = publisher.PublishAsync(secondMessageId, payload, CancellationToken.None).AsTask();
+            await WaitForOutstandingSubmissionCountAsync(connection, expectedCount: 1, observationTimeout.Token);
+            long secondEpochTick = GetConnectionDefinitiveResponseProgressTick(connection);
+
+            Assert.NotEqual(0L, secondEpochTick);
+            Assert.NotEqual(firstEpochTick, secondEpochTick);
+            Assert.NotEqual(staleIdleTick, secondEpochTick);
+            Assert.True(secondEpochTick > staleIdleTick);
+
+            allowSecondResponse.TrySetResult(true);
+            TransitPublishResult secondResult = await secondPublish.WaitAsync(observationTimeout.Token);
+            Assert.Equal(TransitPublishStatus.Accepted, secondResult.Status);
+            Assert.Equal(0L, GetConnectionDefinitiveResponseProgressTick(connection));
+            Assert.False(connection.IsResponseLoopFaulted);
         }
 
         /// <summary>
@@ -5785,6 +6145,81 @@ namespace VectorNNTP.BackFiller.Tests.Runtime.Transit
 
             object? value = field.GetValue(connection);
             return Assert.IsType<long>(value);
+        }
+
+        /// <summary>
+        /// Sets the connection's definitive response-progress tick through reflection for deterministic watchdog epoch tests.
+        /// </summary>
+        /// <param name="connection">Connection whose private definitive progress tick is overridden.</param>
+        /// <param name="tick">Stopwatch tick value to write.</param>
+        private static void SetConnectionDefinitiveResponseProgressTick(TransitConnection connection, long tick)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+
+            FieldInfo? field = typeof(TransitConnection).GetField("_lastDefinitiveResponseProgressTick", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            field.SetValue(connection, tick);
+        }
+
+        /// <summary>
+        /// Converts a <see cref="TimeSpan"/> into stopwatch ticks using the current runtime frequency.
+        /// </summary>
+        /// <param name="duration">Duration to convert.</param>
+        /// <returns>Equivalent stopwatch ticks for the supplied duration.</returns>
+        private static long GetStopwatchTickDuration(TimeSpan duration)
+        {
+            long ticks = (long)(duration.TotalSeconds * Stopwatch.Frequency);
+            return Math.Max(1L, ticks);
+        }
+
+        /// <summary>
+        /// Waits until a connection reports a specific outstanding-submission count.
+        /// </summary>
+        /// <param name="connection">Connection being observed.</param>
+        /// <param name="expectedCount">Expected outstanding submission count.</param>
+        /// <param name="cancellationToken">Cancels the wait if the expected count is not observed.</param>
+        /// <returns>A task that completes when the expected count is observed.</returns>
+        private static async Task WaitForOutstandingSubmissionCountAsync(TransitConnection connection, int expectedCount, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (connection.OutstandingSubmissionCount == expectedCount)
+                {
+                    return;
+                }
+
+                await Task.Yield();
+            }
+        }
+
+        /// <summary>
+        /// Waits until the connection has at least one outstanding submission and a non-zero active response epoch tick.
+        /// </summary>
+        /// <param name="connection">The connection whose active epoch state is observed.</param>
+        /// <param name="cancellationToken">Cancels the wait if an active epoch is not observed in time.</param>
+        /// <returns>The non-zero active response epoch tick observed once pending ownership is active.</returns>
+        private static async Task<long> WaitForActiveResponseEpochAsync(TransitConnection connection, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (connection.OutstandingSubmissionCount > 0)
+                {
+                    long tick = GetConnectionDefinitiveResponseProgressTick(connection);
+                    if (tick != 0)
+                    {
+                        return tick;
+                    }
+                }
+
+                await Task.Yield();
+            }
         }
 
         /// <summary>

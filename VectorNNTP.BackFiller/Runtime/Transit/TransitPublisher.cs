@@ -1577,7 +1577,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     useSsl: _runtimeOptions.TransitServerUseSsl,
                     logger: _logger,
                     perConnectionPipelineDepth: _perConnectionPipelineDepth,
-                    responseProgressTimeout: initializationResponseProgressTimeout,
+                    responseProgressTimeout: _connectionResponseProgressTimeout,
+                    initializationProgressTimeout: initializationResponseProgressTimeout,
                     responseProgressCheckInterval: _connectionResponseProgressCheckInterval,
                     timingCollector: _timingCollector,
                     watchdogProbe: _watchdogProbe);
