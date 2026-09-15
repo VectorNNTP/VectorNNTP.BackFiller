@@ -26,6 +26,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
     internal enum TransitWatchdogProbePoint
     {
         /// <summary>
+        /// Indicates the watchdog observed an idle epoch with stale progress tick and is about to attempt an idle-only conditional reset.
+        /// </summary>
+        IdleStaleProgressBeforeConditionalReset,
+
+        /// <summary>
         /// Indicates the watchdog observed active pending work and confirmed elapsed progress age is still within timeout.
         /// </summary>
         ActivePendingElapsedWithinTimeout,
@@ -653,11 +658,42 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// <summary>
         /// Clears active response-progress epoch state.
         /// </summary>
+        /// <remarks>
+        /// This unconditional reset is reserved for lifecycle transitions where this connection is being initialized,
+        /// torn down, or fully disconnected.
+        /// </remarks>
         private void ResetActiveResponseProgressEpoch()
         {
             lock (_activeResponseEpochGate)
             {
                 _activeResponsePendingCount = 0;
+                _lastDefinitiveResponseProgressTick = 0;
+            }
+        }
+
+        /// <summary>
+        /// Clears stale idle progress tick only if idle state is still authoritative at mutation time.
+        /// </summary>
+        /// <param name="observedProgressTick">Progress tick observed by caller before attempting conditional clear.</param>
+        private void ResetActiveResponseProgressEpochIfIdleAndProgressTickMatches(long observedProgressTick)
+        {
+            if (observedProgressTick <= 0)
+            {
+                return;
+            }
+
+            lock (_activeResponseEpochGate)
+            {
+                if (_activeResponsePendingCount != 0)
+                {
+                    return;
+                }
+
+                if (_lastDefinitiveResponseProgressTick != observedProgressTick)
+                {
+                    return;
+                }
+
                 _lastDefinitiveResponseProgressTick = 0;
             }
         }
@@ -782,7 +818,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Thrown when internal initialization invariants are violated, such as missing transport read/write streams after a required stage transition.
         /// </exception>
         /// <exception cref="TransitConnectionLifecycleException">
-        /// Thrown when initialization exceeds the configured response-progress timeout or when protocol negotiation fails during greeting,
+        /// Thrown when any initialization stage exceeds the configured initialization-progress timeout (including immediate TLS handshake)
+        /// or when protocol negotiation fails during greeting,
         /// CAPABILITIES, STARTTLS, post-STARTTLS CAPABILITIES, STREAMING capability validation, or MODE STREAM response validation.
         /// </exception>
         /// <remarks>
@@ -1595,7 +1632,8 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     {
                         if (lastProgressTick != 0)
                         {
-                            ResetActiveResponseProgressEpoch();
+                            _watchdogProbe?.Invoke(TransitWatchdogProbePoint.IdleStaleProgressBeforeConditionalReset);
+                            ResetActiveResponseProgressEpochIfIdleAndProgressTickMatches(lastProgressTick);
                         }
 
                         continue;
