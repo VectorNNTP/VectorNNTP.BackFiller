@@ -600,9 +600,15 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
         /// Removes one pending entry and settles its active response-epoch ownership under one synchronization boundary.
         /// </summary>
         /// <param name="messageId">Message-ID key to remove.</param>
+        /// <param name="isDefinitiveResponse">Indicates whether the removal is triggered by a definitive <c>239</c>/<c>439</c> response.</param>
+        /// <param name="definitiveProgressTick">Correlation tick for definitive progress attribution when <paramref name="isDefinitiveResponse"/> is <see langword="true"/>.</param>
         /// <param name="removed">Removed pending entry when present.</param>
         /// <returns>Epoch settle result for the remove path, including whether ownership was removed and idle transition metadata.</returns>
-        private PendingRemovalResult TryRemovePendingAndSettleEpoch(string messageId, out PendingOwnedWork? removed)
+        private PendingRemovalResult TryRemovePendingAndSettleEpoch(
+            string messageId,
+            bool isDefinitiveResponse,
+            long definitiveProgressTick,
+            out PendingOwnedWork? removed)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
 
@@ -622,6 +628,16 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
 
                 remainingPendingCount = OnPendingWorkSettledUnderEpochGate();
                 transitionedToIdle = remainingPendingCount == 0;
+
+                if (isDefinitiveResponse
+                    && remainingPendingCount > 0
+                    && removedEpochId > 0
+                    && _activeResponseEpochId == removedEpochId)
+                {
+                    _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.DefinitiveResponseBeforeEpochProgressAttribution);
+                    _lastDefinitiveResponseProgressTick = definitiveProgressTick;
+                }
+
                 if (!transitionedToIdle)
                 {
                     return new PendingRemovalResult(Removed: true, RemainingPendingCount: remainingPendingCount, RemovedEpochId: removedEpochId);
@@ -718,27 +734,6 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 }
 
                 _lastDefinitiveResponseProgressTick = 0;
-            }
-        }
-
-        /// <summary>
-        /// Advances definitive response-progress tick only when the correlated response belongs to the currently active epoch.
-        /// </summary>
-        /// <param name="responseEpochId">Epoch identity captured when the now-settled pending entry was registered.</param>
-        /// <param name="correlatedTick">Monotonic timestamp captured when a definitive response was correlated.</param>
-        private void AdvanceDefinitiveResponseProgressIfActiveEpochMatches(long responseEpochId, long correlatedTick)
-        {
-            if (responseEpochId <= 0)
-            {
-                return;
-            }
-
-            lock (_activeResponseEpochGate)
-            {
-                if (_activeResponsePendingCount > 0 && _activeResponseEpochId == responseEpochId)
-                {
-                    _lastDefinitiveResponseProgressTick = correlatedTick;
-                }
             }
         }
 
@@ -1403,7 +1398,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                 if (_pendingByMessageId.TryGetValue(messageId, out PendingOwnedWork? pending)
                     && pending.T2SocketWriteBeginTick == 0)
                 {
-                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(messageId, out _);
+                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(
+                        messageId,
+                        isDefinitiveResponse: false,
+                        definitiveProgressTick: 0,
+                        out _);
                     if (removal.Removed)
                     {
                         AcknowledgeSendOrder(messageId);
@@ -1469,7 +1468,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                     continue;
                 }
 
-                PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(messageId, out PendingOwnedWork? removed);
+                PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(
+                    messageId,
+                    isDefinitiveResponse: false,
+                    definitiveProgressTick: 0,
+                    out PendingOwnedWork? removed);
                 if (removal.Removed && removed is not null)
                 {
                     AcknowledgeSendOrder(messageId);
@@ -1590,11 +1593,17 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                         continue;
                     }
 
-                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(mapped.MessageId, out PendingOwnedWork? pendingCandidate);
+                    bool isDefinitiveResponse = mapped.ResponseCode is 239 or 439;
+                    long responseCorrelatedTick = Stopwatch.GetTimestamp();
+                    PendingRemovalResult removal = TryRemovePendingAndSettleEpoch(
+                        mapped.MessageId,
+                        isDefinitiveResponse,
+                        responseCorrelatedTick,
+                        out PendingOwnedWork? pendingCandidate);
                     if (removal.Removed && pendingCandidate is not null)
                     {
                         int remainingPending = removal.RemainingPendingCount;
-                        pendingCandidate.T6ResponseCorrelatedTick = Stopwatch.GetTimestamp();
+                        pendingCandidate.T6ResponseCorrelatedTick = responseCorrelatedTick;
                         TransitPublishResult correlatedResult = mapped with
                         {
                             T2SocketWriteBeginTick = pendingCandidate.T2SocketWriteBeginTick,
@@ -1602,17 +1611,11 @@ namespace VectorNNTP.Backfiller.Runtime.Transit
                             T6ResponseCorrelatedTick = pendingCandidate.T6ResponseCorrelatedTick,
                         };
 
-                        if (correlatedResult.ResponseCode is 239 or 439 && remainingPending > 0)
-                        {
-                            _activeResponseEpochProbe?.Invoke(TransitActiveResponseEpochProbePoint.DefinitiveResponseBeforeEpochProgressAttribution);
-                            AdvanceDefinitiveResponseProgressIfActiveEpochMatches(removal.RemovedEpochId, pendingCandidate.T6ResponseCorrelatedTick);
-                        }
-
                         _timingCollector?.RecordResponseCorrelation(
                             elapsedTicks: pendingCandidate.T6ResponseCorrelatedTick - responseCorrelationStartTick,
                             responseAvailableTick: responseAvailableTick,
                             correlatedTick: pendingCandidate.T6ResponseCorrelatedTick,
-                            definitive: mapped.ResponseCode is 239 or 439);
+                            definitive: isDefinitiveResponse);
                         AcknowledgeSendOrder(mapped.MessageId);
 
                         RecordSubmissionResult(correlatedResult.Status);
